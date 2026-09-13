@@ -190,7 +190,7 @@ jobs:
               --prerelease \
               --target "${GITHUB_SHA}" \
               --title "eizhu ${{ steps.android-release.outputs.version }}" \
-              --notes "eizhu 测试版（移动端资产先行上传，桌面安装包随后补充）。" \
+              --notes "🧪 eizhu 测试版：Android 资产已上传；桌面构建完成后，本页面会自动更新为完整的平台下载与升级说明。" \
               || true
           fi
           gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" "$ASSET" --clobber
@@ -249,7 +249,7 @@ jobs:
               --repo "$GITHUB_REPOSITORY" \
               --target "${GITHUB_SHA}" \
               --title "eizhu $(tr -d '[:space:]' < VERSION_MOBILE)" \
-              --notes "eizhu 正式版（移动端资产先行上传，桌面安装包随后补充）。" \
+              --notes "✅ eizhu 正式版：Android 资产已上传；桌面构建完成后，本页面会自动更新为完整的平台下载与升级说明。" \
               || true
           fi
           gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" "$ASSET" --clobber
@@ -398,7 +398,7 @@ jobs:
               $PRERELEASE_FLAG \
               --target "${GITHUB_SHA}" \
               --title "eizhu $(tr -d '[:space:]' < VERSION_MOBILE)" \
-              --notes "eizhu（移动端资产先行上传，桌面安装包随后补充）。" \
+              --notes "eizhu 移动端资产已上传；桌面构建完成后，本页面会自动更新为完整的平台下载与升级说明。" \
               || true
           fi
           gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" "$ASSET" --clobber
