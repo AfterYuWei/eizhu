@@ -10,14 +10,22 @@
 | 平台 | 无签名门禁 | 有签名发布产物 | 当前 ABI / 目标 |
 | --- | --- | --- | --- |
 | Android | debug APK、release AAB、R8 mapping | upload key 签名的 release AAB | `arm64-v8a` / API 24+ |
-| iOS | arm64 Simulator `.app` | App Store Connect Archive / IPA | arm64 / iOS 15+ |
+| iOS | arm64 真机未签名 IPA | App Store Connect Archive / IPA | arm64 / iOS 15+ |
+
+`dev` 的 Android debug APK 与 iOS 未签名真机 IPA 会同时保存为 Actions Artifact，并上传到
+与桌面端相同的 GitHub Prerelease（一次提交一个全平台 Release，标签跟随桌面端
+`VERSION`）。资产文件名使用移动端版本：`eizhu-<VERSION_MOBILE>-test.<提交计数>.<短SHA>…`，
+可直接下载安装（IPA 需自行签名后侧载）。CI 会对 Rust dev profile 使用 `opt-level=s` 并
+剥离调试符号，以避免测试包因 Rust 符号膨胀到数百 MB；测试包不用于商店发布，也不用于
+原生崩溃符号调试。
 
 Android 首版正式支持 arm64。需要增加 ABI 时，先在真机矩阵验证，再把 `android build` 的
 `--target` 扩展为 `armv7`、`i686` 或 `x86_64`；不得只增加产物而跳过对应设备验收。
 
-版本名称来自根目录 `VERSION` 与 `src-tauri/Cargo.toml`。Android `versionCode` 由 Tauri 按
-SemVer 派生，iOS `CFBundleVersion` 默认跟随应用版本；正式发布前必须确认商店中的构建号尚未
-使用。
+移动端版本独立于桌面端：版本名称来自根目录 `VERSION_MOBILE`（桌面端使用 `VERSION`），
+由 `scripts/run-tauri.mjs` 在 android/ios 命令时注入。test 版本号 = 提交计数 + 短 SHA，
+随历史单调递增。Android `versionCode` 由 Tauri 按 SemVer 派生，iOS `CFBundleVersion`
+默认跟随应用版本；正式发布前必须确认商店中的构建号尚未使用。
 
 ## CI 签名变量
 
@@ -28,8 +36,13 @@ SemVer 派生，iOS `CFBundleVersion` 默认跟随应用版本；正式发布前
 - `ANDROID_KEY_PASSWORD`：keystore/key 密码。
 
 CI 仅在非 pull request 构建中解码密钥，并生成不入库的
-`src-tauri/gen/android/keystore.properties`。发布 AAB 必须启用 R8，工作流会检查
-`mapping/release/mapping.txt` 并与 AAB 一起保存。
+`src-tauri/gen/android/keystore.properties`；`scripts/prepare-android-signing.mjs` 会在其
+存在时把上传密钥签名注入 debug / release 构建（`tauri android init` 的默认模板本身不会
+读取 keystore.properties），因此配置 Secrets 后测试 APK 也使用固定签名，可直接覆盖安装。
+密钥生成与 Secrets 配置步骤见 `docs/ANDROID_APK_GITHUB.md`。发布 AAB 必须启用 R8，
+工作流会检查 `app/build/outputs/mapping/<variant>/mapping.txt` 并与 AAB 一起保存；
+`<variant>` 由 Tauri 根据 ABI/flavor 生成，例如 `arm64Release` 或 `universalRelease`，
+不可写死为 `release`。
 
 ### iOS
 
@@ -38,7 +51,8 @@ CI 仅在非 pull request 构建中解码密钥，并生成不入库的
 - `APPLE_API_ISSUER`：Issuer ID。
 
 CI 将私钥写入 runner 临时目录并设置 `APPLE_API_KEY_PATH`。签名变量齐全时执行
-`ios build --export-method app-store-connect`，生成 Archive/IPA；pull request 只构建模拟器版本。
+`ios build --export-method app-store-connect`，生成上架用 Archive/IPA；
+pull request 与测试通道通过 `ios build --no-sign` 产出真机未签名 IPA（需自行签名后侧载）。
 
 ## 商店声明
 

@@ -94,10 +94,6 @@
 .pf-inline-action:hover {
   color: var(--fg);
 }
-.pf-help-text {
-  font: 400 12px / 1.5 var(--sans);
-  color: var(--fg-4);
-}
 .pf-section-divider {
   height: 1px;
   background: var(--border-subtle);
@@ -149,8 +145,11 @@
   margin-top: 1px;
 }
 .pf-test-result.error .pf-test-summary > svg,
-.pf-test-stage:has(.pf-confirm-key-btn) > svg:first-child {
+.pf-test-stage[data-status='error'] > svg:first-child {
   color: var(--red);
+}
+.pf-test-stage[data-status='warning'] > svg:first-child {
+  color: var(--yellow);
 }
 .pf-test-latency {
   margin-left: auto;
@@ -177,13 +176,6 @@
   overflow-wrap: anywhere;
   color: var(--fg-4);
   font: 400 10.5px / 1.45 var(--mono);
-}
-.pf-confirm-key-btn {
-  margin-left: auto;
-  min-height: 26px !important;
-  height: 26px !important;
-  padding: 0 8px !important;
-  font-size: 11px !important;
 }
 /* Icon prefix button inside the name input. */
 .pf-icon-prefix-wrap {

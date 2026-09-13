@@ -84,7 +84,7 @@ export interface ProfileTestResult {
 
 export interface ProfileTestStage {
   stage: 'resolve' | 'proxy' | 'host_key' | 'ssh_auth' | string
-  status: 'success' | 'error'
+  status: 'success' | 'warning' | 'error'
   message: string
   profile_id?: string
   profile_name?: string

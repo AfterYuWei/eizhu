@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
+import { writeClipboardText } from '@/lib/clipboard'
 import {
   Server,
   FolderOpen,
@@ -296,7 +297,7 @@ export function FilePane({ pane, onPickServer }: FilePaneProps) {
     { id: 'newFolder', label: '新建文件夹', icon: <FolderPlus size={13} />, onClick: () => store.openNewFolderDialog(pane) },
     { id: 'd2', label: '', divider: true },
     { id: 'rename', label: '重命名', icon: <Pencil size={13} />, onClick: () => store.openRenameDialog(pane, entry) },
-    { id: 'copy', label: '复制路径', icon: <Copy size={13} />, onClick: () => navigator.clipboard?.writeText(entry.path) },
+    { id: 'copy', label: '复制路径', icon: <Copy size={13} />, onClick: () => void writeClipboardText(entry.path) },
     { id: 'd3', label: '', divider: true },
     { id: 'del', label: '删除', icon: <Trash2 size={13} />, danger: true, onClick: () => store.openDeleteConfirm(pane, [entry]) },
   ]
@@ -533,17 +534,21 @@ export function FilePane({ pane, onPickServer }: FilePaneProps) {
     <div className="sftp-pane">
       {mobile && (
         <div className="sftp-mobile-actions">
-          <Button variant="outline" disabled={documentBusy || !activeTab.sessionId} onClick={() => void handleDocumentUpload()}>
-            <Upload size={16} /> 上传
+          <Button variant="outline" aria-label="上传" title="上传" disabled={documentBusy || !activeTab.sessionId} onClick={() => void handleDocumentUpload()}>
+            <Upload size={16} />
+            <span className="sftp-m-action-label">上传</span>
           </Button>
-          <Button variant="outline" disabled={documentBusy || !activeTab.sessionId || selected.size === 0} onClick={() => void handleDocumentDownload()}>
-            <Download size={16} /> 下载
+          <Button variant="outline" aria-label="下载" title="下载" disabled={documentBusy || !activeTab.sessionId || selected.size === 0} onClick={() => void handleDocumentDownload()}>
+            <Download size={16} />
+            <span className="sftp-m-action-label">下载</span>
           </Button>
-          <Button variant="outline" disabled={documentBusy || !activeTab.sessionId || selected.size === 0} onClick={() => openMobileTransfer('copy')}>
-            <Copy size={16} /> 复制到
+          <Button variant="outline" aria-label="复制到" title="复制到" disabled={documentBusy || !activeTab.sessionId || selected.size === 0} onClick={() => openMobileTransfer('copy')}>
+            <Copy size={16} />
+            <span className="sftp-m-action-label">复制到</span>
           </Button>
-          <Button variant="outline" disabled={documentBusy || !activeTab.sessionId || selected.size === 0} onClick={() => openMobileTransfer('move')}>
-            <FolderInput size={16} /> 移动到
+          <Button variant="outline" aria-label="移动到" title="移动到" disabled={documentBusy || !activeTab.sessionId || selected.size === 0} onClick={() => openMobileTransfer('move')}>
+            <FolderInput size={16} />
+            <span className="sftp-m-action-label">移动到</span>
           </Button>
         </div>
       )}
@@ -576,7 +581,7 @@ export function FilePane({ pane, onPickServer }: FilePaneProps) {
           onDelete={() => store.openDeleteConfirm(pane)}
           onCopyPath={() => {
             const selectedPath = Array.from(selected)[0]
-            if (selectedPath) navigator.clipboard?.writeText(selectedPath)
+            if (selectedPath) void writeClipboardText(selectedPath)
           }}
         />
       </div>
@@ -615,7 +620,7 @@ export function FilePane({ pane, onPickServer }: FilePaneProps) {
       )}
 
       <Dialog open={mobileTransfer !== null} onOpenChange={(open) => !open && setMobileTransfer(null)}>
-        <DialogContent className="w-[min(440px,calc(100vw-2rem))]">
+        <DialogContent mobilePresentation="sheet" className="w-[min(440px,calc(100vw-2rem))]">
           <DialogTitle>{mobileTransfer === 'move' ? '移动所选项目' : '复制/跨服务器传输'}</DialogTitle>
           <DialogDescription>选择目标会话与目录；同名文件将自动重命名。</DialogDescription>
           <label className="space-y-1.5 text-sm">

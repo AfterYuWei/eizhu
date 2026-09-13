@@ -13,6 +13,7 @@ export interface ServerSessionResponse {
 export interface ServerInfo {
   hostname: string
   os: string
+  icon: string
   kernel: string
   arch: string
   uptime: string

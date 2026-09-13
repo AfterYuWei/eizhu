@@ -66,7 +66,7 @@ export function EditorDialog() {
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && handleClose()}>
-      <DialogContent showCloseButton={false} className="w-auto max-w-none gap-0 border-0 bg-transparent p-0 shadow-none">
+      <DialogContent mobilePresentation="fullscreen" showCloseButton={false} className="w-auto max-w-none gap-0 border-0 bg-transparent p-0 shadow-none">
         <DialogTitle className="sr-only">文件编辑器</DialogTitle>
         <div className="editor-dialog">
         <EditorTabs tabs={tabItems} onSelect={setActiveTab} onClose={handleTabClose} />

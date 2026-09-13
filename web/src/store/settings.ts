@@ -9,7 +9,9 @@ const DEFAULT_UPDATE_CHANNEL: UpdateChannel = configuredBuildChannel === 'test' 
 
 interface SettingsStore {
   theme: Theme
+  /** 桌面终端字号；移动端使用独立设置，避免跨平台互相覆盖。 */
   fontSize: number
+  mobileTerminalFontSize: number
   fontFamily: string
   fontFamilyCN: string
   sidebarWidth: number
@@ -21,12 +23,15 @@ interface SettingsStore {
   terminalInlineSuggestion: boolean
   terminalPopupMenu: boolean
   updateChannel: UpdateChannel
+  // 移动端启动时自动检查新版本（GitHub Releases 引导下载；桌面端始终静默检查）
+  autoCheckUpdate: boolean
   // system 模式下系统主题变化时自增，用于触发组件重渲染（theme 仍为 'system'）
   systemRevision: number
 
   setTheme: (theme: Theme) => void
   toggleTheme: () => void
   setFontSize: (size: number) => void
+  setMobileTerminalFontSize: (size: number) => void
   setFontFamily: (family: string) => void
   setFontFamilyCN: (family: string) => void
   setSidebarWidth: (width: number) => void
@@ -37,6 +42,7 @@ interface SettingsStore {
   setTerminalInlineSuggestion: (enabled: boolean) => void
   setTerminalPopupMenu: (enabled: boolean) => void
   setUpdateChannel: (channel: UpdateChannel) => void
+  setAutoCheckUpdate: (enabled: boolean) => void
 }
 
 function resolveTheme(theme: Theme): 'light' | 'dark' {
@@ -96,8 +102,9 @@ function ensureSystemWatcher() {
 export const useSettingsStore = create<SettingsStore>()(
   persist(
     (set, get) => ({
-      theme: 'dark',
-      fontSize: 13,
+      theme: 'system',
+      fontSize: 7,
+      mobileTerminalFontSize: 10,
       fontFamily: "'JetBrains Mono'",
       fontFamilyCN: "'Noto Sans SC'",
       sidebarWidth: 240,
@@ -108,6 +115,7 @@ export const useSettingsStore = create<SettingsStore>()(
       terminalInlineSuggestion: false,
       terminalPopupMenu: true,
       updateChannel: DEFAULT_UPDATE_CHANNEL,
+      autoCheckUpdate: true,
       systemRevision: 0,
 
       setTheme: (theme) => {
@@ -121,6 +129,7 @@ export const useSettingsStore = create<SettingsStore>()(
         applyTheme(next)
       },
       setFontSize: (fontSize) => set({ fontSize }),
+      setMobileTerminalFontSize: (mobileTerminalFontSize) => set({ mobileTerminalFontSize }),
       setFontFamily: (fontFamily) => set({ fontFamily }),
       setFontFamilyCN: (fontFamilyCN) => set({ fontFamilyCN }),
       setSidebarWidth: (sidebarWidth) => {
@@ -140,10 +149,21 @@ export const useSettingsStore = create<SettingsStore>()(
       setTerminalInlineSuggestion: (terminalInlineSuggestion) => set({ terminalInlineSuggestion }),
       setTerminalPopupMenu: (terminalPopupMenu) => set({ terminalPopupMenu }),
       setUpdateChannel: (updateChannel) => set({ updateChannel }),
+      setAutoCheckUpdate: (autoCheckUpdate) => set({ autoCheckUpdate }),
     }),
     {
       name: 'eizhu-settings',
+      version: 1,
       storage: createJSONStorage(() => localStorage),
+      // v0 → v1：终端默认字号减半（13 → 7）。对既有设备持久化的字号一次性折半，
+      // 否则旧值会覆盖新默认值导致改动不生效。
+      migrate: (persisted) => {
+        const state = persisted as Partial<SettingsStore>
+        if (typeof state.fontSize === 'number') {
+          state.fontSize = Math.min(32, Math.max(6, Math.round(state.fontSize / 2)))
+        }
+        return state
+      },
     }
   )
 )
@@ -155,4 +175,15 @@ export function initTheme() {
   applyAppFont(state.appFontSize, state.appFontFamily)
   applySidebarWidth(state.sidebarWidth)
   ensureSystemWatcher()
+}
+
+/** 解析当前生效主题（'system' 实时跟随系统深浅色，经 systemRevision 触发重渲染）。 */
+export function useResolvedTheme(): 'light' | 'dark' {
+  const theme = useSettingsStore((state) => state.theme)
+  // 订阅 revision：系统深浅切换时 store 自增，本组件随之重渲染重新求值
+  useSettingsStore((state) => state.systemRevision)
+  if (theme === 'system') {
+    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+  }
+  return theme
 }

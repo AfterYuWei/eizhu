@@ -6,7 +6,21 @@ use crate::{error::CommandError, sftp::SftpService};
 
 const INFO_COMMAND: &str = r#"
 printf '===HOSTNAME===\n'; (hostname -f 2>/dev/null || hostname)
-printf '===OS===\n'; (awk -F= '/^PRETTY_NAME=/{gsub(/^"|"$/, "", $2); print $2; exit}' /etc/os-release 2>/dev/null || uname -s)
+printf '===OS===\n'; (awk '/^PRETTY_NAME=/{sub(/^[^=]*=/, ""); gsub(/^"|"$/, ""); print; exit}' /etc/os-release 2>/dev/null || uname -s)
+printf '===OS_ID===\n'; awk -F= '/^ID=/{gsub(/^"|"$/, "", $2); print tolower($2); exit}' /etc/os-release 2>/dev/null
+printf '===OS_LIKE===\n'; awk '/^ID_LIKE=/{sub(/^[^=]*=/, ""); gsub(/^"|"$/, ""); print tolower($0); exit}' /etc/os-release 2>/dev/null
+printf '===PRODUCT===\n';
+if [ -d /usr/trim ] || [ -S /run/trim_cgi.socket ]; then echo fnos
+elif command -v pveversion >/dev/null 2>&1 || [ -d /etc/pve ]; then echo proxmox
+elif command -v midclt >/dev/null 2>&1 && [ -e /etc/version ]; then echo truenas
+elif [ -e /etc/synoinfo.conf ] || [ -e /etc.defaults/VERSION ]; then echo synology
+elif [ -e /etc/config/uLinux.conf ]; then echo qnap
+elif [ -e /etc/unraid-version ]; then echo unraid
+elif [ -e /etc/openmediavault/config.xml ] || command -v omv-confdbadm >/dev/null 2>&1; then echo openmediavault
+elif [ -e /etc/openwrt_release ]; then echo openwrt
+elif command -v casaos-cli >/dev/null 2>&1 || [ -d /etc/casaos ]; then echo casaos
+elif [ -d /home/umbrel/umbrel ] || [ -d /umbrel ]; then echo umbrel
+fi
 printf '===KERNEL===\n'; uname -r
 printf '===ARCH===\n'; uname -m
 printf '===UPTIME===\n'; (uptime -p 2>/dev/null || uptime)
@@ -32,6 +46,7 @@ awk '/cpu MHz/{s+=$4;c++} END{if(c) printf "CM %.2f\n",s/c;else print "CM 0"}' /
 pub(crate) struct ServerInfo {
     hostname: String,
     os: String,
+    icon: String,
     kernel: String,
     arch: String,
     uptime: String,
@@ -115,6 +130,14 @@ fn parse_info(output: &str) -> ServerInfo {
     ServerInfo {
         hostname: value("HOSTNAME"),
         os: value("OS"),
+        icon: detect_server_icon(
+            &value("PRODUCT"),
+            &value("OS_ID"),
+            &value("OS_LIKE"),
+            &value("OS"),
+            &value("KERNEL"),
+        )
+        .into(),
         kernel: value("KERNEL"),
         arch: value("ARCH"),
         uptime: value("UPTIME"),
@@ -122,6 +145,75 @@ fn parse_info(output: &str) -> ServerInfo {
         load_avg_detail,
         cpus: value("CPUS").parse().unwrap_or(1),
         cpu_mhz: value("CPUMHZ").parse().unwrap_or_default(),
+    }
+}
+
+fn detect_server_icon(
+    product: &str,
+    os_id: &str,
+    os_like: &str,
+    os_name: &str,
+    kernel: &str,
+) -> &'static str {
+    match product.trim() {
+        "fnos" => return "os-fnos",
+        "proxmox" => return "os-proxmox",
+        "truenas" => return "os-truenas",
+        "synology" => return "os-synology",
+        "qnap" => return "os-qnap",
+        "unraid" => return "os-unraid",
+        "openmediavault" => return "os-openmediavault",
+        "openwrt" => return "os-openwrt",
+        "casaos" => return "os-casaos",
+        "umbrel" => return "os-umbrel",
+        _ => {}
+    }
+
+    let identity = format!("{os_id} {os_like} {os_name}").to_lowercase();
+    let has = |candidate: &str| {
+        identity
+            .split(|character: char| !(character.is_ascii_alphanumeric() || character == '-'))
+            .any(|part| part == candidate)
+    };
+
+    if has("ubuntu") {
+        "os-ubuntu"
+    } else if identity.contains("linux mint") || has("linuxmint") {
+        "os-linuxmint"
+    } else if has("raspbian") || identity.contains("raspberry pi") {
+        "os-raspberrypi"
+    } else if has("kali") {
+        "os-kali"
+    } else if has("debian") {
+        "os-debian"
+    } else if has("rocky") {
+        "os-rocky"
+    } else if has("almalinux") || identity.contains("alma linux") {
+        "os-almalinux"
+    } else if has("centos") {
+        "os-centos"
+    } else if has("rhel") || identity.contains("red hat") {
+        "os-redhat"
+    } else if has("fedora") {
+        "os-fedora"
+    } else if has("alpine") {
+        "os-alpine"
+    } else if has("manjaro") {
+        "os-manjaro"
+    } else if has("arch") || has("archlinux") {
+        "os-archlinux"
+    } else if has("opensuse") || has("suse") || has("sles") {
+        "os-opensuse"
+    } else if has("amzn") || identity.contains("amazon linux") {
+        "os-amazonlinux"
+    } else if has("ol") || identity.contains("oracle linux") {
+        "os-oraclelinux"
+    } else if identity.contains("freebsd") || kernel.to_lowercase().contains("freebsd") {
+        "os-freebsd"
+    } else if !identity.trim().is_empty() || !kernel.trim().is_empty() {
+        "os-linux"
+    } else {
+        "server"
     }
 }
 
@@ -293,6 +385,34 @@ mod tests {
         assert_eq!(info.hostname, "node");
         assert_eq!(info.load_avg, "0.1 / 0.2 / 0.3");
         assert_eq!(info.cpus, 4);
+    }
+
+    #[test]
+    fn product_markers_override_the_base_distribution_icon() {
+        assert_eq!(
+            detect_server_icon("fnos", "debian", "", "Debian GNU/Linux 13", "6.6.38-trim"),
+            "os-fnos"
+        );
+        assert_eq!(
+            detect_server_icon("proxmox", "debian", "", "Debian GNU/Linux 13", "6.14.8-pve"),
+            "os-proxmox"
+        );
+    }
+
+    #[test]
+    fn detects_distribution_families_when_no_product_marker_exists() {
+        assert_eq!(
+            detect_server_icon("", "ubuntu", "debian", "Ubuntu 24.04", "linux"),
+            "os-ubuntu"
+        );
+        assert_eq!(
+            detect_server_icon("", "rocky", "rhel centos fedora", "Rocky Linux 9", "linux"),
+            "os-rocky"
+        );
+        assert_eq!(
+            detect_server_icon("", "", "", "FreeBSD 14.1", "14.1-RELEASE"),
+            "os-freebsd"
+        );
     }
 
     #[test]

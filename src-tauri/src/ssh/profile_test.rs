@@ -56,13 +56,13 @@ impl HostKeyVerifier for TestVerifier {
                 .expect("profile test mutex poisoned")
                 .push(ProfileTestStage {
                     stage: "host_key".into(),
-                    status: if matches { "success" } else { "error" }.into(),
+                    status: if matches { "success" } else { "warning" }.into(),
                     message: if matches {
                         "SSH 主机指纹校验通过"
                     } else if known.is_empty() {
-                        "SSH 主机指纹尚未信任"
+                        "已获取 SSH 主机指纹；测试连接不会写入信任记录"
                     } else {
-                        "SSH 主机指纹已变化"
+                        "SSH 主机指纹与已保存记录不一致；本次仅测试，不更新信任记录"
                     }
                     .into(),
                     profile_id: profile_id.into(),
@@ -71,7 +71,10 @@ impl HostKeyVerifier for TestVerifier {
                     known_fingerprint: known.into(),
                     fingerprint: current.into(),
                 });
-            matches
+            // A connection test validates routing and authentication. It records
+            // the observed key for the user, but deliberately does not let an
+            // unknown/changed key stop the short-lived test session or persist it.
+            true
         })
     }
 }
@@ -220,12 +223,31 @@ pub(crate) async fn confirm_profile_host_key(
 
 #[cfg(test)]
 mod tests {
-    use super::host_key_matches;
+    use super::{host_key_matches, HostKeyVerifier, TestVerifier};
+    use std::sync::{Arc, Mutex};
 
     #[test]
     fn unknown_and_changed_host_keys_always_require_confirmation() {
         assert!(!host_key_matches("", "SHA256:new"));
         assert!(!host_key_matches("SHA256:old", "SHA256:new"));
         assert!(host_key_matches("SHA256:same", "SHA256:same"));
+    }
+
+    #[tokio::test]
+    async fn connection_test_records_unknown_key_without_blocking_authentication() {
+        let stages = Arc::new(Mutex::new(Vec::new()));
+        let verifier = TestVerifier {
+            stages: stages.clone(),
+        };
+
+        assert!(
+            verifier
+                .verify("draft-1", "example.com", "", "SHA256:new")
+                .await
+        );
+        let stages = stages.lock().unwrap();
+        assert_eq!(stages.len(), 1);
+        assert_eq!(stages[0].status, "warning");
+        assert_eq!(stages[0].fingerprint, "SHA256:new");
     }
 }
