@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Activity, Monitor, Terminal, Palette, Type, ChevronRight, DatabaseBackup, CloudSync, Info, FileText } from 'lucide-react'
+import { Activity, Monitor, Terminal, Palette, Type, ChevronRight, DatabaseBackup, CloudSync, Info, FileText, UserRound } from 'lucide-react'
 import { TerminalThemePicker } from './TerminalThemePicker'
 import { BackupPanel } from './BackupPanel'
 import { SyncPanel } from './SyncPanel'
@@ -17,6 +17,7 @@ import { LogPanel } from './LogPanel'
 import { isTestBuild } from '@/lib/updater'
 import { isDesktopRuntime, isMobileRuntime } from '@/lib/platform'
 import { MobileDiagnosticsPanel } from './MobileDiagnosticsPanel'
+import { AccountPanel } from './AccountPanel'
 import {
   themeOptions,
   appFontFamilyOptions,
@@ -29,12 +30,13 @@ interface SettingsDialogProps {
   onOpenChange: (open: boolean) => void
 }
 
-type SettingsTab = 'appearance' | 'terminal' | 'backup' | 'sync' | 'logs' | 'diagnostics' | 'about'
+type SettingsTab = 'appearance' | 'terminal' | 'backup' | 'account' | 'sync' | 'logs' | 'diagnostics' | 'about'
 
 const baseTabs: { key: SettingsTab; label: string; icon: typeof Monitor }[] = [
   { key: 'appearance', label: '外观', icon: Palette },
   { key: 'terminal', label: '终端', icon: Terminal },
   { key: 'backup', label: '数据备份', icon: DatabaseBackup },
+  { key: 'account', label: '账号', icon: UserRound },
   { key: 'sync', label: '云同步', icon: CloudSync },
   { key: 'about', label: '关于', icon: Info },
 ]
@@ -252,6 +254,8 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
             </TabsContent>
 
             <TabsContent value="backup" className="settings-content"><BackupPanel /></TabsContent>
+
+            <TabsContent value="account" className="settings-content"><AccountPanel /></TabsContent>
 
             <TabsContent value="sync" className="settings-content"><SyncPanel /></TabsContent>
 

@@ -126,7 +126,8 @@ fn validate_persisted_ciphertexts(
              UNION ALL SELECT 'profile-proxy',proxy_credential FROM profiles WHERE proxy_credential!='' \
              UNION ALL SELECT 'sync-provider',config FROM sync_providers WHERE config!='' \
              UNION ALL SELECT 'sync-password',value FROM sync_settings \
-                 WHERE key='sync_password' AND value!=''",
+                 WHERE key='sync_password' AND value!='' \
+             UNION ALL SELECT 'account-session',token FROM account_session WHERE token!=''",
         )
         .map_err(CommandError::database)?;
     let rows = statement

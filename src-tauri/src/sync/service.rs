@@ -9,7 +9,7 @@ use std::{
 use chrono::{Local, SecondsFormat};
 use serde::Serialize;
 
-use crate::{backup::BackupService, error::CommandError};
+use crate::{account::AccountService, backup::BackupService, error::CommandError};
 
 use super::{
     error::SyncError,
@@ -40,6 +40,7 @@ pub(super) struct SyncInner {
     pub(super) operation: OperationCoordinator,
     pub(super) oauth_states: Mutex<HashMap<String, super::oauth::OAuthState>>,
     pub(super) scheduler: Mutex<Option<super::scheduler::SchedulerRuntime>>,
+    pub(super) account: AccountService,
 }
 
 #[derive(Default)]
@@ -73,6 +74,7 @@ impl SyncService {
         repository: SyncRepository,
         backup: BackupService,
         backup_dir: PathBuf,
+        account: AccountService,
     ) -> Result<Self, CommandError> {
         std::fs::create_dir_all(&backup_dir).map_err(|error| {
             CommandError::new("SYNC_FAILED", format!("create backup dir: {error}"))
@@ -89,6 +91,7 @@ impl SyncService {
                 operation: OperationCoordinator::default(),
                 oauth_states: Mutex::new(HashMap::new()),
                 scheduler: Mutex::new(None),
+                account,
             }),
         })
     }
@@ -350,7 +353,7 @@ pub fn validate_provider(config: &SyncProviderConfig) -> Result<(), CommandError
             "INVALID_PROVIDER",
             "OAuth Client ID 不能为空（需在对应云平台注册应用获取）",
         )),
-        "webdav" | "s3" | "gdrive" | "onedrive" => Ok(()),
+        "webdav" | "s3" | "gdrive" | "onedrive" | "account" => Ok(()),
         other => Err(CommandError::new(
             "INVALID_PROVIDER",
             format!("暂不支持的云服务类型: {other}"),
@@ -394,6 +397,7 @@ fn now() -> String {
 mod tests {
     use super::*;
     use crate::{
+        account::AccountService,
         audit::AuditRepository,
         group::GroupService,
         infrastructure::database::Database,
@@ -419,9 +423,15 @@ mod tests {
             profiles,
             vault,
         );
-        let repository = SyncRepository::new(database, encryptor);
-        let state =
-            SyncService::initialize(repository, backup, directory.path().join("backups")).unwrap();
+        let repository = SyncRepository::new(database.clone(), encryptor.clone());
+        let account = AccountService::initialize(database, encryptor, repository.clone()).unwrap();
+        let state = SyncService::initialize(
+            repository,
+            backup,
+            directory.path().join("backups"),
+            account,
+        )
+        .unwrap();
         (directory, state)
     }
 

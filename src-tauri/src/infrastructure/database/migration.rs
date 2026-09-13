@@ -106,6 +106,12 @@ pub(super) fn migrate(connection: &Connection) -> Result<(), StorageError> {
             );\
              CREATE INDEX IF NOT EXISTS idx_sync_events_time \
                 ON sync_events(created_at DESC);\
+             CREATE TABLE IF NOT EXISTS account_session (\
+                id         INTEGER PRIMARY KEY CHECK (id = 1),\
+                email      TEXT NOT NULL,\
+                token      TEXT NOT NULL,\
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP\
+            );\
              INSERT OR IGNORE INTO sync_state (id,next_version,status) \
                 VALUES (1,1,'idle');",
     )?;

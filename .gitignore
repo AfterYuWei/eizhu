@@ -4,6 +4,9 @@ data/
 # fileterm 子项目（独立管理）
 fileterm/
 
+# admin 闭源子项目（独立 Git 仓库）
+admin/
+
 # Tauri（src-tauri/.gitignore 另行忽略 target/gen/binaries）
 /node_modules/
 

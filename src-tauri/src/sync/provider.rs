@@ -7,7 +7,7 @@ use reqwest::{Client, Method, Response, StatusCode};
 use sha2::{Digest, Sha256};
 use url::Url;
 
-use crate::error::CommandError;
+use crate::{account::AccountService, error::CommandError};
 
 use super::{
     model::{CloudIndex, SyncProviderConfig},
@@ -57,6 +57,7 @@ pub struct CloudProvider {
     config: SyncProviderConfig,
     repository: SyncRepository,
     client: Client,
+    account: AccountService,
 }
 
 impl CloudProvider {
@@ -64,6 +65,7 @@ impl CloudProvider {
         id: String,
         config: SyncProviderConfig,
         repository: SyncRepository,
+        account: AccountService,
     ) -> Result<Self, CommandError> {
         let client = Client::builder()
             .timeout(Duration::from_secs(60))
@@ -75,6 +77,7 @@ impl CloudProvider {
             config,
             repository,
             client,
+            account,
         })
     }
 
@@ -106,6 +109,7 @@ impl CloudProvider {
             }
             "gdrive" => self.ensure_gdrive_folder().await.map(|_| ()),
             "onedrive" => self.ensure_onedrive_folder().await,
+            "account" => self.account.me().await.map(|_| ()),
             other => Err(CommandError::new(
                 "SYNC_FAILED",
                 format!("暂不支持的云服务类型: {other}"),
@@ -148,6 +152,7 @@ impl CloudProvider {
             }
             "gdrive" => self.gdrive_upload(name, bytes).await,
             "onedrive" => self.onedrive_put(name, bytes).await,
+            "account" => self.account.put_object(name, bytes).await,
             other => Err(unsupported(other)),
         }
     }
@@ -178,6 +183,7 @@ impl CloudProvider {
                     .await?;
                 response
             }
+            "account" => return self.account.get_object(name).await,
             other => return Err(unsupported(other)),
         };
         if response.status() == StatusCode::NOT_FOUND {
@@ -209,6 +215,7 @@ impl CloudProvider {
                 self.oauth_request(Method::DELETE, self.onedrive_item_url(name), vec![], None)
                     .await?
             }
+            "account" => return self.account.delete_object(name).await,
             other => return Err(unsupported(other)),
         };
         if response.status() == StatusCode::NOT_FOUND || response.status().is_success() {

@@ -17,7 +17,12 @@ use super::{
 
 impl SyncService {
     fn provider(&self, row: ProviderRow) -> Result<CloudProvider, CommandError> {
-        CloudProvider::new(row.meta.id, row.config, self.inner.repository.clone())
+        CloudProvider::new(
+            row.meta.id,
+            row.config,
+            self.inner.repository.clone(),
+            self.inner.account.clone(),
+        )
     }
 
     pub async fn status(&self) -> Result<SyncStatus, CommandError> {

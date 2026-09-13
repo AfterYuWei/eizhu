@@ -21,7 +21,7 @@ export interface SyncVersionInfo {
 
 export interface SyncProviderMeta {
   id: string
-  type: 'webdav' | 's3' | 'gdrive' | 'onedrive'
+  type: ProviderType | 'account'
   name: string
   enabled: boolean
   authorized?: boolean

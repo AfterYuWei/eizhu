@@ -68,6 +68,7 @@ src/
 ├── main.rs
 ├── lib.rs
 ├── error.rs
+├── account/{mod.rs,client.rs,model.rs,repository.rs,service.rs}
 ├── server_detail.rs
 ├── app/
 │   ├── mod.rs
@@ -75,6 +76,7 @@ src/
 │   └── events.rs
 ├── commands/
 │   ├── mod.rs
+│   ├── account.rs
 │   ├── audit.rs
 │   ├── backup.rs
 │   ├── desktop.rs
@@ -148,9 +150,10 @@ src/
 | `app/mod.rs` | app facade | 仅重导出 bootstrap/event adapter |
 | `app/bootstrap.rs` | Desktop/Mobile builder、依赖构造、插件、handler、deep-link、shutdown | composition root |
 | `app/events.rs` | `SessionEventSink`/`SftpEventSink` 的 Tauri 实现 | feature 不直接依赖 Tauri |
-| `audit/backup/group/profile/snippet/vault/ssh/sftp/sync/mod.rs` | 声明 feature 子模块并选择性重导出 facade/model | 不承载业务逻辑 |
+| `account/audit/backup/group/profile/snippet/vault/ssh/sftp/sync/mod.rs` | 声明 feature 子模块并选择性重导出 facade/model | 不承载业务逻辑 |
 | `infrastructure/mod.rs`、`database/mod.rs`、`platform/mod.rs`、`desktop/mod.rs` | 声明基础设施层级及最小 API | desktop module 由 cfg 隔离 |
 | `commands/mod.rs` | command 模块注册 facade | crate 内可见；glob 用于携带 Tauri 宏生成的 handler 符号 |
+| `commands/account.rs` | 账号登录态、资料与账号同步开关 IPC | 无 HTTP/SQL 实现 |
 | `commands/audit.rs` | Audit IPC 与 `spawn_blocking` | 无 SQL |
 | `commands/backup.rs` | Backup IPC；desktop 文件对话框门控 | 无格式/加密逻辑 |
 | `commands/desktop.rs` | 窗口、日志、迁移、保存、drag-out IPC | `#[cfg(desktop)]` |
@@ -204,7 +207,10 @@ src/
 | `sync/scheduler.rs` | bounded queue、计划/变更触发、tracked JoinHandle、shutdown | backpressure 显式返回 |
 | `sync/cloud.rs` | pull/push/index/conflict/restore orchestration | 受 operation coordinator 保护 |
 | `sync/oauth.rs` | OAuth state、URL/callback、token exchange | deep-link 监听在 app adapter |
-| `sync/provider.rs` | WebDAV/S3/GDrive/OneDrive HTTP connector | provider body 不直接进入 IPC error |
+| `sync/provider.rs` | WebDAV/S3/GDrive/OneDrive/Account HTTP connector | provider body 不直接进入 IPC error |
+| `account/client.rs` | 账号认证与对象存储 HTTP 契约、401 刷新错误收口 | 不回显响应正文或 token |
+| `account/repository.rs` | 加密账号 session 的单行 SQLite 持久化 | token JSON 使用设备 `Encryptor` |
+| `account/service.rs` | 登录/注册/退出、轮换和内置 account provider 生命周期 | 与 Sync repository 组合，不改变同步引擎 |
 | `infrastructure/database/connection.rs` | SQLite connection factory、busy timeout、foreign keys | 不含业务 SQL |
 | `infrastructure/database/migration.rs` | schema 和幂等兼容 migration | 不依赖 feature |
 | `infrastructure/database/error.rs` | `StorageError` | 保留 rusqlite/io source |
@@ -223,7 +229,7 @@ src/
 
 ## Tauri Command Boundary
 
-当前 94 个 command 全部位于 `commands/`。它们只处理：
+当前所有 command 全部位于 `commands/`。它们只处理：
 
 1. `State`、IPC 参数和 binary body/response；
 2. 输入的轻量适配；
@@ -306,7 +312,7 @@ russh debug detail 和敏感 plaintext 不直接暴露到 IPC。
 
 ## Credential and Secret Boundary
 
-- 只有 `vault/crypto.rs` 实现 credential AES-256-GCM；Profile、Backup、Sync 复用 `Encryptor`；
+- 只有 `vault/crypto.rs` 实现 credential AES-256-GCM；Profile、Backup、Sync、Account 复用 `Encryptor`；
 - key file、nonce/ciphertext/tag、Backup Argon2id/AAD 均保持 Go 兼容；
 - `Credential`、`ResolvedProfileNode`、`SyncSettings`、`SyncProviderConfig`、`BackupPayload` 等
   secret-bearing 类型不实现 `Debug`；
@@ -317,7 +323,7 @@ russh debug detail 和敏感 plaintext 不直接暴露到 IPC。
 ## App State and Shutdown
 
 没有全局 God `AppState`。Tauri 分别管理 `GroupService`、`SnippetService`、`ProfileService`、
-`VaultService`、`BackupService`、`SyncService`、`SshService`、`SftpService` 和
+`VaultService`、`BackupService`、`AccountService`、`SyncService`、`SshService`、`SftpService` 和
 `AuditRepository`。Command 只能请求其签名中声明的 state。
 
 Desktop `ExitRequested` 的清理顺序为：SSH sessions -> SFTP sessions/transfers -> Sync scheduler
@@ -350,7 +356,7 @@ Cargo target dependency、composition 分支和 feature port 处理，不复制�
 
 ### Cross-platform core
 
-- Profile/Group/Snippet/Audit/Vault/Backup/Sync 规则与格式；
+- Profile/Group/Snippet/Audit/Vault/Backup/Account/Sync 规则与格式；
 - bundled SQLite schema/repositories；
 - russh SSH 与 remote SFTP；
 - cloud providers 与 OAuth use case；

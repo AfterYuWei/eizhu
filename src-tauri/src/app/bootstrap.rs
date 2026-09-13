@@ -1,6 +1,6 @@
 //! Tauri application composition root.
 
-use crate::{backup, commands, profile, sftp, ssh, sync, vault};
+use crate::{account, backup, commands, profile, sftp, ssh, sync, vault};
 
 #[cfg(desktop)]
 use crate::infrastructure::platform::desktop;
@@ -129,7 +129,13 @@ pub(crate) fn run() {
                 commands::sync_update_provider,
                 commands::sync_delete_provider,
                 commands::sync_test_provider,
-                commands::sync_oauth_url
+                commands::sync_oauth_url,
+                commands::account_status,
+                commands::account_login,
+                commands::account_register,
+                commands::account_logout,
+                commands::account_me,
+                commands::account_set_sync_enabled
             ])
             .setup(|app| {
                 use tauri::Manager;
@@ -165,10 +171,18 @@ pub(crate) fn run() {
                     profiles.clone(),
                     vault.clone(),
                 );
+                let sync_repository =
+                    sync::SyncRepository::new(database.clone(), encryptor.clone());
+                let account = account::AccountService::initialize(
+                    database.clone(),
+                    encryptor.clone(),
+                    sync_repository.clone(),
+                )?;
                 let sync = sync::SyncService::initialize(
-                    sync::SyncRepository::new(database.clone(), encryptor.clone()),
+                    sync_repository,
                     backup.clone(),
                     data_dir.join("backups"),
+                    account.clone(),
                 )?;
                 let runtime = tauri::async_runtime::handle();
                 sync.start_scheduler(runtime.inner())?;
@@ -184,6 +198,7 @@ pub(crate) fn run() {
                 app.manage(vault);
                 app.manage(profiles);
                 app.manage(backup);
+                app.manage(account);
                 app.manage(sync);
                 app.manage(sessions);
                 app.manage(sftp);
@@ -335,7 +350,13 @@ fn desktop_run() {
             commands::sync_update_provider,
             commands::sync_delete_provider,
             commands::sync_test_provider,
-            commands::sync_oauth_url
+            commands::sync_oauth_url,
+            commands::account_status,
+            commands::account_login,
+            commands::account_register,
+            commands::account_logout,
+            commands::account_me,
+            commands::account_set_sync_enabled
         ])
         .setup(move |app| {
             let data_dir = desktop::user_data_dir()
@@ -366,10 +387,17 @@ fn desktop_run() {
                 profiles.clone(),
                 vault.clone(),
             );
+            let sync_repository = sync::SyncRepository::new(database.clone(), encryptor.clone());
+            let account = account::AccountService::initialize(
+                database.clone(),
+                encryptor.clone(),
+                sync_repository.clone(),
+            )?;
             let sync = sync::SyncService::initialize(
-                sync::SyncRepository::new(database.clone(), encryptor.clone()),
+                sync_repository,
                 backup.clone(),
                 data_dir.join("backups"),
+                account.clone(),
             )?;
             let runtime = tauri::async_runtime::handle();
             sync.start_scheduler(runtime.inner())?;
@@ -384,6 +412,7 @@ fn desktop_run() {
             app.manage(vault);
             app.manage(profiles);
             app.manage(backup);
+            app.manage(account);
             app.manage(sync);
             app.manage(sessions);
             app.manage(sftp);

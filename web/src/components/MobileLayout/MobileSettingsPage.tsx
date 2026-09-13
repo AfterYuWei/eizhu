@@ -2,7 +2,7 @@ import { useRef, useState } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import {
   Activity, ChevronLeft, ChevronRight, CloudSync, DatabaseBackup,
-  Info, Palette, RefreshCw, SquareTerminal, Wifi,
+  Info, Palette, RefreshCw, SquareTerminal, UserRound, Wifi,
 } from 'lucide-react'
 import type { ComponentType } from 'react'
 import { MobileHeader } from './MobileHeader'
@@ -12,6 +12,8 @@ import { BackupPanel } from '@/components/SettingsDialog/BackupPanel'
 import { SyncPanel } from '@/components/SettingsDialog/SyncPanel'
 import { AboutPanel } from '@/components/SettingsDialog/AboutPanel'
 import { MobileDiagnosticsPanel } from '@/components/SettingsDialog/MobileDiagnosticsPanel'
+import { AccountPanel } from '@/components/SettingsDialog/AccountPanel'
+import { useAccountStore } from '@/store/account'
 import { useSettingsStore } from '@/store/settings'
 import { terminalThemes } from '@/lib/terminalThemes'
 import type { NativePlatform } from '@/lib/platform'
@@ -20,6 +22,7 @@ export type MobileSettingsSubPage =
   | 'appearance'
   | 'terminal'
   | 'backup'
+  | 'account'
   | 'sync'
   | 'diagnostics'
   | 'update'
@@ -31,6 +34,7 @@ const SUB_TITLES: Record<MobileSettingsSubPage, string> = {
   appearance: '外观',
   terminal: '终端',
   backup: '数据备份',
+  account: '账号',
   sync: '云同步',
   diagnostics: '诊断',
   update: '软件更新',
@@ -72,6 +76,7 @@ export function MobileSettingsPage({
   const reducedMotion = useReducedMotion()
   const theme = useSettingsStore((state) => state.theme)
   const terminalTheme = useSettingsStore((state) => state.terminalTheme)
+  const account = useAccountStore((state) => state.status)
   const platformLabel = platform === 'android' ? 'Android 设备' : platform === 'ios' ? 'iPhone 与 iPad' : '移动设备'
   // 记录导航方向，二级页 push 从右滑入、pop 向右滑出（对称路径）
   const [navDir, setNavDir] = useState<'push' | 'pop'>('push')
@@ -117,6 +122,7 @@ export function MobileSettingsPage({
                 {subPage === 'appearance' && <MobileAppearancePanel />}
                 {subPage === 'terminal' && <MobileTerminalPanel />}
                 {subPage === 'backup' && <div className="m-subpanel"><BackupPanel /></div>}
+                {subPage === 'account' && <div className="m-subpanel"><AccountPanel /></div>}
                 {subPage === 'sync' && <div className="m-subpanel"><SyncPanel /></div>}
                 {subPage === 'diagnostics' && <div className="m-subpanel"><MobileDiagnosticsPanel /></div>}
                 {subPage === 'update' && <MobileUpdatePanel />}
@@ -139,6 +145,11 @@ export function MobileSettingsPage({
       />
       <div className="m-page-scroll" ref={scrollRef}>
         <div className="m-page-body m-settings-flow">
+          <button type="button" className="m-card m-account-card" onClick={() => openSub('account')}>
+            <span className="m-set-row-icon is-settings"><UserRound size={19} /></span>
+            <span className="m-set-row-copy"><strong>{account?.loggedIn ? account.user?.email : '登录 eizhu 账号'}</strong><span>{account?.loggedIn ? (account.syncEnabled ? '账号同步已开启' : '账号同步已关闭') : '跨设备同步加密配置'}</span></span>
+            <ChevronRight size={16} />
+          </button>
           <h2 className="m-eyebrow"><span>设置</span></h2>
           <div className="m-card">
             {MENU_ITEMS.map((item) => {

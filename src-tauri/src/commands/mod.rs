@@ -1,5 +1,6 @@
 //! Tauri IPC adapter layer.
 
+mod account;
 mod audit;
 mod backup;
 #[cfg(desktop)]
@@ -16,6 +17,7 @@ mod ssh;
 mod sync;
 mod vault;
 
+pub(crate) use account::*;
 pub(crate) use audit::*;
 pub(crate) use backup::*;
 #[cfg(desktop)]
