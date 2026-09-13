@@ -795,6 +795,123 @@
 
 /* ─────────────── 桌面弹窗的移动适配（Portal，移动运行时限定） ─────────────── */
 
+/*
+ * 所有共享弹窗在移动端显式声明空间语义：
+ * - sheet：短输入、操作与确认，从底部进入并沿原路径退出；
+ * - fullscreen：长表单/编辑器，原地淡入缩放，避免大面积纵向扫过；
+ * - center：少量居中工具，同样只在当前位置 materialize。
+ * custom 留给连接进度等已有专用布局的弹窗。
+ */
+:root[data-eizhu-mobile] [data-mobile-presentation='sheet'],
+:root[data-eizhu-mobile] [data-mobile-presentation='fullscreen'],
+:root[data-eizhu-mobile] [data-mobile-presentation='center'] {
+  --mobile-dialog-ime-inset: max(
+    var(--mobile-native-ime-inset, 0px),
+    var(--mobile-viewport-ime-inset, 0px)
+  );
+  --mobile-dialog-extra-ime-inset: max(
+    0px,
+    calc(var(--mobile-native-ime-inset, 0px) - var(--mobile-viewport-ime-inset, 0px))
+  );
+  will-change: opacity, transform;
+}
+
+:root[data-eizhu-mobile] [data-mobile-presentation='sheet'] {
+  top: auto;
+  right: 8px;
+  bottom: calc(8px + var(--safe-inset-bottom) + var(--mobile-dialog-ime-inset));
+  left: 8px;
+  width: min(36rem, calc(100% - 16px));
+  max-width: none;
+  max-height: min(
+    78dvh,
+    calc(
+      var(--mobile-viewport-height, 100dvh)
+      - var(--safe-inset-top)
+      - var(--safe-inset-bottom)
+      - var(--mobile-dialog-extra-ime-inset)
+      - 16px
+    )
+  );
+  margin-inline: auto;
+  overflow-y: auto;
+  translate: none;
+  transform: none;
+  border-radius: 24px;
+}
+
+:root[data-eizhu-mobile] [data-mobile-presentation='fullscreen'] {
+  top: calc(var(--safe-inset-top) + 6px);
+  right: 6px;
+  bottom: calc(6px + var(--safe-inset-bottom) + var(--mobile-dialog-ime-inset));
+  left: 6px;
+  width: auto;
+  height: auto;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  overflow: auto;
+  translate: none;
+  transform: none;
+  border-radius: 20px;
+}
+
+:root[data-eizhu-mobile] [data-mobile-presentation='center'] {
+  width: min(32rem, calc(100% - 20px));
+  max-height: calc(var(--mobile-viewport-height, 100dvh) - var(--safe-inset-top) - 20px);
+  overflow-y: auto;
+}
+
+:root[data-eizhu-mobile] [data-mobile-presentation='sheet'][data-state='open'] {
+  animation: mobile-dialog-sheet-in 280ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+:root[data-eizhu-mobile] [data-mobile-presentation='sheet'][data-state='closed'] {
+  animation: mobile-dialog-sheet-out 180ms cubic-bezier(0.4, 0, 1, 1) both;
+}
+:root[data-eizhu-mobile] [data-mobile-presentation='fullscreen'][data-state='open'],
+:root[data-eizhu-mobile] [data-mobile-presentation='center'][data-state='open'] {
+  animation: mobile-dialog-materialize-in 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+:root[data-eizhu-mobile] [data-mobile-presentation='fullscreen'][data-state='closed'],
+:root[data-eizhu-mobile] [data-mobile-presentation='center'][data-state='closed'] {
+  animation: mobile-dialog-materialize-out 160ms ease-in both;
+}
+
+@keyframes mobile-dialog-sheet-in {
+  from { opacity: 0; transform: translateY(24px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes mobile-dialog-sheet-out {
+  from { opacity: 1; transform: translateY(0); }
+  to { opacity: 0; transform: translateY(24px); }
+}
+@keyframes mobile-dialog-materialize-in {
+  from { opacity: 0; scale: 0.975; }
+  to { opacity: 1; scale: 1; }
+}
+@keyframes mobile-dialog-materialize-out {
+  from { opacity: 1; scale: 1; }
+  to { opacity: 0; scale: 0.985; }
+}
+
+/* 全屏承载层内的复合面板跟随容器尺寸，不再保留桌面固定宽高。 */
+:root[data-eizhu-mobile] [data-mobile-presentation='fullscreen'] > .editor-dialog,
+:root[data-eizhu-mobile] [data-mobile-presentation='fullscreen'] > .sftp-picker {
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+}
+:root[data-eizhu-mobile] [data-mobile-presentation='fullscreen'] > .sftp-picker {
+  display: flex;
+  flex-direction: column;
+}
+:root[data-eizhu-mobile] [data-mobile-presentation='fullscreen'] > .sftp-picker .sftp-picker-list {
+  min-height: 0;
+  max-height: none;
+  flex: 1;
+}
+
 /* 主机表单：内边距收紧，两列网格合并为单列 */
 :root[data-eizhu-mobile] .pf-dialog-content { padding: 16px 14px; }
 :root[data-eizhu-mobile] .pf-dialog-content .pf-grid-2,
@@ -802,10 +919,10 @@
 :root[data-eizhu-mobile] .pf-dialog-content .pf-footer { margin-top: 16px; }
 
 /* Vault 表单/生成密钥：去掉左侧分区 rail，双列面板合并单列 */
-:root[data-eizhu-mobile] .vault-sheet-dialog-content { width: calc(100vw - 16px); }
+:root[data-eizhu-mobile] .vault-sheet-dialog-content { width: auto; }
 :root[data-eizhu-mobile] .vault-sheet-body { grid-template-columns: 1fr; overflow-y: auto; }
 :root[data-eizhu-mobile] .vault-sheet-grid { grid-template-columns: 1fr; }
-:root[data-eizhu-mobile] .vault-gen-dialog-content { width: calc(100vw - 16px); }
+:root[data-eizhu-mobile] .vault-gen-dialog-content { width: auto; }
 :root[data-eizhu-mobile] .vault-gen-grid { grid-template-columns: 1fr; }
 
 /* 文件编辑器：贴合视口，为系统手势区留边 */
@@ -1706,8 +1823,8 @@
 @media (pointer: coarse) {
   .mobile-layout button { touch-action: manipulation; }
   :root[data-eizhu-mobile] .m-sheet-item { touch-action: manipulation; }
-  :root[data-eizhu-mobile] [role='dialog'],
-  :root[data-eizhu-mobile] [role='alertdialog'] {
+  :root[data-eizhu-mobile] [role='dialog']:not([data-mobile-presentation]),
+  :root[data-eizhu-mobile] [role='alertdialog']:not([data-mobile-presentation]) {
     max-height: calc(var(--mobile-viewport-height, 100dvh) - 20px);
   }
 }
@@ -1715,6 +1832,14 @@
 /* ─────────────── 无障碍降级 ─────────────── */
 
 @media (prefers-reduced-motion: reduce) {
+  :root[data-eizhu-mobile] [data-mobile-presentation][data-state='open'] {
+    animation: mobile-dialog-fade-in 140ms ease-out both;
+  }
+  :root[data-eizhu-mobile] [data-mobile-presentation][data-state='closed'] {
+    animation: mobile-dialog-fade-out 100ms ease-in both;
+  }
+  @keyframes mobile-dialog-fade-in { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes mobile-dialog-fade-out { from { opacity: 1; } to { opacity: 0; } }
   .mobile-layout .m-compactbar-fixed { animation: none; }
   .mobile-layout .msftp-icon-btn:active,
   .mobile-layout .msftp-text-btn:active,

@@ -16,7 +16,7 @@ interface TerminalThemePickerProps {
 export function TerminalThemePicker({ open, onOpenChange, value, onChange }: TerminalThemePickerProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg p-0 overflow-hidden">
+      <DialogContent mobilePresentation="sheet" className="max-w-lg p-0 overflow-hidden">
         <DialogHeader className="px-6 pt-5 pb-4 border-b border-[var(--border-subtle)]">
           <DialogTitle>选择主题</DialogTitle>
         </DialogHeader>

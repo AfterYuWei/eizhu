@@ -292,6 +292,7 @@ export function ConnectionDialog({
       }}
     >
       <DialogContent
+        mobilePresentation="custom"
         showCloseButton={false}
         onEscapeKeyDown={(event) => !canCloseByClick && event.preventDefault()}
         onPointerDownOutside={(event) => !canCloseByClick && event.preventDefault()}

@@ -115,7 +115,7 @@ export function VaultView() {
 
       {/* 删除确认弹窗 */}
       <Dialog open={!!deleteTarget} onOpenChange={(v) => !v && setDeleteTarget(null)}>
-        <DialogContent className="max-w-md">
+        <DialogContent mobilePresentation="sheet" className="max-w-md">
           <DialogHeader className="mb-4">
             <DialogTitle>
               {deleteTarget && deleteTarget.refs.length > 0 ? '无法删除' : '确认删除'}

@@ -152,7 +152,7 @@ export function VaultGenerateDialog({ open, onOpenChange }: VaultGenerateDialogP
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="vault-gen-dialog-content">
+      <DialogContent mobilePresentation="fullscreen" className="vault-gen-dialog-content">
         <DialogHeader className="vault-gen-header">
           <div className="vault-gen-header-top">
             <DialogTitle>{isResultStep ? '保存 SSH 密钥' : '生成 SSH 密钥对'}</DialogTitle>

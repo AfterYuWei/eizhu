@@ -5,6 +5,8 @@ import { Dialog as DialogPrimitive } from "radix-ui"
 
 import { Button } from "@/components/ui/button"
 
+export type MobileDialogPresentation = "sheet" | "fullscreen" | "center" | "custom"
+
 function Dialog({
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Root>) {
@@ -49,15 +51,18 @@ function DialogContent({
   className,
   children,
   showCloseButton = true,
+  mobilePresentation = "center",
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean
+  mobilePresentation?: MobileDialogPresentation
 }) {
   return (
     <DialogPortal data-slot="dialog-portal">
       <DialogOverlay />
       <DialogPrimitive.Content
         data-slot="dialog-content"
+        data-mobile-presentation={mobilePresentation}
         className={cn(
           // Keep the viewport inset in the width itself. A responsive max-width
           // here would also cap larger, feature-owned dialog sizes on desktop.

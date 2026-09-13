@@ -72,7 +72,7 @@ export function GroupForm({ open, onOpenChange, group, defaultParentId }: GroupF
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent mobilePresentation="sheet" className="max-w-md">
         <DialogHeader>
           <DialogTitle>{isEditing ? '编辑分组' : '新建分组'}</DialogTitle>
         </DialogHeader>

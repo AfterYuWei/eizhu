@@ -2,6 +2,7 @@ import * as React from "react"
 import { AlertDialog as AlertDialogPrimitive } from "radix-ui"
 import { cn } from "cn"
 import { buttonVariants } from "@/components/ui/button"
+import type { MobileDialogPresentation } from "@/components/ui/dialog"
 
 function AlertDialog({
   ...props
@@ -41,13 +42,17 @@ function AlertDialogOverlay({
 
 function AlertDialogContent({
   className,
+  mobilePresentation = "sheet",
   ...props
-}: React.ComponentProps<typeof AlertDialogPrimitive.Content>) {
+}: React.ComponentProps<typeof AlertDialogPrimitive.Content> & {
+  mobilePresentation?: MobileDialogPresentation
+}) {
   return (
     <AlertDialogPortal>
       <AlertDialogOverlay />
       <AlertDialogPrimitive.Content
         data-slot="alert-dialog-content"
+        data-mobile-presentation={mobilePresentation}
         className={cn(
           "fixed top-1/2 left-1/2 z-50 grid w-[min(32rem,calc(100%-2rem))] max-w-none -translate-x-1/2 -translate-y-1/2 gap-4 rounded-[var(--r-xl)] border border-[var(--dialog-border)] bg-[var(--dialog-bg)] p-6 shadow-[var(--shadow-modal)] duration-200 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95",
           className

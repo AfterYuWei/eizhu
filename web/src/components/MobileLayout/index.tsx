@@ -95,6 +95,14 @@ export function MobileLayout() {
   const keyboardOpen = useMobileKeyboardVisible(imeInset)
 
   useEffect(() => {
+    const root = document.documentElement
+    root.style.setProperty('--mobile-native-ime-inset', `${imeInset}px`)
+    return () => {
+      root.style.removeProperty('--mobile-native-ime-inset')
+    }
+  }, [imeInset])
+
+  useEffect(() => {
     const viewport = window.visualViewport
     const updateViewport = () => {
       const viewportHeight = viewport?.height ?? window.innerHeight

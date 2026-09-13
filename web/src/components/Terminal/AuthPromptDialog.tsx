@@ -20,6 +20,7 @@ export function AuthPromptDialog({ request, onSubmit, onCancel }: AuthPromptDial
   return (
     <Dialog open={Boolean(request)} onOpenChange={(open) => !open && onCancel()}>
       <DialogContent
+        mobilePresentation="sheet"
         className="w-[min(440px,calc(100vw-2rem))] rounded-[var(--r-lg)]"
         onPointerDownOutside={(event) => event.preventDefault()}
       >

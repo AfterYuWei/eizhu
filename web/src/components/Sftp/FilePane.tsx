@@ -620,7 +620,7 @@ export function FilePane({ pane, onPickServer }: FilePaneProps) {
       )}
 
       <Dialog open={mobileTransfer !== null} onOpenChange={(open) => !open && setMobileTransfer(null)}>
-        <DialogContent className="w-[min(440px,calc(100vw-2rem))]">
+        <DialogContent mobilePresentation="sheet" className="w-[min(440px,calc(100vw-2rem))]">
           <DialogTitle>{mobileTransfer === 'move' ? '移动所选项目' : '复制/跨服务器传输'}</DialogTitle>
           <DialogDescription>选择目标会话与目录；同名文件将自动重命名。</DialogDescription>
           <label className="space-y-1.5 text-sm">

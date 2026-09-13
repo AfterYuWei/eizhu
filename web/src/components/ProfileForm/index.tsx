@@ -276,7 +276,7 @@ export function ProfileForm({ open, onOpenChange, profile, presetGroupId }: Prof
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="pf-dialog-content max-h-[calc(100dvh-2rem)] w-[min(760px,calc(100vw-2rem))] max-w-none overflow-y-auto">
+      <DialogContent mobilePresentation="fullscreen" className="pf-dialog-content max-h-[calc(100dvh-2rem)] w-[min(760px,calc(100vw-2rem))] max-w-none overflow-y-auto">
         <DialogHeader className="mb-6">
           <DialogTitle>{isEditing ? '编辑连接' : '新建连接'}</DialogTitle>
         </DialogHeader>
