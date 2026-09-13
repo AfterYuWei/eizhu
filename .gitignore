@@ -22,6 +22,7 @@ Thumbs.db
 .agents/
 .claude/
 .trae/
+.zcode/
 skills-lock.json
 
 # Android Gradle 构建产物（插件目录）
