@@ -9,7 +9,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { useProfileStore } from '@/store/profile'
 import { profileApi } from '@/api/profile'
-import { SERVER_ICONS, ServerIcon } from '@/lib/serverIcons'
+import { SELECTABLE_SERVER_ICONS, ServerIcon } from '@/lib/serverIcons'
 import { applyVaultUsernameToProfile } from '@/lib/vaultUsername'
 import { jumpProfileCandidates, newProxyInput, proxyInputFromProfile } from '@/lib/profileProxy'
 import { VaultSelectButton } from '@/components/Vault/VaultSelectButton'
@@ -85,7 +85,13 @@ export function ProfileForm({ open, onOpenChange, profile, presetGroupId }: Prof
     setError('')
 
     try {
-      const payload: ProfileCreateRequest = { ...form, username: form.username.trim() }
+      const host = form.host.trim()
+      const payload: ProfileCreateRequest = {
+        ...form,
+        host,
+        name: form.name.trim() || host,
+        username: form.username.trim(),
+      }
       if (!payload.username) {
         setError('用户名不能为空')
         setLoading(false)
@@ -118,7 +124,13 @@ export function ProfileForm({ open, onOpenChange, profile, presetGroupId }: Prof
     setTestResult(null)
     setError('')
     try {
-      const payload: ProfileCreateRequest = { ...form, username: form.username.trim() }
+      const host = form.host.trim()
+      const payload: ProfileCreateRequest = {
+        ...form,
+        host,
+        name: form.name.trim() || host,
+        username: form.username.trim(),
+      }
       if (!payload.host.trim() || !payload.username) {
         setError('请先填写主机和用户名')
         return
@@ -138,19 +150,6 @@ export function ProfileForm({ open, onOpenChange, profile, presetGroupId }: Prof
       const apiMessage = (err as { error?: { message?: string } })?.error?.message
       setError(apiMessage || (err as Error).message || '连接测试失败')
     } finally {
-      setTesting(false)
-    }
-  }
-
-  const confirmTestHostKey = async (profileId: string, fingerprint: string) => {
-    setTesting(true)
-    setError('')
-    try {
-      await profileApi.confirmHostKey(profileId, fingerprint)
-      await runConnectionTest()
-    } catch (err) {
-      const apiMessage = (err as { error?: { message?: string } })?.error?.message
-      setError(apiMessage || '确认主机指纹失败')
       setTesting(false)
     }
   }
@@ -216,14 +215,6 @@ export function ProfileForm({ open, onOpenChange, profile, presetGroupId }: Prof
   const showPasswordAuth = form.auth_type === 'password'
   const showKeyAuth = form.auth_type === 'key'
   const isPasswordVault = form.auth_type === 'vault' && selectedVaultItem?.type === 'password'
-  const vaultUsernameHelpText = selectedVaultItem
-    ? selectedVaultItem.type === 'password'
-      ? selectedVaultItem.username
-        ? '密码凭据已绑定用户名，服务器中不可单独修改。'
-        : '该密码凭据缺少用户名，请先前往 Vault 补充。'
-      : '私钥不绑定用户，请填写当前服务器的登录用户名。'
-    : '选择 Vault 凭据；服务器登录用户名始终需要确认。'
-
   const applyVaultItem = useCallback((item: VaultItem, updateVaultId: boolean) => {
     const previousAutoUsername = autoVaultUsernameRef.current
     setSelectedVaultItem(item)
@@ -284,7 +275,7 @@ export function ProfileForm({ open, onOpenChange, profile, presetGroupId }: Prof
         <form onSubmit={handleSubmit} id="profile-form" className="pf-form">
           <div className="pf-field">
             <Label htmlFor="name" className="pf-label">
-              名称
+              名称（可选）
             </Label>
             <div className="pf-input-group">
               <div className="pf-icon-prefix-wrap">
@@ -301,10 +292,10 @@ export function ProfileForm({ open, onOpenChange, profile, presetGroupId }: Prof
                       <ServerIcon iconKey={form.icon} size={15} />
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent align="start" className="pf-icon-popover w-[220px] p-2.5">
+                  <PopoverContent align="start" className="pf-icon-popover max-h-[min(70dvh,420px)] w-[220px] overflow-y-auto p-2.5">
                     <div className="pf-icon-popover-title">选择图标</div>
                     <div className="pf-icon-popover-grid">
-                      {SERVER_ICONS.map((definition) => {
+                      {SELECTABLE_SERVER_ICONS.map((definition) => {
                         const Icon = definition.Icon
                         const active = (form.icon || 'server') === definition.key
                         return (
@@ -334,8 +325,7 @@ export function ProfileForm({ open, onOpenChange, profile, presetGroupId }: Prof
                 id="name"
                 value={form.name}
                 onChange={(event) => setForm({ ...form, name: event.target.value })}
-                placeholder="生产服务器"
-                required
+                placeholder="留空则使用主机地址"
                 className="pf-input-mono"
               />
             </div>
@@ -400,7 +390,6 @@ export function ProfileForm({ open, onOpenChange, profile, presetGroupId }: Prof
                 onItemResolved={handleVaultResolved}
                 onChange={handleVaultSelection}
               />
-              <div className="pf-help-text">{vaultUsernameHelpText}</div>
             </div>
           ) : (
             <>
@@ -553,7 +542,6 @@ export function ProfileForm({ open, onOpenChange, profile, presetGroupId }: Prof
                   )}
                 </div>
               </div>
-              <div className="pf-help-text">目标域名由代理端解析；账号与密码需要同时填写。</div>
             </>
           )}
 
@@ -564,7 +552,6 @@ export function ProfileForm({ open, onOpenChange, profile, presetGroupId }: Prof
                 <SelectTrigger className="w-full"><SelectValue placeholder="请选择" /></SelectTrigger>
                 <SelectContent>{jumpProfileOptions.map((option) => <SelectItem key={option.value || '__none__'} value={option.value || '__none__'}>{option.label}</SelectItem>)}</SelectContent>
               </Select>
-              <div className="pf-help-text">跳板机使用其自身 SSH 凭据和代理配置，支持最多 5 层递归链路。</div>
             </div>
           )}
 
@@ -577,24 +564,17 @@ export function ProfileForm({ open, onOpenChange, profile, presetGroupId }: Prof
               </div>
               <div className="pf-test-stages">
                 {testResult.stages.map((stage, index) => (
-                  <div key={`${stage.stage}-${stage.profile_id}-${index}`} className="pf-test-stage">
+                  <div
+                    key={`${stage.stage}-${stage.profile_id}-${index}`}
+                    className="pf-test-stage"
+                    data-status={stage.status}
+                  >
                     {stage.status === 'success' ? <CheckCircle2 size={13} /> : <ShieldAlert size={13} />}
                     <div>
                       <div>{stage.profile_name ? `${stage.profile_name}：` : ''}{stage.message}</div>
                       {stage.fingerprint && <div className="pf-test-fingerprint">当前：{stage.fingerprint}</div>}
                       {stage.known_fingerprint && <div className="pf-test-fingerprint">已保存：{stage.known_fingerprint}</div>}
                     </div>
-                    {stage.status === 'error' && stage.profile_id && stage.fingerprint && !stage.profile_id.startsWith('draft-') && (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="pf-confirm-key-btn"
-                        disabled={testing}
-                        onClick={() => confirmTestHostKey(stage.profile_id!, stage.fingerprint!)}
-                      >
-                        信任新指纹
-                      </Button>
-                    )}
                   </div>
                 ))}
               </div>
