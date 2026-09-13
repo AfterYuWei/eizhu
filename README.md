@@ -64,19 +64,19 @@ HTTP 或 WebSocket 服务。
 
 ### 正式版（Stable）
 
-[![正式版](https://img.shields.io/badge/正式版-v0.4.1-2ea44f)](https://github.com/AfterYuWei/eizhu/releases/tag/v0.4.1)
+[![正式版](https://img.shields.io/badge/正式版-v0.4.3-2ea44f)](https://github.com/AfterYuWei/eizhu/releases/tag/v0.4.3)
 
 正式版由 `main` 分支发布，优先保证稳定性，适合日常使用。点击对应平台徽标即可直接下载安装包：
 
 <p>
-  <a href="https://github.com/AfterYuWei/eizhu/releases/download/v0.4.1/eizhu_0.4.1_x64-setup.exe"><img src="https://img.shields.io/badge/Windows-x64-0078D4?logo=windows11&amp;logoColor=white" alt="下载 Windows x64 正式版"></a>
-  <a href="https://github.com/AfterYuWei/eizhu/releases/download/v0.4.1/eizhu_0.4.1_aarch64.dmg"><img src="https://img.shields.io/badge/macOS-Apple_Silicon-000000?logo=apple&amp;logoColor=white" alt="下载 macOS Apple Silicon 正式版"></a>
-  <a href="https://github.com/AfterYuWei/eizhu/releases/download/v0.4.1/eizhu_0.4.1_amd64.AppImage"><img src="https://img.shields.io/badge/Linux-AppImage-FCC624?logo=linux&amp;logoColor=black" alt="下载 Linux AppImage 正式版"></a>
-  <a href="https://github.com/AfterYuWei/eizhu/releases/download/v0.4.1/eizhu_0.4.1_amd64.deb"><img src="https://img.shields.io/badge/Linux-deb-A81D33?logo=debian&amp;logoColor=white" alt="下载 Linux deb 正式版"></a>
-  <a href="https://github.com/AfterYuWei/eizhu/releases/download/v0.4.1/eizhu-0.4.1-1.x86_64.rpm"><img src="https://img.shields.io/badge/Linux-rpm-294172?logo=fedora&amp;logoColor=white" alt="下载 Linux rpm 正式版"></a>
+  <a href="https://github.com/AfterYuWei/eizhu/releases/download/v0.4.3/eizhu_0.4.3_x64-setup.exe"><img src="https://img.shields.io/badge/Windows-x64-0078D4?logo=windows11&amp;logoColor=white" alt="下载 Windows x64 正式版"></a>
+  <a href="https://github.com/AfterYuWei/eizhu/releases/download/v0.4.3/eizhu_0.4.3_aarch64.dmg"><img src="https://img.shields.io/badge/macOS-Apple_Silicon-000000?logo=apple&amp;logoColor=white" alt="下载 macOS Apple Silicon 正式版"></a>
+  <a href="https://github.com/AfterYuWei/eizhu/releases/download/v0.4.3/eizhu_0.4.3_amd64.AppImage"><img src="https://img.shields.io/badge/Linux-AppImage-FCC624?logo=linux&amp;logoColor=black" alt="下载 Linux AppImage 正式版"></a>
+  <a href="https://github.com/AfterYuWei/eizhu/releases/download/v0.4.3/eizhu_0.4.3_amd64.deb"><img src="https://img.shields.io/badge/Linux-deb-A81D33?logo=debian&amp;logoColor=white" alt="下载 Linux deb 正式版"></a>
+  <a href="https://github.com/AfterYuWei/eizhu/releases/download/v0.4.3/eizhu-0.4.3-1.x86_64.rpm"><img src="https://img.shields.io/badge/Linux-rpm-294172?logo=fedora&amp;logoColor=white" alt="下载 Linux rpm 正式版"></a>
 </p>
 
-[查看正式版发布说明](https://github.com/AfterYuWei/eizhu/releases/tag/v0.4.1) ·
+[查看正式版发布说明](https://github.com/AfterYuWei/eizhu/releases/tag/v0.4.3) ·
 [始终前往最新正式版](https://github.com/AfterYuWei/eizhu/releases/latest)
 
 ### 测试版（Preview）
