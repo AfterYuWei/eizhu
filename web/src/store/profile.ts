@@ -3,6 +3,7 @@ import { profileApi } from '@/api/profile'
 import { groupApi } from '@/api/group'
 import type { Profile, ProfileCreateRequest, ProfileUpdateRequest } from '@/types/profile'
 import type { Group } from '@/types/group'
+import { isAutoManagedServerIcon } from '@/lib/serverIconKeys'
 
 interface ProfileStore {
   profiles: Profile[]
@@ -21,6 +22,7 @@ interface ProfileStore {
   applySnapshot: (profiles: Profile[], groups: Group[]) => void
   createProfile: (data: ProfileCreateRequest) => Promise<Profile>
   updateProfile: (id: string, data: ProfileUpdateRequest) => Promise<Profile>
+  updateDetectedIcon: (id: string, icon: string) => Promise<void>
   deleteProfile: (id: string) => Promise<void>
   createGroup: (data: { name: string; parent_id?: string; icon?: string }) => Promise<Group>
   updateGroup: (id: string, data: { name?: string; parent_id?: string; icon?: string }) => Promise<Group>
@@ -98,6 +100,30 @@ export const useProfileStore = create<ProfileStore>((set, get) => ({
     const profile = await profileApi.update(id, data)
     get().fetchProfiles()
     return profile
+  },
+
+  updateDetectedIcon: async (id, icon) => {
+    const current = get().profiles.find((profile) => profile.id === id)
+    if (!current || current.icon === icon || !isAutoManagedServerIcon(current.icon)) return
+
+    const previousIcon = current.icon
+    set((state) => ({
+      profiles: state.profiles.map((profile) => (
+        profile.id === id ? { ...profile, icon } : profile
+      )),
+    }))
+    try {
+      await profileApi.update(id, { icon })
+    } catch (error) {
+      set((state) => ({
+        profiles: state.profiles.map((profile) => (
+          profile.id === id && profile.icon === icon
+            ? { ...profile, icon: previousIcon }
+            : profile
+        )),
+      }))
+      console.error('Failed to persist detected server icon:', error)
+    }
   },
 
   deleteProfile: async (id) => {
