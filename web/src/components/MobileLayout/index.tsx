@@ -78,14 +78,6 @@ export function MobileLayout() {
   useEffect(() => {
     const capabilities = getPlatformCapabilities()
     if (capabilities.platform !== 'android') return
-    const guideKey = 'eizhu-android-battery-guide-v1'
-    if (!localStorage.getItem(guideKey)) {
-      localStorage.setItem(guideKey, 'shown')
-      toast('后台连接提示', {
-        description: '部分国产 Android 系统会强制冻结后台应用。如会话频繁中断，请在系统电池设置中允许 eizhu 后台运行；应用不会自动修改系统设置。',
-        duration: 12_000,
-      })
-    }
     const notificationLimited = (event: Event) => {
       const message = (event as CustomEvent<string>).detail
       toast.warning('通知权限未开启', {
