@@ -4,6 +4,7 @@ import { XIcon } from "lucide-react"
 import { Dialog as DialogPrimitive } from "radix-ui"
 
 import { Button } from "@/components/ui/button"
+import { isMobileRuntime } from "@/lib/platform"
 
 export type MobileDialogPresentation = "sheet" | "fullscreen" | "center" | "custom"
 
@@ -57,6 +58,11 @@ function DialogContent({
   showCloseButton?: boolean
   mobilePresentation?: MobileDialogPresentation
 }) {
+  const mobilePositionReset =
+    isMobileRuntime() && mobilePresentation !== "center"
+      ? "top-auto left-0 translate-x-0 translate-y-0"
+      : undefined
+
   return (
     <DialogPortal data-slot="dialog-portal">
       <DialogOverlay />
@@ -67,6 +73,7 @@ function DialogContent({
           // Keep the viewport inset in the width itself. A responsive max-width
           // here would also cap larger, feature-owned dialog sizes on desktop.
           "fixed top-[50%] left-[50%] z-50 grid w-[min(36rem,calc(100%-2rem))] max-w-none translate-x-[-50%] translate-y-[-50%] gap-4 rounded-[var(--r-xl)] border border-[var(--dialog-border)] bg-[var(--dialog-bg)] p-6 shadow-[var(--shadow-modal)] duration-200 outline-none data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95",
+          mobilePositionReset,
           className
         )}
         {...props}
