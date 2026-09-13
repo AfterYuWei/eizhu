@@ -56,13 +56,14 @@ test 版本号由「提交计数 + 短 SHA」组成（如 `0.4.2-test.486.1a2b3c
 | Linux (Fedora/RHEL) | `.rpm` | ❌（手动覆盖安装） |
 | Linux (通用) | `.AppImage` | ✅ |
 | Android (arm64) | `.apk`（测试版为 debug 优化构建） | ❌（手动下载安装，见下方签名说明） |
-| iOS (arm64) | 未签名 `.ipa`（侧载用） | ❌（需自行签名，App Store 上架包走单独构建） |
+| iOS (arm64) | 未签名 `.ipa`（侧载用） | ❌（当前不包含 App Store 上架流程） |
 
 稳定版与测试版的 updater 清单分别为 `latest-stable-*` 和 `latest-test-*`，
 由固定的 `tauri-update-channel` Release 保存最新指针。
 移动端产物（APK / IPA）上传到与桌面相同的版本 Release，资产文件名以
 `eizhu-<VERSION_MOBILE>…` 标识移动端版本；iOS 测试 IPA 通过
-`tauri ios build --no-sign` 产出，需自行签名后侧载。
+`tauri ios build --no-sign` 产出，正式与测试分支均不读取 App Store Connect 密钥，
+需自行签名后侧载。
 
 ## Secrets（可选）
 
