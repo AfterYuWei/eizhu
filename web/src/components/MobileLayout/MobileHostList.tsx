@@ -3,6 +3,7 @@ import { Plus, Search, X, Server } from 'lucide-react'
 import { toast } from 'sonner'
 import { MobileHeader } from './MobileHeader'
 import { MobileEmpty } from './MobileEmpty'
+import { MobileInlineNotice } from './MobileInlineNotice'
 import { HostRow } from './HostRow'
 import { MobileSheet } from './MobileSheet'
 import { useHeaderCollapse } from './useHeaderCollapse'
@@ -43,6 +44,7 @@ export function MobileHostList() {
   const [formOpen, setFormOpen] = useState(false)
   const [sheetProfile, setSheetProfile] = useState<Profile | null>(null)
   const [profileToDelete, setProfileToDelete] = useState<Profile | null>(null)
+  const [operationError, setOperationError] = useState('')
 
   useEffect(() => {
     void fetchProfiles()
@@ -102,11 +104,12 @@ export function MobileHostList() {
 
   const confirmDelete = async () => {
     if (!profileToDelete) return
+    setOperationError('')
     try {
       await deleteProfile(profileToDelete.id)
       toast.success('连接已删除')
     } catch (err) {
-      toast.error((err as Error).message || '删除失败')
+      setOperationError((err as Error).message || '删除失败')
     } finally {
       setProfileToDelete(null)
     }
@@ -159,6 +162,15 @@ export function MobileHostList() {
               </button>
             )}
           </label>
+
+          {operationError && (
+            <MobileInlineNotice
+              tone="error"
+              title="删除连接失败"
+              description={operationError}
+              onDismiss={() => setOperationError('')}
+            />
+          )}
 
           {loading && profiles.length === 0 && groups.length === 0 ? (
             <div className="m-loading">加载中…</div>

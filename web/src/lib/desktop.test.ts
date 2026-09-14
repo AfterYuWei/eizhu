@@ -2,15 +2,25 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn() }))
+vi.mock('@tauri-apps/plugin-opener', () => ({ openUrl: vi.fn() }))
 import { invoke } from '@tauri-apps/api/core'
+import { openUrl } from '@tauri-apps/plugin-opener'
 
 const mockedInvoke = vi.mocked(invoke)
+const mockedOpenUrl = vi.mocked(openUrl)
 
 const desktopCapabilities = {
   platform: 'linux', runtime: 'desktop', windowControls: true, appUpdates: true,
   dragOut: true, nativeFilePaths: true, documentPicker: true,
   secureKeyStore: false, biometric: false, backgroundMode: 'unsupported',
   maxConcurrentTransfers: 5,
+}
+
+const mobileCapabilities = {
+  platform: 'android', runtime: 'mobile', windowControls: false, appUpdates: false,
+  dragOut: false, nativeFilePaths: false, documentPicker: true,
+  secureKeyStore: true, biometric: false, backgroundMode: 'android-foreground-service',
+  maxConcurrentTransfers: 2,
 }
 
 function setTauri(present: boolean) {
@@ -20,6 +30,7 @@ function setTauri(present: boolean) {
 
 beforeEach(() => {
   mockedInvoke.mockReset()
+  mockedOpenUrl.mockReset()
   localStorage.clear()
   setTauri(false)
 })
@@ -69,5 +80,17 @@ describe('desktop bridge', () => {
     await desktop.initDesktop()
     expect(mockedInvoke).not.toHaveBeenCalledWith('mark_electron_settings_migrated')
     setItem.mockRestore()
+  })
+
+  it('移动端外链通过原生 opener 交给系统浏览器', async () => {
+    setTauri(true)
+    mockedInvoke.mockResolvedValue(mobileCapabilities)
+    const platform = await import('./platform')
+    await platform.initializePlatform()
+
+    const desktop = await import('./desktop')
+    await desktop.openExternal('https://github.com/AfterYuWei/eizhu/releases')
+
+    expect(mockedOpenUrl).toHaveBeenCalledWith('https://github.com/AfterYuWei/eizhu/releases')
   })
 })

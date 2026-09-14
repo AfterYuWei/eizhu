@@ -111,8 +111,18 @@ async function fetchReleases(): Promise<Parameters<typeof pickMobileRelease>[0]>
 }
 
 /** 用系统浏览器打开 APK 下载链接（或发布页回退地址）。 */
-export function openMobileReleasePage(url: string): void {
-  if (url) void openExternal(url)
+export async function openMobileReleasePage(url: string): Promise<void> {
+  if (!url) {
+    toast.error('下载地址不可用')
+    return
+  }
+  try {
+    await openExternal(url)
+  } catch (err) {
+    toast.error('无法打开下载链接', {
+      description: err instanceof Error ? err.message : String(err),
+    })
+  }
 }
 
 /**
@@ -128,7 +138,7 @@ export function scheduleSilentMobileUpdateCheck(enabled: boolean): void {
         toast.info(`发现新版本 ${result.newVersion}`, {
           description: '点击开始下载安装包',
           duration: 15000,
-          action: { label: '下载', onClick: () => openMobileReleasePage(result.url) },
+          action: { label: '下载', onClick: () => void openMobileReleasePage(result.url) },
         })
       })
       .catch(() => {

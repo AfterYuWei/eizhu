@@ -6,6 +6,7 @@ import {
 } from 'lucide-react'
 import type { ComponentType } from 'react'
 import { MobileHeader } from './MobileHeader'
+import { MobileInlineNotice } from './MobileInlineNotice'
 import { useHeaderCollapse } from './useHeaderCollapse'
 import { MobileAppearancePanel, MobileTerminalPanel, MobileUpdatePanel } from './MobileSettingsPanels'
 import { BackupPanel } from '@/components/SettingsDialog/BackupPanel'
@@ -60,16 +61,20 @@ interface MobileSettingsPageProps {
   platform: NativePlatform
   connectedTabs: number
   subPage: MobileSettingsSubPage | null
+  notificationWarning?: string
   onOpenSubPage: (page: MobileSettingsSubPage) => void
   onBackFromSubPage: () => void
+  onDismissNotificationWarning?: () => void
 }
 
 export function MobileSettingsPage({
   platform,
   connectedTabs,
   subPage,
+  notificationWarning,
   onOpenSubPage,
   onBackFromSubPage,
+  onDismissNotificationWarning,
 }: MobileSettingsPageProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const collapsed = useHeaderCollapse(scrollRef)
@@ -145,6 +150,14 @@ export function MobileSettingsPage({
       />
       <div className="m-page-scroll" ref={scrollRef}>
         <div className="m-page-body m-settings-flow">
+          {notificationWarning && (
+            <MobileInlineNotice
+              tone="warning"
+              title="通知权限未开启"
+              description={notificationWarning}
+              onDismiss={onDismissNotificationWarning}
+            />
+          )}
           <button type="button" className="m-card m-account-card" onClick={() => openSub('account')}>
             <span className="m-set-row-icon is-settings"><UserRound size={19} /></span>
             <span className="m-set-row-copy"><strong>{account?.loggedIn ? account.user?.email : '登录 eizhu 账号'}</strong><span>{account?.loggedIn ? (account.syncEnabled ? '账号同步已开启' : '账号同步已关闭') : '跨设备同步加密配置'}</span></span>

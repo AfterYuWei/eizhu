@@ -33,6 +33,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { MobileSheet, type MobileSheetItem } from '@/components/MobileLayout/MobileSheet'
+import { MobileInlineNotice } from '@/components/MobileLayout/MobileInlineNotice'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { documentApi, type DocumentDescriptor } from '@/api/document'
@@ -101,6 +102,7 @@ export function MobileSftpView({ pane = 'right', onPickServer, showTransferSumma
   const [directoryAction, setDirectoryAction] = useState<MobileDirectoryAction | null>(null)
   const [transferOpen, setTransferOpen] = useState(false)
   const [documentBusy, setDocumentBusy] = useState(false)
+  const [documentError, setDocumentError] = useState('')
   const [uploadPending, setUploadPending] = useState<{ documents: DocumentDescriptor[]; conflicts: number } | null>(null)
 
   const selectedEntries = useMemo(
@@ -131,6 +133,7 @@ export function MobileSftpView({ pane = 'right', onPickServer, showTransferSumma
 
   const download = async (entries: SftpEntry[]) => {
     if (!activeTab?.sessionId || entries.length === 0) return
+    setDocumentError('')
     setDocumentBusy(true)
     try {
       await sftpApi.downloadToDocuments(
@@ -141,7 +144,7 @@ export function MobileSftpView({ pane = 'right', onPickServer, showTransferSumma
       )
       toast.success('文件已保存到所选位置')
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : '下载失败')
+      setDocumentError(error instanceof Error ? error.message : '下载失败')
     } finally {
       setDocumentBusy(false)
     }
@@ -149,6 +152,7 @@ export function MobileSftpView({ pane = 'right', onPickServer, showTransferSumma
 
   const uploadDocuments = async (documents: DocumentDescriptor[], resolution: ConflictResolution) => {
     if (!activeTab?.sessionId) return
+    setDocumentError('')
     setUploadPending(null)
     setDocumentBusy(true)
     for (let index = 0; index < documents.length; index += 1) {
@@ -171,7 +175,7 @@ export function MobileSftpView({ pane = 'right', onPickServer, showTransferSumma
         await Promise.all(
           documents.slice(index + 1).map((item) => documentApi.release(item.reference).catch(() => undefined)),
         )
-        toast.error(error instanceof Error ? error.message : '上传失败')
+        setDocumentError(error instanceof Error ? error.message : '上传失败')
         setDocumentBusy(false)
         return
       }
@@ -183,9 +187,10 @@ export function MobileSftpView({ pane = 'right', onPickServer, showTransferSumma
 
   const beginUpload = async () => {
     if (!activeTab?.sessionId) return
+    setDocumentError('')
     setDocumentBusy(true)
     const documents = await documentApi.pick(true).catch((error) => {
-      toast.error(error instanceof Error ? error.message : '选择文件失败')
+      setDocumentError(error instanceof Error ? error.message : '选择文件失败')
       return []
     })
     if (documents.length === 0) {
@@ -306,6 +311,17 @@ export function MobileSftpView({ pane = 'right', onPickServer, showTransferSumma
         <span>{activeTab.path}</span>
         <ChevronRight size={15} />
       </button>
+
+      {documentError && (
+        <div className="msftp-inline-notice">
+          <MobileInlineNotice
+            tone="error"
+            title="文件操作失败"
+            description={documentError}
+            onDismiss={() => setDocumentError('')}
+          />
+        </div>
+      )}
 
       <div className="msftp-list" role="listbox" aria-multiselectable={selectionMode}>
         {activeTab.loading ? (

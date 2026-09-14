@@ -19,6 +19,8 @@ pub(crate) fn run() {
     {
         tauri::Builder::default()
             .plugin(tauri_plugin_deep_link::init())
+            // 更新下载、OAuth 等外链交给系统浏览器；移动 WebView 的 window.open 不可靠。
+            .plugin(tauri_plugin_opener::init())
             .plugin(tauri_plugin_clipboard_manager::init())
             .plugin(tauri_plugin_session_keepalive::init())
             .plugin(tauri_plugin_system_insets::init())

@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { KeyRound, Plus, Search, X } from 'lucide-react'
-import { toast } from 'sonner'
 import { MobileHeader } from './MobileHeader'
 import { MobileEmpty } from './MobileEmpty'
+import { MobileInlineNotice } from './MobileInlineNotice'
 import { MobileSheet } from './MobileSheet'
 import { VaultRow } from './VaultRow'
 import { useHeaderCollapse } from './useHeaderCollapse'
@@ -39,6 +39,7 @@ export function MobileVaultPage() {
   const [sheetItem, setSheetItem] = useState<VaultItem | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null)
   const [deleting, setDeleting] = useState(false)
+  const [operationError, setOperationError] = useState('')
 
   useEffect(() => {
     void fetchList()
@@ -71,11 +72,12 @@ export function MobileVaultPage() {
   }
 
   const requestDelete = async (item: VaultItem) => {
+    setOperationError('')
     try {
       const refs = await vaultApi.references(item.id)
       setDeleteTarget({ item, refs: refs ?? [] })
     } catch {
-      toast.error('查询引用失败')
+      setOperationError('无法确认该凭据是否正在被连接使用，请稍后重试。')
     }
   }
 
@@ -86,7 +88,7 @@ export function MobileVaultPage() {
       await remove(deleteTarget.item.id)
       setDeleteTarget(null)
     } catch (err) {
-      toast.error((err as Error).message || '删除失败')
+      setOperationError((err as Error).message || '删除失败')
     } finally {
       setDeleting(false)
     }
@@ -153,6 +155,15 @@ export function MobileVaultPage() {
               </button>
             )}
           </label>
+
+          {operationError && (
+            <MobileInlineNotice
+              tone="error"
+              title="凭据操作失败"
+              description={operationError}
+              onDismiss={() => setOperationError('')}
+            />
+          )}
 
           {loading && items.length === 0 ? (
             <div className="m-loading">加载中…</div>

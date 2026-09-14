@@ -1,5 +1,26 @@
-import { describe, expect, it } from 'vitest'
-import { compareMobileVersions, pickMobileRelease, versionFromApkAsset } from './mobileUpdate'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+const mocks = vi.hoisted(() => ({
+  openExternal: vi.fn(),
+  toastError: vi.fn(),
+}))
+
+vi.mock('./desktop', () => ({ openExternal: mocks.openExternal }))
+vi.mock('sonner', () => ({
+  toast: { error: mocks.toastError, info: vi.fn() },
+}))
+
+import {
+  compareMobileVersions,
+  openMobileReleasePage,
+  pickMobileRelease,
+  versionFromApkAsset,
+} from './mobileUpdate'
+
+beforeEach(() => {
+  mocks.openExternal.mockReset()
+  mocks.toastError.mockReset()
+})
 
 describe('compareMobileVersions', () => {
   it('比较主次修订号', () => {
@@ -99,5 +120,28 @@ describe('pickMobileRelease', () => {
       [{ tag_name: 'v0.4.1', prerelease: false, html_url: '', assets: [{ name: 'x.msi', browser_download_url: '' }] }],
       'stable',
     )).toBeNull()
+  })
+})
+
+describe('openMobileReleasePage', () => {
+  it('通过系统浏览器打开下载地址', async () => {
+    mocks.openExternal.mockResolvedValue(undefined)
+
+    await openMobileReleasePage('https://github.com/AfterYuWei/eizhu/releases/download/app.apk')
+
+    expect(mocks.openExternal).toHaveBeenCalledWith(
+      'https://github.com/AfterYuWei/eizhu/releases/download/app.apk',
+    )
+    expect(mocks.toastError).not.toHaveBeenCalled()
+  })
+
+  it('原生浏览器打开失败时反馈错误', async () => {
+    mocks.openExternal.mockRejectedValue(new Error('opener unavailable'))
+
+    await openMobileReleasePage('https://github.com/AfterYuWei/eizhu/releases/download/app.apk')
+
+    expect(mocks.toastError).toHaveBeenCalledWith('无法打开下载链接', {
+      description: 'opener unavailable',
+    })
   })
 })

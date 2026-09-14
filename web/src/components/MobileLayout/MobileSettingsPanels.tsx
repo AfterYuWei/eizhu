@@ -1,5 +1,4 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { toast } from 'sonner'
 import { ChevronRight, Download, Minus, Plus, RefreshCw } from 'lucide-react'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
@@ -8,6 +7,7 @@ import { terminalThemes } from '@/lib/terminalThemes'
 import { TerminalThemePicker } from '@/components/SettingsDialog/TerminalThemePicker'
 import { appVersion, buildChannel } from '@/lib/updater'
 import { checkMobileUpdate, openMobileReleasePage, type MobileUpdateCheckResult } from '@/lib/mobileUpdate'
+import { MobileInlineNotice } from './MobileInlineNotice'
 import {
   themeOptions,
   appFontFamilyOptions,
@@ -172,6 +172,7 @@ export function MobileUpdatePanel() {
   const [version, setVersion] = useState('')
   const [checking, setChecking] = useState(false)
   const [result, setResult] = useState<MobileUpdateCheckResult | null>(null)
+  const [checkError, setCheckError] = useState('')
 
   useEffect(() => {
     void appVersion().then(setVersion)
@@ -180,73 +181,75 @@ export function MobileUpdatePanel() {
   const handleCheck = async () => {
     setChecking(true)
     setResult(null)
+    setCheckError('')
     try {
       const checkResult = await checkMobileUpdate(updateChannel)
       setResult(checkResult)
-      if (checkResult.available) {
-        toast.info(`发现新版本 ${checkResult.newVersion}`, {
-          description: '点击开始下载安装包',
-          action: { label: '下载', onClick: () => openMobileReleasePage(checkResult.url) },
-        })
-      } else {
-        toast.success('已是最新版本')
-      }
     } catch (err) {
-      toast.error('检查更新失败', {
-        description: err instanceof Error ? err.message : String(err),
-      })
+      setCheckError(err instanceof Error ? err.message : String(err))
     } finally {
       setChecking(false)
     }
   }
 
   return (
-    <div className="m-card m-field-card">
-      <FieldRow label="当前版本" desc="移动端版本独立于桌面端发布">
-        <span className="m-field-value">
-          {version ? `${version} · ${buildChannel === 'test' ? '测试版' : '正式版'}` : '—'}
-        </span>
-      </FieldRow>
-      <FieldRow label="更新通道" desc="正式版优先稳定性；测试版可提前获取最新修复">
-        <Select
-          value={updateChannel}
-          onValueChange={(value) => {
-            setUpdateChannel(value as UpdateChannel)
-            setResult(null)
-          }}
-          disabled={checking}
-        >
-          <SelectTrigger className="m-field-select" aria-label="更新通道">
-            <SelectValue placeholder="请选择" />
-          </SelectTrigger>
-          <SelectContent>
-            {channelOptions.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}
-          </SelectContent>
-        </Select>
-      </FieldRow>
-      <FieldRow label="自动检查更新" desc="启动时检查新版本并提示下载">
-        <Switch checked={autoCheckUpdate} onCheckedChange={setAutoCheckUpdate} />
-      </FieldRow>
-      <FieldRow
-        label="检查更新"
-        desc={checking
-          ? '正在检查…'
-          : result?.available
-            ? `发现新版本 ${result.newVersion}，点击右侧直接下载`
-            : result
-              ? '已是最新版本'
-              : undefined}
-      >
-        {result?.available ? (
-          <button type="button" className="m-field-link" onClick={() => openMobileReleasePage(result.url)}>
-            <Download size={15} />
-          </button>
-        ) : (
+    <>
+      <div className="m-card m-field-card">
+        <FieldRow label="当前版本" desc="移动端版本独立于桌面端发布">
+          <span className="m-field-value">
+            {version ? `${version} · ${buildChannel === 'test' ? '测试版' : '正式版'}` : '—'}
+          </span>
+        </FieldRow>
+        <FieldRow label="更新通道" desc="正式版优先稳定性；测试版可提前获取最新修复">
+          <Select
+            value={updateChannel}
+            onValueChange={(value) => {
+              setUpdateChannel(value as UpdateChannel)
+              setResult(null)
+              setCheckError('')
+            }}
+            disabled={checking}
+          >
+            <SelectTrigger className="m-field-select" aria-label="更新通道">
+              <SelectValue placeholder="请选择" />
+            </SelectTrigger>
+            <SelectContent>
+              {channelOptions.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </FieldRow>
+        <FieldRow label="自动检查更新" desc="启动时检查新版本并提示下载">
+          <Switch checked={autoCheckUpdate} onCheckedChange={setAutoCheckUpdate} />
+        </FieldRow>
+        <FieldRow label="检查更新" desc={checking ? '正在检查…' : '手动检查当前通道的最新版本'}>
           <button type="button" className="m-field-link" onClick={() => void handleCheck()} disabled={checking}>
             <RefreshCw size={15} className={checking ? 'animate-spin' : ''} />
           </button>
-        )}
-      </FieldRow>
-    </div>
+        </FieldRow>
+      </div>
+
+      {checkError ? (
+        <MobileInlineNotice
+          tone="error"
+          title="检查更新失败"
+          description={checkError}
+          action={<button type="button" onClick={() => void handleCheck()}>重试</button>}
+          onDismiss={() => setCheckError('')}
+        />
+      ) : result?.available ? (
+        <MobileInlineNotice
+          tone="info"
+          title={`发现新版本 ${result.newVersion}`}
+          description="安装包将通过系统浏览器下载。"
+          action={(
+            <button type="button" onClick={() => void openMobileReleasePage(result.url)}>
+              <Download size={15} /> 下载
+            </button>
+          )}
+        />
+      ) : result ? (
+        <MobileInlineNotice tone="success" title="已是最新版本" />
+      ) : null}
+    </>
   )
 }

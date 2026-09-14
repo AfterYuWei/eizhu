@@ -13,6 +13,7 @@
 | 平台能力发现 | ✅ | ✅ | ✅ | `platform_capabilities`，禁止 UA 推断 |
 | 桌面窗口、拖出、updater | ✅ | 不支持 | 不支持 | capability 隔离 |
 | OAuth deep link | ✅ | 配置完成 | 配置完成 | 真机回调待验收 |
+| 系统浏览器外链 | ✅ | ✅ | ✅ | 原生 opener；用于更新下载与 OAuth，不依赖 WebView `window.open` |
 | 系统文档选择器 | ✅ | ✅（待真机） | ✅（待真机） | SAF / Document Picker 先复制到私有暂存区，领域层仅接收不透明引用 |
 | 360 秒后台窗口 | 不适用 | ✅（待真机） | ✅（待真机） | Android 前台服务；iOS 逻辑恢复窗口 |
 | Keystore / Keychain | 不适用 | ✅（待真机） | ✅（待真机） | Keystore AES-GCM 包装 / Keychain ThisDeviceOnly；旧密钥验证后迁移 |

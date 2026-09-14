@@ -310,6 +310,180 @@
   font: 700 0.5625rem/1 var(--sans);
 }
 
+/* ─────────────── 分级反馈（移动端替代顶部 Toast） ─────────────── */
+
+.mobile-layout .m-feedback-host {
+  position: absolute;
+  z-index: 44;
+  left: max(var(--m-pad), var(--safe-inset-left));
+  right: max(var(--m-pad), var(--safe-inset-right));
+  bottom: calc(var(--m-tabbar-h) + var(--m-tabbar-inset) + 10px);
+  display: grid;
+  justify-items: center;
+  pointer-events: none;
+}
+
+/* 文件页已有底部传输/选择条时，反馈沿同一空间轨迹上移，避免遮挡操作。 */
+.mobile-layout:has(.msftp-selection-bar, .msftp-transfer-summary) .m-feedback-host {
+  bottom: calc(var(--m-tabbar-h) + var(--m-tabbar-inset) + 78px);
+}
+
+.mobile-layout.is-terminal-level .m-feedback-host,
+.mobile-layout.is-keyboard-open .m-feedback-host {
+  bottom: calc(54px + var(--safe-inset-bottom));
+}
+
+.mobile-layout .m-feedback {
+  --m-feedback-tone: var(--accent);
+  width: min(100%, 420px);
+  min-height: 54px;
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 8px 8px 12px;
+  border-radius: 18px;
+  background: var(--m-glass-heavy);
+  backdrop-filter: var(--m-glass-blur);
+  -webkit-backdrop-filter: var(--m-glass-blur);
+  box-shadow:
+    var(--m-specular),
+    0 0 0 1px var(--edge-soft),
+    0 12px 32px -12px rgb(0 0 0 / 30%);
+  color: var(--fg);
+  pointer-events: auto;
+  touch-action: pan-y;
+}
+
+.mobile-layout .m-feedback[data-tone='success'] { --m-feedback-tone: var(--green); }
+.mobile-layout .m-feedback[data-tone='warning'] { --m-feedback-tone: var(--yellow); }
+.mobile-layout .m-feedback[data-tone='error'] { --m-feedback-tone: var(--red); }
+.mobile-layout .m-feedback[data-tone='loading'] { --m-feedback-tone: var(--accent); }
+
+.mobile-layout .m-feedback[data-presentation='capsule'] {
+  width: auto;
+  max-width: min(100%, 360px);
+  min-height: 42px;
+  grid-template-columns: 20px minmax(0, auto);
+  gap: 7px;
+  padding: 7px 14px 7px 11px;
+  border-radius: 999px;
+}
+
+.mobile-layout .m-feedback-icon {
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--m-feedback-tone) 14%, transparent);
+  color: var(--m-feedback-tone);
+}
+.mobile-layout .m-feedback[data-presentation='capsule'] .m-feedback-icon {
+  width: 20px;
+  height: 20px;
+  background: transparent;
+}
+.mobile-layout .m-feedback-icon svg { width: 16px; height: 16px; }
+.mobile-layout .m-feedback-icon .is-spinning { animation: m-feedback-spin 900ms linear infinite; }
+@keyframes m-feedback-spin { to { transform: rotate(360deg); } }
+
+.mobile-layout .m-feedback-content {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.mobile-layout .m-feedback-title {
+  overflow-wrap: anywhere;
+  font: 600 0.875rem/1.3 var(--sans);
+  letter-spacing: -0.005em;
+}
+.mobile-layout .m-feedback[data-presentation='capsule'] .m-feedback-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mobile-layout .m-feedback-description {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--fg-3);
+  font: 400 0.75rem/1.4 var(--sans);
+}
+.mobile-layout .m-feedback-description > div { width: 100%; max-width: 100%; }
+
+.mobile-layout .m-feedback-actions { display: flex; align-items: center; gap: 4px; }
+.mobile-layout .m-feedback-actions button,
+.mobile-layout .m-feedback-close {
+  min-width: 44px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 999px;
+  padding: 0 12px;
+  background: transparent;
+  color: var(--fg-3);
+  font: 550 0.8125rem/1 var(--sans);
+  touch-action: manipulation;
+}
+.mobile-layout .m-feedback-actions button:active,
+.mobile-layout .m-feedback-close:active { transform: scale(0.94); background: var(--bg-active); }
+.mobile-layout .m-feedback-actions button.is-primary {
+  background: color-mix(in srgb, var(--m-feedback-tone) 14%, transparent);
+  color: var(--m-feedback-tone);
+}
+.mobile-layout .m-feedback-close { width: 36px; min-width: 36px; padding: 0; }
+.mobile-layout .m-feedback-close svg { width: 16px; height: 16px; }
+
+/* 能定位到来源的校验/错误留在内容流中，不占用全局浮层。 */
+.mobile-layout .m-inline-notice {
+  --m-notice-tone: var(--accent);
+  min-height: 52px;
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 9px;
+  margin: 0 0 12px;
+  padding: 8px 8px 8px 12px;
+  border: 1px solid color-mix(in srgb, var(--m-notice-tone) 20%, var(--border-subtle));
+  border-radius: var(--m-radius-control);
+  background: color-mix(in srgb, var(--m-notice-tone) 7%, var(--m-fill));
+}
+.mobile-layout .m-field-card + .m-inline-notice { margin-top: 12px; }
+.mobile-layout .m-inline-notice[data-tone='success'] { --m-notice-tone: var(--green); }
+.mobile-layout .m-inline-notice[data-tone='warning'] { --m-notice-tone: var(--yellow); }
+.mobile-layout .m-inline-notice[data-tone='error'] { --m-notice-tone: var(--red); }
+.mobile-layout .m-inline-notice-icon { width: 24px; height: 24px; display: grid; place-items: center; color: var(--m-notice-tone); }
+.mobile-layout .m-inline-notice-icon svg { width: 17px; height: 17px; }
+.mobile-layout .m-inline-notice-copy { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.mobile-layout .m-inline-notice-copy strong { color: var(--fg); font: 600 0.8125rem/1.3 var(--sans); }
+.mobile-layout .m-inline-notice-copy > span { overflow-wrap: anywhere; color: var(--fg-3); font: 400 0.75rem/1.4 var(--sans); }
+.mobile-layout .m-inline-notice-action button,
+.mobile-layout .m-inline-notice-close {
+  min-width: 44px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  border: 0;
+  border-radius: 999px;
+  padding: 0 10px;
+  background: transparent;
+  color: var(--m-notice-tone);
+  font: 550 0.8125rem/1 var(--sans);
+  touch-action: manipulation;
+}
+.mobile-layout .m-inline-notice-action button:active,
+.mobile-layout .m-inline-notice-close:active { transform: scale(0.94); background: var(--bg-active); }
+.mobile-layout .m-inline-notice-action svg { width: 15px; height: 15px; }
+.mobile-layout .m-inline-notice-close { width: 36px; min-width: 36px; padding: 0; color: var(--fg-4); }
+.mobile-layout .m-inline-notice-close svg { width: 16px; height: 16px; }
+.mobile-layout .msftp-inline-notice { flex: none; padding: 4px 12px 0; }
+.mobile-layout .msftp-inline-notice .m-inline-notice { margin-bottom: 4px; }
+
 /* ─────────────── 主机页 ─────────────── */
 
 .mobile-layout .m-host-master { height: 100%; min-height: 0; }
@@ -1819,6 +1993,17 @@
   .mobile-layout .msftp-tablet-panes .msftp-list { padding-inline: 12px; }
 }
 
+@media (orientation: landscape) and (max-height: 560px) {
+  .mobile-layout .m-feedback-host {
+    left: max(24px, var(--safe-inset-left));
+    right: max(24px, var(--safe-inset-right));
+  }
+  .mobile-layout.is-terminal-level .m-feedback-host,
+  .mobile-layout.is-keyboard-open .m-feedback-host {
+    bottom: calc(48px + var(--safe-inset-bottom));
+  }
+}
+
 /* 触控目标（仅移动运行时） */
 @media (pointer: coarse) {
   .mobile-layout button { touch-action: manipulation; }
@@ -1846,6 +2031,11 @@
   .mobile-layout .msftp-path:active,
   .mobile-layout .msftp-selection-bar button:active,
   .mobile-layout .msftp-transfer-summary:active { transform: none; }
+  .mobile-layout .m-feedback-icon .is-spinning { animation: none; }
+  .mobile-layout .m-feedback-actions button:active,
+  .mobile-layout .m-feedback-close:active,
+  .mobile-layout .m-inline-notice-action button:active,
+  .mobile-layout .m-inline-notice-close:active { transform: none; }
   .msftp-spin { animation: none; }
 }
 
@@ -1863,6 +2053,11 @@
   .mobile-layout .msftp-header,
   .mobile-layout .msftp-selection-bar,
   .mobile-layout .msftp-transfer-summary { backdrop-filter: none; -webkit-backdrop-filter: none; }
+  .mobile-layout .m-feedback {
+    background: var(--surface-overlay);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
   :root[data-eizhu-mobile] .m-sheet {
     background: var(--surface-overlay);
     backdrop-filter: none;
@@ -1873,6 +2068,8 @@
 @media (prefers-contrast: more) {
   .mobile-layout .m-tabbar { box-shadow: 0 0 0 1px var(--border); }
   .mobile-layout .m-card { box-shadow: 0 0 0 1px var(--border); }
+  .mobile-layout .m-feedback,
+  .mobile-layout .m-inline-notice { border: 1px solid currentColor; }
 }
 
 /* ─────────────── 页面余韵动画（切换位移由 motion 负责） ─────────────── */

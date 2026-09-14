@@ -51,7 +51,7 @@ async function migrateElectronSettings(): Promise<void> {
  * 浏览器模式退化为 window.open。
  */
 export async function openExternal(url: string): Promise<void> {
-  if (getPlatformCapabilities().runtime === 'desktop') {
+  if (getPlatformCapabilities().runtime !== 'browser') {
     await openUrl(url)
   } else {
     window.open(url, '_blank', 'noopener,noreferrer')

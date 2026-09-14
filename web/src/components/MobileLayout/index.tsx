@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties } from 're
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { onBackButtonPress } from '@tauri-apps/api/app'
 import { TerminalView } from '@/components/Terminal'
-import { Toaster } from '@/components/ui/sonner'
 import { useProfileStore } from '@/store/profile'
 import { useSessionStore } from '@/store/session'
 import { useResolvedTheme, useSettingsStore } from '@/store/settings'
@@ -11,8 +10,8 @@ import { getTerminalThemeMeta, resolveTerminalThemeId } from '@/lib/terminalThem
 import { consumeMobileBackNavigation } from '@/lib/mobileBack'
 import { useImeInset, useMobileKeyboardVisible } from '@/hooks/useMobileIme'
 import { scheduleSilentMobileUpdateCheck } from '@/lib/mobileUpdate'
-import { toast } from 'sonner'
 import { MobileTabBar, type MobileSection } from './MobileTabBar'
+import { MobileFeedbackHost } from './MobileFeedbackHost'
 import { MobileEmpty } from './MobileEmpty'
 import { MobileHostList } from './MobileHostList'
 import { MobileSessionsPage } from './MobileSessionsPage'
@@ -33,9 +32,9 @@ export function MobileLayout() {
   // 会话 tab 的层级：list 卡片列表 / terminal 终端页（放这里供 Android back 先弹这一层）
   const [sessionsLevel, setSessionsLevel] = useState<'list' | 'terminal'>('list')
   const [settingsSub, setSettingsSub] = useState<MobileSettingsSubPage | null>(null)
+  const [notificationWarning, setNotificationWarning] = useState('')
   const { fetchProfiles, fetchGroups } = useProfileStore()
   const { tabs, activeTabId, setActiveTab, openSftpTab, openVaultTab, closeTab } = useSessionStore()
-  const theme = useSettingsStore((state) => state.theme)
   const terminalTheme = useSettingsStore((state) => state.terminalTheme)
   const resolvedAppTheme = useResolvedTheme()
   const mobileTerminalBackground = getTerminalThemeMeta(
@@ -80,10 +79,7 @@ export function MobileLayout() {
     if (capabilities.platform !== 'android') return
     const notificationLimited = (event: Event) => {
       const message = (event as CustomEvent<string>).detail
-      toast.warning('通知权限未开启', {
-        description: message || '后台恢复窗口可能无法可靠运行，请在系统设置中允许通知。',
-        duration: 10_000,
-      })
+      setNotificationWarning(message || '后台恢复窗口可能无法可靠运行，请在系统设置中允许通知。')
     }
     window.addEventListener('eizhu:notification-limited', notificationLimited)
     return () => window.removeEventListener('eizhu:notification-limited', notificationLimited)
@@ -270,8 +266,10 @@ export function MobileLayout() {
                 platform={platform}
                 connectedTabs={connectedTabs}
                 subPage={settingsSub}
+                notificationWarning={notificationWarning}
                 onOpenSubPage={setSettingsSub}
                 onBackFromSubPage={() => setSettingsSub(null)}
+                onDismissNotificationWarning={() => setNotificationWarning('')}
               />
             )}
           </motion.div>
@@ -279,13 +277,7 @@ export function MobileLayout() {
       </main>
 
       <MobileTabBar section={section} sessionCount={terminalTabs.length} onNavigate={navigate} />
-
-      <Toaster
-        position="top-center"
-        theme={theme === 'system'
-          ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
-          : theme}
-      />
+      <MobileFeedbackHost />
     </div>
   )
 }

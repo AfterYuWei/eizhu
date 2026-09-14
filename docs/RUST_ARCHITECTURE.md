@@ -334,12 +334,15 @@ Desktop `ExitRequested` 的清理顺序为：SSH sessions -> SFTP sessions/trans
 
 ### Desktop only
 
-- single-instance、dialog、opener、drag、updater、process plugins；
+- single-instance、dialog、drag、updater、process plugins；
 - window controls、ready-to-show、日志查看器、Electron settings migration、drag-out；
 - 系统任意路径对话框和 legacy `eizhu` 用户目录选择。
 
 以上插件放在 Cargo desktop target dependency table，代码用 `#[cfg(desktop)]`，默认 capability
 显式限制为 Linux/macOS/Windows。
+
+`opener` 是跨平台 adapter：Desktop 与 Mobile composition 均注册，但 capability 仅允许将
+`http://`、`https://`、`mailto:`、`tel:` 外链交给系统应用，不授予移动端路径打开权限。
 
 ## Desktop / Mobile Strategy
 
@@ -383,7 +386,8 @@ Cargo target dependency、composition 分支和 feature port 处理，不复制�
 
 | 依赖/假设 | 状态 |
 | --- | --- |
-| `tauri-plugin-single-instance/dialog/opener/drag/updater/process` | desktop target-gated |
+| `tauri-plugin-single-instance/dialog/drag/updater/process` | desktop target-gated |
+| `tauri-plugin-opener` | 跨平台；移动端用于更新下载与 OAuth 外链，权限仅限默认 URL scheme |
 | `tauri-plugin-deep-link` | 共用；mobile callback 需真机验证 |
 | `rusqlite(bundled)` | 无系统 SQLite 路径假设；需各 target 编译验证 |
 | `russh`/`russh-sftp`/`ring` | 不含 desktop API；需 Android/iOS toolchain 验证 |
