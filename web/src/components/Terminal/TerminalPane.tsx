@@ -3,7 +3,12 @@ import { useTerminal } from '@/hooks/useTerminal'
 import { useSessionChannel } from '@/hooks/useSessionChannel'
 import { useSessionStore } from '@/store/session'
 import { useProfileStore } from '@/store/profile'
-import { useSettingsStore, useResolvedTheme } from '@/store/settings'
+import {
+  DEFAULT_DESKTOP_TERMINAL_FONT_SIZE,
+  DEFAULT_MOBILE_TERMINAL_FONT_SIZE,
+  useSettingsStore,
+  useResolvedTheme,
+} from '@/store/settings'
 import { resolveTerminalThemeId } from '@/lib/terminalThemes'
 import { sessionApi } from '@/api/session'
 import { ConnectionDialog } from '@/components/ConnectionDialog'
@@ -26,6 +31,7 @@ import type {
   ConnectionLogEntry,
   ConnectionStatePayload,
   CwdPayload,
+  DetectedIconPayload,
   DisconnectPayload,
   ErrorPayload,
   MetaPayload,
@@ -67,7 +73,7 @@ export function TerminalPane({ tab, isActive }: TerminalPaneProps) {
     closeTab,
     clearTabHostKeyPrompt,
   } = useSessionStore()
-  const { profiles } = useProfileStore()
+  const { profiles, updateDetectedIcon } = useProfileStore()
   const {
     fontSize,
     mobileTerminalFontSize,
@@ -82,7 +88,9 @@ export function TerminalPane({ tab, isActive }: TerminalPaneProps) {
   const effectiveFontSize = isMobile ? mobileTerminalFontSize : fontSize
 
   // 默认字体大小（用于显示相对变化）
-  const DEFAULT_FONT_SIZE = isMobile ? 10 : 7
+  const DEFAULT_FONT_SIZE = isMobile
+    ? DEFAULT_MOBILE_TERMINAL_FONT_SIZE
+    : DEFAULT_DESKTOP_TERMINAL_FONT_SIZE
 
   // 'default' 终端主题跟随应用深浅色（浅色切 one-light），显式选择的主题固定
   const resolvedAppTheme = useResolvedTheme()
@@ -151,8 +159,7 @@ export function TerminalPane({ tab, isActive }: TerminalPaneProps) {
   )
 
   const handleFontSizeChange = useCallback((delta: number) => {
-    const minimum = isMobile ? 8 : 6
-    const newSize = Math.min(32, Math.max(minimum, effectiveFontSize + delta))
+    const newSize = Math.min(32, Math.max(8, effectiveFontSize + delta))
     if (isMobile) setMobileTerminalFontSize(newSize)
     else setFontSize(newSize)
 
@@ -456,6 +463,14 @@ export function TerminalPane({ tab, isActive }: TerminalPaneProps) {
           break
         }
 
+        case 'detected_icon': {
+          const payload = msg.payload as DetectedIconPayload
+          if (tab.profileId && payload?.icon) {
+            void updateDetectedIcon(tab.profileId, payload.icon)
+          }
+          break
+        }
+
         case 'complete_response': {
           const payload = msg.payload as CompleteResponsePayload
           if (payload) handleCompleteResponseRef.current(payload)
@@ -505,8 +520,10 @@ export function TerminalPane({ tab, isActive }: TerminalPaneProps) {
       fit,
       markTabReconnecting,
       tab.id,
+      tab.profileId,
       resetReconnectState,
       updateTabCwd,
+      updateDetectedIcon,
       updateTabStatus,
       write,
       writeln,

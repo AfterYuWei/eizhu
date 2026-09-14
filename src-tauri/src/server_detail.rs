@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use serde::Serialize;
 
-use crate::{error::CommandError, sftp::SftpService};
+use crate::{error::CommandError, sftp::SftpService, ssh::transport::ConnectedRoute};
 
 const INFO_COMMAND: &str = r#"
 printf '===HOSTNAME===\n'; (hostname -f 2>/dev/null || hostname)
@@ -17,7 +17,11 @@ elif [ -e /etc/synoinfo.conf ] || [ -e /etc.defaults/VERSION ]; then echo synolo
 elif [ -e /etc/config/uLinux.conf ]; then echo qnap
 elif [ -e /etc/unraid-version ]; then echo unraid
 elif [ -e /etc/openmediavault/config.xml ] || command -v omv-confdbadm >/dev/null 2>&1; then echo openmediavault
-elif [ -e /etc/openwrt_release ]; then echo openwrt
+elif [ -e /etc/openwrt_release ] || [ -e /etc/openwrt_version ] || command -v uci >/dev/null 2>&1; then echo openwrt
+elif command -v opnsense-version >/dev/null 2>&1 || [ -e /usr/local/etc/opnsense-update.conf ]; then echo opnsense
+elif command -v pfSsh.php >/dev/null 2>&1 || [ -e /etc/inc/globals.inc ]; then echo pfsense
+elif [ -e /etc/vyos-version ] || [ -d /opt/vyatta ]; then echo vyos
+elif [ -e /etc/yunohost ]; then echo yunohost
 elif command -v casaos-cli >/dev/null 2>&1 || [ -d /etc/casaos ]; then echo casaos
 elif [ -d /home/umbrel/umbrel ] || [ -d /umbrel ]; then echo umbrel
 fi
@@ -54,6 +58,12 @@ pub(crate) struct ServerInfo {
     load_avg_detail: String,
     cpus: i64,
     cpu_mhz: f64,
+}
+
+impl ServerInfo {
+    pub(crate) fn icon(&self) -> &str {
+        &self.icon
+    }
 }
 
 #[derive(Debug, Default, PartialEq, Serialize)]
@@ -164,6 +174,10 @@ fn detect_server_icon(
         "unraid" => return "os-unraid",
         "openmediavault" => return "os-openmediavault",
         "openwrt" => return "os-openwrt",
+        "opnsense" => return "os-opnsense",
+        "pfsense" => return "os-pfsense",
+        "vyos" => return "os-vyos",
+        "yunohost" => return "os-yunohost",
         "casaos" => return "os-casaos",
         "umbrel" => return "os-umbrel",
         _ => {}
@@ -176,10 +190,28 @@ fn detect_server_icon(
             .any(|part| part == candidate)
     };
 
-    if has("ubuntu") {
+    if has("openwrt") || has("lede") || has("immortalwrt") {
+        "os-openwrt"
+    } else if has("opnsense") {
+        "os-opnsense"
+    } else if has("pfsense") {
+        "os-pfsense"
+    } else if has("routeros") || has("mikrotik") {
+        "os-mikrotik"
+    } else if has("vyos") || has("vyatta") {
+        "os-vyos"
+    } else if has("yunohost") {
+        "os-yunohost"
+    } else if has("ubuntu") {
         "os-ubuntu"
     } else if identity.contains("linux mint") || has("linuxmint") {
         "os-linuxmint"
+    } else if has("pop") || has("pop-os") || identity.contains("pop!_os") {
+        "os-popos"
+    } else if has("elementary") {
+        "os-elementary"
+    } else if has("deepin") {
+        "os-deepin"
     } else if has("raspbian") || identity.contains("raspberry pi") {
         "os-raspberrypi"
     } else if has("kali") {
@@ -200,16 +232,37 @@ fn detect_server_icon(
         "os-alpine"
     } else if has("manjaro") {
         "os-manjaro"
+    } else if has("endeavouros") {
+        "os-endeavouros"
     } else if has("arch") || has("archlinux") {
         "os-archlinux"
+    } else if has("gentoo") {
+        "os-gentoo"
+    } else if has("nixos") {
+        "os-nixos"
+    } else if has("void") || has("voidlinux") {
+        "os-voidlinux"
+    } else if has("slackware") {
+        "os-slackware"
     } else if has("opensuse") || has("suse") || has("sles") {
         "os-opensuse"
     } else if has("amzn") || identity.contains("amazon linux") {
         "os-amazonlinux"
     } else if has("ol") || identity.contains("oracle linux") {
         "os-oraclelinux"
+    } else if has("photon") {
+        "os-photon"
+    } else if identity.contains("openbsd") || kernel.to_lowercase().contains("openbsd") {
+        "os-openbsd"
+    } else if identity.contains("netbsd") || kernel.to_lowercase().contains("netbsd") {
+        "os-netbsd"
     } else if identity.contains("freebsd") || kernel.to_lowercase().contains("freebsd") {
         "os-freebsd"
+    } else if has("darwin")
+        || identity.contains("macos")
+        || kernel.to_lowercase().contains("darwin")
+    {
+        "os-macos"
     } else if !identity.trim().is_empty() || !kernel.trim().is_empty() {
         "os-linux"
     } else {
@@ -352,6 +405,23 @@ pub(crate) async fn get_info(
     session_id: String,
 ) -> Result<ServerInfo, CommandError> {
     let (output, code) = service.exec(&session_id, INFO_COMMAND).await?;
+    parse_info_result(output, code)
+}
+
+/// Collect server identity over an already-authenticated SSH route. This keeps
+/// OS icon detection available on systems such as stock OpenWrt that do not
+/// provide an SFTP subsystem.
+pub(crate) async fn get_info_from_route(
+    route: &ConnectedRoute,
+) -> Result<ServerInfo, CommandError> {
+    let (output, code) = route
+        .exec(INFO_COMMAND)
+        .await
+        .map_err(|error| CommandError::new("EXEC_FAILED", error.to_string()))?;
+    parse_info_result(output, code)
+}
+
+fn parse_info_result(output: String, code: i32) -> Result<ServerInfo, CommandError> {
     if code != 0 {
         return Err(CommandError::new(
             "EXEC_FAILED",
@@ -397,6 +467,10 @@ mod tests {
             detect_server_icon("proxmox", "debian", "", "Debian GNU/Linux 13", "6.14.8-pve"),
             "os-proxmox"
         );
+        assert_eq!(
+            detect_server_icon("opnsense", "freebsd", "", "FreeBSD", "14.3-RELEASE"),
+            "os-opnsense"
+        );
     }
 
     #[test]
@@ -412,6 +486,30 @@ mod tests {
         assert_eq!(
             detect_server_icon("", "", "", "FreeBSD 14.1", "14.1-RELEASE"),
             "os-freebsd"
+        );
+    }
+
+    #[test]
+    fn detects_openwrt_and_common_server_systems_from_identity() {
+        assert_eq!(
+            detect_server_icon("", "openwrt", "", "OpenWrt 24.10", "6.6.86"),
+            "os-openwrt"
+        );
+        assert_eq!(
+            detect_server_icon("", "immortalwrt", "openwrt", "ImmortalWrt", "6.6.86"),
+            "os-openwrt"
+        );
+        assert_eq!(
+            detect_server_icon("", "nixos", "", "NixOS 25.05", "linux"),
+            "os-nixos"
+        );
+        assert_eq!(
+            detect_server_icon("", "openbsd", "", "OpenBSD 7.7", "GENERIC"),
+            "os-openbsd"
+        );
+        assert_eq!(
+            detect_server_icon("", "vyos", "debian", "VyOS 1.5", "linux"),
+            "os-vyos"
         );
     }
 

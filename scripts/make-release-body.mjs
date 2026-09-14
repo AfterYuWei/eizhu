@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { writeFileSync } from 'node:fs'
+import { readFileSync, writeFileSync } from 'node:fs'
 
 const REPO = 'AfterYuWei/eizhu'
 const [, , version, tag, channel, output] = process.argv
@@ -21,6 +21,20 @@ if (tag !== expectedTag) {
   process.exit(1)
 }
 
+const mobileBaseVersion = readFileSync('VERSION_MOBILE', 'utf8').trim()
+if (!/^\d+\.\d+\.\d+$/.test(mobileBaseVersion)) {
+  console.error(`无效的移动端版本: ${mobileBaseVersion}`)
+  process.exit(1)
+}
+
+const stable = channel === 'stable'
+const testSuffix = stable ? '' : version.match(/-test\.\d+\.[0-9a-f]{7}$/)?.[0]
+if (!stable && !testSuffix) {
+  console.error(`测试版 Release 版本缺少构建号和短 SHA: ${version}`)
+  process.exit(1)
+}
+const mobileVersion = `${mobileBaseVersion}${testSuffix}`
+
 const releaseUrl = `https://github.com/${REPO}/releases/tag/${encodeURIComponent(tag)}`
 const assetUrl = (name) =>
   `https://github.com/${REPO}/releases/download/${encodeURIComponent(tag)}/${encodeURIComponent(name)}`
@@ -33,9 +47,10 @@ const assets = {
   appimage: `eizhu_${version}_amd64.AppImage`,
   deb: `eizhu_${version}_amd64.deb`,
   rpm: `eizhu-${version}-1.x86_64.rpm`,
+  android: `eizhu-${mobileVersion}-android-arm64-${stable ? 'release' : 'debug'}.apk`,
+  ios: `eizhu-${mobileVersion}-ios-arm64-unsigned.ipa`,
 }
 
-const stable = channel === 'stable'
 const channelTitle = stable ? '✅ 正式版 · Stable' : '🧪 测试版 · Preview'
 const channelSummary = stable
   ? '此版本来自 `main` 分支，优先保证稳定性，适合日常使用。'
@@ -62,6 +77,8 @@ ${callout}
   ${badge('Linux-AppImage', 'FCC624', 'linux', assets.appimage, `下载 Linux AppImage eizhu ${version}`)}
   ${badge('Linux-deb', 'A81D33', 'debian', assets.deb, `下载 Linux deb eizhu ${version}`)}
   ${badge('Linux-rpm', '294172', 'fedora', assets.rpm, `下载 Linux rpm eizhu ${version}`)}
+  ${badge('Android-arm64', '3DDC84', 'android', assets.android, `下载 Android arm64 eizhu ${mobileVersion}`)}
+  ${badge('iOS-arm64_未签名', '000000', 'apple', assets.ios, `下载 iOS arm64 未签名 eizhu ${mobileVersion}`)}
 </p>
 
 | 平台 | 架构 | 推荐安装包 | 安装方式 |

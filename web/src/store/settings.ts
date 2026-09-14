@@ -6,6 +6,8 @@ export type UpdateChannel = 'stable' | 'test'
 
 const configuredBuildChannel = import.meta.env.VITE_EIZHU_CHANNEL
 const DEFAULT_UPDATE_CHANNEL: UpdateChannel = configuredBuildChannel === 'test' ? 'test' : 'stable'
+export const DEFAULT_DESKTOP_TERMINAL_FONT_SIZE = 13
+export const DEFAULT_MOBILE_TERMINAL_FONT_SIZE = 10
 
 interface SettingsStore {
   theme: Theme
@@ -103,8 +105,8 @@ export const useSettingsStore = create<SettingsStore>()(
   persist(
     (set, get) => ({
       theme: 'system',
-      fontSize: 7,
-      mobileTerminalFontSize: 10,
+      fontSize: DEFAULT_DESKTOP_TERMINAL_FONT_SIZE,
+      mobileTerminalFontSize: DEFAULT_MOBILE_TERMINAL_FONT_SIZE,
       fontFamily: "'JetBrains Mono'",
       fontFamilyCN: "'Noto Sans SC'",
       sidebarWidth: 240,
@@ -153,14 +155,14 @@ export const useSettingsStore = create<SettingsStore>()(
     }),
     {
       name: 'eizhu-settings',
-      version: 1,
+      version: 2,
       storage: createJSONStorage(() => localStorage),
-      // v0 → v1：终端默认字号减半（13 → 7）。对既有设备持久化的字号一次性折半，
-      // 否则旧值会覆盖新默认值导致改动不生效。
-      migrate: (persisted) => {
+      // v1 曾把桌面终端默认字号误改为 7；只修复这个旧默认值，保留用户设置的
+      // 其他桌面字号。移动端从始至终使用独立的 mobileTerminalFontSize。
+      migrate: (persisted, version) => {
         const state = persisted as Partial<SettingsStore>
-        if (typeof state.fontSize === 'number') {
-          state.fontSize = Math.min(32, Math.max(6, Math.round(state.fontSize / 2)))
+        if (version === 1 && state.fontSize === 7) {
+          state.fontSize = DEFAULT_DESKTOP_TERMINAL_FONT_SIZE
         }
         return state
       },

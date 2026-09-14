@@ -43,7 +43,7 @@ interface SidebarDetailStore {
   setLastTerminalTab: (id: string | null) => void
 }
 
-const defaultDetail = (): DetailState => ({ scrollTop: 0, expandedPaths: [], filesCollapsed: false, metricsCollapsed: false, infoCollapsed: false, followShellCwd: true })
+const defaultDetail = (): DetailState => ({ scrollTop: 0, expandedPaths: [], filesCollapsed: false, metricsCollapsed: true, infoCollapsed: true, followShellCwd: true })
 
 export const useSidebarDetailStore = create<SidebarDetailStore>((set, get) => ({
   pageByTab: { [GLOBAL_PAGE_KEY]: 0 },
@@ -87,16 +87,32 @@ export const useSidebarDetailStore = create<SidebarDetailStore>((set, get) => ({
   toggleMetrics: (tabId) =>
     set((s) => {
       const cur = s.detailCache[tabId] ?? defaultDetail()
+      const metricsCollapsed = !cur.metricsCollapsed
       return {
-        detailCache: { ...s.detailCache, [tabId]: { ...cur, metricsCollapsed: !cur.metricsCollapsed } },
+        detailCache: {
+          ...s.detailCache,
+          [tabId]: {
+            ...cur,
+            metricsCollapsed,
+            infoCollapsed: metricsCollapsed ? cur.infoCollapsed : true,
+          },
+        },
       }
     }),
 
   toggleInfo: (tabId) =>
     set((s) => {
       const cur = s.detailCache[tabId] ?? defaultDetail()
+      const infoCollapsed = !cur.infoCollapsed
       return {
-        detailCache: { ...s.detailCache, [tabId]: { ...cur, infoCollapsed: !cur.infoCollapsed } },
+        detailCache: {
+          ...s.detailCache,
+          [tabId]: {
+            ...cur,
+            metricsCollapsed: infoCollapsed ? cur.metricsCollapsed : true,
+            infoCollapsed,
+          },
+        },
       }
     }),
 

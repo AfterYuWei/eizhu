@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import {
   File, Folder, HardDrive, Cpu, Loader2, AlertCircle,
   FilePlus, FolderPlus, RefreshCw, Pencil, Trash2, Copy, Eye, EyeOff,
-  FolderOpen, FileEdit, Inbox, Crosshair
+  FolderOpen, FileEdit, Inbox, Crosshair, ChevronDown
 } from 'lucide-react'
 import { useSessionStore } from '@/store/session'
 import { useSidebarDetailStore } from '@/store/sidebarDetail'
@@ -149,6 +149,12 @@ export function ServerDetail({
     if (bytesPerSec < 1024) return `${bytesPerSec} B/s`
     if (bytesPerSec < 1024 * 1024) return `${(bytesPerSec / 1024).toFixed(1)} KB/s`
     return `${(bytesPerSec / (1024 * 1024)).toFixed(1)} MB/s`
+  }
+
+  const formatRateCompact = (bytesPerSec: number): string => {
+    if (bytesPerSec < 1024) return `${Math.round(bytesPerSec)}B/s`
+    if (bytesPerSec < 1024 * 1024) return `${(bytesPerSec / 1024).toFixed(1)}K/s`
+    return `${(bytesPerSec / (1024 * 1024)).toFixed(1)}M/s`
   }
 
   /** Compact uptime: "up 5 days, 2 hours, 39 minutes" → "5d 2h 39m" */
@@ -503,8 +509,36 @@ export function ServerDetail({
             aria-label={detail.metricsCollapsed ? '展开系统指标' : '折叠系统指标'}
             aria-expanded={!detail.metricsCollapsed}
           >
-            <Cpu size={11} className="psec-title-icon" />
-            <span className="psec-title-text">系统指标</span>
+            <span className="sdetail-collapse-main">
+              <Cpu size={11} className="psec-title-icon" />
+              <span className="psec-title-text">系统指标</span>
+              <ChevronDown
+                size={12}
+                className={`sdetail-collapse-chev${detail.metricsCollapsed ? ' collapsed' : ''}`}
+              />
+            </span>
+            {detail.metricsCollapsed && (
+              <span className="sdetail-metric-summary" aria-hidden="true">
+                <span className="sdetail-summary-item">
+                  <span className="sdetail-summary-label">CPU</span>
+                  <span className="sdetail-summary-value">{isOff ? '—' : `${Math.round(metrics.cpu)}%`}</span>
+                </span>
+                <span className="sdetail-summary-item">
+                  <span className="sdetail-summary-label">内存</span>
+                  <span className="sdetail-summary-value">{isOff ? '—' : `${Math.round(metrics.mem_percent)}%`}</span>
+                </span>
+                <span className="sdetail-summary-item">
+                  <span className="sdetail-summary-label">磁盘</span>
+                  <span className="sdetail-summary-value">{isOff ? '—' : `${Math.round(metrics.disk_percent)}%`}</span>
+                </span>
+                <span className="sdetail-summary-item sdetail-summary-network">
+                  <span className="sdetail-summary-label">网络</span>
+                  <span className="sdetail-summary-value">
+                    {isOff ? '—' : `↓${formatRateCompact(metrics.net_rx)} ↑${formatRateCompact(metrics.net_tx)}`}
+                  </span>
+                </span>
+              </span>
+            )}
           </Button>
           {!detail.metricsCollapsed && (
             <div className="psec-body">
@@ -613,8 +647,17 @@ export function ServerDetail({
             aria-label={detail.infoCollapsed ? '展开服务器信息' : '折叠服务器信息'}
             aria-expanded={!detail.infoCollapsed}
           >
-            <HardDrive size={11} className="psec-title-icon" />
-            <span className="psec-title-text">服务器信息</span>
+            <span className="sdetail-collapse-main">
+              <HardDrive size={11} className="psec-title-icon" />
+              <span className="psec-title-text">服务器信息</span>
+              {detail.infoCollapsed && (
+                <span className="sdetail-info-summary" aria-hidden="true">{platformDisplay}</span>
+              )}
+              <ChevronDown
+                size={12}
+                className={`sdetail-collapse-chev${detail.infoCollapsed ? ' collapsed' : ''}`}
+              />
+            </span>
           </Button>
           {!detail.infoCollapsed && (
             <div className="psec-body">
