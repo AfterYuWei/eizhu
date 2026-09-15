@@ -65,10 +65,10 @@
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  gap: 5px;
-  padding: 6px;
+  gap: 0;
+  padding: 0;
   border-top: 1px solid var(--border-subtle);
-  background: color-mix(in srgb, var(--surface-panel) 70%, transparent);
+  background: transparent;
   max-height: min(46%, 360px);
   overflow-y: auto;
   overflow-x: hidden;
@@ -77,9 +77,9 @@
   min-width: 0;
   padding: 0;
   overflow: hidden;
-  border: 1px solid var(--border-subtle);
-  border-radius: 9px;
-  background: var(--bg-elevated);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
 }
 .sdetail-bottom-sec + .sdetail-bottom-sec {
   border-top: 1px solid var(--border-subtle);
@@ -95,7 +95,7 @@
   border: none;
   background: transparent;
   cursor: pointer;
-  padding: 7px 9px;
+  padding: 8px 12px;
   text-align: left;
   justify-content: flex-start;
   overflow: hidden;
@@ -144,9 +144,12 @@
 .sdetail-summary-item {
   min-width: 0;
   overflow: hidden;
-  padding: 4px 6px 5px;
-  border-radius: 6px;
-  background: color-mix(in srgb, var(--fg) 4%, transparent);
+  padding: 2px 6px 4px;
+  border-radius: 0;
+  background: transparent;
+}
+.sdetail-summary-item + .sdetail-summary-item {
+  border-left: 1px solid var(--border-subtle);
 }
 .sdetail-summary-copy {
   display: flex;
@@ -242,7 +245,7 @@
 }
 /* Section body shown when expanded. */
 .psec-body {
-  margin: 0 8px 8px;
+  margin: 0 12px 8px;
   animation: sdetail-panel-in 140ms ease-out;
 }
 /* Section title with icon */
@@ -650,31 +653,33 @@
 /* Bottom inspector shelf: readable at the 240px default sidebar width and
    stable when the sidebar is resized. */
 .psec.sdetail-bottom-sec:last-child {
-  border-bottom: 1px solid var(--border-subtle);
+  border-bottom: 0;
 }
 .sdetail-bottom-sec[data-expanded='true'] {
-  background: color-mix(in srgb, var(--bg-elevated) 94%, var(--accent) 6%);
+  background: transparent;
 }
 .sdetail-metrics-body {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border-top: 1px solid var(--border-subtle);
 }
 .sdetail-metrics-body .metric {
   min-width: 0;
-  height: 58px;
+  height: 43px;
   margin: 0;
-  padding: 7px;
+  padding: 4px 0;
   overflow: hidden;
-  border-radius: 7px;
-  background: color-mix(in srgb, var(--fg) 4%, transparent);
+  border-radius: 0;
+  background: transparent;
 }
+.sdetail-metrics-body .metric + .metric { border-top: 1px solid var(--border-subtle); }
 .sdetail-metrics-body .metric.metric-compact {
-  height: 58px;
+  height: 39px;
 }
 .sdetail-metrics-body .m-head {
   height: 14px;
-  margin-bottom: 6px;
+  margin-bottom: 4px;
   gap: 6px;
 }
 .sdetail-metrics-body .m-label,
@@ -688,23 +693,23 @@
 .sdetail-metrics-body .m-val { flex: 1; }
 .sdetail-metrics-body .m-bar { height: 3px; }
 .sdetail-metrics-body .m-sub {
-  height: 12px;
-  margin-top: 5px;
+  height: 11px;
+  margin-top: 3px;
   overflow: hidden;
 }
 .sdetail-metrics-body .m-sub span {
   min-width: 0;
   overflow: hidden;
   font-size: 9px;
-  line-height: 12px;
+  line-height: 11px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .sdetail-network-values {
   min-width: 0;
   display: flex;
-  flex-direction: column;
-  gap: 4px;
+  flex-direction: row;
+  gap: 14px;
   overflow: hidden;
   font: 500 9.5px / 1.15 var(--mono);
   font-variant-numeric: tabular-nums;
@@ -712,8 +717,9 @@
 }
 .sdetail-info-body {
   overflow: hidden;
-  border-radius: 7px;
-  background: color-mix(in srgb, var(--fg) 3%, transparent);
+  border-top: 1px solid var(--border-subtle);
+  border-radius: 0;
+  background: transparent;
 }
 .sdetail-info-body .info-row {
   min-width: 0;
@@ -750,17 +756,16 @@
 }
 
 @media (prefers-contrast: more) {
-  .psec.sdetail-bottom-sec { border-color: var(--border); }
-  .sdetail-summary-item,
-  .sdetail-metrics-body .metric,
-  .sdetail-info-body { outline: 1px solid var(--border); }
+  .sdetail-bottom,
+  .sdetail-bottom-sec + .sdetail-bottom-sec,
+  .sdetail-metrics-body,
+  .sdetail-info-body { border-color: var(--border); }
 }
 
 @container (max-width: 260px) {
-  .sdetail-metrics-body { grid-template-columns: minmax(0, 1fr); }
   .sdetail-metrics-body .metric,
-  .sdetail-metrics-body .metric.metric-compact { height: 50px; }
-  .sdetail-network-values { flex-direction: row; gap: 12px; }
+  .sdetail-metrics-body .metric.metric-compact { height: 43px; }
+  .sdetail-network-values { gap: 12px; }
 }
 
 @container (max-width: 200px) {
