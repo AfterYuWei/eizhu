@@ -42,8 +42,8 @@ jobs:
       - name: Set up Android SDK and NDK in GitHub runner
         uses: android-actions/setup-android@v4
         with:
+          # setup-android 已自行安装 cmdline-tools；Google 不再提供旧的 tools 包。
           packages: >-
-            tools
             platform-tools
             platforms;android-36
             build-tools;36.0.0
