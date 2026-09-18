@@ -150,6 +150,35 @@ export function useTerminal(options: UseTerminalOptions) {
     // so the parent can push the new size to the backend immediately.
     terminal.onResize(({ cols, rows }) => onResizeRef.current?.(cols, rows))
 
+    // 键盘复制/粘贴（VS Code / Termius 语义）。TUI 程序（claude code、opencode
+    // 等）开启鼠标上报后拖拽无法选区、Ctrl+C 被拦截为中断；而 Ctrl+V 只会向
+    // PTY 发送 0x16，远端程序读不到本地剪贴板（OSC 52 读取 xterm 也不支持），
+    // 因此粘贴必须由终端代读剪贴板写入。返回 false 阻止 xterm 把按键发往 PTY。
+    const isMacPlatform = /mac/i.test(navigator.userAgent)
+    terminal.attachCustomKeyEventHandler((event) => {
+      if (event.type !== 'keydown' || !terminal.element) return true
+      const modifier = isMacPlatform ? event.metaKey : event.ctrlKey && !event.altKey
+      if (!modifier || event.key !== 'v' && event.key !== 'c') return true
+      // 粘贴：Ctrl+V / Ctrl+Shift+V（mac 为 Cmd+V），统一由终端写入剪贴板内容。
+      if (event.key === 'v') {
+        readClipboardText()
+          .then((clip) => {
+            if (clip) terminal.paste(normalizePasteLineEndings(clip))
+          })
+          .catch(() => {})
+        return false
+      }
+      // 复制：Ctrl+C / Cmd+C 仅在已有选区时接管为复制，无选区仍发送 ^C 中断。
+      if (!event.shiftKey && terminal.hasSelection()) {
+        const selection = terminal.getSelection()
+        if (selection) {
+          void writeClipboardText(selection).catch(() => {})
+          return false
+        }
+      }
+      return true
+    })
+
     // Termius-style text selection and copy/paste:
     // - Drag to select (no auto-copy on release).
     // - Left-click on an existing selection copies it; left-click outside cancels.
