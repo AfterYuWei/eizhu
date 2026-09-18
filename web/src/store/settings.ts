@@ -54,7 +54,9 @@ function resolveTheme(theme: Theme): 'light' | 'dark' {
   return theme
 }
 
-const DEFAULT_APP_FONT_FAMILY = "-apple-system, BlinkMacSystemFont, 'Inter', system-ui, sans-serif"
+export const DEFAULT_APP_FONT_FAMILY = "-apple-system, BlinkMacSystemFont, 'Inter', 'Noto Sans SC', system-ui, sans-serif"
+// v2 及之前的默认界面字体栈（不含本地 Noto Sans SC 兜底），迁移时据此识别旧默认值。
+const LEGACY_APP_FONT_FAMILY = "-apple-system, BlinkMacSystemFont, 'Inter', system-ui, sans-serif"
 
 function applyAppFont(appFontSize: number, appFontFamily: string) {
   const root = document.documentElement
@@ -155,14 +157,19 @@ export const useSettingsStore = create<SettingsStore>()(
     }),
     {
       name: 'eizhu-settings',
-      version: 2,
+      version: 3,
       storage: createJSONStorage(() => localStorage),
       // v1 曾把桌面终端默认字号误改为 7；只修复这个旧默认值，保留用户设置的
       // 其他桌面字号。移动端从始至终使用独立的 mobileTerminalFontSize。
+      // v3 字体本地化后默认界面字体栈追加了 'Noto Sans SC'；仅当存量值仍是
+      // 旧默认栈（说明用户未自定义）时才更新，避免覆盖用户的明确选择。
       migrate: (persisted, version) => {
         const state = persisted as Partial<SettingsStore>
         if (version === 1 && state.fontSize === 7) {
           state.fontSize = DEFAULT_DESKTOP_TERMINAL_FONT_SIZE
+        }
+        if (state.appFontFamily === LEGACY_APP_FONT_FAMILY) {
+          state.appFontFamily = DEFAULT_APP_FONT_FAMILY
         }
         return state
       },

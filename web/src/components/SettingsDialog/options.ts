@@ -8,7 +8,7 @@ export const themeOptions = [
 
 export const appFontFamilyOptions = [
   // ── 系统默认 ──
-  { value: "-apple-system, BlinkMacSystemFont, 'Inter', system-ui, sans-serif", label: '系统默认' },
+  { value: "-apple-system, BlinkMacSystemFont, 'Inter', 'Noto Sans SC', system-ui, sans-serif", label: '系统默认' },
   // ── 西文 Web 字体 ──
   { value: "'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif", label: 'Inter' },
   { value: "'Manrope', -apple-system, BlinkMacSystemFont, system-ui, sans-serif", label: 'Manrope' },
