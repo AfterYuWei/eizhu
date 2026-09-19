@@ -78,6 +78,11 @@ export function useTerminal(options: UseTerminalOptions) {
       // We handle right-click copy/paste ourselves (Termius-style), so disable
       // xterm's built-in right-click word selection (defaults to true on macOS).
       rightClickSelectsWord: false,
+      // Remote TUIs enable mouse reporting, which disables normal xterm
+      // selection. Preserve their mouse controls while allowing macOS users to
+      // hold Option and drag to force a local selection. Windows/Linux already
+      // use Shift+drag for the same xterm behavior.
+      macOptionClickForcesSelection: true,
       cursorBlink: true,
       scrollback: 10000,
       linkHandler: {
@@ -158,9 +163,10 @@ export function useTerminal(options: UseTerminalOptions) {
     terminal.attachCustomKeyEventHandler((event) => {
       if (event.type !== 'keydown' || !terminal.element) return true
       const modifier = isMacPlatform ? event.metaKey : event.ctrlKey && !event.altKey
-      if (!modifier || event.key !== 'v' && event.key !== 'c') return true
+      const key = event.key.toLowerCase()
+      if (!modifier || key !== 'v' && key !== 'c') return true
       // 粘贴：Ctrl+V / Ctrl+Shift+V（mac 为 Cmd+V），统一由终端写入剪贴板内容。
-      if (event.key === 'v') {
+      if (key === 'v') {
         readClipboardText()
           .then((clip) => {
             if (clip) terminal.paste(normalizePasteLineEndings(clip))
