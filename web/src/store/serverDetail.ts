@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { serverDetailApi } from '@/api/serverDetail'
 import { editApi } from '@/api/edit'
-import { useEditorStore } from '@/store/editor'
+import { openEditorFile } from '@/lib/editorWindow'
 import { useProfileStore } from '@/store/profile'
 import type { ServerInfo, ServerMetrics } from '@/api/serverDetail'
 
@@ -406,7 +406,7 @@ export const useServerDetailStore = create<ServerDetailStore>((set, get) => ({
   openEditor: (profileId: string, path: string) => {
     const detail = get().details[profileId]
     if (!detail?.sessionId) return
-    useEditorStore.getState().openFile(detail.sessionId, 'serverDetail', path)
+    void openEditorFile(detail.sessionId, 'serverDetail', path)
   },
 
   updateMetrics: (profileId: string, metrics: ServerMetrics) => {

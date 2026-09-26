@@ -33,6 +33,7 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+          cache: gradle
       - name: Set up Android SDK and NDK in GitHub runner
         uses: android-actions/setup-android@v4
         with:

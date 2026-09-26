@@ -40,7 +40,7 @@ import {
 import { usePointerDrag } from '@/hooks/usePointerDrag'
 import { dropPayloadAttr, hitTestDropTarget } from '@/lib/dragRegistry'
 import { isTauri, sftpDragOut, startNativeFileDrag } from '@/lib/desktop'
-import { getPlatformCapabilities, isMobileRuntime } from '@/lib/platform'
+import { getPlatformCapabilities, isDesktopRuntime, isMobileRuntime } from '@/lib/platform'
 import { documentApi } from '@/api/document'
 import { sftpApi } from '@/api/sftp'
 import type { SftpEntry } from '@/types/sftp'
@@ -266,17 +266,21 @@ export function FilePane({ pane, onPickServer }: FilePaneProps) {
 
   // --- Context menu builders ---
   const fileMenuItems = (entry: SftpEntry): MenuItem[] => [
-    { id: 'open', label: entry.is_dir ? '打开文件夹' : '打开', icon: <FolderOpen size={13} />, onClick: () => openEntry(entry) },
-    // Only show "编辑" for files (not directories).
-    ...(!entry.is_dir
-      ? [
-          {
-            id: 'edit',
-            label: '编辑',
-            icon: <FileEdit size={13} />,
-            onClick: () => store.openEditor(pane, entry.path),
-          },
-        ]
+    ...(entry.is_dir || !isDesktopRuntime()
+      ? [{
+          id: 'open',
+          label: entry.is_dir ? '打开文件夹' : '打开',
+          icon: <FolderOpen size={13} />,
+          onClick: () => openEntry(entry),
+        }]
+      : []),
+    ...(!entry.is_dir && !isDesktopRuntime()
+      ? [{
+          id: 'edit',
+          label: '编辑',
+          icon: <FileEdit size={13} />,
+          onClick: () => store.openEditor(pane, entry.path),
+        }]
       : []),
     // 桌面端拖出兜底入口（拖拽手势之外的显式导出）
     ...(getPlatformCapabilities().dragOut

@@ -253,6 +253,11 @@ fn desktop_run() {
             commands::sftp_upload_document,
             commands::sftp_export_download,
             commands::frontend_ready,
+            commands::request_app_close,
+            commands::resolve_app_close,
+            commands::open_editor_window,
+            commands::editor_window_ready,
+            commands::editor_window_show,
             commands::get_platform,
             commands::read_app_log,
             commands::append_frontend_log,
@@ -361,6 +366,7 @@ fn desktop_run() {
             commands::account_set_sync_enabled
         ])
         .setup(move |app| {
+            app.manage(commands::EditorWindowCoordinator::default());
             let data_dir = desktop::user_data_dir()
                 .map_err(|error| std::io::Error::other(error.to_string()))?;
             let document_gateway =

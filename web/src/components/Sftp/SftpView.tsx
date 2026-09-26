@@ -13,7 +13,7 @@ import { useSftpTransfer } from '@/hooks/useSftpTransfer'
 import { useExternalDrop } from '@/hooks/useExternalDrop'
 import { sftpApi } from '@/api/sftp'
 import { HostKeyDialog } from './HostKeyDialog'
-import { isMobileRuntime } from '@/lib/platform'
+import { isDesktopRuntime, isMobileRuntime } from '@/lib/platform'
 import { mobileSftpLayout, MOBILE_SFTP_TABLET_QUERY } from '@/lib/mobileSftp'
 import { MobileSftpView } from './MobileSftpView'
 
@@ -142,7 +142,7 @@ export function SftpView() {
         <HostKeyDialog />
         <DirectoryTransferDialog />
         <SftpDialogs />
-        <EditorDialog />
+        {!isDesktopRuntime() && <EditorDialog />}
       </div>
     </SftpStoreContext.Provider>
   )

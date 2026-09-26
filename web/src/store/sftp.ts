@@ -1,7 +1,7 @@
 import { createStore, type StoreApi } from 'zustand'
 import { sftpApi } from '@/api/sftp'
 import { profileApi } from '@/api/profile'
-import { useEditorStore } from '@/store/editor'
+import { openEditorFile } from '@/lib/editorWindow'
 import type {
   SftpEntry,
   SftpServer,
@@ -806,8 +806,7 @@ export function createSftpStore(options: SftpStoreOptions = {}): SftpStoreApi {
         toast.warning('当前标签页未连接')
         return
       }
-      // Delegate to the unified editor store
-      useEditorStore.getState().openFile(tab.sessionId, 'sftp', path)
+      await openEditorFile(tab.sessionId, 'sftp', path)
     },
   }))
 

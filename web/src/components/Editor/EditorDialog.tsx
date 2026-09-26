@@ -10,6 +10,7 @@ import { CodeEditor } from './CodeEditor'
 import { EditorToolbar } from './EditorToolbar'
 import { EditorStatusBar } from './EditorStatusBar'
 import { EditorTabs } from './EditorTabs'
+import { isDesktopRuntime } from '@/lib/platform'
 
 const SKELETON_WIDTHS = [52, 74, 43, 81, 61, 36, 69, 48, 86, 57, 72, 39, 64, 78, 45, 83, 55, 68]
 
@@ -55,7 +56,7 @@ export function EditorDialog() {
     closeTab(tabId)
   }
 
-  if (!open || !activeTab) return null
+  if (isDesktopRuntime() || !open || !activeTab) return null
 
   const tabItems = tabs.map((t) => ({
     id: t.id,

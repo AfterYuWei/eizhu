@@ -37,7 +37,7 @@ interface EditorStore {
   setActiveTab: (tabId: string) => void
   setContent: (tabId: string, content: string) => void
   setLanguage: (tabId: string, language: string) => void
-  saveFile: (tabId: string) => Promise<void>
+  saveFile: (tabId: string) => Promise<boolean>
   reloadFile: (tabId: string) => Promise<void>
 }
 
@@ -48,6 +48,11 @@ function makeTabId(): string {
 function extractFilename(path: string): string {
   const parts = path.split('/')
   return parts[parts.length - 1] || path
+}
+
+/** Monaco edits use LF internally; keep stored text in that canonical form. */
+function normalizeEditorContent(content: string): string {
+  return content.replace(/\r\n?/g, '\n')
 }
 
 /** Extract a human message from an API error. */
@@ -105,14 +110,15 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
     try {
       const res = await editApi.readFile(sessionId, path)
+      const content = normalizeEditorContent(res.content)
 
       set((state) => ({
         tabs: state.tabs.map((t) =>
           t.id === tabId
             ? {
                 ...t,
-                content: res.content,
-                originalContent: res.content,
+                content,
+                originalContent: content,
                 modTime: res.mod_time,
                 language: res.language,
                 lineEnding: res.line_ending,
@@ -166,8 +172,9 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   },
 
   setContent: (tabId, content) => {
+    const normalizedContent = normalizeEditorContent(content)
     set((state) => ({
-      tabs: state.tabs.map((t) => (t.id === tabId ? { ...t, content } : t)),
+      tabs: state.tabs.map((t) => (t.id === tabId ? { ...t, content: normalizedContent } : t)),
     }))
   },
 
@@ -179,7 +186,10 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
   saveFile: async (tabId) => {
     const tab = get().tabs.find((t) => t.id === tabId)
-    if (!tab || !tab.modTime || tab.saving || tab.readOnly) return
+    if (!tab) return false
+    if (tab.content === tab.originalContent) return true
+    if (!tab.modTime || tab.saving || tab.readOnly) return false
+    const content = tab.content
 
     set((state) => ({
       tabs: state.tabs.map((t) => (t.id === tabId ? { ...t, saving: true } : t)),
@@ -187,7 +197,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
     try {
       const res = await editApi.writeFile(tab.sessionId, tab.path, {
-        content: tab.content,
+        content,
         expected_mod_time: tab.modTime,
         line_ending: tab.lineEnding,
       })
@@ -197,7 +207,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
           t.id === tabId
             ? {
                 ...t,
-                originalContent: t.content,
+                originalContent: content,
                 modTime: res.mod_time,
                 saving: false,
                 conflict: false,
@@ -207,6 +217,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         ),
       }))
       toast.success('已保存')
+      return true
     } catch (err) {
       const code = extractApiCode(err)
       if (code === 'FILE_MODIFIED') {
@@ -225,6 +236,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         }))
         toast.error(msg)
       }
+      return false
     }
   },
 
@@ -240,14 +252,15 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
     try {
       const res = await editApi.readFile(tab.sessionId, tab.path)
+      const content = normalizeEditorContent(res.content)
 
       set((state) => ({
         tabs: state.tabs.map((t) =>
           t.id === tabId
             ? {
                 ...t,
-                content: res.content,
-                originalContent: res.content,
+                content,
+                originalContent: content,
                 modTime: res.mod_time,
                 language: res.language,
                 lineEnding: res.line_ending,

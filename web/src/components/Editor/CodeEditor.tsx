@@ -1,6 +1,5 @@
-import { useRef, useCallback } from 'react'
+import { useRef, useCallback, useLayoutEffect } from 'react'
 import MonacoEditor, { type OnMount, loader } from '@monaco-editor/react'
-import type { editor } from 'monaco-editor'
 import { useSettingsStore } from '@/store/settings'
 
 // Define custom themes once when the module loads.
@@ -77,7 +76,10 @@ export function CodeEditor({
   onChange,
   onSave,
 }: CodeEditorProps) {
-  const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null)
+  const onSaveRef = useRef(onSave)
+  useLayoutEffect(() => {
+    onSaveRef.current = onSave
+  }, [onSave])
 
   const theme = useSettingsStore((s) => s.theme)
   const systemRevision = useSettingsStore((s) => s.systemRevision)
@@ -87,22 +89,14 @@ export function CodeEditor({
       ? window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
       : theme
 
-  const handleMount: OnMount = useCallback(
-    (inst, monaco) => {
-      editorRef.current = inst
-
-      // Sync edits → store
-      inst.onDidChangeModelContent(() => {
-        onChange(inst.getValue())
-      })
-
-      // Ctrl/Cmd+S → save
-      inst.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
-        onSave()
-      })
-    },
-    [onChange, onSave]
-  )
+  const handleMount: OnMount = useCallback((inst, monaco) => {
+    // @monaco-editor/react owns the model change subscription and suppresses
+    // callbacks for controlled value updates. A second subscription here sees
+    // tab switches as edits and captures the first tab's onChange callback.
+    inst.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
+      onSaveRef.current()
+    })
+  }, [])
 
   return (
     <MonacoEditor
