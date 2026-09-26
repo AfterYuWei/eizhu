@@ -26,7 +26,7 @@ pub struct SyncStateRow {
 }
 
 #[derive(Clone)]
-pub struct ProviderRow {
+pub(super) struct ProviderRow {
     pub meta: SyncProviderMeta,
     pub config: SyncProviderConfig,
 }
@@ -387,7 +387,7 @@ impl SyncRepository {
             .map_err(CommandError::database)
     }
 
-    pub fn create_provider(
+    pub(super) fn create_provider(
         &self,
         config: &SyncProviderConfig,
     ) -> Result<ProviderRow, CommandError> {
@@ -429,7 +429,7 @@ impl SyncRepository {
         })
     }
 
-    pub fn get_provider(&self, id: &str) -> Result<ProviderRow, CommandError> {
+    pub(super) fn get_provider(&self, id: &str) -> Result<ProviderRow, CommandError> {
         let connection = self.database.connect()?;
         let raw = connection
             .query_row(
@@ -441,7 +441,10 @@ impl SyncRepository {
         self.decrypt_provider(raw)
     }
 
-    pub fn list_providers(&self, enabled_only: bool) -> Result<Vec<ProviderRow>, CommandError> {
+    pub(super) fn list_providers(
+        &self,
+        enabled_only: bool,
+    ) -> Result<Vec<ProviderRow>, CommandError> {
         let connection = self.database.connect()?;
         let query = if enabled_only {
             format!(
@@ -517,6 +520,46 @@ impl SyncRepository {
             .map_err(CommandError::database)?;
         if changed == 0 {
             return Err(CommandError::new("DB_ERROR", "provider not found"));
+        }
+        Ok(())
+    }
+
+    pub(crate) fn account_provider_enabled(&self) -> Result<Option<bool>, CommandError> {
+        Ok(self
+            .list_providers(false)?
+            .into_iter()
+            .find(|row| row.config.provider_type == "account")
+            .map(|row| row.meta.enabled))
+    }
+
+    pub(crate) fn ensure_account_provider(&self, name: &str) -> Result<(), CommandError> {
+        if self.account_provider_enabled()?.is_some() {
+            return Ok(());
+        }
+        let mut config = SyncProviderConfig::default();
+        config.provider_type = "account".into();
+        config.name = name.into();
+        config.enabled = true;
+        self.create_provider(&config)?;
+        Ok(())
+    }
+
+    pub(crate) fn set_account_provider_enabled(&self, enabled: bool) -> Result<(), CommandError> {
+        let row = self
+            .list_providers(false)?
+            .into_iter()
+            .find(|row| row.config.provider_type == "account")
+            .ok_or_else(|| CommandError::new("DB_ERROR", "账号同步配置不存在"))?;
+        let mut config = row.config;
+        config.enabled = enabled;
+        self.update_provider(&row.meta.id, &config)
+    }
+
+    pub(crate) fn delete_account_providers(&self) -> Result<(), CommandError> {
+        for row in self.list_providers(false)? {
+            if row.config.provider_type == "account" {
+                self.delete_provider(&row.meta.id)?;
+            }
         }
         Ok(())
     }

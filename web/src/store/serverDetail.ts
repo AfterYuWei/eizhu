@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { serverDetailApi } from '@/api/serverDetail'
 import { editApi } from '@/api/edit'
 import { useEditorStore } from '@/store/editor'
+import { useProfileStore } from '@/store/profile'
 import type { ServerInfo, ServerMetrics } from '@/api/serverDetail'
 
 // --- File tree node (supports lazy-loaded children) ---
@@ -71,6 +72,7 @@ interface ServerDetailStore {
 const emptyInfo = (): ServerInfo => ({
   hostname: '',
   os: '',
+  icon: '',
   kernel: '',
   arch: '',
   uptime: '',
@@ -320,6 +322,9 @@ export const useServerDetailStore = create<ServerDetailStore>((set, get) => ({
           },
         }
       })
+      if (info.icon && get().details[profileId]?.sessionId === sessionId) {
+        void useProfileStore.getState().updateDetectedIcon(profileId, info.icon)
+      }
     } catch (err) {
       console.error('Failed to fetch server info:', err)
     }

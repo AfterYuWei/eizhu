@@ -6,10 +6,14 @@ export type UpdateChannel = 'stable' | 'test'
 
 const configuredBuildChannel = import.meta.env.VITE_EIZHU_CHANNEL
 const DEFAULT_UPDATE_CHANNEL: UpdateChannel = configuredBuildChannel === 'test' ? 'test' : 'stable'
+export const DEFAULT_DESKTOP_TERMINAL_FONT_SIZE = 13
+export const DEFAULT_MOBILE_TERMINAL_FONT_SIZE = 10
 
 interface SettingsStore {
   theme: Theme
+  /** 桌面终端字号；移动端使用独立设置，避免跨平台互相覆盖。 */
   fontSize: number
+  mobileTerminalFontSize: number
   fontFamily: string
   fontFamilyCN: string
   sidebarWidth: number
@@ -21,12 +25,15 @@ interface SettingsStore {
   terminalInlineSuggestion: boolean
   terminalPopupMenu: boolean
   updateChannel: UpdateChannel
+  // 移动端启动时自动检查新版本（GitHub Releases 引导下载；桌面端始终静默检查）
+  autoCheckUpdate: boolean
   // system 模式下系统主题变化时自增，用于触发组件重渲染（theme 仍为 'system'）
   systemRevision: number
 
   setTheme: (theme: Theme) => void
   toggleTheme: () => void
   setFontSize: (size: number) => void
+  setMobileTerminalFontSize: (size: number) => void
   setFontFamily: (family: string) => void
   setFontFamilyCN: (family: string) => void
   setSidebarWidth: (width: number) => void
@@ -37,6 +44,7 @@ interface SettingsStore {
   setTerminalInlineSuggestion: (enabled: boolean) => void
   setTerminalPopupMenu: (enabled: boolean) => void
   setUpdateChannel: (channel: UpdateChannel) => void
+  setAutoCheckUpdate: (enabled: boolean) => void
 }
 
 function resolveTheme(theme: Theme): 'light' | 'dark' {
@@ -46,7 +54,9 @@ function resolveTheme(theme: Theme): 'light' | 'dark' {
   return theme
 }
 
-const DEFAULT_APP_FONT_FAMILY = "-apple-system, BlinkMacSystemFont, 'Inter', system-ui, sans-serif"
+export const DEFAULT_APP_FONT_FAMILY = "-apple-system, BlinkMacSystemFont, 'Inter', 'Noto Sans SC', system-ui, sans-serif"
+// v2 及之前的默认界面字体栈（不含本地 Noto Sans SC 兜底），迁移时据此识别旧默认值。
+const LEGACY_APP_FONT_FAMILY = "-apple-system, BlinkMacSystemFont, 'Inter', system-ui, sans-serif"
 
 function applyAppFont(appFontSize: number, appFontFamily: string) {
   const root = document.documentElement
@@ -96,8 +106,9 @@ function ensureSystemWatcher() {
 export const useSettingsStore = create<SettingsStore>()(
   persist(
     (set, get) => ({
-      theme: 'dark',
-      fontSize: 13,
+      theme: 'system',
+      fontSize: DEFAULT_DESKTOP_TERMINAL_FONT_SIZE,
+      mobileTerminalFontSize: DEFAULT_MOBILE_TERMINAL_FONT_SIZE,
       fontFamily: "'JetBrains Mono'",
       fontFamilyCN: "'Noto Sans SC'",
       sidebarWidth: 240,
@@ -108,6 +119,7 @@ export const useSettingsStore = create<SettingsStore>()(
       terminalInlineSuggestion: false,
       terminalPopupMenu: true,
       updateChannel: DEFAULT_UPDATE_CHANNEL,
+      autoCheckUpdate: true,
       systemRevision: 0,
 
       setTheme: (theme) => {
@@ -121,6 +133,7 @@ export const useSettingsStore = create<SettingsStore>()(
         applyTheme(next)
       },
       setFontSize: (fontSize) => set({ fontSize }),
+      setMobileTerminalFontSize: (mobileTerminalFontSize) => set({ mobileTerminalFontSize }),
       setFontFamily: (fontFamily) => set({ fontFamily }),
       setFontFamilyCN: (fontFamilyCN) => set({ fontFamilyCN }),
       setSidebarWidth: (sidebarWidth) => {
@@ -140,10 +153,26 @@ export const useSettingsStore = create<SettingsStore>()(
       setTerminalInlineSuggestion: (terminalInlineSuggestion) => set({ terminalInlineSuggestion }),
       setTerminalPopupMenu: (terminalPopupMenu) => set({ terminalPopupMenu }),
       setUpdateChannel: (updateChannel) => set({ updateChannel }),
+      setAutoCheckUpdate: (autoCheckUpdate) => set({ autoCheckUpdate }),
     }),
     {
       name: 'eizhu-settings',
+      version: 3,
       storage: createJSONStorage(() => localStorage),
+      // v1 曾把桌面终端默认字号误改为 7；只修复这个旧默认值，保留用户设置的
+      // 其他桌面字号。移动端从始至终使用独立的 mobileTerminalFontSize。
+      // v3 字体本地化后默认界面字体栈追加了 'Noto Sans SC'；仅当存量值仍是
+      // 旧默认栈（说明用户未自定义）时才更新，避免覆盖用户的明确选择。
+      migrate: (persisted, version) => {
+        const state = persisted as Partial<SettingsStore>
+        if (version === 1 && state.fontSize === 7) {
+          state.fontSize = DEFAULT_DESKTOP_TERMINAL_FONT_SIZE
+        }
+        if (state.appFontFamily === LEGACY_APP_FONT_FAMILY) {
+          state.appFontFamily = DEFAULT_APP_FONT_FAMILY
+        }
+        return state
+      },
     }
   )
 )
@@ -155,4 +184,15 @@ export function initTheme() {
   applyAppFont(state.appFontSize, state.appFontFamily)
   applySidebarWidth(state.sidebarWidth)
   ensureSystemWatcher()
+}
+
+/** 解析当前生效主题（'system' 实时跟随系统深浅色，经 systemRevision 触发重渲染）。 */
+export function useResolvedTheme(): 'light' | 'dark' {
+  const theme = useSettingsStore((state) => state.theme)
+  // 订阅 revision：系统深浅切换时 store 自增，本组件随之重渲染重新求值
+  useSettingsStore((state) => state.systemRevision)
+  if (theme === 'system') {
+    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+  }
+  return theme
 }

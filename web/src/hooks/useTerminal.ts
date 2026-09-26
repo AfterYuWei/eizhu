@@ -6,6 +6,8 @@ import { WebLinksAddon } from '@xterm/addon-web-links'
 import { WebglAddon } from '@xterm/addon-webgl'
 import { getTerminalTheme } from '@/lib/terminalThemes'
 import { openExternal } from '@/lib/desktop'
+import { writeClipboardText, readClipboardText } from '@/lib/clipboard'
+import { isMobileRuntime } from '@/lib/platform'
 import { toast } from 'sonner'
 
 /**
@@ -76,6 +78,11 @@ export function useTerminal(options: UseTerminalOptions) {
       // We handle right-click copy/paste ourselves (Termius-style), so disable
       // xterm's built-in right-click word selection (defaults to true on macOS).
       rightClickSelectsWord: false,
+      // Remote TUIs enable mouse reporting, which disables normal xterm
+      // selection. Preserve their mouse controls while allowing macOS users to
+      // hold Option and drag to force a local selection. Windows/Linux already
+      // use Shift+drag for the same xterm behavior.
+      macOptionClickForcesSelection: true,
       cursorBlink: true,
       scrollback: 10000,
       linkHandler: {
@@ -147,6 +154,36 @@ export function useTerminal(options: UseTerminalOptions) {
     // Forward xterm's own resize events (fired after fit()/terminal.resize)
     // so the parent can push the new size to the backend immediately.
     terminal.onResize(({ cols, rows }) => onResizeRef.current?.(cols, rows))
+
+    // 键盘复制/粘贴（VS Code / Termius 语义）。TUI 程序（claude code、opencode
+    // 等）开启鼠标上报后拖拽无法选区、Ctrl+C 被拦截为中断；而 Ctrl+V 只会向
+    // PTY 发送 0x16，远端程序读不到本地剪贴板（OSC 52 读取 xterm 也不支持），
+    // 因此粘贴必须由终端代读剪贴板写入。返回 false 阻止 xterm 把按键发往 PTY。
+    const isMacPlatform = /mac/i.test(navigator.userAgent)
+    terminal.attachCustomKeyEventHandler((event) => {
+      if (event.type !== 'keydown' || !terminal.element) return true
+      const modifier = isMacPlatform ? event.metaKey : event.ctrlKey && !event.altKey
+      const key = event.key.toLowerCase()
+      if (!modifier || key !== 'v' && key !== 'c') return true
+      // 粘贴：Ctrl+V / Ctrl+Shift+V（mac 为 Cmd+V），统一由终端写入剪贴板内容。
+      if (key === 'v') {
+        readClipboardText()
+          .then((clip) => {
+            if (clip) terminal.paste(normalizePasteLineEndings(clip))
+          })
+          .catch(() => {})
+        return false
+      }
+      // 复制：Ctrl+C / Cmd+C 仅在已有选区时接管为复制，无选区仍发送 ^C 中断。
+      if (!event.shiftKey && terminal.hasSelection()) {
+        const selection = terminal.getSelection()
+        if (selection) {
+          void writeClipboardText(selection).catch(() => {})
+          return false
+        }
+      }
+      return true
+    })
 
     // Termius-style text selection and copy/paste:
     // - Drag to select (no auto-copy on release).
@@ -240,7 +277,7 @@ export function useTerminal(options: UseTerminalOptions) {
         if (cell) {
           const [sx, sy, ex, ey] = range
           if (isCellInSelection(cell[0], cell[1], sx, sy, ex, ey)) {
-            navigator.clipboard.writeText(text).catch(() => {})
+            void writeClipboardText(text).catch(() => {})
           }
         }
       }
@@ -261,7 +298,7 @@ export function useTerminal(options: UseTerminalOptions) {
       }
       if (inside && text) {
         // Right-click on the selection: copy it and paste into the command line.
-        navigator.clipboard.writeText(text).catch(() => {})
+        void writeClipboardText(text).catch(() => {})
         // terminal.paste() automatically wraps with \x1b[200~...\x1b[201~ when
         // bracketed paste mode is enabled (the shell enables it and xterm.js
         // receives \x1b[?2004h), and sends raw text when it's not. This avoids
@@ -272,15 +309,21 @@ export function useTerminal(options: UseTerminalOptions) {
       }
       // Right-click elsewhere: drop any stale highlight, then paste.
       terminal.clearSelection()
-      navigator.clipboard.readText().then((clip) => {
+      readClipboardText().then((clip) => {
         if (clip) {
           terminal.paste(normalizePasteLineEndings(clip))
         }
       }).catch(() => {})
     }
-    terminalElement?.addEventListener('mousedown', handleMouseDown, true)
-    terminalElement?.addEventListener('mouseup', handleMouseUp)
-    terminalElement?.addEventListener('contextmenu', handleContextMenu, true)
+    // 移动端终端交互完全由 useMobileTerminalGestures 接管：
+    // 长按会触发 touch 模拟的 contextmenu，旧的右键处理会“复制并粘贴选区/
+    // 读取剪贴板粘贴”，这正是长按弹菜单时被自动粘贴的根因；同样地，
+    // touch 合成的 mousedown/mouseup 会误触“点选区即复制”。全部仅桌面挂载。
+    if (!isMobileRuntime()) {
+      terminalElement?.addEventListener('mousedown', handleMouseDown, true)
+      terminalElement?.addEventListener('mouseup', handleMouseUp)
+      terminalElement?.addEventListener('contextmenu', handleContextMenu, true)
+    }
 
     // Ctrl+滚轮缩放终端字体
     const handleWheel = (event: WheelEvent) => {
@@ -377,6 +420,44 @@ export function useTerminal(options: UseTerminalOptions) {
   // 暴露 terminal 实例供补全等外部逻辑读取 buffer/光标
   const getTerminal = useCallback(() => terminalRef.current, [])
 
+  /**
+   * 移动端双击选词：把视口坐标换算成 buffer 单元格，向两侧扫描非空白字符
+   * 得到词边界后调用 terminal.select。选区为单行（终端选词的常见形态）。
+   * 点在空白处则清除选区。返回是否形成了选区。
+   */
+  const selectWordAt = useCallback((clientX: number, clientY: number): boolean => {
+    const terminal = terminalRef.current
+    const screenEl = terminal?.element?.querySelector('.xterm-screen') as HTMLElement | null
+    if (!terminal || !screenEl) return false
+    const rect = screenEl.getBoundingClientRect()
+    const cellWidth = rect.width / terminal.cols
+    const cellHeight = rect.height / terminal.rows
+    if (cellWidth <= 0 || cellHeight <= 0) return false
+    const style = window.getComputedStyle(screenEl)
+    const leftPad = parseFloat(style.paddingLeft) || 0
+    const topPad = parseFloat(style.paddingTop) || 0
+    const col = Math.min(Math.max(Math.floor((clientX - rect.left - leftPad) / cellWidth), 0), terminal.cols - 1)
+    const screenRow = Math.min(Math.max(Math.floor((clientY - rect.top - topPad) / cellHeight), 0), terminal.rows - 1)
+    const bufferRow = screenRow + terminal.buffer.active.viewportY
+    const line = terminal.buffer.active.getLine(bufferRow)
+    if (!line) return false
+
+    const isWordChar = (index: number): boolean => {
+      const cell = line.getCell(index)
+      return !!cell && cell.getWidth() > 0 && cell.getCode() > 32
+    }
+    if (!isWordChar(col)) {
+      terminal.clearSelection()
+      return false
+    }
+    let start = col
+    let end = col
+    while (start > 0 && isWordChar(start - 1)) start -= 1
+    while (end < terminal.cols - 1 && isWordChar(end + 1)) end += 1
+    terminal.select(start, bufferRow, end - start + 1)
+    return true
+  }, [])
+
   return {
     write,
     writeln,
@@ -385,5 +466,6 @@ export function useTerminal(options: UseTerminalOptions) {
     fit,
     getSize,
     getTerminal,
+    selectWordAt,
   }
 }

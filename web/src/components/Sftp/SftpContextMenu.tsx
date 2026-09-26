@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import {
   ContextMenu,
   ContextMenuContent,
@@ -26,10 +26,36 @@ interface SftpContextMenuProps {
 
 /** Controlled shadcn context menu anchored at the captured pointer position. */
 export function SftpContextMenu({ x, y, items, onClose }: SftpContextMenuProps) {
+  const triggerRef = useRef<HTMLSpanElement>(null)
+  const [open, setOpen] = useState(false)
+
+  // Radix ContextMenu records its virtual anchor from the Trigger's contextmenu
+  // event. The original pointer event happened before this controlled menu was
+  // mounted, so replay it with the captured viewport coordinates before paint.
+  useLayoutEffect(() => {
+    triggerRef.current?.dispatchEvent(new MouseEvent('contextmenu', {
+      bubbles: true,
+      cancelable: true,
+      clientX: x,
+      clientY: y,
+    }))
+  }, [x, y])
+
   return (
-    <ContextMenu open onOpenChange={(open) => !open && onClose()}>
+    <ContextMenu
+      open={open}
+      onOpenChange={(nextOpen) => {
+        setOpen(nextOpen)
+        if (!nextOpen) onClose()
+      }}
+    >
       <ContextMenuTrigger asChild>
-        <span className="pointer-events-none fixed size-px" style={{ left: x, top: y }} />
+        <span
+          ref={triggerRef}
+          className="pointer-events-none fixed size-px"
+          style={{ left: x, top: y }}
+          onContextMenu={(event) => event.stopPropagation()}
+        />
       </ContextMenuTrigger>
       <ContextMenuContent className="min-w-[168px]" collisionPadding={8}>
         {items.map((item) =>

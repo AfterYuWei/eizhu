@@ -3,6 +3,7 @@
 //! React communicates with the in-process Rust backend through fine-grained
 //! Tauri commands and events.
 
+mod account;
 mod app;
 mod audit;
 mod backup;

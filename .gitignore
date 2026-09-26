@@ -4,6 +4,9 @@ data/
 # fileterm 子项目（独立管理）
 fileterm/
 
+# admin 闭源子项目（独立 Git 仓库）
+admin/
+
 # Tauri（src-tauri/.gitignore 另行忽略 target/gen/binaries）
 /node_modules/
 
@@ -14,3 +17,25 @@ Thumbs.db
 
 # IDE
 .idea/
+
+# AI 工具本地配置（skills、方案文档）
+.agents/
+.claude/
+.trae/
+.zcode/
+skills-lock.json
+
+# Android Gradle 构建产物（插件目录）
+**/android/.gradle/
+**/android/build/
+
+# Tauri android init 生成的插件脚手架
+src-tauri/plugins/*/android/.tauri/
+
+# tauri android init 生成的 Android 工程（含签名配置，可用 android:init 重建）
+src-tauri/gen/android/
+
+# Android signing keys
+*.jks
+*.keystore
+keystore.properties

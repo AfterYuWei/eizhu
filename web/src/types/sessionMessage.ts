@@ -13,6 +13,7 @@ export type SessionMessageType =
   | 'complete_response'
   | 'disconnect'
   | 'connection_state'
+  | 'detected_icon'
 
 export interface SessionMessage {
   type: SessionMessageType
@@ -43,6 +44,10 @@ export interface MetaPayload {
 
 export interface CwdPayload {
   path: string
+}
+
+export interface DetectedIconPayload {
+  icon: string
 }
 
 // 异常断连:SSH 连接死亡(远端关机/网络中断/保活超时)

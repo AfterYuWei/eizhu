@@ -41,6 +41,9 @@ pub(crate) struct TransferTask {
     finished_at: Option<i64>,
     #[serde(skip_serializing_if = "String::is_empty")]
     error_message: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    error_code: String,
+    retryable: bool,
 }
 
 struct TransferEntry {
@@ -73,12 +76,12 @@ pub(super) struct TransferManager {
 
 #[derive(Debug, Serialize)]
 pub(crate) struct SftpUploadResponse {
-    tasks: Vec<TransferTask>,
+    pub(crate) tasks: Vec<TransferTask>,
 }
 
 #[derive(Debug, Serialize)]
 pub(crate) struct SftpUploadBeginResponse {
-    upload_id: String,
+    pub(crate) upload_id: String,
     tasks: Vec<TransferTask>,
 }
 
@@ -137,7 +140,7 @@ impl TransferManager {
             tasks: Arc::new(RwLock::new(HashMap::new())),
             uploads: Arc::new(RwLock::new(HashMap::new())),
             workers: Arc::new(Mutex::new(HashMap::new())),
-            semaphore: Arc::new(Semaphore::new(5)),
+            semaphore: Arc::new(Semaphore::new(if cfg!(mobile) { 2 } else { 5 })),
         }
     }
 
@@ -169,6 +172,8 @@ impl TransferManager {
                 started_at: now_millis(),
                 finished_at: None,
                 error_message: String::new(),
+                error_code: String::new(),
+                retryable: false,
             }),
             cancel: CancellationToken::new(),
             session_id,
@@ -238,15 +243,43 @@ impl TransferManager {
             task.speed = 0;
             task.finished_at = Some(now_millis());
             task.error_message = message.into();
+            task.error_code = "INTERNAL".into();
             task.clone()
         };
         emit(
             events,
             "transfer_failed",
             serde_json::json!({
-                "task_id":task.id,"status":task.status,"error_message":task.error_message
+                "task_id":task.id,"status":task.status,"error_message":task.error_message,
+                "error_code":task.error_code,"retryable":task.retryable
             }),
         );
+    }
+
+    async fn mark_background_limit(entry: &TransferEntry, events: &dyn SftpEventSink) -> bool {
+        let task = {
+            let mut task = entry.task.lock().await;
+            if !matches!(task.status.as_str(), "queued" | "transferring") {
+                return false;
+            }
+            task.status = "failed".into();
+            task.speed = 0;
+            task.finished_at = Some(now_millis());
+            task.error_message = "后台恢复窗口已结束，可在回到前台后重试".into();
+            task.error_code = "BACKGROUND_LIMIT".into();
+            task.retryable = true;
+            task.clone()
+        };
+        entry.cancel.cancel();
+        emit(
+            events,
+            "transfer_failed",
+            serde_json::json!({
+                "task_id":task.id,"status":task.status,"error_message":task.error_message,
+                "error_code":task.error_code,"retryable":task.retryable
+            }),
+        );
+        true
     }
 
     pub(super) async fn shutdown(&self) {
@@ -299,6 +332,48 @@ impl TransferManager {
             self.abort_worker(&id).await;
         }
         self.remove_uploads(Some(session_id)).await;
+    }
+
+    pub(super) async fn cancel_session_for_background(
+        &self,
+        session_id: &str,
+        events: &dyn SftpEventSink,
+    ) {
+        let entries = self
+            .tasks
+            .read()
+            .await
+            .values()
+            .filter(|entry| entry.session_id == session_id)
+            .cloned()
+            .collect::<Vec<_>>();
+        let mut ids = Vec::new();
+        for entry in &entries {
+            if Self::mark_background_limit(entry, events).await {
+                ids.push(entry.task.lock().await.id.clone());
+                if let Some(path) = entry.download_path.lock().await.take() {
+                    let _ = tokio::fs::remove_file(path).await;
+                }
+            }
+        }
+        for id in ids {
+            self.abort_worker(&id).await;
+        }
+
+        let uploads = self
+            .uploads
+            .read()
+            .await
+            .values()
+            .filter(|upload| upload.session_id == session_id)
+            .cloned()
+            .collect::<Vec<_>>();
+        for upload in uploads {
+            if let Some(mut writer) = upload.writer.lock().await.take() {
+                let _ = writer.shutdown().await;
+            }
+            let _ = upload.backend.remove_file(&upload.destination).await;
+        }
     }
 
     async fn remove_uploads(&self, session_id: Option<&str>) {
@@ -364,6 +439,18 @@ fn now_millis() -> i64 {
     chrono::Utc::now().timestamp_millis()
 }
 
+async fn cancelled_transfer_error(entry: &TransferEntry) -> CommandError {
+    let task = entry.task.lock().await;
+    if task.error_code == "BACKGROUND_LIMIT" {
+        CommandError::new("BACKGROUND_LIMIT", task.error_message.clone())
+            .retryable()
+            .with_session(entry.session_id.clone(), "background")
+            .with_details(serde_json::json!({"task_id": task.id}))
+    } else {
+        CommandError::new("CANCELLED", "transfer was cancelled")
+    }
+}
+
 async fn copy_with_progress(
     source: &FileBackend,
     source_path: &str,
@@ -417,6 +504,17 @@ fn validate_upload_name(name: &str) -> Result<(), CommandError> {
     Ok(())
 }
 
+fn validate_conflict_resolution(resolution: &str) -> Result<(), CommandError> {
+    if matches!(resolution, "ask" | "overwrite" | "rename" | "skip") {
+        Ok(())
+    } else {
+        Err(CommandError::new(
+            "VALIDATION",
+            "invalid conflict_resolution",
+        ))
+    }
+}
+
 pub(crate) async fn sftp_upload_begin(
     state: &SftpService,
     session_id: String,
@@ -425,21 +523,34 @@ pub(crate) async fn sftp_upload_begin(
     overwrite: bool,
     size: u64,
 ) -> Result<SftpUploadBeginResponse, CommandError> {
+    sftp_upload_begin_with_resolution(
+        state,
+        session_id,
+        name,
+        dest_dir,
+        if overwrite { "overwrite" } else { "ask" },
+        size,
+    )
+    .await?
+    .ok_or_else(|| CommandError::new("INTERNAL", "upload was unexpectedly skipped"))
+}
+
+pub(crate) async fn sftp_upload_begin_with_resolution(
+    state: &SftpService,
+    session_id: String,
+    name: String,
+    dest_dir: String,
+    conflict_resolution: &str,
+    size: u64,
+) -> Result<Option<SftpUploadBeginResponse>, CommandError> {
     validate_upload_name(&name)?;
+    validate_conflict_resolution(conflict_resolution)?;
     let (session, backend) = state.backend(&session_id).await?;
     let destination_dir = clean_path(&dest_dir);
     backend
         .mkdir_all(&destination_dir)
         .await
         .map_err(internal)?;
-    let destination = join_path(&destination_dir, &name);
-    if !overwrite && backend.stat(&destination).await.is_ok() {
-        return Err(CommandError::new(
-            "PATH_EXISTS",
-            format!("file already exists: {destination}"),
-        ));
-    }
-
     let permit = state
         .transfers
         .semaphore
@@ -447,10 +558,61 @@ pub(crate) async fn sftp_upload_begin(
         .acquire_owned()
         .await
         .map_err(|_| CommandError::new("INTERNAL", "transfer manager stopped"))?;
-    let writer = backend.open_write(&destination).await.map_err(internal)?;
+    let requested_destination = join_path(&destination_dir, &name);
+    let (destination, writer) = match conflict_resolution {
+        "overwrite" => {
+            let destination =
+                resolve_destination(&backend, requested_destination, conflict_resolution)
+                    .await
+                    .map_err(internal)?
+                    .expect("overwrite always resolves a destination");
+            let writer = backend.open_write(&destination).await.map_err(internal)?;
+            (destination, writer)
+        }
+        "rename" => {
+            let mut destination = if backend.stat(&requested_destination).await.is_ok() {
+                auto_rename(&backend, &requested_destination)
+                    .await
+                    .map_err(internal)?
+            } else {
+                requested_destination.clone()
+            };
+            loop {
+                match backend.open_write_new(&destination).await {
+                    Ok(writer) => break (destination, writer),
+                    Err(_) if backend.stat(&destination).await.is_ok() => {
+                        destination = auto_rename(&backend, &requested_destination)
+                            .await
+                            .map_err(internal)?;
+                    }
+                    Err(error) => return Err(internal(error)),
+                }
+            }
+        }
+        "ask" | "skip" => {
+            if backend.stat(&requested_destination).await.is_ok() {
+                if conflict_resolution == "skip" {
+                    return Ok(None);
+                }
+                return Err(upload_path_exists(&requested_destination));
+            }
+            match backend.open_write_new(&requested_destination).await {
+                Ok(writer) => (requested_destination, writer),
+                Err(_) if backend.stat(&requested_destination).await.is_ok() => {
+                    if conflict_resolution == "skip" {
+                        return Ok(None);
+                    }
+                    return Err(upload_path_exists(&requested_destination));
+                }
+                Err(error) => return Err(internal(error)),
+            }
+        }
+        _ => unreachable!("validated conflict resolution"),
+    };
+    let task_name = base_name(&destination);
     let transfer = state
         .transfers
-        .create(session_id.clone(), name.clone(), "upload", size)
+        .create(session_id.clone(), task_name, "upload", size)
         .await;
     TransferManager::set_transferring(&transfer).await;
     let upload_id = format!("ul-{}", uuid::Uuid::new_v4());
@@ -469,10 +631,15 @@ pub(crate) async fn sftp_upload_begin(
             _permit: permit,
         }),
     );
-    Ok(SftpUploadBeginResponse {
+    Ok(Some(SftpUploadBeginResponse {
         upload_id,
         tasks: vec![TransferManager::snapshot(&transfer).await],
-    })
+    }))
+}
+
+fn upload_path_exists(destination: &str) -> CommandError {
+    CommandError::new("PATH_EXISTS", format!("file already exists: {destination}"))
+        .with_details(serde_json::json!({ "dest_path": destination }))
 }
 
 pub(crate) async fn upload_chunk(
@@ -520,7 +687,7 @@ async fn write_upload_chunk(
         .cloned()
         .ok_or_else(|| CommandError::new("NOT_FOUND", "upload stream not found"))?;
     if upload.transfer.cancel.is_cancelled() {
-        return Err(CommandError::new("CANCELLED", "upload was cancelled"));
+        return Err(cancelled_transfer_error(&upload.transfer).await);
     }
     let mut received = upload.received.lock().await;
     let next = received.saturating_add(bytes.len() as u64);
@@ -536,7 +703,7 @@ async fn write_upload_chunk(
         .ok_or_else(|| CommandError::new("INVALID_STATE", "upload stream is already closed"))?;
     tokio::select! {
         _ = upload.transfer.cancel.cancelled() => {
-            return Err(CommandError::new("CANCELLED", "upload was cancelled"));
+            return Err(cancelled_transfer_error(&upload.transfer).await);
         }
         result = writer.write_all(bytes) => {
             result.map_err(|error| CommandError::new("INTERNAL", error.to_string()))?;
@@ -577,7 +744,7 @@ pub(crate) async fn sftp_upload_finish(
             let _ = writer.shutdown().await;
         }
         let _ = upload.backend.remove_file(&upload.destination).await;
-        return Err(CommandError::new("CANCELLED", "upload was cancelled"));
+        return Err(cancelled_transfer_error(&upload.transfer).await);
     }
     if received != upload.expected_size {
         if let Some(mut writer) = upload.writer.lock().await.take() {
@@ -1103,6 +1270,9 @@ pub(crate) async fn sftp_download_chunk(
         .cloned()
         .ok_or_else(|| CommandError::new("NOT_FOUND", "transfer task not found"))?;
     if entry.task.lock().await.status != "completed" {
+        if entry.cancel.is_cancelled() {
+            return Err(cancelled_transfer_error(&entry).await);
+        }
         return Err(CommandError::new("NOT_READY", "transfer is not completed"));
     }
     let path = entry
@@ -1138,6 +1308,9 @@ pub(crate) async fn sftp_download_chunk_base64(
         .cloned()
         .ok_or_else(|| CommandError::new("NOT_FOUND", "transfer task not found"))?;
     if entry.task.lock().await.status != "completed" {
+        if entry.cancel.is_cancelled() {
+            return Err(cancelled_transfer_error(&entry).await);
+        }
         return Err(CommandError::new("NOT_READY", "transfer is not completed"));
     }
     let path = entry
@@ -1180,6 +1353,34 @@ pub(crate) async fn sftp_download_close(
         }
     }
     Ok(())
+}
+
+pub(crate) async fn sftp_download_artifact(
+    state: &SftpService,
+    task_id: &str,
+) -> Result<(PathBuf, String), CommandError> {
+    let entry = state
+        .transfers
+        .tasks
+        .read()
+        .await
+        .get(task_id)
+        .cloned()
+        .ok_or_else(|| CommandError::new("NOT_FOUND", "download task not found"))?;
+    let task = entry.task.lock().await.clone();
+    if task.status != "completed" {
+        return Err(CommandError::new(
+            "TRANSFER_NOT_READY",
+            format!("download task is {}", task.status),
+        ));
+    }
+    let path = entry
+        .download_path
+        .lock()
+        .await
+        .clone()
+        .ok_or_else(|| CommandError::new("NOT_FOUND", "download artifact not found"))?;
+    Ok((path, task.file_name))
 }
 
 async fn auto_rename(backend: &FileBackend, path: &str) -> Result<String, SftpError> {
@@ -1660,6 +1861,73 @@ mod tests {
     use std::io::Read;
 
     use super::*;
+
+    struct TestEvents;
+
+    impl SftpEventSink for TestEvents {
+        fn emit_sftp(&self, _event_type: &'static str, _payload: serde_json::Value) {}
+    }
+
+    #[test]
+    fn upload_conflict_resolution_rejects_unknown_values() {
+        for resolution in ["ask", "overwrite", "rename", "skip"] {
+            assert!(validate_conflict_resolution(resolution).is_ok());
+        }
+        let error = validate_conflict_resolution("replace").unwrap_err();
+        assert_eq!(error.code, "VALIDATION");
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn upload_destination_supports_rename_skip_and_overwrite() {
+        let directory = tempfile::tempdir().unwrap();
+        let original = directory.path().join("report.txt");
+        tokio::fs::write(&original, b"old").await.unwrap();
+        let backend = FileBackend::Local;
+        let original_api = original.to_string_lossy().into_owned();
+
+        assert!(backend.open_write_new(&original_api).await.is_err());
+        assert_eq!(tokio::fs::read(&original).await.unwrap(), b"old");
+
+        let renamed = resolve_destination(&backend, original_api.clone(), "rename")
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(renamed.ends_with("report (1).txt"));
+        assert!(resolve_destination(&backend, original_api.clone(), "skip")
+            .await
+            .unwrap()
+            .is_none());
+        let overwritten = resolve_destination(&backend, original_api.clone(), "overwrite")
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(overwritten, original_api);
+        assert!(!original.exists());
+    }
+
+    #[tokio::test]
+    async fn background_limit_marks_active_transfer_retryable() {
+        let manager = TransferManager::new();
+        let entry = manager
+            .create("session-1".into(), "large.bin".into(), "download", 1024)
+            .await;
+        assert!(TransferManager::set_transferring(&entry).await);
+
+        manager
+            .cancel_session_for_background("session-1", &TestEvents)
+            .await;
+
+        let task = TransferManager::snapshot(&entry).await;
+        assert_eq!(task.status, "failed");
+        assert_eq!(task.error_code, "BACKGROUND_LIMIT");
+        assert!(task.retryable);
+        let error = serde_json::to_value(cancelled_transfer_error(&entry).await).unwrap();
+        assert_eq!(error["code"], "BACKGROUND_LIMIT");
+        assert_eq!(error["retryable"], true);
+        assert_eq!(error["session_id"], "session-1");
+        assert_eq!(error["stage"], "background");
+    }
 
     #[test]
     fn tar_builder_preserves_paths_and_content() {

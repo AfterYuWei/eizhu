@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import {
   File, Folder, HardDrive, Cpu, Loader2, AlertCircle,
   FilePlus, FolderPlus, RefreshCw, Pencil, Trash2, Copy, Eye, EyeOff,
-  FolderOpen, FileEdit, Inbox, Crosshair
+  FolderOpen, FileEdit, Inbox, Crosshair, ChevronDown
 } from 'lucide-react'
 import { useSessionStore } from '@/store/session'
 import { useSidebarDetailStore } from '@/store/sidebarDetail'
@@ -15,6 +15,7 @@ import { EditorDialog } from '@/components/Editor/EditorDialog'
 import { SftpContextMenu, type MenuItem } from '@/components/Sftp/SftpContextMenu'
 import { InputDialog, validateSftpName } from '@/components/Sftp/InputDialog'
 import { DeleteConfirmDialog } from '@/components/Sftp/DeleteConfirmDialog'
+import { writeClipboardText } from '@/lib/clipboard'
 import type { FileTreeNode } from '@/store/serverDetail'
 import type { SftpEntry } from '@/types/sftp'
 
@@ -150,6 +151,12 @@ export function ServerDetail({
     return `${(bytesPerSec / (1024 * 1024)).toFixed(1)} MB/s`
   }
 
+  const formatRateCompact = (bytesPerSec: number): string => {
+    if (bytesPerSec < 1024) return `${Math.round(bytesPerSec)}B/s`
+    if (bytesPerSec < 1024 * 1024) return `${(bytesPerSec / 1024).toFixed(1)}K/s`
+    return `${(bytesPerSec / (1024 * 1024)).toFixed(1)}M/s`
+  }
+
   /** Compact uptime: "up 5 days, 2 hours, 39 minutes" → "5d 2h 39m" */
   const compactUptime = (raw: string): string => {
     if (!raw) return '—'
@@ -179,6 +186,7 @@ export function ServerDetail({
   const platformDisplay = info.os || info.kernel || '—'
   const runtimeDisplay = info.uptime ? `${statusText} ${compactUptime(info.uptime)}` : statusText
   const loadDisplay = info.load_avg || '—'
+  const boundedPercent = (value: number) => `${Math.min(100, Math.max(0, value))}%`
 
   const renderInfoTooltip = (rows: Array<{ label: string; value: string }>) => (
     <div className="sdetail-tip">
@@ -229,7 +237,7 @@ export function ServerDetail({
     { id: 'newFolder', label: '新建文件夹', icon: <FolderPlus size={13} />, onClick: () => setNewFolderDialog(true) },
     { id: 'd2', label: '', divider: true },
     { id: 'rename', label: '重命名', icon: <Pencil size={13} />, onClick: () => setRenameDialog({ path: node.path, currentName: node.name }) },
-    { id: 'copy', label: '复制路径', icon: <Copy size={13} />, onClick: () => navigator.clipboard?.writeText(node.path) },
+    { id: 'copy', label: '复制路径', icon: <Copy size={13} />, onClick: () => void writeClipboardText(node.path) },
     { id: 'd3', label: '', divider: true },
     { id: 'del', label: '删除', icon: <Trash2 size={13} />, danger: true, onClick: () => setDeleteConfirm({ entries: [node] }) },
   ]
@@ -352,6 +360,10 @@ export function ServerDetail({
         >
           <Folder size={11} className="psec-title-icon" />
           <span className="psec-title-text">文件管理</span>
+          <ChevronDown
+            size={12}
+            className={`sdetail-collapse-chev${detail.filesCollapsed ? ' collapsed' : ''}`}
+          />
         </Button>
         {!detail.filesCollapsed && isConnected && (
           <div className="sdetail-file-actions">
@@ -493,20 +505,65 @@ export function ServerDetail({
       {/* Bottom panels — pinned at the bottom, collapsible */}
       <div className="sdetail-bottom">
         {/* System Metrics */}
-        <div className="psec sdetail-bottom-sec">
-          <Button
+        <section className="psec sdetail-bottom-sec" data-expanded={!detail.metricsCollapsed}>
+          <button
             type="button"
-            variant="ghost"
             className="psec-title sdetail-collapse-hdr"
             onClick={() => toggleMetrics(tabId)}
             aria-label={detail.metricsCollapsed ? '展开系统指标' : '折叠系统指标'}
             aria-expanded={!detail.metricsCollapsed}
           >
-            <Cpu size={11} className="psec-title-icon" />
-            <span className="psec-title-text">系统指标</span>
-          </Button>
+            <span className="sdetail-collapse-main">
+              <Cpu size={11} className="psec-title-icon" />
+              <span className="psec-title-text">系统指标</span>
+              <ChevronDown
+                size={12}
+                className={`sdetail-collapse-chev${detail.metricsCollapsed ? ' collapsed' : ''}`}
+              />
+            </span>
+            {detail.metricsCollapsed && (
+              <span className="sdetail-metric-summary" aria-hidden="true">
+                <span className="sdetail-summary-item">
+                  <span className="sdetail-summary-copy">
+                    <span className="sdetail-summary-label">CPU</span>
+                    <span className="sdetail-summary-value">{isOff ? '—' : `${Math.round(metrics.cpu)}%`}</span>
+                  </span>
+                  <span className="sdetail-summary-track" aria-hidden="true">
+                    <span className="cpu" style={{ width: isOff ? '0%' : boundedPercent(metrics.cpu) }} />
+                  </span>
+                </span>
+                <span className="sdetail-summary-item">
+                  <span className="sdetail-summary-copy">
+                    <span className="sdetail-summary-label">内存</span>
+                    <span className="sdetail-summary-value">{isOff ? '—' : `${Math.round(metrics.mem_percent)}%`}</span>
+                  </span>
+                  <span className="sdetail-summary-track" aria-hidden="true">
+                    <span className="mem" style={{ width: isOff ? '0%' : boundedPercent(metrics.mem_percent) }} />
+                  </span>
+                </span>
+                <span className="sdetail-summary-item">
+                  <span className="sdetail-summary-copy">
+                    <span className="sdetail-summary-label">磁盘</span>
+                    <span className="sdetail-summary-value">{isOff ? '—' : `${Math.round(metrics.disk_percent)}%`}</span>
+                  </span>
+                  <span className="sdetail-summary-track" aria-hidden="true">
+                    <span className="disk" style={{ width: isOff ? '0%' : boundedPercent(metrics.disk_percent) }} />
+                  </span>
+                </span>
+                <span className="sdetail-summary-network">
+                  <span className="sdetail-summary-label">网络</span>
+                  {isOff ? <span className="sdetail-summary-value">—</span> : (
+                    <span className="sdetail-summary-rates">
+                      <span className="is-rx">↓ {formatRateCompact(metrics.net_rx)}</span>
+                      <span className="is-tx">↑ {formatRateCompact(metrics.net_tx)}</span>
+                    </span>
+                  )}
+                </span>
+              </span>
+            )}
+          </button>
           {!detail.metricsCollapsed && (
-            <div className="psec-body">
+            <div className="psec-body sdetail-metrics-body">
               <DetailTooltip
                 side="top"
                 content={metrics?.cpu_detail?.length ? (
@@ -592,31 +649,44 @@ export function ServerDetail({
                 <div className="metric metric-compact" style={{ opacity: isOff || !metrics ? 0.4 : 1 }}>
                   <div className="m-head">
                     <span className="m-label">网络</span>
-                    <span className="m-val" style={{ whiteSpace: 'nowrap' }}>
-                      {`↓${formatBytesPerSec(metrics.net_rx)} ↑${formatBytesPerSec(metrics.net_tx)}`}
-                    </span>
+                  </div>
+                  <div className="sdetail-network-values">
+                    <span className="is-rx">↓ {formatBytesPerSec(metrics.net_rx)}</span>
+                    <span className="is-tx">↑ {formatBytesPerSec(metrics.net_tx)}</span>
                   </div>
                 </div>
               </DetailTooltip>
             </div>
           )}
-        </div>
+        </section>
 
         {/* Server Info */}
-        <div className="psec sdetail-bottom-sec">
-          <Button
+        <section className="psec sdetail-bottom-sec" data-expanded={!detail.infoCollapsed}>
+          <button
             type="button"
-            variant="ghost"
             className="psec-title sdetail-collapse-hdr"
             onClick={() => toggleInfo(tabId)}
             aria-label={detail.infoCollapsed ? '展开服务器信息' : '折叠服务器信息'}
             aria-expanded={!detail.infoCollapsed}
           >
-            <HardDrive size={11} className="psec-title-icon" />
-            <span className="psec-title-text">服务器信息</span>
-          </Button>
+            <span className="sdetail-collapse-main">
+              <HardDrive size={11} className="psec-title-icon" />
+              <span className="psec-title-text">服务器信息</span>
+              <ChevronDown
+                size={12}
+                className={`sdetail-collapse-chev${detail.infoCollapsed ? ' collapsed' : ''}`}
+              />
+            </span>
+            {detail.infoCollapsed && (
+              <span className="sdetail-info-summary" aria-hidden="true">
+                <span>{info.hostname || profileName}</span>
+                <span className="sdetail-info-summary-sep">·</span>
+                <span className="sdetail-info-platform" title={platformDisplay}>{platformDisplay}</span>
+              </span>
+            )}
+          </button>
           {!detail.infoCollapsed && (
-            <div className="psec-body">
+            <div className="psec-body sdetail-info-body">
               <div className="info-row">
                 <span className="info-label">主机名</span>
                 <span className="info-val">{info.hostname || profileName}</span>
@@ -675,7 +745,7 @@ export function ServerDetail({
               </div>
             </div>
           )}
-        </div>
+        </section>
       </div>
 
       <EditorDialog />

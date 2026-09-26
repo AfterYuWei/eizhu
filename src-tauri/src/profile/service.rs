@@ -268,11 +268,11 @@ impl ProfileService {
         request.name = request.name.trim().to_owned();
         request.host = request.host.trim().to_owned();
         request.username = request.username.trim().to_owned();
-        if request.name.is_empty() || request.host.is_empty() {
-            return Err(CommandError::new(
-                "VALIDATION",
-                "name and host are required",
-            ));
+        if request.host.is_empty() {
+            return Err(CommandError::new("VALIDATION", "host is required"));
+        }
+        if request.name.is_empty() {
+            request.name.clone_from(&request.host);
         }
         if request.port == 0 {
             request.port = 22;
@@ -820,6 +820,13 @@ mod tests {
         assert_eq!(state.list(None, Some("生产")).unwrap().len(), 1);
         state.delete(&profile.id).unwrap();
         assert_eq!(state.get(&profile.id).unwrap_err().code, "NOT_FOUND");
+    }
+
+    #[test]
+    fn empty_profile_name_defaults_to_trimmed_host() {
+        let (_directory, state) = state();
+        let profile = state.create(password_request("   ")).unwrap();
+        assert_eq!(profile.name, "example.com");
     }
 
     #[test]

@@ -1,56 +1,7 @@
 @import "tailwindcss";
 
-/* ═══════════════════ WEB FONTS ═══════════════════ */
-/* 优先 local() 匹配用户设备已安装的字体，Google Fonts 仅作兜底（国内不可用时无感降级） */
-@font-face {
-  font-family: 'Inter';
-  font-style: normal;
-  font-weight: 100 900;
-  font-display: swap;
-  src: local('Inter'), local('Inter Regular'), url('https://fonts.gstatic.com/s/inter/v18/UcCO3FwrK3iLTeHuS_nVMrMxCp50SjIw2boKoduKmMEVuLyfAZ9hiJ-Ek-_EeA.woff2') format('woff2');
-}
-@font-face {
-  font-family: 'Noto Sans SC';
-  font-style: normal;
-  font-weight: 100 900;
-  font-display: swap;
-  src: local('Noto Sans SC'), local('NotoSansSC-Regular'), url('https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYlNbPzS5HB7A8H.119.woff2') format('woff2');
-}
-@font-face {
-  font-family: 'Fira Code';
-  font-style: normal;
-  font-weight: 300 700;
-  font-display: swap;
-  src: local('Fira Code'), local('FiraCode-Regular'), url('https://fonts.gstatic.com/s/firacode/v22/uU9NCBsR6Z2vfE9aq3bh0NSDqFGedCMX.woff2') format('woff2');
-}
-@font-face {
-  font-family: 'IBM Plex Sans';
-  font-style: normal;
-  font-weight: 100 900;
-  font-display: swap;
-  src: local('IBM Plex Sans'), local('IBMPlexSans'), local('IBMPlexSans-Regular');
-}
-@font-face {
-  font-family: 'Manrope';
-  font-style: normal;
-  font-weight: 200 800;
-  font-display: swap;
-  src: local('Manrope'), local('Manrope Regular');
-}
-@font-face {
-  font-family: 'Plus Jakarta Sans';
-  font-style: normal;
-  font-weight: 200 800;
-  font-display: swap;
-  src: local('Plus Jakarta Sans'), local('PlusJakartaSans-Regular');
-}
-@font-face {
-  font-family: 'HarmonyOS Sans';
-  font-style: normal;
-  font-weight: 100 900;
-  font-display: swap;
-  src: local('HarmonyOS Sans'), local('HarmonyOS Sans Regular');
-}
+/* 字体统一由 public/fonts/fonts.css 本地提供（Inter / JetBrains Mono / Fira Code /
+   Noto Sans SC，woff2 可变字体，离线可用），此处不再声明任何 webfont。 */
 
 /* ═══════════════════ DESIGN TOKENS ═══════════════════ */
 @theme inline {
@@ -82,7 +33,7 @@
   --radius-lg: 0.75rem;    /* 12px — DESIGN.md rounded.lg */
 
   --font-mono: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
-  --font-sans: -apple-system, BlinkMacSystemFont, 'Inter', system-ui, sans-serif;
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Inter', 'Noto Sans SC', system-ui, sans-serif;
 }
 
 /* ═══════════════════ LIGHT THEME (default) ═══════════════════ */
@@ -137,7 +88,7 @@
   --gradient-ship-start: #ff4d4d;
   --gradient-ship-end: #f9cb28;
   --mono: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
-  --sans: -apple-system, BlinkMacSystemFont, 'Inter', system-ui, sans-serif;
+  --sans: -apple-system, BlinkMacSystemFont, 'Inter', 'Noto Sans SC', system-ui, sans-serif;
   --sans-size: 12px;
   --r: 8px;
   --r-sm: 6px;
@@ -452,3 +403,17 @@
 @import "./styles/editor.css";
 @import "./styles/settings.css";
 @import "./styles/vault.css";
+@import "./styles/mobile.css";
+/* 账号中心 */
+.account-panel { display: flex; flex-direction: column; gap: 14px; }
+.account-hero { margin-bottom: 0; }
+.account-card { display: flex; flex-direction: column; gap: 14px; }
+.account-welcome { display: flex; align-items: center; gap: 12px; padding: 8px 2px; }
+.account-welcome > span { display: grid; place-items: center; width: 46px; height: 46px; border-radius: var(--r-lg); color: var(--accent); background: var(--accent-bg); }
+.account-welcome h3 { margin: 0; font-size: 15px; }.account-welcome p { margin: 4px 0 0; color: var(--fg-4); line-height: 1.5; }
+.account-form-card { display: flex; flex-direction: column; gap: 14px; max-width: 480px; }
+.account-form-field { display: grid; gap: 7px; }.account-mode-link { align-self: flex-start; border: 0; padding: 2px 0; color: var(--link); background: transparent; font-size: 12px; }
+.account-error { padding: 9px 11px; border-radius: var(--r-sm); color: var(--red); background: var(--red-bg); font-size: 12px; }
+.account-usage > div { display: flex; justify-content: space-between; color: var(--fg-3); font-size: 12px; }
+.account-usage i { display: block; height: 6px; margin-top: 8px; overflow: hidden; border-radius: var(--r-pill); background: var(--bg-elevated); }.account-usage em { display: block; height: 100%; border-radius: inherit; background: var(--accent); }
+.m-account-card { width: 100%; display: flex; align-items: center; gap: 12px; padding: 14px 16px; border: 0; color: inherit; text-align: left; }

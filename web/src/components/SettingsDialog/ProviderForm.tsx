@@ -39,8 +39,9 @@ const PROVIDER_ICONS: Record<ProviderType, typeof Cloud> = {
 }
 
 type ProvStatus = { key: 'connected' | 'pending' | 'disabled'; label: string }
+type EditableProvider = SyncProviderMeta & { type: ProviderType }
 
-function providerStatus(p: SyncProviderMeta): ProvStatus {
+function providerStatus(p: EditableProvider): ProvStatus {
   if (!p.enabled) return { key: 'disabled', label: '已禁用' }
   if (isOAuth(p.type) && !p.authorized) return { key: 'pending', label: '待授权' }
   if (isOAuth(p.type)) return { key: 'connected', label: '已连接' }
@@ -48,6 +49,9 @@ function providerStatus(p: SyncProviderMeta): ProvStatus {
 }
 
 export function ProviderSection({ providers, onChanged }: Props) {
+  const visibleProviders = providers.filter(
+    (provider): provider is EditableProvider => provider.type !== 'account',
+  )
   const [adding, setAdding] = useState(false)
   const [form, setForm] = useState<ProviderConfig>(emptyForm('webdav'))
   const [busy, setBusy] = useState(false)
@@ -75,7 +79,7 @@ export function ProviderSection({ providers, onChanged }: Props) {
     }
   }
 
-  const handleToggle = async (p: SyncProviderMeta) => {
+  const handleToggle = async (p: EditableProvider) => {
     try {
       await syncApi.updateProvider(p.id, {
         type: p.type, name: p.name, enabled: !p.enabled,
@@ -140,7 +144,7 @@ export function ProviderSection({ providers, onChanged }: Props) {
     <div className="sync-provider-block">
       <div className="sync-provider-header">
         <div className="settings-subsection-title">
-          <Server size={13} /><span>云存储配置（{providers.length}）</span>
+          <Server size={13} /><span>云存储配置（{visibleProviders.length}）</span>
         </div>
         {!adding && (
           <Button variant="outline" size="sm" onClick={() => setAdding(true)}>
@@ -149,13 +153,13 @@ export function ProviderSection({ providers, onChanged }: Props) {
         )}
       </div>
 
-      {providers.length === 0 && !adding && (
+      {visibleProviders.length === 0 && !adding && (
         <div className="sync-provider-empty-hint">尚未配置云存储源，点击「添加存储源」开始备份。</div>
       )}
 
-      {providers.length > 0 && (
+      {visibleProviders.length > 0 && (
         <div className="sync-provider-list">
-          {providers.map((p) => {
+          {visibleProviders.map((p) => {
             const st = providerStatus(p)
             const Icon = PROVIDER_ICONS[p.type]
             return (

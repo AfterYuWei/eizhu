@@ -8,107 +8,35 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Monitor, Terminal, Palette, Type, ChevronRight, DatabaseBackup, CloudSync, Info, FileText } from 'lucide-react'
+import { Activity, Monitor, Terminal, Palette, Type, ChevronRight, DatabaseBackup, CloudSync, Info, FileText, UserRound } from 'lucide-react'
 import { TerminalThemePicker } from './TerminalThemePicker'
 import { BackupPanel } from './BackupPanel'
 import { SyncPanel } from './SyncPanel'
 import { AboutPanel } from './AboutPanel'
 import { LogPanel } from './LogPanel'
-import { isTauri } from '@/lib/desktop'
 import { isTestBuild } from '@/lib/updater'
+import { isDesktopRuntime, isMobileRuntime } from '@/lib/platform'
+import { MobileDiagnosticsPanel } from './MobileDiagnosticsPanel'
+import { AccountPanel } from './AccountPanel'
+import {
+  themeOptions,
+  appFontFamilyOptions,
+  terminalFontFamilyOptions,
+  terminalFontFamilyCNOptions,
+} from './options'
 
 interface SettingsDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
 }
 
-const themeOptions = [
-  { value: 'light', label: '浅色' },
-  { value: 'dark', label: '深色' },
-  { value: 'system', label: '跟随系统' },
-]
-
-const appFontFamilyOptions = [
-  // ── 系统默认 ──
-  { value: "-apple-system, BlinkMacSystemFont, 'Inter', system-ui, sans-serif", label: '系统默认' },
-  // ── 西文 Web 字体 ──
-  { value: "'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif", label: 'Inter' },
-  { value: "'Manrope', -apple-system, BlinkMacSystemFont, system-ui, sans-serif", label: 'Manrope' },
-  { value: "'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, system-ui, sans-serif", label: 'Plus Jakarta Sans' },
-  { value: "'IBM Plex Sans', -apple-system, BlinkMacSystemFont, system-ui, sans-serif", label: 'IBM Plex Sans' },
-  { value: "'Roboto', -apple-system, BlinkMacSystemFont, system-ui, sans-serif", label: 'Roboto' },
-  { value: "'Open Sans', -apple-system, BlinkMacSystemFont, system-ui, sans-serif", label: 'Open Sans' },
-  { value: "'Lato', -apple-system, BlinkMacSystemFont, system-ui, sans-serif", label: 'Lato' },
-  { value: "'Montserrat', -apple-system, BlinkMacSystemFont, system-ui, sans-serif", label: 'Montserrat' },
-  { value: "'Poppins', -apple-system, BlinkMacSystemFont, system-ui, sans-serif", label: 'Poppins' },
-  { value: "'Outfit', -apple-system, BlinkMacSystemFont, system-ui, sans-serif", label: 'Outfit' },
-  { value: "'DM Sans', -apple-system, BlinkMacSystemFont, system-ui, sans-serif", label: 'DM Sans' },
-  { value: "'Noto Sans', -apple-system, BlinkMacSystemFont, system-ui, sans-serif", label: 'Noto Sans' },
-  { value: "'Geist', -apple-system, BlinkMacSystemFont, system-ui, sans-serif", label: 'Geist (Vercel)' },
-  // ── 系统西文字体 ──
-  { value: "'SF Pro Text', -apple-system, BlinkMacSystemFont, system-ui, sans-serif", label: 'SF Pro (Apple)' },
-  { value: "'Segoe UI', system-ui, sans-serif", label: 'Segoe UI (Windows)' },
-  { value: "'Helvetica Neue', -apple-system, BlinkMacSystemFont, system-ui, sans-serif", label: 'Helvetica Neue' },
-  { value: "'Arial', -apple-system, BlinkMacSystemFont, system-ui, sans-serif", label: 'Arial' },
-  // ── 中文字体 ──
-  { value: "'Noto Sans SC', -apple-system, BlinkMacSystemFont, system-ui, sans-serif", label: 'Noto Sans SC（思源黑体）' },
-  { value: "'Source Han Sans SC', 'Noto Sans SC', -apple-system, BlinkMacSystemFont, system-ui, sans-serif", label: 'Source Han Sans（思源黑体）' },
-  { value: "'PingFang SC', -apple-system, BlinkMacSystemFont, system-ui, sans-serif", label: 'PingFang SC（苹方）' },
-  { value: "'Microsoft YaHei', -apple-system, BlinkMacSystemFont, system-ui, sans-serif", label: 'Microsoft YaHei（微软雅黑）' },
-  { value: "'HarmonyOS Sans', 'Noto Sans SC', system-ui, sans-serif", label: '鸿蒙黑体' },
-  { value: "'MiSans', -apple-system, BlinkMacSystemFont, system-ui, sans-serif", label: '小米 (MiSans)' },
-  { value: "'OPPO Sans', -apple-system, BlinkMacSystemFont, system-ui, sans-serif", label: 'OPPO Sans' },
-  { value: "'Alibaba PuHuiTi 2.0', 'Noto Sans SC', system-ui, sans-serif", label: '阿里巴巴普惠体' },
-  { value: "'LXGW WenKai', 'Noto Sans SC', system-ui, sans-serif", label: '霞鹜文楷' },
-  { value: "'Noto Serif SC', -apple-system, BlinkMacSystemFont, system-ui, sans-serif", label: '思源宋体 (Noto Serif SC)' },
-  { value: "'WenQuanYi Micro Hei', -apple-system, BlinkMacSystemFont, system-ui, sans-serif", label: '文泉驿微米黑' },
-  { value: "'STHeiti', -apple-system, BlinkMacSystemFont, system-ui, sans-serif", label: '华文黑体' },
-  // ── 通用 ──
-  { value: "system-ui, sans-serif", label: 'System UI' },
-]
-
-const terminalFontFamilyOptions = [
-  { value: "'JetBrains Mono'", label: 'JetBrains Mono' },
-  { value: "'Fira Code'", label: 'Fira Code' },
-  { value: "'Cascadia Code'", label: 'Cascadia Code' },
-  { value: "'Source Code Pro'", label: 'Source Code Pro' },
-  { value: "'Consolas'", label: 'Consolas' },
-  { value: "'Monaco'", label: 'Monaco' },
-  { value: "'Hack'", label: 'Hack' },
-  { value: "'Ubuntu Mono'", label: 'Ubuntu Mono' },
-  { value: "'Menlo'", label: 'Menlo' },
-  { value: "'DejaVu Sans Mono'", label: 'DejaVu Sans Mono' },
-  { value: "'Courier New'", label: 'Courier New' },
-  { value: "'Inconsolata'", label: 'Inconsolata' },
-  { value: "'Roboto Mono'", label: 'Roboto Mono' },
-  { value: "'IBM Plex Mono'", label: 'IBM Plex Mono' },
-  { value: "'Space Mono'", label: 'Space Mono' },
-  { value: "'Liberation Mono'", label: 'Liberation Mono' },
-  { value: "ui-monospace", label: '系统默认' },
-]
-
-const terminalFontFamilyCNOptions = [
-  { value: "'Noto Sans SC'", label: '思源黑体 (Noto Sans SC)' },
-  { value: "'PingFang SC'", label: '苹方 (PingFang SC)' },
-  { value: "'Microsoft YaHei'", label: '微软雅黑 (Microsoft YaHei)' },
-  { value: "'HarmonyOS Sans'", label: '鸿蒙黑体 (HarmonyOS Sans)' },
-  { value: "'MiSans'", label: '小米 (MiSans)' },
-  { value: "'OPPO Sans'", label: 'OPPO Sans' },
-  { value: "'Alibaba PuHuiTi 2.0'", label: '阿里巴巴普惠体 (Alibaba PuHuiTi)' },
-  { value: "'LXGW WenKai'", label: '霞鹜文楷 (LXGW WenKai)' },
-  { value: "'Source Han Sans SC'", label: '思源黑体 (Source Han Sans)' },
-  { value: "'WenQuanYi Micro Hei'", label: '文泉驿微米黑 (WenQuanYi)' },
-  { value: "'Noto Serif SC'", label: '思源宋体 (Noto Serif SC)' },
-  { value: "'STHeiti'", label: '华文黑体 (STHeiti)' },
-  { value: "sans-serif", label: '系统默认' },
-]
-
-type SettingsTab = 'appearance' | 'terminal' | 'backup' | 'sync' | 'logs' | 'about'
+type SettingsTab = 'appearance' | 'terminal' | 'backup' | 'account' | 'sync' | 'logs' | 'diagnostics' | 'about'
 
 const baseTabs: { key: SettingsTab; label: string; icon: typeof Monitor }[] = [
   { key: 'appearance', label: '外观', icon: Palette },
   { key: 'terminal', label: '终端', icon: Terminal },
   { key: 'backup', label: '数据备份', icon: DatabaseBackup },
+  { key: 'account', label: '账号', icon: UserRound },
   { key: 'sync', label: '云同步', icon: CloudSync },
   { key: 'about', label: '关于', icon: Info },
 ]
@@ -124,14 +52,16 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
     terminalPopupMenu, setTerminalPopupMenu,
   } = useSettingsStore()
 
-  const currentThemeLabel = terminalThemes.find((t) => t.id === terminalTheme)?.label ?? '默认深色'
-  const tabs = isTauri() && isTestBuild()
+  const currentThemeLabel = terminalThemes.find((t) => t.id === terminalTheme)?.label ?? '跟随应用'
+  const tabs = isDesktopRuntime() && isTestBuild()
     ? [...baseTabs.slice(0, -1), { key: 'logs' as const, label: '日志', icon: FileText }, baseTabs.at(-1)!]
-    : baseTabs
+    : isMobileRuntime()
+      ? [...baseTabs.slice(0, -1), { key: 'diagnostics' as const, label: '诊断', icon: Activity }, baseTabs.at(-1)!]
+      : baseTabs
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex h-[min(620px,calc(100dvh-2rem))] w-[min(900px,calc(100vw-2rem))] max-w-none flex-col overflow-hidden p-0">
+      <DialogContent mobilePresentation="fullscreen" className="flex h-[min(620px,calc(100dvh-2rem))] w-[min(900px,calc(100vw-2rem))] max-w-none flex-col overflow-hidden p-0">
         <DialogHeader className="px-6 pt-5 pb-0">
           <DialogTitle>设置</DialogTitle>
         </DialogHeader>
@@ -325,9 +255,13 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
 
             <TabsContent value="backup" className="settings-content"><BackupPanel /></TabsContent>
 
+            <TabsContent value="account" className="settings-content"><AccountPanel /></TabsContent>
+
             <TabsContent value="sync" className="settings-content"><SyncPanel /></TabsContent>
 
             <TabsContent value="logs" className="settings-content"><LogPanel /></TabsContent>
+
+            <TabsContent value="diagnostics" className="settings-content"><MobileDiagnosticsPanel /></TabsContent>
 
             <TabsContent value="about" className="settings-content"><AboutPanel /></TabsContent>
           </div>

@@ -165,7 +165,7 @@ export function VaultFormDialog({ open, onOpenChange, item }: VaultFormDialogPro
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="vault-sheet-dialog-content vault-form-dialog-content">
+      <DialogContent mobilePresentation="fullscreen" className="vault-sheet-dialog-content vault-form-dialog-content">
         <DialogHeader className="vault-sheet-header">
           <div className="vault-sheet-header-top">
             <div className="vault-sheet-title-wrap">

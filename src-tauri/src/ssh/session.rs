@@ -20,6 +20,7 @@ use crate::{
     audit::AuditRepository,
     error::CommandError,
     profile::{ProfileService, ResolvedProfileNode},
+    server_detail,
 };
 
 const COMPLETE_TIMEOUT: Duration = Duration::from_millis(400);
@@ -525,9 +526,17 @@ impl SshService {
         // them. Once request_shell succeeds, its output is buffered by russh
         // while the auxiliary detection channel runs.
         session.stage("starting_shell", "info", "正在识别远程 Shell");
-        let osc7_setup = detect_remote_shell(&route.handle)
-            .await
-            .map(osc7_setup_command);
+        let (remote_shell, server_info) = tokio::join!(
+            detect_remote_shell(&route.handle),
+            timeout(
+                Duration::from_secs(5),
+                server_detail::get_info_from_route(&route)
+            ),
+        );
+        let osc7_setup = remote_shell.map(osc7_setup_command);
+        if let Ok(Ok(info)) = server_info {
+            session.emit_message("detected_icon", "", Some(json!({ "icon": info.icon() })));
+        }
 
         let (commands_tx, mut commands_rx) = mpsc::channel(128);
         *session.commands.lock().await = Some(commands_tx);

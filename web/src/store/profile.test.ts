@@ -3,10 +3,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({
   listProfiles: vi.fn(),
   listGroups: vi.fn(),
+  updateProfile: vi.fn(),
 }))
 
 vi.mock('@/api/profile', () => ({
-  profileApi: { list: mocks.listProfiles },
+  profileApi: { list: mocks.listProfiles, update: mocks.updateProfile },
 }))
 
 vi.mock('@/api/group', () => ({
@@ -18,6 +19,7 @@ import { useProfileStore } from './profile'
 beforeEach(() => {
   mocks.listProfiles.mockReset()
   mocks.listGroups.mockReset()
+  mocks.updateProfile.mockReset()
   useProfileStore.setState({
     profiles: [],
     groups: [],
@@ -25,6 +27,29 @@ beforeEach(() => {
     searchQuery: '',
     loading: false,
     error: null,
+  })
+})
+
+describe('profile store detected icons', () => {
+  it('更新默认或已自动识别的图标，但保留用户手动选择', async () => {
+    mocks.updateProfile.mockResolvedValue({})
+    useProfileStore.setState({
+      profiles: [{ id: 'profile-1', name: 'NAS', icon: 'server' }] as never,
+    })
+
+    await useProfileStore.getState().updateDetectedIcon('profile-1', 'os-fnos')
+
+    expect(mocks.updateProfile).toHaveBeenCalledWith('profile-1', { icon: 'os-fnos' })
+    expect(useProfileStore.getState().profiles[0].icon).toBe('os-fnos')
+
+    mocks.updateProfile.mockClear()
+    useProfileStore.setState({
+      profiles: [{ id: 'profile-1', name: 'NAS', icon: 'harddrive' }] as never,
+    })
+    await useProfileStore.getState().updateDetectedIcon('profile-1', 'os-proxmox')
+
+    expect(mocks.updateProfile).not.toHaveBeenCalled()
+    expect(useProfileStore.getState().profiles[0].icon).toBe('harddrive')
   })
 })
 

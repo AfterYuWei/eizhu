@@ -25,7 +25,7 @@ export function ConflictDialog() {
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && dismiss()}>
-      <DialogContent showCloseButton={false} className="w-auto max-w-none gap-0 border-0 bg-transparent p-0 shadow-none">
+      <DialogContent mobilePresentation="sheet" showCloseButton={false} className="w-auto max-w-none gap-0 border-0 bg-transparent p-0 shadow-none">
         <DialogTitle className="sr-only">文件冲突</DialogTitle>
         <div className="sftp-conflict">
         <div className="sftp-conflict-hdr">

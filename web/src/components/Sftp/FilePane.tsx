@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
+import { writeClipboardText } from '@/lib/clipboard'
 import {
   Server,
   FolderOpen,
@@ -12,6 +13,8 @@ import {
   Copy,
   FileEdit,
   FolderInput,
+  Upload,
+  Download,
 } from 'lucide-react'
 import { Breadcrumb } from './Breadcrumb'
 import { FileRow } from './FileRow'
@@ -20,6 +23,8 @@ import { PaneTabs } from './PaneTabs'
 import { PaneActions } from './PaneActions'
 import { SftpContextMenu, type MenuItem } from './SftpContextMenu'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { useSftpStore, useSftpStoreApi } from './storeContext'
 import {
   parentPath,
@@ -35,6 +40,9 @@ import {
 import { usePointerDrag } from '@/hooks/usePointerDrag'
 import { dropPayloadAttr, hitTestDropTarget } from '@/lib/dragRegistry'
 import { isTauri, sftpDragOut, startNativeFileDrag } from '@/lib/desktop'
+import { getPlatformCapabilities, isMobileRuntime } from '@/lib/platform'
+import { documentApi } from '@/api/document'
+import { sftpApi } from '@/api/sftp'
 import type { SftpEntry } from '@/types/sftp'
 
 interface FilePaneProps {
@@ -51,11 +59,16 @@ interface ExternalDropState {
 const DRAG_OUT_TOAST = 'sftp-drag-out'
 
 export function FilePane({ pane, onPickServer }: FilePaneProps) {
+  const mobile = isMobileRuntime()
   const store = useSftpStore()
   // store API（非响应式）：事件回调中读取最新状态，替代渲染期写 ref
   const api = useSftpStoreApi()
   const [ctx, setCtx] = useState<{ x: number; y: number; entry: SftpEntry | null } | null>(null)
   const [externalDrop, setExternalDrop] = useState<ExternalDropState | null>(null)
+  const [documentBusy, setDocumentBusy] = useState(false)
+  const [mobileTransfer, setMobileTransfer] = useState<'copy' | 'move' | null>(null)
+  const [mobileTargetId, setMobileTargetId] = useState('')
+  const [mobileDestDir, setMobileDestDir] = useState('/')
 
   const tabs = pane === 'left' ? store.leftTabs : store.rightTabs
   const activeId = pane === 'left' ? store.activeLeftTabId : store.activeRightTabId
@@ -116,7 +129,7 @@ export function FilePane({ pane, onPickServer }: FilePaneProps) {
     onCancel: () => api.getState().cancelDrag(),
     // 光标拖出窗口：桌面端移交原生文件拖拽（浏览器忽略，维持内部拖拽语义）
     onLeaveWindow: (session) => {
-      if (!isTauri()) return false
+      if (!getPlatformCapabilities().dragOut) return false
       void runDragOut(session.sourceSessionId, session.entries.map((entry) => entry.path))
       return true
     },
@@ -266,7 +279,7 @@ export function FilePane({ pane, onPickServer }: FilePaneProps) {
         ]
       : []),
     // 桌面端拖出兜底入口（拖拽手势之外的显式导出）
-    ...(isTauri()
+    ...(getPlatformCapabilities().dragOut
       ? [
           {
             id: 'dragout',
@@ -284,7 +297,7 @@ export function FilePane({ pane, onPickServer }: FilePaneProps) {
     { id: 'newFolder', label: '新建文件夹', icon: <FolderPlus size={13} />, onClick: () => store.openNewFolderDialog(pane) },
     { id: 'd2', label: '', divider: true },
     { id: 'rename', label: '重命名', icon: <Pencil size={13} />, onClick: () => store.openRenameDialog(pane, entry) },
-    { id: 'copy', label: '复制路径', icon: <Copy size={13} />, onClick: () => navigator.clipboard?.writeText(entry.path) },
+    { id: 'copy', label: '复制路径', icon: <Copy size={13} />, onClick: () => void writeClipboardText(entry.path) },
     { id: 'd3', label: '', divider: true },
     { id: 'del', label: '删除', icon: <Trash2 size={13} />, danger: true, onClick: () => store.openDeleteConfirm(pane, [entry]) },
   ]
@@ -297,6 +310,98 @@ export function FilePane({ pane, onPickServer }: FilePaneProps) {
   ]
 
   const handleRefresh = () => navigate(path)
+  const handleDocumentUpload = async () => {
+    if (!activeTab.sessionId) return
+    setDocumentBusy(true)
+    const documents = await documentApi.pick(true).catch((error) => {
+      toast.error(error instanceof Error ? error.message : '选择文件失败')
+      return []
+    })
+    try {
+      for (const document of documents) {
+        const response = await sftpApi.uploadDocument(activeTab.sessionId, document.reference, path)
+        api.setState((state) => ({ transfers: [...state.transfers, ...response.tasks] }))
+      }
+      if (documents.length) {
+        toast.success(`已上传 ${documents.length} 个文件`)
+        await store.refresh(pane)
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '上传失败')
+    } finally {
+      await Promise.all(documents.map((document) => documentApi.release(document.reference).catch(() => undefined)))
+      setDocumentBusy(false)
+    }
+  }
+  const handleDocumentDownload = async () => {
+    if (!activeTab.sessionId || selected.size === 0) return
+    setDocumentBusy(true)
+    try {
+      await sftpApi.downloadToDocuments(activeTab.sessionId, Array.from(selected))
+      toast.success('文件已保存到所选位置')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '下载失败')
+    } finally {
+      setDocumentBusy(false)
+    }
+  }
+  const transferTargets = [
+    ...store.leftTabs.map((tab) => ({ ...tab, pane: 'left' as const })),
+    ...store.rightTabs.map((tab) => ({ ...tab, pane: 'right' as const })),
+  ].filter((tab) => tab.sessionId && (
+    mobileTransfer === 'move' ? tab.sessionId === activeTab.sessionId : tab.id !== activeTab.id
+  ))
+
+  const openMobileTransfer = (action: 'copy' | 'move') => {
+    if (!activeTab.sessionId || selected.size === 0) return
+    const targets = [
+      ...store.leftTabs.map((tab) => ({ ...tab, pane: 'left' as const })),
+      ...store.rightTabs.map((tab) => ({ ...tab, pane: 'right' as const })),
+    ].filter((tab) => tab.sessionId && (
+      action === 'move' ? tab.sessionId === activeTab.sessionId : tab.id !== activeTab.id
+    ))
+    setMobileTransfer(action)
+    setMobileTargetId(action === 'move' ? activeTab.id : (targets[0]?.id ?? ''))
+    setMobileDestDir(path)
+  }
+
+  const commitMobileTransfer = async () => {
+    if (!mobileTransfer || !activeTab.sessionId) return
+    const target = transferTargets.find((tab) => tab.id === mobileTargetId)
+    if (!target?.sessionId) return
+    const paths = Array.from(selected)
+    setDocumentBusy(true)
+    try {
+      if (mobileTransfer === 'move') {
+        if (target.sessionId !== activeTab.sessionId) {
+          throw new Error('跨服务器请使用“复制到”，移动仅支持同一服务器')
+        }
+        await sftpApi.move(activeTab.sessionId, paths, mobileDestDir, 'rename')
+        await store.refresh(pane)
+        toast.success('移动完成')
+      } else {
+        const response = await sftpApi.transfer(
+          activeTab.sessionId,
+          target.sessionId,
+          paths,
+          mobileDestDir,
+          'rename',
+          paths.some((selectedPath) => activeTab.entries.find((entry) => entry.path === selectedPath)?.is_dir)
+            ? 'archive'
+            : 'preserve',
+        )
+        if (response.tasks?.length) {
+          api.setState((state) => ({ transfers: [...state.transfers, ...response.tasks!] }))
+        }
+        toast.success('跨服务器传输已开始')
+      }
+      setMobileTransfer(null)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '文件操作失败')
+    } finally {
+      setDocumentBusy(false)
+    }
+  }
   const currentTarget = makeTarget(path, 'current')
   const listContainerProps = {
     'data-drag-payload': currentTarget ? dropPayloadAttr({ kind: 'sftp', target: currentTarget }) : undefined,
@@ -334,7 +439,7 @@ export function FilePane({ pane, onPickServer }: FilePaneProps) {
           isDropTarget={matchesDropTarget(visualDropTarget, pane, activeTab.id, 'folder', upEntry.path)}
           onSelect={(e) => {
             e.stopPropagation()
-            // Single-click on ".." only selects; double-click to go up.
+            if (mobile) navigate(upEntry.path)
           }}
           onOpen={() => navigate(upEntry.path)}
           onContextMenu={(e) => e.preventDefault()}
@@ -359,7 +464,8 @@ export function FilePane({ pane, onPickServer }: FilePaneProps) {
               && matchesDropTarget(visualDropTarget, pane, activeTab.id, 'folder', entry.path)}
             onSelect={(e) => {
               e.stopPropagation()
-              selectFn(entry.path, { additive: e.metaKey || e.ctrlKey })
+              if (mobile && entry.is_dir) openEntry(entry)
+              else selectFn(entry.path, { additive: e.metaKey || e.ctrlKey })
             }}
             onOpen={() => openEntry(entry)}
             onContextMenu={(e) => {
@@ -426,6 +532,26 @@ export function FilePane({ pane, onPickServer }: FilePaneProps) {
 
   return (
     <div className="sftp-pane">
+      {mobile && (
+        <div className="sftp-mobile-actions">
+          <Button variant="outline" aria-label="上传" title="上传" disabled={documentBusy || !activeTab.sessionId} onClick={() => void handleDocumentUpload()}>
+            <Upload size={16} />
+            <span className="sftp-m-action-label">上传</span>
+          </Button>
+          <Button variant="outline" aria-label="下载" title="下载" disabled={documentBusy || !activeTab.sessionId || selected.size === 0} onClick={() => void handleDocumentDownload()}>
+            <Download size={16} />
+            <span className="sftp-m-action-label">下载</span>
+          </Button>
+          <Button variant="outline" aria-label="复制到" title="复制到" disabled={documentBusy || !activeTab.sessionId || selected.size === 0} onClick={() => openMobileTransfer('copy')}>
+            <Copy size={16} />
+            <span className="sftp-m-action-label">复制到</span>
+          </Button>
+          <Button variant="outline" aria-label="移动到" title="移动到" disabled={documentBusy || !activeTab.sessionId || selected.size === 0} onClick={() => openMobileTransfer('move')}>
+            <FolderInput size={16} />
+            <span className="sftp-m-action-label">移动到</span>
+          </Button>
+        </div>
+      )}
       <PaneTabs pane={pane} onPickServer={onPickServer} />
 
       <div className="sftp-crumb-row">
@@ -455,7 +581,7 @@ export function FilePane({ pane, onPickServer }: FilePaneProps) {
           onDelete={() => store.openDeleteConfirm(pane)}
           onCopyPath={() => {
             const selectedPath = Array.from(selected)[0]
-            if (selectedPath) navigator.clipboard?.writeText(selectedPath)
+            if (selectedPath) void writeClipboardText(selectedPath)
           }}
         />
       </div>
@@ -492,6 +618,33 @@ export function FilePane({ pane, onPickServer }: FilePaneProps) {
           </strong>
         </div>
       )}
+
+      <Dialog open={mobileTransfer !== null} onOpenChange={(open) => !open && setMobileTransfer(null)}>
+        <DialogContent mobilePresentation="sheet" className="w-[min(440px,calc(100vw-2rem))]">
+          <DialogTitle>{mobileTransfer === 'move' ? '移动所选项目' : '复制/跨服务器传输'}</DialogTitle>
+          <DialogDescription>选择目标会话与目录；同名文件将自动重命名。</DialogDescription>
+          <label className="space-y-1.5 text-sm">
+            <span>目标会话</span>
+            <select
+              className="h-11 w-full rounded-[var(--r-sm)] border border-[var(--border)] bg-[var(--bg-input)] px-3"
+              value={mobileTargetId}
+              onChange={(event) => setMobileTargetId(event.target.value)}
+            >
+              {transferTargets.map((target) => (
+                <option key={target.id} value={target.id}>{target.server.name} · {target.path}</option>
+              ))}
+            </select>
+          </label>
+          <label className="space-y-1.5 text-sm">
+            <span>目标目录</span>
+            <Input value={mobileDestDir} onChange={(event) => setMobileDestDir(event.target.value)} />
+          </label>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setMobileTransfer(null)}>取消</Button>
+            <Button disabled={!mobileTargetId || !mobileDestDir.startsWith('/')} onClick={() => void commitMobileTransfer()}>确认</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {ctx && (
         <SftpContextMenu

@@ -2,9 +2,26 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn() }))
+vi.mock('@tauri-apps/plugin-opener', () => ({ openUrl: vi.fn() }))
 import { invoke } from '@tauri-apps/api/core'
+import { openUrl } from '@tauri-apps/plugin-opener'
 
 const mockedInvoke = vi.mocked(invoke)
+const mockedOpenUrl = vi.mocked(openUrl)
+
+const desktopCapabilities = {
+  platform: 'linux', runtime: 'desktop', windowControls: true, appUpdates: true,
+  dragOut: true, nativeFilePaths: true, documentPicker: true,
+  secureKeyStore: false, biometric: false, backgroundMode: 'unsupported',
+  maxConcurrentTransfers: 5,
+}
+
+const mobileCapabilities = {
+  platform: 'android', runtime: 'mobile', windowControls: false, appUpdates: false,
+  dragOut: false, nativeFilePaths: false, documentPicker: true,
+  secureKeyStore: true, biometric: false, backgroundMode: 'android-foreground-service',
+  maxConcurrentTransfers: 2,
+}
 
 function setTauri(present: boolean) {
   if (present) (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__ = {}
@@ -13,6 +30,7 @@ function setTauri(present: boolean) {
 
 beforeEach(() => {
   mockedInvoke.mockReset()
+  mockedOpenUrl.mockReset()
   localStorage.clear()
   setTauri(false)
 })
@@ -28,22 +46,33 @@ describe('desktop bridge', () => {
   it('Tauri 环境只迁移 Electron 设置', async () => {
     setTauri(true)
     mockedInvoke.mockImplementation(async (command: string) => {
+      if (command === 'platform_capabilities') return desktopCapabilities
       if (command === 'migrate_electron_settings') {
         return { 'eizhu-settings': '{"state":{"theme":"light"}}' }
       }
       if (command === 'mark_electron_settings_migrated') return undefined
       throw new Error(`unexpected command: ${command}`)
     })
+    const platform = await import('./platform')
+    await platform.initializePlatform()
     const desktop = await import('./desktop')
     await desktop.initDesktop()
 
     expect(localStorage.getItem('eizhu-settings')).toContain('light')
-    expect(mockedInvoke).toHaveBeenCalledTimes(2)
+    expect(mockedInvoke).toHaveBeenCalledTimes(3)
+    expect(mockedInvoke).toHaveBeenNthCalledWith(1, 'platform_capabilities')
+    expect(mockedInvoke).toHaveBeenNthCalledWith(2, 'migrate_electron_settings')
+    expect(mockedInvoke).toHaveBeenNthCalledWith(3, 'mark_electron_settings_migrated')
   })
 
   it('设置写入失败时不确认迁移', async () => {
     setTauri(true)
-    mockedInvoke.mockResolvedValue({ 'eizhu-settings': '{"state":{}}' })
+    mockedInvoke.mockImplementation(async (command: string) => {
+      if (command === 'platform_capabilities') return desktopCapabilities
+      return { 'eizhu-settings': '{"state":{}}' }
+    })
+    const platform = await import('./platform')
+    await platform.initializePlatform()
     const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
       throw new DOMException('quota exceeded', 'QuotaExceededError')
     })
@@ -51,5 +80,17 @@ describe('desktop bridge', () => {
     await desktop.initDesktop()
     expect(mockedInvoke).not.toHaveBeenCalledWith('mark_electron_settings_migrated')
     setItem.mockRestore()
+  })
+
+  it('移动端外链通过原生 opener 交给系统浏览器', async () => {
+    setTauri(true)
+    mockedInvoke.mockResolvedValue(mobileCapabilities)
+    const platform = await import('./platform')
+    await platform.initializePlatform()
+
+    const desktop = await import('./desktop')
+    await desktop.openExternal('https://github.com/AfterYuWei/eizhu/releases')
+
+    expect(mockedOpenUrl).toHaveBeenCalledWith('https://github.com/AfterYuWei/eizhu/releases')
   })
 })
