@@ -1610,7 +1610,7 @@ dependencies = [
 
 [[package]]
 name = "eizhu"
-version = "0.4.3"
+version = "0.4.5"
 dependencies = [
  "aes-gcm 0.10.3",
  "argon2 0.5.3",
