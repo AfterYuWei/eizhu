@@ -50,6 +50,11 @@ function extractFilename(path: string): string {
   return parts[parts.length - 1] || path
 }
 
+/** Monaco edits use LF internally; keep stored text in that canonical form. */
+function normalizeEditorContent(content: string): string {
+  return content.replace(/\r\n?/g, '\n')
+}
+
 /** Extract a human message from an API error. */
 function extractApiError(err: unknown, fallback: string): string {
   const e = err as { error?: { message?: string }; message?: string }
@@ -105,14 +110,15 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
     try {
       const res = await editApi.readFile(sessionId, path)
+      const content = normalizeEditorContent(res.content)
 
       set((state) => ({
         tabs: state.tabs.map((t) =>
           t.id === tabId
             ? {
                 ...t,
-                content: res.content,
-                originalContent: res.content,
+                content,
+                originalContent: content,
                 modTime: res.mod_time,
                 language: res.language,
                 lineEnding: res.line_ending,
@@ -166,8 +172,9 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   },
 
   setContent: (tabId, content) => {
+    const normalizedContent = normalizeEditorContent(content)
     set((state) => ({
-      tabs: state.tabs.map((t) => (t.id === tabId ? { ...t, content } : t)),
+      tabs: state.tabs.map((t) => (t.id === tabId ? { ...t, content: normalizedContent } : t)),
     }))
   },
 
@@ -245,14 +252,15 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
     try {
       const res = await editApi.readFile(tab.sessionId, tab.path)
+      const content = normalizeEditorContent(res.content)
 
       set((state) => ({
         tabs: state.tabs.map((t) =>
           t.id === tabId
             ? {
                 ...t,
-                content: res.content,
-                originalContent: res.content,
+                content,
+                originalContent: content,
                 modTime: res.mod_time,
                 language: res.language,
                 lineEnding: res.line_ending,

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { listen } from '@tauri-apps/api/event'
 import { invoke } from '@tauri-apps/api/core'
@@ -25,7 +25,10 @@ interface EditorOpenRequest {
   path: string
 }
 
-type PendingClose = { kind: 'window' } | { kind: 'tab'; tabId: string }
+type PendingClose =
+  | { kind: 'application' }
+  | { kind: 'window' }
+  | { kind: 'tab'; tabId: string }
 
 const SKELETON_WIDTHS = [52, 74, 43, 81, 61, 36, 69, 48, 86, 57, 72, 39, 64, 78, 45, 83, 55, 68]
 
@@ -47,22 +50,46 @@ export function EditorWindowPage() {
   const reloadFile = useEditorStore((state) => state.reloadFile)
   const [pendingClose, setPendingClose] = useState<PendingClose | null>(null)
   const [closingBusy, setClosingBusy] = useState(false)
-  const allowCloseRef = useRef(false)
   const theme = useResolvedTheme()
   const { desktop, mac, showControls, maximized, minimize, toggleMaximize } = useWindowControls()
 
+  const resolveAppClose = useCallback(async (shouldClose: boolean) => {
+    try {
+      await invoke('resolve_app_close', { shouldClose })
+      if (!shouldClose) setPendingClose(null)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      toast.error('无法关闭应用', { description: message })
+    }
+  }, [])
+
+  const handleAppCloseRequest = useCallback(() => {
+    const hasDirtyTabs = useEditorStore.getState().tabs.some(isDirty)
+    if (hasDirtyTabs) {
+      setPendingClose({ kind: 'application' })
+    } else {
+      void resolveAppClose(true)
+    }
+  }, [resolveAppClose])
+
   useEffect(() => {
     let disposed = false
-    let unlisten: (() => void) | undefined
+    let unlistenOpen: (() => void) | undefined
+    let unlistenAppClose: (() => void) | undefined
 
-    void listen<EditorOpenRequest>('eizhu-editor-open-file', ({ payload }) => {
-      void openFile(payload.sessionId, payload.sessionType, payload.path)
-    }).then((stopListening) => {
+    void Promise.all([
+      listen<EditorOpenRequest>('eizhu-editor-open-file', ({ payload }) => {
+        void openFile(payload.sessionId, payload.sessionType, payload.path)
+      }),
+      listen('eizhu-app-close-request', handleAppCloseRequest),
+    ]).then(([stopOpen, stopAppClose]) => {
       if (disposed) {
-        stopListening()
+        stopOpen()
+        stopAppClose()
         return
       }
-      unlisten = stopListening
+      unlistenOpen = stopOpen
+      unlistenAppClose = stopAppClose
       return getCurrentWindow().label === 'editor' ? invoke('editor_window_ready') : undefined
     }).catch((error: unknown) => {
       const message = error instanceof Error ? error.message : String(error)
@@ -71,16 +98,16 @@ export function EditorWindowPage() {
 
     return () => {
       disposed = true
-      unlisten?.()
+      unlistenOpen?.()
+      unlistenAppClose?.()
     }
-  }, [openFile])
+  }, [handleAppCloseRequest, openFile])
 
   useEffect(() => {
     let disposed = false
     let unlisten: (() => void) | undefined
 
     void getCurrentWindow().onCloseRequested((event) => {
-      if (allowCloseRef.current) return
       const hasDirtyTabs = useEditorStore.getState().tabs.some(isDirty)
       if (hasDirtyTabs) {
         event.preventDefault()
@@ -100,11 +127,12 @@ export function EditorWindowPage() {
   }, [])
 
   const closeWindow = useCallback(async () => {
-    allowCloseRef.current = true
     try {
-      await getCurrentWindow().close()
+      // Confirmation has already happened in this page. destroy() avoids
+      // re-entering the close-request guard after the user explicitly chose
+      // to close or discard the current tabs.
+      await getCurrentWindow().destroy()
     } catch (error) {
-      allowCloseRef.current = false
       const message = error instanceof Error ? error.message : String(error)
       toast.error('无法关闭编辑器窗口', { description: message })
     }
@@ -138,8 +166,12 @@ export function EditorWindowPage() {
 
   const discardPendingClose = () => {
     const request = pendingClose
-    setPendingClose(null)
     if (!request) return
+    if (request.kind === 'application') {
+      void resolveAppClose(true)
+      return
+    }
+    setPendingClose(null)
     if (request.kind === 'tab') {
       void closeFileTab(request.tabId)
     } else {
@@ -169,15 +201,28 @@ export function EditorWindowPage() {
         return
       }
 
-      setPendingClose(null)
       if (request.kind === 'tab') {
+        setPendingClose(null)
         await closeFileTab(request.tabId)
+      } else if (request.kind === 'application') {
+        await resolveAppClose(true)
       } else {
+        setPendingClose(null)
         closeAll()
         await closeWindow()
       }
     } finally {
       setClosingBusy(false)
+    }
+  }
+
+  const cancelPendingClose = () => {
+    const request = pendingClose
+    if (!request) return
+    if (request.kind === 'application') {
+      void resolveAppClose(false)
+    } else {
+      setPendingClose(null)
     }
   }
 
@@ -193,9 +238,8 @@ export function EditorWindowPage() {
     <div className="editor-window" role="application" aria-label="文件编辑器">
       <header
         className={`eizhu-header titlebar editor-window-header ${desktop ? 'is-desktop' : ''} ${mac ? 'is-mac' : ''}`}
-        data-tauri-drag-region={desktop || undefined}
       >
-        <div className="editor-window-drag-region" data-tauri-drag-region={desktop || undefined}>
+        <div className="editor-window-drag-region" data-tauri-drag-region={desktop ? '' : undefined}>
           <span>eizhu · 文件编辑器</span>
         </div>
         {showControls && (
@@ -272,16 +316,20 @@ export function EditorWindowPage() {
         )}
       </div>
 
-      <AlertDialog open={pendingClose !== null} onOpenChange={(open) => !open && !closingBusy && setPendingClose(null)}>
+      <AlertDialog open={pendingClose !== null} onOpenChange={(open) => !open && !closingBusy && cancelPendingClose()}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              {pendingClose?.kind === 'tab' ? '关闭前保存文件？' : '关闭前保存修改？'}
+              {pendingClose?.kind === 'application'
+                ? '关闭应用前保存修改？'
+                : pendingClose?.kind === 'tab' ? '关闭前保存文件？' : '关闭前保存修改？'}
             </AlertDialogTitle>
             <AlertDialogDescription>
-              {pendingClose?.kind === 'tab'
-                ? '当前文件有未保存的修改。保存后关闭、放弃修改，或继续编辑。'
-                : '一个或多个文件有未保存的修改。保存所有文件后关闭，或放弃修改。'}
+              {pendingClose?.kind === 'application'
+                ? '关闭主窗口会同时关闭编辑器。保存所有修改、放弃修改，或继续编辑。'
+                : pendingClose?.kind === 'tab'
+                  ? '当前文件有未保存的修改。保存后关闭、放弃修改，或继续编辑。'
+                  : '一个或多个文件有未保存的修改。保存所有文件后关闭，或放弃修改。'}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

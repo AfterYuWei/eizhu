@@ -15,6 +15,17 @@ let fatalRendered = false
 const windowLabel = hasTauriRuntime() ? getCurrentWindow().label : 'main'
 const isEditorWindow = windowLabel === 'editor'
 
+async function installMainWindowCloseGuard() {
+  if (!isDesktopRuntime() || isEditorWindow) return
+
+  await getCurrentWindow().onCloseRequested((event) => {
+    event.preventDefault()
+    void invoke('request_app_close').catch((error: unknown) => {
+      console.error('Application close request failed:', error)
+    })
+  })
+}
+
 // 引导时序：
 // 1. initDesktop 必须先于一切 store 导入，保证 Electron 历史设置先于
 //    zustand persist 水化完成迁移；浏览器下立即返回。
@@ -23,15 +34,16 @@ const isEditorWindow = windowLabel === 'editor'
 async function bootstrap() {
   try {
     await initializePlatform()
+    await installMainWindowCloseGuard()
     await initDesktop()
     installFrontendLogging()
   } catch (err) {
     renderFatal(err instanceof Error ? err.message : String(err))
     // 窗口初始为 visible:false，初始化失败时也必须主动显示错误页。
-    if (isDesktopRuntime()) {
-      await invoke(isEditorWindow ? 'editor_window_ready' : 'frontend_ready').catch(() => undefined)
-    } else if (isEditorWindow) {
-      await invoke('editor_window_ready').catch(() => undefined)
+    if (isEditorWindow) {
+      await invoke('editor_window_show').catch(() => undefined)
+    } else if (isDesktopRuntime()) {
+      await invoke('frontend_ready').catch(() => undefined)
     }
     return
   }
@@ -50,7 +62,7 @@ async function bootstrap() {
   if (!isEditorWindow) installMobileLifecycle()
 
   // 首帧渲染完成后显示并最大化窗口（等价 Electron ready-to-show + maximize）。
-  // 注意窗口此时 visible:false，rAF 在隐藏窗口中可能被节流，故用 setTimeout。
+  // 主窗口已在初始化阶段注册关闭协调器，现在可安全显示。
   if (isDesktopRuntime() && !isEditorWindow) {
     setTimeout(() => void invoke('frontend_ready'), 0)
     // 启动静默检查更新（延迟 10s，不抢启动带宽）
