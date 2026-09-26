@@ -1,12 +1,13 @@
 name: Build Desktop Core
 
-# stable/test 入口分别位于 build-desktop-stable.yml 与
-# build-desktop-test.yml。本文件只承载可复用的三平台构建和发布步骤。
+# main 的 stable 与其他分支的 dev(test) 入口分别位于
+# build-desktop-stable.yml 与 build-desktop-test.yml。本文件只承载可复用的
+# 三平台构建和发布步骤。
 on:
   workflow_call:
     inputs:
       channel:
-        description: '发布通道（stable/test）'
+        description: '发布通道（stable/dev；dev 沿用 test 更新协议）'
         required: true
         type: string
       version:
@@ -216,7 +217,7 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-  # 发布：main 分支发正式 Release，dev 分支发 prerelease Release。
+  # 发布：main 分支发正式 Release，其他分支发 dev prerelease Release。
   # GitHub Release 必须关联 tag，该 tag 由 CI 生成，不再作为发版入口。
   release:
     needs: build
@@ -290,7 +291,7 @@ jobs:
           generate_release_notes: true
 
       # GitHub 的 /releases/latest 不包含 prerelease，因此用固定 Release 保存
-      # stable/test 两套可覆盖的通道清单。安装包本身仍保留在版本 Release 中。
+      # stable/dev(test) 两套可覆盖的通道清单。安装包本身仍保留在版本 Release 中。
       - name: Publish rolling update-channel manifests
         shell: bash
         env:

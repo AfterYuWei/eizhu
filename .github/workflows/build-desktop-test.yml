@@ -1,8 +1,8 @@
-name: Build Desktop Test
+name: Build Desktop Dev
 
 on:
   push:
-    branches: [dev]
+    branches-ignore: [main]
   workflow_dispatch:
 
 permissions:
@@ -10,6 +10,7 @@ permissions:
 
 jobs:
   metadata:
+    if: github.ref != 'refs/heads/main'
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.meta.outputs.version }}
@@ -44,6 +45,7 @@ jobs:
           echo "release_name=eizhu ${VERSION}" >> "$GITHUB_OUTPUT"
 
   build:
+    if: github.ref != 'refs/heads/main'
     needs: metadata
     uses: ./.github/workflows/build-desktop.yml
     with:

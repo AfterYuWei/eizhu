@@ -2,9 +2,7 @@ name: Build Mobile
 
 on:
   push:
-    branches:
-      - dev
-      - main
+    branches: ['**']
 
 permissions:
   contents: read
@@ -146,7 +144,7 @@ jobs:
           retention-days: 14
       - name: Prepare Android APK release metadata
         id: android-release
-        if: github.ref == 'refs/heads/dev'
+        if: github.ref != 'refs/heads/main'
         shell: bash
         run: |
           DESKTOP_VERSION="$(tr -d '[:space:]' < VERSION)"
@@ -175,7 +173,7 @@ jobs:
           echo "size=$(du -h "$RELEASE_ASSET" | cut -f 1)" >> "$GITHUB_OUTPUT"
           echo "sha256=$(sha256sum "$RELEASE_ASSET" | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
       - name: Publish installable APK to the test Release
-        if: github.ref == 'refs/heads/dev'
+        if: github.ref != 'refs/heads/main'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -345,7 +343,6 @@ jobs:
           retention-days: 14
       - name: Prepare iOS release metadata
         id: ios-release
-        if: github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/main'
         shell: bash
         run: |
           DESKTOP_VERSION="$(tr -d '[:space:]' < VERSION)"
@@ -373,7 +370,6 @@ jobs:
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "asset=$RELEASE_ASSET" >> "$GITHUB_OUTPUT"
       - name: Publish iOS IPA to the Release
-        if: github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/main'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
