@@ -1,8 +1,9 @@
 import { StrictMode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { invoke } from '@tauri-apps/api/core'
+import { getCurrentWindow } from '@tauri-apps/api/window'
 import { initDesktop } from '@/lib/desktop'
-import { initializePlatform, isDesktopRuntime } from '@/lib/platform'
+import { hasTauriRuntime, initializePlatform, isDesktopRuntime } from '@/lib/platform'
 import { installMobileLifecycle } from '@/lib/lifecycle'
 import { scheduleSilentUpdateCheck } from '@/lib/updater'
 import { installFrontendLogging } from '@/lib/appLog'
@@ -11,6 +12,8 @@ import '@xterm/xterm/css/xterm.css'
 
 let appRoot: Root | null = null
 let fatalRendered = false
+const windowLabel = hasTauriRuntime() ? getCurrentWindow().label : 'main'
+const isEditorWindow = windowLabel === 'editor'
 
 // 引导时序：
 // 1. initDesktop 必须先于一切 store 导入，保证 Electron 历史设置先于
@@ -24,15 +27,19 @@ async function bootstrap() {
     installFrontendLogging()
   } catch (err) {
     renderFatal(err instanceof Error ? err.message : String(err))
-    // 主窗口初始为 visible:false，初始化失败时也必须主动显示错误页。
+    // 窗口初始为 visible:false，初始化失败时也必须主动显示错误页。
     if (isDesktopRuntime()) {
-      await invoke('frontend_ready').catch(() => undefined)
+      await invoke(isEditorWindow ? 'editor_window_ready' : 'frontend_ready').catch(() => undefined)
+    } else if (isEditorWindow) {
+      await invoke('editor_window_ready').catch(() => undefined)
     }
     return
   }
   if (fatalRendered) return
 
-  const { default: App } = await import('./App.tsx')
+  const { default: App } = isEditorWindow
+    ? await import('@/components/Editor/EditorWindowApp')
+    : await import('./App.tsx')
   if (fatalRendered) return
   appRoot = createRoot(document.getElementById('root')!)
   appRoot.render(
@@ -40,11 +47,11 @@ async function bootstrap() {
       <App />
     </StrictMode>,
   )
-  installMobileLifecycle()
+  if (!isEditorWindow) installMobileLifecycle()
 
   // 首帧渲染完成后显示并最大化窗口（等价 Electron ready-to-show + maximize）。
   // 注意窗口此时 visible:false，rAF 在隐藏窗口中可能被节流，故用 setTimeout。
-  if (isDesktopRuntime()) {
+  if (isDesktopRuntime() && !isEditorWindow) {
     setTimeout(() => void invoke('frontend_ready'), 0)
     // 启动静默检查更新（延迟 10s，不抢启动带宽）
     scheduleSilentUpdateCheck()

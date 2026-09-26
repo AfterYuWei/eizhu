@@ -11,6 +11,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { useServerMetrics } from '@/hooks/useServerMetrics'
+import { isDesktopRuntime } from '@/lib/platform'
 import { EditorDialog } from '@/components/Editor/EditorDialog'
 import { SftpContextMenu, type MenuItem } from '@/components/Sftp/SftpContextMenu'
 import { InputDialog, validateSftpName } from '@/components/Sftp/InputDialog'
@@ -222,11 +223,16 @@ export function ServerDetail({
 
   // Context menu items for file/folder
   const fileMenuItems = (node: FileTreeNode): MenuItem[] => [
-    { id: 'open', label: node.isDir ? '打开文件夹' : '打开', icon: <FolderOpen size={13} />, onClick: () => {
-      if (node.isDir) navigateManually(node.path)
-      else useServerDetailStore.getState().openEditor(profileId, node.path)
-    }},
-    ...(!node.isDir ? [{
+    ...(node.isDir || !isDesktopRuntime() ? [{
+      id: 'open',
+      label: node.isDir ? '打开文件夹' : '打开',
+      icon: <FolderOpen size={13} />,
+      onClick: () => {
+        if (node.isDir) navigateManually(node.path)
+        else useServerDetailStore.getState().openEditor(profileId, node.path)
+      },
+    }] : []),
+    ...(!node.isDir && !isDesktopRuntime() ? [{
       id: 'edit',
       label: '编辑',
       icon: <FileEdit size={13} />,
@@ -748,7 +754,7 @@ export function ServerDetail({
         </section>
       </div>
 
-      <EditorDialog />
+      {!isDesktopRuntime() && <EditorDialog />}
 
       {/* Context Menu */}
       {ctx && (
