@@ -119,7 +119,7 @@ export async function downloadAndInstallUpdate(
 ): Promise<void> {
   // Install the candidate that produced the version shown in Settings. Only
   // perform a new check when this function is called without a prior check.
-  let update = checkedUpdates.get(channel)
+  let update: Update | null | undefined = checkedUpdates.get(channel)
   if (update) checkedUpdates.delete(channel)
   else update = await checkChannel(channel)
   if (!update?.available) throw new Error('没有可用更新')
