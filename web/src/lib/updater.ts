@@ -36,6 +36,15 @@ function preferredUpdateChannel(): UpdateChannel {
   }
 }
 
+// Keep the Update returned by the visible check. Rechecking when the user clicks
+// Install can pick up a newly published manifest whose asset is not available yet,
+// and can make the installed version differ from the version shown in the UI.
+const checkedUpdates = new Map<UpdateChannel, Update>()
+
+function closeUpdate(update: Update | null | undefined): void {
+  if (typeof update?.close === 'function') void update.close().catch(() => {})
+}
+
 async function updateTarget(channel: UpdateChannel): Promise<string> {
   const os = await invoke<string>('get_platform')
   const platform = os === 'windows'
@@ -47,12 +56,17 @@ async function updateTarget(channel: UpdateChannel): Promise<string> {
 }
 
 async function checkChannel(channel: UpdateChannel): Promise<Update | null> {
-  return check({
+  closeUpdate(checkedUpdates.get(channel))
+  checkedUpdates.delete(channel)
+  const update = await check({
     target: await updateTarget(channel),
     // test 版的 0.0.0-test.* 可能低于已安装 stable；只有明确切换通道时
     // 才允许这种跨通道安装，避免同通道误降级。
     allowDowngrades: channel !== buildChannel,
   })
+  if (update?.available) checkedUpdates.set(channel, update)
+  else closeUpdate(update)
+  return update
 }
 
 /** 当前应用版本（桌面端）；浏览器下返回空串。 */
@@ -103,59 +117,70 @@ export async function downloadAndInstallUpdate(
   channel: UpdateChannel = preferredUpdateChannel(),
   onProgress?: (progress: UpdateDownloadProgress) => void,
 ): Promise<void> {
-  const update = await checkChannel(channel)
+  // Install the candidate that produced the version shown in Settings. Only
+  // perform a new check when this function is called without a prior check.
+  let update = checkedUpdates.get(channel)
+  if (update) checkedUpdates.delete(channel)
+  else update = await checkChannel(channel)
   if (!update?.available) throw new Error('没有可用更新')
   let total: number | null = null
   let received = 0
   let samples: Array<{ at: number; bytes: number }> = []
   let lastProgressAt = 0
-  await update.downloadAndInstall((event) => {
-    switch (event.event) {
-      case 'Started': {
-        total = event.data.contentLength ?? null
-        samples = [{ at: Date.now(), bytes: 0 }]
-        onProgress?.({
-          phase: 'downloading',
-          downloadedBytes: 0,
-          totalBytes: total,
-          percent: total ? 0 : null,
-          bytesPerSecond: 0,
-        })
-        break
+  try {
+    await update.downloadAndInstall((event) => {
+      switch (event.event) {
+        case 'Started': {
+          total = event.data.contentLength ?? null
+          samples = [{ at: Date.now(), bytes: 0 }]
+          onProgress?.({
+            phase: 'downloading',
+            downloadedBytes: 0,
+            totalBytes: total,
+            percent: total ? 0 : null,
+            bytesPerSecond: 0,
+          })
+          break
+        }
+        case 'Progress': {
+          received += event.data.chunkLength
+          const now = Date.now()
+          samples.push({ at: now, bytes: received })
+          while (samples.length > 2 && now - samples[0].at > 2_000) samples.shift()
+          const oldest = samples[0]
+          const elapsedSeconds = (now - oldest.at) / 1_000
+          const bytesPerSecond = elapsedSeconds > 0
+            ? Math.max(0, (received - oldest.bytes) / elapsedSeconds)
+            : 0
+          // 更新器可能高频推送小分片；限制 Toast/React 刷新到约 10 FPS。
+          if (now - lastProgressAt < 100) break
+          lastProgressAt = now
+          onProgress?.({
+            phase: 'downloading',
+            downloadedBytes: received,
+            totalBytes: total,
+            percent: total ? Math.min(99, Math.round((received / total) * 100)) : null,
+            bytesPerSecond,
+          })
+          break
+        }
+        case 'Finished':
+          onProgress?.({
+            phase: 'installing',
+            downloadedBytes: received,
+            totalBytes: total,
+            percent: 100,
+            bytesPerSecond: 0,
+          })
+          break
       }
-      case 'Progress': {
-        received += event.data.chunkLength
-        const now = Date.now()
-        samples.push({ at: now, bytes: received })
-        while (samples.length > 2 && now - samples[0].at > 2_000) samples.shift()
-        const oldest = samples[0]
-        const elapsedSeconds = (now - oldest.at) / 1_000
-        const bytesPerSecond = elapsedSeconds > 0
-          ? Math.max(0, (received - oldest.bytes) / elapsedSeconds)
-          : 0
-        // 更新器可能高频推送小分片；限制 Toast/React 刷新到约 10 FPS。
-        if (now - lastProgressAt < 100) break
-        lastProgressAt = now
-        onProgress?.({
-          phase: 'downloading',
-          downloadedBytes: received,
-          totalBytes: total,
-          percent: total ? Math.min(99, Math.round((received / total) * 100)) : null,
-          bytesPerSecond,
-        })
-        break
-      }
-      case 'Finished':
-        onProgress?.({
-          phase: 'installing',
-          downloadedBytes: received,
-          totalBytes: total,
-          percent: 100,
-          bytesPerSecond: 0,
-        })
-        break
-    }
-  })
+    })
+  } finally {
+    // The updater may already have released the Rust resource after success.
+    // Closing is still needed after a failed download, so ignore an already
+    // released resource here.
+    closeUpdate(update)
+  }
   await relaunch()
 }
 
