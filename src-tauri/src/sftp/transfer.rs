@@ -48,9 +48,37 @@ pub(crate) struct TransferTask {
 
 struct TransferEntry {
     task: Mutex<TransferTask>,
+    speed_meter: Mutex<SpeedMeter>,
     cancel: CancellationToken,
     session_id: String,
     download_path: Mutex<Option<PathBuf>>,
+}
+
+struct SpeedMeter {
+    sampled_at: Instant,
+    sampled_bytes: u64,
+    speed: u64,
+}
+
+impl SpeedMeter {
+    fn new(now: Instant) -> Self {
+        Self {
+            sampled_at: now,
+            sampled_bytes: 0,
+            speed: 0,
+        }
+    }
+
+    fn record(&mut self, total_bytes: u64, now: Instant) -> u64 {
+        let elapsed = now.saturating_duration_since(self.sampled_at);
+        if elapsed >= Duration::from_millis(250) {
+            self.speed = (total_bytes.saturating_sub(self.sampled_bytes) as f64
+                / elapsed.as_secs_f64()) as u64;
+            self.sampled_at = now;
+            self.sampled_bytes = total_bytes;
+        }
+        self.speed
+    }
 }
 
 struct UploadIngress {
@@ -62,7 +90,6 @@ struct UploadIngress {
     backend: Arc<FileBackend>,
     transfer: Arc<TransferEntry>,
     profile_id: String,
-    started: Instant,
     _permit: OwnedSemaphorePermit,
 }
 
@@ -175,6 +202,7 @@ impl TransferManager {
                 error_code: String::new(),
                 retryable: false,
             }),
+            speed_meter: Mutex::new(SpeedMeter::new(Instant::now())),
             cancel: CancellationToken::new(),
             session_id,
             download_path: Mutex::new(None),
@@ -212,7 +240,18 @@ impl TransferManager {
             return false;
         }
         task.status = "transferring".into();
+        drop(task);
+        *entry.speed_meter.lock().await = SpeedMeter::new(Instant::now());
         true
+    }
+
+    async fn advance(entry: &TransferEntry, transferred: u64) -> TransferTask {
+        let mut meter = entry.speed_meter.lock().await;
+        let speed = meter.record(transferred, Instant::now());
+        let mut task = entry.task.lock().await;
+        task.transferred = transferred;
+        task.speed = speed;
+        task.clone()
     }
 
     async fn complete(entry: &TransferEntry, events: &dyn SftpEventSink) {
@@ -462,7 +501,6 @@ async fn copy_with_progress(
     let mut reader = source.open_read(source_path).await?;
     let mut writer = target.open_write(target_path).await?;
     let mut buffer = vec![0_u8; 128 * 1024];
-    let started = Instant::now();
     loop {
         let read = tokio::select! {
             _ = entry.cancel.cancelled() => return Err("transfer cancelled".into()),
@@ -475,13 +513,13 @@ async fn copy_with_progress(
             _ = entry.cancel.cancelled() => return Err("transfer cancelled".into()),
             result = writer.write_all(&buffer[..read]) => result.map_err(|error| error.to_string())?,
         }
-        let snapshot = {
-            let mut task = entry.task.lock().await;
-            task.transferred += read as u64;
-            task.speed =
-                (task.transferred as f64 / started.elapsed().as_secs_f64().max(0.001)) as u64;
-            task.clone()
-        };
+        let transferred = entry
+            .task
+            .lock()
+            .await
+            .transferred
+            .saturating_add(read as u64);
+        let snapshot = TransferManager::advance(entry, transferred).await;
         emit(
             events,
             "transfer_progress",
@@ -627,7 +665,6 @@ pub(crate) async fn sftp_upload_begin_with_resolution(
             backend,
             transfer: transfer.clone(),
             profile_id: session.profile_id.clone(),
-            started: Instant::now(),
             _permit: permit,
         }),
     );
@@ -710,12 +747,7 @@ async fn write_upload_chunk(
         }
     }
     *received = next;
-    let snapshot = {
-        let mut task = upload.transfer.task.lock().await;
-        task.transferred = next;
-        task.speed = (next as f64 / upload.started.elapsed().as_secs_f64().max(0.001)) as u64;
-        task.clone()
-    };
+    let snapshot = TransferManager::advance(&upload.transfer, next).await;
     emit(
         state.events.as_ref(),
         "transfer_progress",
@@ -1412,6 +1444,25 @@ fn path_within(candidate: &str, root: &str) -> bool {
     candidate == root || candidate.starts_with(&format!("{}/", root.trim_end_matches('/')))
 }
 
+fn normalize_transfer_source_path(source: &FileBackend, path: &str) -> String {
+    #[cfg(windows)]
+    if matches!(source, FileBackend::Local) {
+        return windows_local_path_to_api(path);
+    }
+    let _ = source;
+    clean_path(path)
+}
+
+#[cfg(any(windows, test))]
+fn windows_local_path_to_api(path: &str) -> String {
+    let normalized = path.replace('\\', "/");
+    if normalized.as_bytes().get(1) == Some(&b':') {
+        clean_path(&format!("/{normalized}"))
+    } else {
+        clean_path(&normalized)
+    }
+}
+
 async fn resolve_destination(
     backend: &FileBackend,
     destination: String,
@@ -1567,7 +1618,7 @@ pub(crate) async fn sftp_transfer(
     }
     let paths = paths
         .into_iter()
-        .map(|path| clean_path(&path))
+        .map(|path| normalize_transfer_source_path(&source, &path))
         .collect::<Vec<_>>();
     let dest_dir = clean_path(&dest_dir);
     let mut conflicts = Vec::new();
@@ -1866,6 +1917,48 @@ mod tests {
 
     impl SftpEventSink for TestEvents {
         fn emit_sftp(&self, _event_type: &'static str, _payload: serde_json::Value) {}
+    }
+
+    #[test]
+    fn windows_local_transfer_uses_only_the_file_name_at_destination() {
+        let source = windows_local_path_to_api(r"C:\Projects\anya\miyun\audio_314.mp3");
+        assert_eq!(source, "/C:/Projects/anya/miyun/audio_314.mp3");
+        assert_eq!(base_name(&source), "audio_314.mp3");
+        assert_eq!(
+            join_path("/nginx/video", &base_name(&source)),
+            "/nginx/video/audio_314.mp3"
+        );
+    }
+
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn native_windows_drop_path_resolves_to_the_local_file() {
+        let directory = tempfile::tempdir().unwrap();
+        let file = directory.path().join("audio_314.mp3");
+        tokio::fs::write(&file, b"audio").await.unwrap();
+        let backend = FileBackend::Local;
+        let source = normalize_transfer_source_path(&backend, &file.to_string_lossy());
+        let info = backend.stat(&source).await.unwrap();
+        assert_eq!(info.name, "audio_314.mp3");
+        assert_eq!(info.size, 5);
+    }
+
+    #[test]
+    fn transfer_speed_uses_recent_bytes_across_file_boundaries() {
+        let start = Instant::now();
+        let mut meter = SpeedMeter::new(start);
+        assert_eq!(
+            meter.record(10_000_000, start + Duration::from_secs(1)),
+            10_000_000
+        );
+        assert_eq!(
+            meter.record(10_100_000, start + Duration::from_millis(1100)),
+            10_000_000
+        );
+        assert_eq!(
+            meter.record(10_500_000, start + Duration::from_secs(2)),
+            500_000
+        );
     }
 
     #[test]
