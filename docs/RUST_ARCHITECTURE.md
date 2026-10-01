@@ -1,15 +1,15 @@
 # eizhu Rust / Tauri 后端架构
 
-> 状态：架构重构与主机验收完成，等待各原生平台 CI/真机持续验证
+> 状态：架构重构、账号条目同步和独立备份已实现；自动检查与集成测试通过，原生平台验收待验证
 >
 > 初始审计基线：`57bddcb`
 >
 > 实现区间：`7f53a8b..HEAD`
 >
-> 更新日期：2026-09-09
+> 更新日期：2026-10-01
 
 本文是 `src-tauri` 的架构约束、实现说明与审计记录。它描述当前真实代码，不是要求所有
-Feature 套用同一模板的目录蓝图。数据库 schema、IPC command 名称与 credential 密文保持稳定；
+Feature 套用同一模板的目录蓝图。原业务表与 credential 密文保持兼容；新增账号空间、实时同步元数据及独立备份 IPC，迁移说明见 [DATA_SYNC.md](DATA_SYNC.md)；
 新备份使用 `.eizhubackup`，同时兼容导入 XControl `.xcbackup` 文件。
 
 ## Architecture Overview
@@ -73,7 +73,8 @@ src/
 ├── app/
 │   ├── mod.rs
 │   ├── bootstrap.rs
-│   └── events.rs
+│   ├── events.rs
+│   └── workspace.rs
 ├── commands/
 │   ├── mod.rs
 │   ├── account.rs
@@ -90,6 +91,7 @@ src/
 │   └── vault.rs
 ├── audit/{mod.rs,model.rs,repository.rs}
 ├── backup/{mod.rs,error.rs,format.rs,model.rs,repository.rs,service.rs}
+│   └── archive/{model.rs,repository.rs,service.rs,cloud.rs,provider.rs,oauth.rs,scheduler.rs,error.rs}
 ├── group/{mod.rs,model.rs,repository.rs,service.rs}
 ├── profile/{mod.rs,connection.rs,error.rs,legacy.rs,model.rs,repository.rs,service.rs}
 ├── snippet/{mod.rs,model.rs,repository.rs,service.rs}
@@ -109,16 +111,7 @@ src/
 │   ├── events.rs
 │   ├── state.rs
 │   └── transfer.rs
-├── sync/
-│   ├── mod.rs
-│   ├── cloud.rs
-│   ├── error.rs
-│   ├── model.rs
-│   ├── oauth.rs
-│   ├── provider.rs
-│   ├── repository.rs
-│   ├── scheduler.rs
-│   └── service.rs
+├── sync/{mod.rs,model.rs,crypto.rs,repository.rs,service.rs,scheduler.rs}
 └── infrastructure/
     ├── mod.rs
     ├── database/{mod.rs,connection.rs,error.rs,migration.rs}
@@ -153,15 +146,15 @@ src/
 | `account/audit/backup/group/profile/snippet/vault/ssh/sftp/sync/mod.rs` | 声明 feature 子模块并选择性重导出 facade/model | 不承载业务逻辑 |
 | `infrastructure/mod.rs`、`database/mod.rs`、`platform/mod.rs`、`desktop/mod.rs` | 声明基础设施层级及最小 API | desktop module 由 cfg 隔离 |
 | `commands/mod.rs` | command 模块注册 facade | crate 内可见；glob 用于携带 Tauri 宏生成的 handler 符号 |
-| `commands/account.rs` | 账号登录态、资料与账号同步开关 IPC | 无 HTTP/SQL 实现 |
+| `commands/account.rs` | 账号登录态、资料与空间协调 IPC | 无 HTTP/SQL 实现 |
 | `commands/audit.rs` | Audit IPC 与 `spawn_blocking` | 无 SQL |
 | `commands/backup.rs` | Backup IPC；desktop 文件对话框门控 | 无格式/加密逻辑 |
 | `commands/desktop.rs` | 窗口、日志、迁移、保存、drag-out IPC | `#[cfg(desktop)]` |
-| `commands/group.rs` | Group IPC 与 Sync change 通知 | 无 SQL |
-| `commands/profile.rs` | Profile IPC 与 Sync change 通知 | 无凭据实现 |
+| `commands/group.rs` | Group IPC 与 Sync/Backup change 通知 | 无 SQL |
+| `commands/profile.rs` | Profile IPC 与 Sync/Backup change 通知 | 无凭据实现 |
 | `commands/server_detail.rs` | Server detail IPC | 只调用 use case |
 | `commands/sftp.rs` | SFTP IPC、binary body/response 转换 | 不管理 session/transfer map |
-| `commands/snippet.rs` | Snippet IPC 与 Sync change 通知 | 无 SQL |
+| `commands/snippet.rs` | Snippet IPC 与 Sync/Backup change 通知 | 无 SQL |
 | `commands/ssh.rs` | Profile test 和 SSH session IPC | 不调用 `russh` |
 | `commands/sync.rs` | Sync IPC 和阻塞任务切换 | 不实现 provider 协议 |
 | `commands/vault.rs` | Vault IPC 和 keygen 阻塞任务切换 | 不实现加密 |
@@ -188,7 +181,7 @@ src/
 | `backup/format.rs` | 格式校验、Argon2id、AES-GCM | 兼容 XControl v1/AAD/nonce 格式 |
 | `backup/error.rs` | Backup typed errors | feature 私有 |
 | `backup/repository.rs` | 跨域导出与单事务导入 | 明确 aggregate repository |
-| `backup/service.rs` | export/preview/import/sync version orchestration | 不依赖 Tauri dialog |
+| `backup/service.rs` | 导出、隔离恢复、导入、安全快照和完整版本 | 不依赖 Tauri dialog |
 | `ssh/error.rs` | transport/protocol/auth typed errors | 第三方错误不越界 |
 | `ssh/events.rs` | terminal outbound event port | 合理的 dependency inversion |
 | `ssh/transport.rs` | TCP、SOCKS5、HTTP CONNECT、jump、auth、host-key、subsystem/exec | `russh` boundary |
@@ -200,17 +193,16 @@ src/
 | `sftp/backend.rs` | Local/remote 流式文件操作，remote 持有封装 route | 不暴露 russh handle；路径策略委托 platform adapter |
 | `sftp/state.rs` | `SftpService`、session registry、连接和文件 use case | connection task owner |
 | `sftp/transfer.rs` | TransferManager、分块上传下载、复制/移动、磁盘 staging 归档 | worker/cancellation owner |
-| `sync/model.rs` | settings/provider/version/conflict DTO | secret config zeroize 且无 `Debug` |
-| `sync/error.rs` | operation/scheduler typed errors | 映射稳定错误码 |
-| `sync/repository.rs` | Sync SQLite persistence | 原 `store.rs` |
-| `sync/service.rs` | local version/settings/provider use case 和统一 operation coordinator | 原 `manager.rs` |
-| `sync/scheduler.rs` | bounded queue、计划/变更触发、tracked JoinHandle、shutdown | backpressure 显式返回 |
-| `sync/cloud.rs` | pull/push/index/conflict/restore orchestration | 受 operation coordinator 保护 |
-| `sync/oauth.rs` | OAuth state、URL/callback、token exchange | deep-link 监听在 app adapter |
-| `sync/provider.rs` | WebDAV/S3/GDrive/OneDrive/Account HTTP connector | provider body 不直接进入 IPC error |
-| `account/client.rs` | 账号认证与对象存储 HTTP 契约、401 刷新错误收口 | 不回显响应正文或 token |
-| `account/repository.rs` | 加密账号 session 的单行 SQLite 持久化 | token JSON 使用设备 `Encryptor` |
-| `account/service.rs` | 登录/注册/退出、轮换和内置 account provider 生命周期 | 与 Sync repository 组合，不改变同步引擎 |
+| `sync/model.rs` | 条目协议、状态与冲突摘要 | 无第三方目标或备份版本 |
+| `sync/crypto.rs` | 随机数据密钥、Argon2id 包装和条目 AES-GCM/AAD | secret 默认无 Debug |
+| `sync/repository.rs` | 加密队列、冻结请求、确认、跨域应用与冲突 | 明确条目同步 aggregate |
+| `sync/service.rs` | 账号协议、首次接入、恢复核对与密码轮换 | SQLite/加密执行于阻塞线程 |
+| `sync/scheduler.rs` | 立即唤醒、持久队列扫描、退避、SSE 与回补 | tracked/cancellable runtime |
+| `backup/archive/*` | 完整版本、第三方/官方对象备份、OAuth、独立调度和保留 | 不合并远端业务内容 |
+| `account/client.rs` | 账号 HTTP 契约与错误收口 | 不回显响应正文或 token |
+| `account/repository.rs` | application.db 中加密账号 session | token JSON 使用原设备 Encryptor |
+| `account/service.rs` | 认证、稳定用户身份、带账号校验的请求 | 不依赖 sync/backup repository |
+| `app/workspace.rs` | 空间隔离、服务装配、切换和缓存代次 | 跨模块协调属于应用层 |
 | `infrastructure/database/connection.rs` | SQLite connection factory、busy timeout、foreign keys | 不含业务 SQL |
 | `infrastructure/database/migration.rs` | schema 和幂等兼容 migration | 不依赖 feature |
 | `infrastructure/database/error.rs` | `StorageError` | 保留 rusqlite/io source |
@@ -236,22 +228,21 @@ src/
 3. 必要的 `spawn_blocking`；
 4. 调用 feature facade；
 5. 保持既有 `CommandError` 或 desktop 字符串错误 contract；
-6. 成功写操作后的 Sync change 通知。
+6. 成功写操作后的 Sync/Backup change 通知。
 
 Feature 中不存在 `#[tauri::command]`。SSH/SFTP 的反向消息也通过 event port 注入，不再持有
 `AppHandle`。
 
 ## Database Boundary
 
-`Database` 只持有 `Arc<PathBuf>`，每次操作创建短生命周期 connection。没有全局 SQLite
+`Database` 持有数据库路径和设备加密捕获回调，每次操作创建短生命周期 connection。没有全局 SQLite
 connection mutex，因而不会发生 connection lock 跨 `.await`。连接统一启用：
 
 - `busy_timeout = 5s`；
 - `foreign_keys = ON`；
 - migration 中保持历史 WAL/schema/column backfill。
 
-业务 SQL 与其领域共同演进。Backup 是唯一合法跨域 repository，因为导入必须在一个 SQLite
-transaction 内保持原子性；它不是全局 repository 垃圾桶。
+业务 SQL 与其领域共同演进。Backup 导入和 Sync 条目应用是两个明确的跨域 aggregate，必须在一个 SQLite transaction 内保证引用、业务变化和队列一致性。业务 CRUD 的捕获触发器与业务写入在同一事务提交；捕获回调由 Vault 装配，基础设施不依赖 Vault。
 
 ## SSH Runtime Ownership
 
@@ -288,16 +279,11 @@ SftpService
 remote-to-remote archive 使用有限磁盘 staging，再流式压缩/上传；不会把整棵目录及压缩包同时
 驻留内存。shutdown 会取消并等待 connection/transfer workers，清理临时文件。
 
-## Sync Runtime Ownership
+## Sync and Backup Runtime Ownership
 
-`SyncService` 私有持有 repository、BackupService、backup directory、OAuth pending state、
-`OperationCoordinator` 与 scheduler slot。Scheduler 使用容量 32 的 bounded channel：手动
-reload/sync/push 在队列满或关闭时返回稳定错误，不再虚假返回 `started: true`；change 通知失败
-会记录日志。
+`SyncService` 私有持有条目 repository、账号认证 facade、任务取消信号、通知器和 operation mutex。本地变化立即唤醒任务；冻结请求和队列持久化，网络错误不会撤销本地事务。SSE 任务负责云端通知，持久化游标负责回补。关闭任务会取消网络请求并等待已开始的 SQLite/KDF 工作退出。
 
-所有 create/restore/pull/push/conflict/delete-cloud 变更使用同一个 Tokio operation mutex，避免
-版本恢复和云端 index read-modify-write 并发。该 mutex 有意覆盖完整异步 operation；它不是
-保护普通数据结构的细粒度锁，因此不存在 lock ordering 链。
+`ArchiveService` 属于 Backup，拥有独立 repository、目录、OAuth state、operation coordinator 和容量 32 的调度队列。每次提交最新完整版本，目标独立确认和重试；不拉取并合并第三方云业务内容。账号完整备份也通过该模块访问官方对象存储。原 `sync_*` 备份适配器位于 `commands/backup_compat.rs`。
 
 ## Error Strategy
 
@@ -322,13 +308,9 @@ russh debug detail 和敏感 plaintext 不直接暴露到 IPC。
 
 ## App State and Shutdown
 
-没有全局 God `AppState`。Tauri 分别管理 `GroupService`、`SnippetService`、`ProfileService`、
-`VaultService`、`BackupService`、`AccountService`、`SyncService`、`SshService`、`SftpService` 和
-`AuditRepository`。Command 只能请求其签名中声明的 state。
+Tauri 管理应用级 `WorkspaceManager`、`AccountService` 和平台/生命周期服务。WorkspaceManager 为当前空间装配独立的 Profile/Vault/Group/Snippet/Backup/Sync/SSH/SFTP/Audit 服务，commands 通过携带代次的 `current()` 获取所属空间；业务状态不再作为跨账号共享的 Tauri State。
 
-Desktop `ExitRequested` 的清理顺序为：SSH sessions -> SFTP sessions/transfers -> Sync scheduler
--> shutdown backup。每个长期任务均有 manager/slot 保存其 `JoinHandle`。Mobile composition 使用
-相同 feature facade；suspend/resume 与移动 OS 后台网络策略仍属于真机集成阶段。
+切换前构建新空间，停止旧空间同步和备份后台任务、关闭 SSH/SFTP，随后发布新代次。旧事件被应用事件适配器过滤，前端丢弃旧请求结果。退出与移动前后台生命周期使用相同任务所有权；真机验收见 `MOBILE_RELEASE.md` 和 `DATA_SYNC.md`。
 
 ## Platform Boundary
 

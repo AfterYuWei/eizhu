@@ -5,21 +5,30 @@ use tauri::State;
 use crate::{
     error::CommandError,
     server_detail::{self, ServerInfo, ServerMetrics},
-    sftp::SftpService,
 };
 
 #[tauri::command]
 pub(crate) async fn server_get_info(
-    service: State<'_, SftpService>,
+    service_workspace: State<'_, crate::app::WorkspaceManager>,
     session_id: String,
+    workspace_generation: Option<u64>,
 ) -> Result<ServerInfo, CommandError> {
-    server_detail::get_info(service.inner(), session_id).await
+    let service = service_workspace
+        .current(workspace_generation)?
+        .sftp
+        .clone();
+    server_detail::get_info(&service, session_id).await
 }
 
 #[tauri::command]
 pub(crate) async fn server_get_metrics(
-    service: State<'_, SftpService>,
+    service_workspace: State<'_, crate::app::WorkspaceManager>,
     session_id: String,
+    workspace_generation: Option<u64>,
 ) -> Result<ServerMetrics, CommandError> {
-    server_detail::get_metrics(service.inner(), session_id).await
+    let service = service_workspace
+        .current(workspace_generation)?
+        .sftp
+        .clone();
+    server_detail::get_metrics(&service, session_id).await
 }

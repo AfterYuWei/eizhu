@@ -6,3 +6,5 @@ mod migration;
 
 pub(crate) use connection::Database;
 pub(crate) use error::StorageError;
+
+mod sync_migration;

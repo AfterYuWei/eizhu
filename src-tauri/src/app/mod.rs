@@ -13,3 +13,6 @@ pub(crate) use lifecycle::{
 pub(crate) use logging::{log_runtime_error, log_runtime_event};
 
 pub(crate) use bootstrap::run;
+
+mod workspace;
+pub(crate) use workspace::{WorkspaceManager, WorkspaceStatus};

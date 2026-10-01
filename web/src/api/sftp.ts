@@ -1,3 +1,4 @@
+import { workspaceGeneration } from '@/lib/workspaceScope'
 import { invoke } from '@tauri-apps/api/core'
 import { invokeCommand, normalizeCommandError } from './tauri'
 import { isMobileRuntime } from '@/lib/platform'
@@ -160,7 +161,7 @@ export const sftpApi = {
                 await invoke(
                   'sftp_upload_chunk',
                   chunk,
-                  { headers: { 'x-eizhu-upload-id': uploadId } },
+                  { headers: { 'x-eizhu-upload-id': uploadId, ...(workspaceGeneration() !== undefined ? { 'x-eizhu-workspace-generation': String(workspaceGeneration()) } : {}) } },
                 )
               }
             }

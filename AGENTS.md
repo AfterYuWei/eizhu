@@ -41,7 +41,9 @@ Frontend tests are vitest files colocated with sources (`web/src/**/*.test.ts`).
 - `src-tauri/src/infrastructure/database/`: SQLite connection policy and compatible migrations.
 - `src-tauri/src/profile/`, `vault/`, `group/`, `snippet/`, `audit/`: local feature modules and
   domain-owned repositories.
-- `src-tauri/src/backup/`, `sync/`: backup aggregate, providers, OAuth and tracked scheduler.
+- `src-tauri/src/backup/`: complete snapshots, isolated restore and safety snapshots; `backup/archive/`: providers, OAuth and an independent backup scheduler.
+- `src-tauri/src/sync/`: account-only encrypted item synchronization, durable transactional outbox, conflict resolution and SSE replay.
+- `src-tauri/src/app/workspace.rs`: account-isolated composition, generation guards and tracked workspace shutdown.
 - `ssh/transport.rs`: direct, SOCKS5, HTTP CONNECT and SSH jump connections.
 - `ssh/session.rs` + `session_manager.rs`: PTY, terminal I/O and tracked session ownership.
 - `sftp/`: sessions, file operations, editor and tracked transfers.

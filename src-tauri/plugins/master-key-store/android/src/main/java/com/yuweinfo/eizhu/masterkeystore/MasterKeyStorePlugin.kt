@@ -18,8 +18,12 @@ import javax.crypto.spec.GCMParameterSpec
 
 @InvokeArg
 class StoreArgs {
+    var namespace: String = "default"
     lateinit var value: String
 }
+
+@InvokeArg
+class LoadArgs { var namespace: String = "default" }
 
 @TauriPlugin
 class MasterKeyStorePlugin(private val activity: Activity) : Plugin(activity) {
@@ -30,7 +34,9 @@ class MasterKeyStorePlugin(private val activity: Activity) : Plugin(activity) {
     @Command
     fun load(invoke: Invoke) {
         try {
-            val wrapped = preferences.getString(WRAPPED_KEY, null)
+            val namespace = invoke.parseArgs(LoadArgs::class.java).namespace
+            val key = if (namespace == "default") WRAPPED_KEY else "wrapped_master_key_$namespace"
+            val wrapped = preferences.getString(key, null)
             val response = JSObject()
             if (wrapped != null) response.put("value", decrypt(wrapped))
             invoke.resolve(response)
@@ -42,21 +48,23 @@ class MasterKeyStorePlugin(private val activity: Activity) : Plugin(activity) {
     @Command
     fun store(invoke: Invoke) {
         try {
-            val value = invoke.parseArgs(StoreArgs::class.java).value
-            val existing = preferences.getString(WRAPPED_KEY, null)
+            val args = invoke.parseArgs(StoreArgs::class.java)
+            val value = args.value
+            val key = if (args.namespace == "default") WRAPPED_KEY else "wrapped_master_key_${args.namespace}"
+            val existing = preferences.getString(key, null)
             if (existing != null) {
                 require(decrypt(existing) == value) { "安全存储中已存在不同的主密钥" }
                 invoke.resolve()
                 return
             }
-            val committed = preferences.edit().putString(WRAPPED_KEY, encrypt(value)).commit()
+            val committed = preferences.edit().putString(key, encrypt(value)).commit()
             require(committed) { "写入安全存储失败" }
             try {
-                require(preferences.getString(WRAPPED_KEY, null)?.let(::decrypt) == value) {
+                require(preferences.getString(key, null)?.let(::decrypt) == value) {
                     "安全存储写入校验失败"
                 }
             } catch (error: Exception) {
-                preferences.edit().remove(WRAPPED_KEY).commit()
+                preferences.edit().remove(key).commit()
                 throw error
             }
             invoke.resolve()

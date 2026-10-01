@@ -1,525 +1,777 @@
+use super::{crypto, model::*, repository::SyncRepository};
+use crate::{
+    account::AccountService, error::CommandError, infrastructure::database::Database,
+    vault::Encryptor,
+};
+use reqwest::Method;
+use serde_json::{json, Value};
 use std::{
     collections::HashMap,
-    fs::OpenOptions,
-    io::Write,
-    path::{Path, PathBuf},
     sync::{Arc, Mutex},
 };
-
-use chrono::{Local, SecondsFormat};
-use serde::Serialize;
-
-use crate::{account::AccountService, backup::BackupService, error::CommandError};
-
-use super::{
-    error::SyncError,
-    model::{
-        SyncConflictInfo, SyncEvent, SyncProviderConfig, SyncProviderMeta, SyncSettings,
-        SyncStatus, SyncVersion, SyncVersionInfo,
-    },
-    repository::SyncRepository,
-};
-
-pub const ORIGIN_MANUAL: &str = "manual";
-pub const ORIGIN_SCHEDULED: &str = "scheduled";
-pub const ORIGIN_SHUTDOWN: &str = "shutdown";
-pub const ORIGIN_CHANGE: &str = "change";
-pub const ORIGIN_CONFLICT_RESOLVE: &str = "conflict_resolve";
-pub const ORIGIN_RESTORE: &str = "restore";
+use zeroize::Zeroizing;
 
 #[derive(Clone)]
 pub(crate) struct SyncService {
     pub(super) inner: Arc<SyncInner>,
 }
-
 pub(super) struct SyncInner {
-    pub(super) repository: SyncRepository,
-    pub(super) backup: BackupService,
-    pub(super) backup_dir: PathBuf,
-    pub(super) device_id: String,
-    pub(super) operation: OperationCoordinator,
-    pub(super) oauth_states: Mutex<HashMap<String, super::oauth::OAuthState>>,
-    pub(super) scheduler: Mutex<Option<super::scheduler::SchedulerRuntime>>,
-    pub(super) account: AccountService,
+    pub repository: SyncRepository,
+    pub blocking: Mutex<usize>,
+    pub quiescent: tokio::sync::Notify,
+    pub account: AccountService,
+    pub user: i64,
+    pub device: String,
+    pub paused: std::sync::atomic::AtomicBool,
+    pub blocked: std::sync::atomic::AtomicBool,
+    pub resume: tokio::sync::Notify,
+    pub wake: tokio::sync::Notify,
+    pub stop: tokio_util::sync::CancellationToken,
+    pub operation: tokio::sync::Mutex<()>,
+    pub runtime: Mutex<Vec<tauri::async_runtime::JoinHandle<()>>>,
+    pub emit: Arc<dyn Fn(Value) + Send + Sync>,
+    previews: Mutex<HashMap<String, Preview>>,
 }
-
-#[derive(Default)]
-pub(super) struct OperationCoordinator {
-    lock: tokio::sync::Mutex<()>,
-}
-
-impl OperationCoordinator {
-    pub(super) fn try_enter(&self) -> Result<tokio::sync::MutexGuard<'_, ()>, SyncError> {
-        self.lock.try_lock().map_err(|_| SyncError::InProgress)
+struct BlockingWork(Arc<SyncInner>);
+impl Drop for BlockingWork {
+    fn drop(&mut self) {
+        if let Ok(mut count) = self.0.blocking.lock() {
+            *count -= 1;
+        }
+        self.0.quiescent.notify_waiters();
     }
 }
-
-#[derive(Debug, Serialize)]
-pub struct BackupNowResult {
-    pub created: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub message: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub version: Option<SyncVersion>,
+struct Preview {
+    generation: i64,
+    seq: i64,
+    epoch: i64,
+    items: Vec<Item>,
 }
-
-#[derive(Debug, Serialize)]
-pub struct RestoreResult {
-    pub restored: bool,
-    pub version: Option<SyncVersion>,
-}
-
 impl SyncService {
-    pub fn initialize(
-        repository: SyncRepository,
-        backup: BackupService,
-        backup_dir: PathBuf,
+    pub fn new(
+        database: Database,
+        encryptor: Encryptor,
         account: AccountService,
-    ) -> Result<Self, CommandError> {
-        std::fs::create_dir_all(&backup_dir).map_err(|error| {
-            CommandError::new("SYNC_FAILED", format!("create backup dir: {error}"))
-        })?;
-        set_private_directory_permissions(&backup_dir).map_err(|error| {
-            CommandError::new("SYNC_FAILED", format!("create backup dir: {error}"))
-        })?;
-        Ok(Self {
+        user: i64,
+        device: String,
+        emit: Arc<dyn Fn(Value) + Send + Sync>,
+    ) -> Self {
+        Self {
             inner: Arc::new(SyncInner {
-                repository,
-                backup,
-                backup_dir,
-                device_id: uuid::Uuid::new_v4().to_string(),
-                operation: OperationCoordinator::default(),
-                oauth_states: Mutex::new(HashMap::new()),
-                scheduler: Mutex::new(None),
+                repository: SyncRepository::new(database, encryptor),
+                blocking: Mutex::new(0),
+                quiescent: tokio::sync::Notify::new(),
                 account,
+                user,
+                device,
+                paused: std::sync::atomic::AtomicBool::new(false),
+                blocked: std::sync::atomic::AtomicBool::new(false),
+                resume: tokio::sync::Notify::new(),
+                wake: tokio::sync::Notify::new(),
+                stop: tokio_util::sync::CancellationToken::new(),
+                operation: tokio::sync::Mutex::new(()),
+                runtime: Mutex::new(Vec::new()),
+                emit,
+                previews: Mutex::new(HashMap::new()),
             }),
-        })
-    }
-
-    pub fn get_settings(&self) -> Result<SyncSettings, CommandError> {
-        let mut settings = self.inner.repository.load_settings()?;
-        settings.sync_password.clear();
-        Ok(settings)
-    }
-
-    pub fn reveal_password(&self) -> Result<String, CommandError> {
-        let settings = self.inner.repository.load_settings()?;
-        if !settings.sync_password_set || settings.sync_password.is_empty() {
-            return Err(CommandError::new("NO_PASSWORD", "尚未设置同步密码"));
         }
-        Ok(settings.sync_password.clone())
     }
-
-    pub fn save_settings(&self, mut settings: SyncSettings) -> Result<(), CommandError> {
-        validate_settings(&mut settings)?;
-        self.inner
-            .repository
-            .save_settings(&settings)
-            .map_err(|error| CommandError::new("SETTINGS_FAILED", error.message))
-    }
-
-    pub fn local_status(&self) -> Result<SyncStatus, CommandError> {
-        let state = self.inner.repository.get_state()?;
-        let local_latest = self
-            .inner
-            .repository
-            .latest_version()?
-            .as_ref()
-            .map(SyncVersionInfo::from);
-        let conflict = if state.conflict_json.is_empty() {
-            None
-        } else {
-            serde_json::from_str::<SyncConflictInfo>(&state.conflict_json).ok()
-        };
-        let providers = self.list_providers()?;
-        Ok(SyncStatus {
-            status: state.status,
-            local_latest,
-            cloud_latest: Default::default(),
-            providers,
-            conflict,
-            last_sync_at: state.last_sync_at,
-        })
-    }
-
-    pub fn list_versions(&self) -> Result<Vec<SyncVersion>, CommandError> {
-        self.inner.repository.list_versions()
-    }
-
-    pub fn list_events(&self, limit: i64) -> Result<Vec<SyncEvent>, CommandError> {
-        self.inner.repository.list_events(limit)
-    }
-
-    pub fn create_version(&self, origin: &str) -> Result<Option<SyncVersion>, CommandError> {
-        let _operation = self.inner.operation.try_enter()?;
-        self.create_version_inner(origin)
-    }
-
-    pub(super) fn create_version_inner(
+    pub(super) async fn local<T: Send + 'static>(
         &self,
-        origin: &str,
-    ) -> Result<Option<SyncVersion>, CommandError> {
-        let settings = self.inner.repository.load_settings()?;
-        if settings.sync_password.is_empty() {
-            return Err(password_required());
-        }
-        let (bytes, hash) = self
-            .inner
-            .backup
-            .build_sync_version(&settings.sync_password)?;
-        if self
-            .inner
-            .repository
-            .latest_version()?
-            .is_some_and(|latest| latest.hash == hash)
+        work: impl FnOnce(SyncRepository) -> Result<T, CommandError> + Send + 'static,
+    ) -> Result<T, CommandError> {
         {
-            return Ok(None);
+            let mut count = self
+                .inner
+                .blocking
+                .lock()
+                .map_err(|_| CommandError::new("SYNC_BUSY", "同步任务状态不可用"))?;
+            if self.inner.stop.is_cancelled() {
+                return Err(CommandError::new("WORKSPACE_CHANGED", "数据空间已切换"));
+            }
+            *count += 1;
         }
-
-        if self
-            .inner
-            .repository
-            .latest_version()?
-            .is_some_and(|latest| latest.hash == hash)
-        {
-            return Ok(None);
-        }
-        let number = self.inner.repository.next_version()?;
-        let filename = format!("v{number:06}-{}.eizhubackup", &hash[..12]);
-        let path = self.inner.backup_dir.join(filename);
-        write_private_file(&path, &bytes).map_err(|error| {
-            CommandError::new("SYNC_FAILED", format!("write version file: {error}"))
-        })?;
-        let version = SyncVersion {
-            id: uuid::Uuid::new_v4().to_string(),
-            version: number,
-            hash,
-            size: i64::try_from(bytes.len()).unwrap_or(i64::MAX),
-            file_path: path.display().to_string(),
-            origin: origin.into(),
-            synced_to: vec![],
-            created_at: now(),
-        };
-        if let Err(error) = self.inner.repository.add_version(&version) {
-            let _ = std::fs::remove_file(&path);
-            return Err(error);
-        }
-        self.inner
-            .repository
-            .log_event("", "backup", number, true, "");
-        let _ = self.inner.repository.touch_last_sync();
-        Ok(Some(version))
+        let guard = BlockingWork(self.inner.clone());
+        let repository = self.inner.repository.clone();
+        tokio::task::spawn_blocking(move || {
+            let _guard = guard;
+            work(repository)
+        })
+        .await
+        .map_err(CommandError::database)?
     }
-
-    pub fn delete_version(&self, id: &str, force: bool) -> Result<(), CommandError> {
-        let version = self
-            .inner
-            .repository
-            .get_version(id)
-            .map_err(|error| CommandError::new("DELETE_FAILED", error.message))?;
-        if !force && version.synced_to.is_empty() {
-            return Err(CommandError::new(
-                "DELETE_FAILED",
-                "该版本尚未同步到任何云端，删除后将无法恢复（可用 force 强制删除）",
-            ));
-        }
-        if let Err(error) = std::fs::remove_file(&version.file_path) {
-            if error.kind() != std::io::ErrorKind::NotFound {
-                return Err(CommandError::new("DELETE_FAILED", error.to_string()));
+    pub(super) async fn emit_async(&self) {
+        if let Ok(status) = self.local(|r| r.status()).await {
+            if let Ok(body) = serde_json::to_value(status) {
+                (self.inner.emit)(body);
             }
         }
+    }
+    pub fn pause(&self, paused: bool) {
         self.inner
-            .repository
-            .log_event("", "delete", version.version, true, "user");
-        self.inner
-            .repository
-            .delete_version(id)
-            .map_err(|error| CommandError::new("DELETE_FAILED", error.message))
-    }
-
-    pub fn restore_version(&self, id: &str) -> Result<Option<SyncVersion>, CommandError> {
-        let _operation = self.inner.operation.try_enter()?;
-        let settings = self.inner.repository.load_settings()?;
-        let version = self.inner.repository.get_version(id)?;
-        let bytes = std::fs::read(&version.file_path).map_err(|error| {
-            CommandError::new("SYNC_FAILED", format!("读取版本文件失败: {error}"))
-        })?;
-        self.inner.backup.restore_sync_version(
-            &bytes,
-            &settings.sync_password,
-            &version.hash,
-            "版本文件校验失败（内容 hash 不匹配），文件可能已损坏或同步密码已变更",
-        )?;
-        self.inner
-            .repository
-            .log_event("", "restore", version.version, true, "");
-        self.create_version_inner(ORIGIN_RESTORE)
-    }
-
-    pub fn list_providers(&self) -> Result<Vec<SyncProviderMeta>, CommandError> {
-        self.inner
-            .repository
-            .list_providers(false)?
-            .into_iter()
-            .map(|mut row| {
-                if matches!(row.config.provider_type.as_str(), "gdrive" | "onedrive") {
-                    row.meta.authorized = row.config.authorized();
-                }
-                Ok(row.meta)
-            })
-            .collect()
-    }
-
-    pub fn create_provider(
-        &self,
-        config: SyncProviderConfig,
-    ) -> Result<SyncProviderMeta, CommandError> {
-        validate_provider(&config)?;
-        self.inner
-            .repository
-            .create_provider(&config)
-            .map(|row| row.meta)
-            .map_err(|error| CommandError::new("INVALID_PROVIDER", error.message))
-    }
-
-    pub fn update_provider(
-        &self,
-        id: &str,
-        config: SyncProviderConfig,
-    ) -> Result<(), CommandError> {
-        validate_provider(&config)
-            .map_err(|error| CommandError::new("UPDATE_FAILED", error.message))?;
-        self.inner
-            .repository
-            .update_provider(id, &config)
-            .map_err(|error| CommandError::new("UPDATE_FAILED", error.message))
-    }
-
-    pub fn delete_provider(&self, id: &str) -> Result<(), CommandError> {
-        self.inner
-            .repository
-            .delete_provider(id)
-            .map_err(|error| CommandError::new("DELETE_FAILED", error.message))
-    }
-}
-
-pub fn validate_settings(settings: &mut SyncSettings) -> Result<(), CommandError> {
-    if !matches!(settings.sync_mode.as_str(), "manual" | "auto") {
-        return Err(CommandError::new(
-            "INVALID_SETTINGS",
-            "sync_mode 须为 manual | auto",
-        ));
-    }
-    if !matches!(settings.conflict_policy.as_str(), "prompt" | "latest") {
-        return Err(CommandError::new(
-            "INVALID_SETTINGS",
-            "conflict_policy 须为 prompt | latest",
-        ));
-    }
-    if !matches!(
-        settings.cloud_retention.as_str(),
-        "keep_forever" | "mirror_local"
-    ) {
-        return Err(CommandError::new(
-            "INVALID_SETTINGS",
-            "cloud_retention 须为 keep_forever | mirror_local",
-        ));
-    }
-    if !settings.scheduled_daily_time.is_empty()
-        && (settings.scheduled_daily_time.len() != 5
-            || settings.scheduled_daily_time.as_bytes().get(2) != Some(&b':'))
-    {
-        return Err(CommandError::new(
-            "INVALID_SETTINGS",
-            "scheduled_daily_time 格式须为 HH:MM",
-        ));
-    }
-    settings.change_debounce_seconds = settings.change_debounce_seconds.max(5);
-    Ok(())
-}
-
-pub fn validate_provider(config: &SyncProviderConfig) -> Result<(), CommandError> {
-    if config.name.is_empty() {
-        return Err(CommandError::new("INVALID_PROVIDER", "名称不能为空"));
-    }
-    match config.provider_type.as_str() {
-        "webdav" if config.endpoint.is_empty() => {
-            Err(CommandError::new("INVALID_PROVIDER", "WebDAV 地址不能为空"))
+            .paused
+            .store(paused, std::sync::atomic::Ordering::Release);
+        if paused {
+            self.notify_change();
+        } else {
+            self.retry_now();
         }
-        "s3" if config.s3_bucket.is_empty() || config.s3_access_key.is_empty() => Err(
-            CommandError::new("INVALID_PROVIDER", "S3 Bucket 与 AccessKey 不能为空"),
-        ),
-        "gdrive" | "onedrive" if config.oauth_client_id.is_empty() => Err(CommandError::new(
-            "INVALID_PROVIDER",
-            "OAuth Client ID 不能为空（需在对应云平台注册应用获取）",
-        )),
-        "webdav" | "s3" | "gdrive" | "onedrive" | "account" => Ok(()),
-        other => Err(CommandError::new(
-            "INVALID_PROVIDER",
-            format!("暂不支持的云服务类型: {other}"),
-        )),
     }
-}
-
-pub fn password_required() -> CommandError {
-    CommandError::new("SYNC_PASSWORD_REQUIRED", "请先在同步设置中配置同步密码")
-}
-
-pub(crate) fn write_private_file(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
-    let mut options = OpenOptions::new();
-    options.create(true).truncate(true).write(true);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        options.mode(0o600);
+    pub fn retry_now(&self) {
+        self.inner
+            .blocked
+            .store(false, std::sync::atomic::Ordering::Release);
+        self.inner.resume.notify_one();
+        self.notify_change();
     }
-    let mut file = options.open(path)?;
-    file.write_all(bytes)?;
-    file.sync_all()
-}
-
-#[cfg(unix)]
-fn set_private_directory_permissions(path: &Path) -> std::io::Result<()> {
-    use std::os::unix::fs::PermissionsExt;
-    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o700))
-}
-
-#[cfg(not(unix))]
-fn set_private_directory_permissions(_path: &Path) -> std::io::Result<()> {
-    Ok(())
-}
-
-fn now() -> String {
-    Local::now().to_rfc3339_opts(SecondsFormat::AutoSi, true)
+    pub fn notify_change(&self) {
+        self.inner.wake.notify_one();
+    }
+    pub fn status(&self) -> Result<SyncStatus, CommandError> {
+        self.inner.repository.status()
+    }
+    pub fn conflicts(&self) -> Result<Vec<Conflict>, CommandError> {
+        self.inner.repository.conflicts()
+    }
+    pub async fn unlock(&self, password: String) -> Result<(), CommandError> {
+        let _lock = self.inner.operation.lock().await;
+        let password = Zeroizing::new(password);
+        let user = self.inner.user;
+        if user <= 0 {
+            return Err(CommandError::new("ACCOUNT_NOT_LOGGED_IN", "请先登录账号"));
+        }
+        let account = self.inner.account.clone();
+        let capabilities: Value = account
+            .json_for(user, Method::GET, "api/sync/v2/capabilities", None)
+            .await?;
+        if capabilities["protocol"] != 2 {
+            return Err(CommandError::new(
+                "SYNC_PROTOCOL",
+                "云端尚未支持条目同步协议",
+            ));
+        }
+        let _: Value = account
+            .json_for(
+                user,
+                Method::POST,
+                "api/sync/v2/devices",
+                Some(json!({"deviceId":self.inner.device})),
+            )
+            .await?;
+        let envelope: Result<crypto::KeyEnvelope, _> = account
+            .json_for(user, Method::GET, "api/sync/v2/keys", None)
+            .await;
+        let (key, envelope) = match envelope {
+            Ok(envelope) => {
+                let owned = password.clone();
+                let copy = envelope.clone();
+                let key = self
+                    .local(move |_| crypto::unwrap(&owned, &copy, user))
+                    .await?;
+                (key, envelope)
+            }
+            Err(error) if error.code == "KEY_NOT_FOUND" => {
+                let mut bytes = Zeroizing::new([0u8; 32]);
+                getrandom::fill(bytes.as_mut()).map_err(CommandError::database)?;
+                let owned = password.clone();
+                let copy = bytes.clone();
+                let envelope = self
+                    .local(move |_| crypto::wrap(&owned, &copy, user, 0))
+                    .await?;
+                let created = account
+                    .json_for(
+                        user,
+                        Method::PUT,
+                        "api/sync/v2/keys",
+                        Some(serde_json::to_value(&envelope).map_err(CommandError::database)?),
+                    )
+                    .await;
+                match created {
+                    Ok(saved) => (bytes, saved),
+                    Err(error) if error.code == "KEY_CONFLICT" => {
+                        let saved: crypto::KeyEnvelope = account
+                            .json_for(user, Method::GET, "api/sync/v2/keys", None)
+                            .await?;
+                        let copy = saved.clone();
+                        let owned = password.clone();
+                        let key = self
+                            .local(move |_| crypto::unwrap(&owned, &copy, user))
+                            .await?;
+                        (key, saved)
+                    }
+                    Err(error) => return Err(error),
+                }
+            }
+            Err(error) => return Err(error),
+        };
+        self.local(move |r| r.save_key(&key, &envelope, &password))
+            .await?;
+        self.retry_now();
+        self.emit_async().await;
+        Ok(())
+    }
+    pub async fn change_password(&self, password: String) -> Result<(), CommandError> {
+        let _lock = self.inner.operation.lock().await;
+        let key = self
+            .local(|r| r.key())
+            .await?
+            .ok_or_else(|| CommandError::new("SYNC_LOCKED", "请先解锁"))?;
+        let current: crypto::KeyEnvelope = self
+            .inner
+            .account
+            .json_for(self.inner.user, Method::GET, "api/sync/v2/keys", None)
+            .await?;
+        let password = Zeroizing::new(password);
+        let copy = key.clone();
+        let owned = password.clone();
+        let user = self.inner.user;
+        let next = self
+            .local(move |_| crypto::wrap(&owned, &copy, user, current.revision))
+            .await?;
+        let saved: crypto::KeyEnvelope = self
+            .inner
+            .account
+            .json_for(
+                user,
+                Method::PUT,
+                "api/sync/v2/keys",
+                Some(serde_json::to_value(next).map_err(CommandError::database)?),
+            )
+            .await?;
+        self.local(move |r| r.save_key(&key, &saved, &password))
+            .await
+    }
+    pub async fn preview(&self) -> Result<Value, CommandError> {
+        let _lock = self.inner.operation.lock().await;
+        let (snapshot, items) = self.download_snapshot().await?;
+        let (generation,local_count)=self.local(|r| {
+            let mut c=r.database.connect()?;let tx=c.transaction().map_err(CommandError::database)?;
+            let generation:i64=tx.query_row("SELECT next_generation FROM realtime_state WHERE id=1",[],|r|r.get(0)).map_err(CommandError::database)?;
+            let count:i64=tx.query_row("SELECT (SELECT count(*) FROM groups)+(SELECT count(*) FROM profiles)+(SELECT count(*) FROM vault)+(SELECT count(*) FROM snippets)",[],|r|r.get(0)).map_err(CommandError::database)?;
+            tx.commit().map_err(CommandError::database)?;Ok((generation,count))
+        }).await?;
+        let token = uuid::Uuid::new_v4().to_string();
+        let cloud_count = items.iter().filter(|i| !i.deleted).count();
+        let preview = Preview {
+            generation,
+            seq: snapshot["seq"].as_i64().unwrap_or(0),
+            epoch: snapshot["epoch"].as_i64().unwrap_or(1),
+            items,
+        };
+        let mut previews = self
+            .inner
+            .previews
+            .lock()
+            .map_err(|_| CommandError::new("SYNC_BUSY", "接入状态不可用"))?;
+        previews.clear();
+        previews.insert(token.clone(), preview);
+        Ok(json!({"token":token,"localCount":local_count,"cloudCount":cloud_count}))
+    }
+    async fn download_snapshot(&self) -> Result<(Value, Vec<Item>), CommandError> {
+        let snapshot: Value = self
+            .inner
+            .account
+            .json_for(
+                self.inner.user,
+                Method::POST,
+                "api/sync/v2/snapshots",
+                Some(json!({})),
+            )
+            .await?;
+        let id = snapshot["snapshotId"]
+            .as_str()
+            .ok_or_else(|| CommandError::new("SYNC_PROTOCOL", "快照响应无效"))?;
+        let mut offset = 0;
+        let mut items = Vec::new();
+        loop {
+            let page: Value = self
+                .inner
+                .account
+                .json_for(
+                    self.inner.user,
+                    Method::GET,
+                    &format!("api/sync/v2/snapshots/{id}?offset={offset}"),
+                    None,
+                )
+                .await?;
+            let mut values: Vec<Item> =
+                serde_json::from_value(page["items"].clone()).map_err(CommandError::database)?;
+            if values.iter().any(|item| item.key_version != 1) {
+                return Err(CommandError::new("SYNC_PROTOCOL", "条目密钥版本暂不支持"));
+            }
+            items.append(&mut values);
+            if page["hasMore"] != true {
+                break;
+            }
+            offset = page["offset"]
+                .as_i64()
+                .ok_or_else(|| CommandError::new("SYNC_PROTOCOL", "快照分页无效"))?;
+        }
+        Ok((snapshot, items))
+    }
+    async fn recover_snapshot(&self, key: &[u8; 32]) -> Result<(), CommandError> {
+        let (head, items) = self.download_snapshot().await?;
+        let epoch = head["epoch"]
+            .as_i64()
+            .ok_or_else(|| CommandError::new("SYNC_PROTOCOL", "数据代次无效"))?;
+        let seq = head["seq"]
+            .as_i64()
+            .ok_or_else(|| CommandError::new("SYNC_PROTOCOL", "云端水位无效"))?;
+        let batch = Batch {
+            request_id: "recovery".into(),
+            seq,
+            epoch,
+            items,
+        };
+        let key = Zeroizing::new(*key);
+        let user = self.inner.user;
+        self.local(move |r| r.rebase_snapshot(&batch, &key, user))
+            .await?;
+        self.emit_async().await;
+        Ok(())
+    }
+    pub async fn bootstrap(&self, token: &str, mode: &str) -> Result<(), CommandError> {
+        if !matches!(mode, "merge" | "use_local" | "use_cloud") {
+            return Err(CommandError::new(
+                "INVALID_CHOICE",
+                "请选择合并、本地或云端",
+            ));
+        }
+        let _lock = self.inner.operation.lock().await;
+        let preview = self
+            .inner
+            .previews
+            .lock()
+            .map_err(|_| CommandError::new("SYNC_BUSY", "接入状态不可用"))?
+            .remove(token)
+            .ok_or_else(|| CommandError::new("PREVIEW_EXPIRED", "请重新预览"))?;
+        let key = self
+            .local(|r| r.key())
+            .await?
+            .ok_or_else(|| CommandError::new("SYNC_LOCKED", "请先解锁"))?;
+        let state: Value = self
+            .inner
+            .account
+            .json_for(
+                self.inner.user,
+                Method::GET,
+                "api/sync/v2/capabilities",
+                None,
+            )
+            .await?;
+        if state["seq"].as_i64() != Some(preview.seq)
+            || state["epoch"].as_i64() != Some(preview.epoch)
+        {
+            return Err(CommandError::new(
+                "PREVIEW_CHANGED",
+                "云端数据已变化，请重新预览",
+            ));
+        }
+        let batch = Batch {
+            request_id: "initial".into(),
+            seq: preview.seq,
+            epoch: preview.epoch,
+            items: preview.items,
+        };
+        let device = self.inner.device.clone();
+        let user = self.inner.user;
+        let mode = mode.to_owned();
+        self.local(move |r| {
+            if mode == "use_local" {
+                r.prepare_local_replace(&batch, preview.generation, &key, user, &device)
+            } else {
+                r.apply_initial(&batch, &key, user, preview.generation, mode == "use_cloud")
+            }
+        })
+        .await?;
+        self.retry_now();
+        self.emit_async().await;
+        Ok(())
+    }
+    pub async fn resolve(
+        &self,
+        kind: &str,
+        id: &str,
+        choice: &str,
+        expected_revision: Option<i64>,
+    ) -> Result<(), CommandError> {
+        let _lock = self.inner.operation.lock().await;
+        let key = self
+            .local(|r| r.key())
+            .await?
+            .ok_or_else(|| CommandError::new("SYNC_LOCKED", "请先解锁"))?;
+        self.pull(&key).await?;
+        let kind = kind.to_owned();
+        let id = id.to_owned();
+        let choice = choice.to_owned();
+        let user = self.inner.user;
+        self.local(move |r| r.resolve(&kind, &id, &choice, expected_revision, &key, user))
+            .await?;
+        self.retry_now();
+        self.emit_async().await;
+        Ok(())
+    }
+    async fn pull(&self, key: &[u8; 32]) -> Result<(), CommandError> {
+        let (mut cursor, epoch, _) = self.local(|r| r.state()).await?;
+        let mut until = 0;
+        loop {
+            let changes: Changes = match self
+                .inner
+                .account
+                .json_for(
+                    self.inner.user,
+                    Method::GET,
+                    &format!("api/sync/v2/changes?after={cursor}&until={until}"),
+                    None,
+                )
+                .await
+            {
+                Ok(v) => v,
+                Err(error) if error.code == "CURSOR_EXPIRED" => {
+                    return self.recover_snapshot(key).await;
+                }
+                Err(error) => return Err(error),
+            };
+            until = changes.until;
+            for batch in changes.batches {
+                if batch.epoch != epoch {
+                    return self.recover_snapshot(key).await;
+                }
+                let owned_key = Zeroizing::new(*key);
+                let user = self.inner.user;
+                self.local(move |r| r.apply_batch(&batch, &owned_key, user))
+                    .await?;
+            }
+            cursor = changes.cursor;
+            self.local(move |r| {
+                r.database
+                    .connect()?
+                    .execute("UPDATE realtime_state SET cursor=?1 WHERE id=1", [cursor])
+                    .map_err(CommandError::database)?;
+                Ok(())
+            })
+            .await?;
+            if !changes.has_more {
+                break;
+            }
+        }
+        Ok(())
+    }
+    async fn ack_async(&self, push: &Push, ids: &[i64]) -> Result<(), CommandError> {
+        let push = push.clone();
+        let ids = ids.to_vec();
+        self.local(move |r| r.ack(&push, &ids)).await
+    }
+    pub(super) async fn sync_once(&self) -> Result<(), CommandError> {
+        let _lock = self.inner.operation.lock().await;
+        if self.inner.user <= 0 {
+            return Ok(());
+        }
+        let (_, _, initialized) = self.local(|r| r.state()).await?;
+        if !initialized {
+            return Ok(());
+        }
+        let key = self
+            .local(|r| r.key())
+            .await?
+            .ok_or_else(|| CommandError::new("SYNC_LOCKED", "请先解锁"))?;
+        self.local(|r| r.set_status("syncing", "")).await?;
+        self.emit_async().await;
+        // Unknown requests are resolved before pulling our own already-committed changes.
+        if let Some((push, ids)) = self.local(|r| r.frozen()).await? {
+            let result: Result<Batch, _> = self
+                .inner
+                .account
+                .json_for(
+                    self.inner.user,
+                    Method::GET,
+                    &format!("api/sync/v2/requests/{}", push.request_id),
+                    None,
+                )
+                .await;
+            match result {
+                Ok(_) => {
+                    self.ack_async(&push, &ids).await?;
+                }
+                Err(e) if e.code == "REQUEST_NOT_FOUND" => {}
+                Err(e) => return Err(e),
+            }
+        }
+        self.pull(&key).await?;
+        let frozen = self.local(|r| r.frozen()).await?;
+        let (push, ids) = if let Some(value) = frozen {
+            value
+        } else {
+            let owned_key = key.clone();
+            let user = self.inner.user;
+            let device = self.inner.device.clone();
+            let Some(value) = self
+                .local(move |r| r.freeze_pending(&owned_key, user, &device))
+                .await?
+            else {
+                self.local(|r| r.set_status("synced", "")).await?;
+                self.emit_async().await;
+                return Ok(());
+            };
+            value
+        };
+        let result: Result<Batch, _> = self
+            .inner
+            .account
+            .json_for(
+                self.inner.user,
+                Method::POST,
+                "api/sync/v2/push",
+                Some(serde_json::to_value(&push).map_err(CommandError::database)?),
+            )
+            .await;
+        match result {
+            Ok(_) => {
+                self.ack_async(&push, &ids).await?;
+                self.pull(&key).await?;
+            }
+            Err(error)
+                if matches!(
+                    error.code,
+                    "ITEM_CONFLICT" | "WATERMARK_CHANGED" | "EPOCH_CHANGED"
+                ) =>
+            {
+                if push.replace {
+                    self.inner
+                        .repository
+                        .database
+                        .connect()?
+                        .execute("UPDATE realtime_state SET initialized=0 WHERE id=1", [])
+                        .map_err(CommandError::database)?;
+                }
+                let request_id = push.request_id.clone();
+                self.local(move |r| r.thaw(&request_id)).await?;
+                self.pull(&key).await?;
+                self.notify_change();
+                return Ok(());
+            }
+            Err(error) => return Err(error),
+        }
+        let pending = self
+            .local(|r| {
+                let pending = r.status()?.pending_count;
+                r.set_status(if pending > 0 { "pending" } else { "synced" }, "")?;
+                Ok(pending)
+            })
+            .await?;
+        self.emit_async().await;
+        if pending > 0 {
+            self.notify_change();
+        }
+        Ok(())
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        account::AccountService,
-        audit::AuditRepository,
-        group::GroupService,
-        infrastructure::database::Database,
-        profile::ProfileService,
-        sync::repository::SyncRepository,
-        vault::{Encryptor, VaultService},
-    };
-
-    fn state() -> (tempfile::TempDir, SyncService) {
-        let directory = tempfile::tempdir().unwrap();
-        let database = Database::initialize(directory.path().join("eizhu.db")).unwrap();
-        let encryptor = Encryptor::load_or_create(directory.path().join("key")).unwrap();
-        let audit = AuditRepository::new(database.clone());
-        let groups = GroupService::new(database.clone());
-        let vault = VaultService::new(database.clone(), encryptor.clone(), audit.clone());
-        let profiles =
-            ProfileService::initialize(database.clone(), encryptor.clone(), vault.clone()).unwrap();
-        let backup = BackupService::new(
-            database.clone(),
-            encryptor.clone(),
-            audit,
-            groups,
-            profiles,
-            vault,
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    #[tokio::test]
+    async fn stopping_a_workspace_joins_blocking_work_and_rejects_late_operations() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = Database::initialize(dir.path().join("db")).unwrap();
+        let encryptor = Encryptor::load_or_create(dir.path().join("key")).unwrap();
+        let account = AccountService::initialize(db.clone(), encryptor.clone()).unwrap();
+        let state = SyncService::new(db, encryptor, account, 1, "device".into(), Arc::new(|_| {}));
+        let started = Arc::new(tokio::sync::Notify::new());
+        let signal = started.clone();
+        let (release, wait) = std::sync::mpsc::channel();
+        let owned = state.clone();
+        let work = tokio::spawn(async move {
+            owned
+                .local(move |_| {
+                    signal.notify_one();
+                    wait.recv().unwrap();
+                    Ok(())
+                })
+                .await
+        });
+        started.notified().await;
+        let owned = state.clone();
+        let mut stopping = tokio::spawn(async move { owned.stop().await });
+        assert!(
+            tokio::time::timeout(std::time::Duration::from_millis(50), &mut stopping)
+                .await
+                .is_err()
         );
-        let repository = SyncRepository::new(database.clone(), encryptor.clone());
-        let account = AccountService::initialize(database, encryptor, repository.clone()).unwrap();
-        let state = SyncService::initialize(
-            repository,
-            backup,
-            directory.path().join("backups"),
-            account,
+        release.send(()).unwrap();
+        work.await.unwrap().unwrap();
+        stopping.await.unwrap();
+        assert_eq!(
+            state.local(|r| r.status()).await.err().unwrap().code,
+            "WORKSPACE_CHANGED"
+        );
+    }
+
+    #[tokio::test]
+    async fn committed_request_with_lost_response_is_recovered_without_losing_a_later_edit() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let committed = Arc::new(Mutex::new(Vec::<Value>::new()));
+        let records = committed.clone();
+        let server = tokio::spawn(async move {
+            loop {
+                let (mut stream, _) = listener.accept().await.unwrap();
+                let records = records.clone();
+                tokio::spawn(async move {
+                    let mut raw = Vec::new();
+                    let mut buffer = [0u8; 4096];
+                    let header_end;
+                    loop {
+                        let n = stream.read(&mut buffer).await.unwrap();
+                        if n == 0 {
+                            return;
+                        }
+                        raw.extend_from_slice(&buffer[..n]);
+                        if let Some(end) = raw.windows(4).position(|w| w == b"\r\n\r\n") {
+                            header_end = end + 4;
+                            break;
+                        }
+                    }
+                    let headers = String::from_utf8_lossy(&raw[..header_end]);
+                    let path = headers
+                        .lines()
+                        .next()
+                        .unwrap()
+                        .split_whitespace()
+                        .nth(1)
+                        .unwrap()
+                        .to_owned();
+                    let length = headers
+                        .lines()
+                        .find_map(|line| {
+                            line.to_ascii_lowercase()
+                                .strip_prefix("content-length:")
+                                .and_then(|v| v.trim().parse::<usize>().ok())
+                        })
+                        .unwrap_or(0);
+                    while raw.len() < header_end + length {
+                        let n = stream.read(&mut buffer).await.unwrap();
+                        if n == 0 {
+                            return;
+                        }
+                        raw.extend_from_slice(&buffer[..n]);
+                    }
+                    let request: Value = if length > 0 {
+                        serde_json::from_slice(&raw[header_end..header_end + length]).unwrap()
+                    } else {
+                        Value::Null
+                    };
+                    let mut code = "200 OK";
+                    let response = if path == "/api/auth/login" {
+                        json!({"accessToken":"test-access","refreshToken":"test-refresh","expiresIn":1800,"user":{"id":1,"email":"test@eizhu","storageUsed":0,"storageQuota":1000000}})
+                    } else if path.starts_with("/api/sync/v2/requests/") {
+                        let id = path.rsplit('/').next().unwrap();
+                        let saved = records
+                            .lock()
+                            .unwrap()
+                            .iter()
+                            .find(|v| v["requestId"] == id)
+                            .cloned();
+                        match saved {
+                            Some(value) => value,
+                            None => {
+                                code = "404 Not Found";
+                                json!({"code":"REQUEST_NOT_FOUND"})
+                            }
+                        }
+                    } else if path.starts_with("/api/sync/v2/changes") {
+                        let seq = records.lock().unwrap().len();
+                        json!({"batches":records.lock().unwrap().clone(),"cursor":seq,"until":seq,"hasMore":false})
+                    } else if path == "/api/sync/v2/push" {
+                        let mut records = records.lock().unwrap();
+                        let seq = records.len() + 1;
+                        let result = json!({"requestId":request["requestId"],"seq":seq,"epoch":1,"items":request["items"]});
+                        records.push(result.clone());
+                        if seq == 1 {
+                            return;
+                        }
+                        result
+                    } else {
+                        panic!("unexpected test request: {path}")
+                    };
+                    let body = response.to_string();
+                    let header=format!("HTTP/1.1 {code}\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n",body.len());
+                    stream.write_all(header.as_bytes()).await.unwrap();
+                    stream.write_all(body.as_bytes()).await.unwrap();
+                });
+            }
+        });
+        let directory = tempfile::tempdir().unwrap();
+        let db = Database::initialize(directory.path().join("db")).unwrap();
+        let encryptor = Encryptor::load_or_create(directory.path().join("key")).unwrap();
+        let capture = encryptor.clone();
+        db.configure_capture(move |value| capture.encrypt(value).map_err(|e| e.to_string()));
+        let account = AccountService::with_server(
+            db.clone(),
+            encryptor.clone(),
+            &format!("http://{address}"),
         )
         .unwrap();
-        (directory, state)
-    }
-
-    #[test]
-    fn settings_password_is_encrypted_preserved_and_hidden() {
-        let (_directory, state) = state();
-        let mut settings = SyncSettings::default();
-        settings.sync_password = "secret-password".into();
-        state.save_settings(settings).unwrap();
-        assert!(state.get_settings().unwrap().sync_password.is_empty());
-        assert!(state.get_settings().unwrap().sync_password_set);
-        assert_eq!(state.reveal_password().unwrap(), "secret-password");
-
-        let mut update = state.get_settings().unwrap();
-        update.local_keep_versions = 7;
-        state.save_settings(update).unwrap();
-        assert_eq!(state.reveal_password().unwrap(), "secret-password");
-    }
-
-    #[test]
-    fn create_deduplicates_and_restore_verifies_hash() {
-        let (_directory, state) = state();
-        let mut settings = SyncSettings::default();
-        settings.sync_password = "secret-password".into();
-        state.save_settings(settings).unwrap();
-        let first = state.create_version(ORIGIN_MANUAL).unwrap().unwrap();
-        assert_eq!(first.version, 1);
-        assert!(state.create_version(ORIGIN_MANUAL).unwrap().is_none());
-        assert!(Path::new(&first.file_path).exists());
-        assert!(state.restore_version(&first.id).unwrap().is_none());
-
-        std::fs::write(&first.file_path, b"corrupt").unwrap();
-        assert!(state.restore_version(&first.id).is_err());
-    }
-
-    #[test]
-    fn unsynced_versions_require_force_to_delete() {
-        let (_directory, state) = state();
-        let mut settings = SyncSettings::default();
-        settings.sync_password = "secret-password".into();
-        state.save_settings(settings).unwrap();
-        let version = state.create_version(ORIGIN_MANUAL).unwrap().unwrap();
-        assert_eq!(
-            state.delete_version(&version.id, false).unwrap_err().code,
-            "DELETE_FAILED"
+        account.login("test@eizhu", "password").await.unwrap();
+        let sync = SyncService::new(
+            db.clone(),
+            encryptor,
+            account,
+            1,
+            uuid::Uuid::new_v4().to_string(),
+            Arc::new(|_| {}),
         );
-        state.delete_version(&version.id, true).unwrap();
-        assert!(state.list_versions().unwrap().is_empty());
-    }
-
-    #[test]
-    fn operation_coordinator_rejects_overlapping_mutations() {
-        let (_directory, state) = state();
-        let _operation = state.inner.operation.try_enter().unwrap();
+        let envelope = crypto::KeyEnvelope {
+            salt: String::new(),
+            time: 3,
+            memory: 65536,
+            threads: 2,
+            wrapped_key: String::new(),
+            version: 1,
+            revision: 1,
+        };
+        sync.inner
+            .repository
+            .save_key(&[8; 32], &envelope, "password")
+            .unwrap();
+        db.connect()
+            .unwrap()
+            .execute("UPDATE realtime_state SET initialized=1 WHERE id=1", [])
+            .unwrap();
+        db.connect()
+            .unwrap()
+            .execute(
+                "INSERT INTO groups(id,name) VALUES('server-group','first')",
+                [],
+            )
+            .unwrap();
+        assert!(sync.sync_once().await.is_err());
+        assert_eq!(committed.lock().unwrap().len(), 1);
+        db.connect()
+            .unwrap()
+            .execute(
+                "UPDATE groups SET name='second' WHERE id='server-group'",
+                [],
+            )
+            .unwrap();
+        sync.sync_once().await.unwrap();
+        assert_eq!(committed.lock().unwrap().len(), 2);
+        assert_eq!(sync.status().unwrap().pending_count, 0);
         assert_eq!(
-            state.create_version(ORIGIN_MANUAL).unwrap_err().code,
-            "SYNC_IN_PROGRESS"
+            sync.inner
+                .repository
+                .revision("group", "server-group")
+                .unwrap(),
+            2
         );
-    }
-
-    #[test]
-    fn scheduler_requests_report_when_runtime_is_stopped() {
-        let (_directory, state) = state();
-        assert_eq!(
-            state.request_sync().unwrap_err().code,
-            "SYNC_SCHEDULER_STOPPED"
-        );
-    }
-
-    #[test]
-    fn scheduler_starts_without_an_entered_runtime() {
-        let (_directory, state) = state();
-        let runtime = tokio::runtime::Runtime::new().unwrap();
-
-        state.start_scheduler(runtime.handle()).unwrap();
-        runtime.block_on(state.stop_scheduler());
-    }
-
-    #[test]
-    fn validation_matches_go_contract() {
-        let mut settings = SyncSettings::default();
-        settings.change_debounce_seconds = 1;
-        validate_settings(&mut settings).unwrap();
-        assert_eq!(settings.change_debounce_seconds, 5);
-        settings.sync_mode = "invalid".into();
-        assert_eq!(
-            validate_settings(&mut settings).unwrap_err().code,
-            "INVALID_SETTINGS"
-        );
+        let c = db.connect().unwrap();
+        let name: String = c
+            .query_row("SELECT name FROM groups WHERE id='server-group'", [], |r| {
+                r.get(0)
+            })
+            .unwrap();
+        assert_eq!(name, "second");
+        server.abort();
     }
 }

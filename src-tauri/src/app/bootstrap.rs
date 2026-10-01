@@ -1,6 +1,8 @@
 //! Tauri application composition root.
 
-use crate::{account, backup, commands, profile, sftp, ssh, sync, vault};
+#[cfg(desktop)]
+use crate::vault;
+use crate::{account, commands};
 
 #[cfg(desktop)]
 use crate::infrastructure::platform::desktop;
@@ -114,6 +116,23 @@ pub(crate) fn run() {
                 commands::backup_preview,
                 commands::backup_import,
                 commands::sync_status,
+                commands::backup_status,
+                commands::backup_backup_now,
+                commands::backup_versions,
+                commands::backup_restore_version,
+                commands::backup_preview_version,
+                commands::backup_apply_restore,
+                commands::backup_safety_versions,
+                commands::backup_cloud_versions,
+                commands::backup_preview_cloud,
+                commands::backup_preview_legacy_account,
+                commands::backup_preview_safety,
+                commands::backup_delete_version,
+                commands::backup_events,
+                commands::backup_get_settings,
+                commands::backup_update_settings,
+                commands::backup_reveal_password,
+                commands::backup_shutdown,
                 commands::sync_backup_now,
                 commands::sync_versions,
                 commands::sync_restore_version,
@@ -122,16 +141,33 @@ pub(crate) fn run() {
                 commands::sync_get_settings,
                 commands::sync_update_settings,
                 commands::sync_reveal_password,
-                commands::sync_shutdown,
-                commands::sync_now,
                 commands::sync_push,
-                commands::sync_resolve_conflict,
                 commands::sync_providers,
                 commands::sync_create_provider,
                 commands::sync_update_provider,
                 commands::sync_delete_provider,
                 commands::sync_test_provider,
                 commands::sync_oauth_url,
+                commands::sync_shutdown,
+                commands::backup_submit_latest,
+                commands::backup_push,
+                commands::backup_legacy_resolve_conflict,
+                commands::backup_targets,
+                commands::backup_create_provider,
+                commands::backup_update_provider,
+                commands::backup_delete_provider,
+                commands::backup_test_provider,
+                commands::backup_oauth_url,
+                commands::sync_unlock,
+                commands::sync_change_password,
+                commands::sync_conflicts,
+                commands::sync_preview,
+                commands::sync_bootstrap,
+                commands::workspace_status,
+                commands::workspace_import_local,
+                commands::workspace_activate,
+                commands::sync_now,
+                commands::sync_resolve_conflict,
                 commands::account_status,
                 commands::account_login,
                 commands::account_register,
@@ -156,55 +192,31 @@ pub(crate) fn run() {
                     &data_dir.join("key"),
                 )
                 .map_err(|error| std::io::Error::other(error.to_string()))?;
-                let audit = crate::audit::AuditRepository::new(database.clone());
-                let vault =
-                    vault::VaultService::new(database.clone(), encryptor.clone(), audit.clone());
-                let profiles = profile::ProfileService::initialize(
-                    database.clone(),
+                let account = account::AccountService::initialize_metadata(
+                    crate::infrastructure::database::Database::initialize(
+                        data_dir.join("application.db"),
+                    )?,
                     encryptor.clone(),
-                    vault.clone(),
+                    database.clone(),
                 )?;
-                let groups = crate::group::GroupService::new(database.clone());
-                let backup = backup::BackupService::new(
-                    database.clone(),
-                    encryptor.clone(),
-                    audit.clone(),
-                    groups.clone(),
-                    profiles.clone(),
-                    vault.clone(),
-                );
-                let sync_repository =
-                    sync::SyncRepository::new(database.clone(), encryptor.clone());
-                let account = account::AccountService::initialize(
-                    database.clone(),
-                    encryptor.clone(),
-                    sync_repository.clone(),
-                )?;
-                let sync = sync::SyncService::initialize(
-                    sync_repository,
-                    backup.clone(),
-                    data_dir.join("backups"),
+                let workspace = super::WorkspaceManager::new(
+                    data_dir.clone(),
+                    database,
+                    encryptor,
                     account.clone(),
+                    app.handle().clone(),
                 )?;
-                let runtime = tauri::async_runtime::handle();
-                sync.start_scheduler(runtime.inner())?;
-                install_oauth_deep_links(app, &sync)?;
-                let events = std::sync::Arc::new(super::TauriEventSink::new(app.handle().clone()));
-                let sessions =
-                    ssh::SshService::new(profiles.clone(), audit.clone(), events.clone());
-                let sftp = sftp::SftpService::new(profiles.clone(), audit.clone(), events);
-                app.manage(crate::snippet::SnippetService::new(database.clone()));
+                install_oauth_deep_links(app, &workspace)?;
+                if tauri::async_runtime::block_on(account.status())?.logged_in {
+                    if let Err(error) = tauri::async_runtime::block_on(workspace.activate_account())
+                    {
+                        super::log_runtime_error("workspace_activation_failed", &error.to_string());
+                    }
+                }
                 app.manage(super::LifecycleCoordinator::new());
                 app.manage(document_gateway);
-                app.manage(groups);
-                app.manage(vault);
-                app.manage(profiles);
-                app.manage(backup);
                 app.manage(account);
-                app.manage(sync);
-                app.manage(sessions);
-                app.manage(sftp);
-                app.manage(audit);
+                app.manage(workspace);
                 Ok(())
             })
             .run(tauri::generate_context!())
@@ -340,6 +352,23 @@ fn desktop_run() {
             commands::server_get_info,
             commands::server_get_metrics,
             commands::sync_status,
+            commands::backup_status,
+            commands::backup_backup_now,
+            commands::backup_versions,
+            commands::backup_restore_version,
+            commands::backup_preview_version,
+            commands::backup_apply_restore,
+            commands::backup_safety_versions,
+            commands::backup_cloud_versions,
+            commands::backup_preview_cloud,
+            commands::backup_preview_legacy_account,
+            commands::backup_preview_safety,
+            commands::backup_delete_version,
+            commands::backup_events,
+            commands::backup_get_settings,
+            commands::backup_update_settings,
+            commands::backup_reveal_password,
+            commands::backup_shutdown,
             commands::sync_backup_now,
             commands::sync_versions,
             commands::sync_restore_version,
@@ -348,16 +377,33 @@ fn desktop_run() {
             commands::sync_get_settings,
             commands::sync_update_settings,
             commands::sync_reveal_password,
-            commands::sync_shutdown,
-            commands::sync_now,
             commands::sync_push,
-            commands::sync_resolve_conflict,
             commands::sync_providers,
             commands::sync_create_provider,
             commands::sync_update_provider,
             commands::sync_delete_provider,
             commands::sync_test_provider,
             commands::sync_oauth_url,
+            commands::sync_shutdown,
+            commands::backup_submit_latest,
+            commands::backup_push,
+            commands::backup_legacy_resolve_conflict,
+            commands::backup_targets,
+            commands::backup_create_provider,
+            commands::backup_update_provider,
+            commands::backup_delete_provider,
+            commands::backup_test_provider,
+            commands::backup_oauth_url,
+            commands::sync_unlock,
+            commands::sync_change_password,
+            commands::sync_conflicts,
+            commands::sync_preview,
+            commands::sync_bootstrap,
+            commands::workspace_status,
+            commands::workspace_import_local,
+            commands::workspace_activate,
+            commands::sync_now,
+            commands::sync_resolve_conflict,
             commands::account_status,
             commands::account_login,
             commands::account_register,
@@ -378,53 +424,28 @@ fn desktop_run() {
                     .map_err(|error| std::io::Error::other(error.to_string()))?;
             let encryptor = vault::Encryptor::load_or_create(data_dir.join("key"))
                 .map_err(|error| std::io::Error::other(error.to_string()))?;
-            let audit = crate::audit::AuditRepository::new(database.clone());
-            let vault =
-                vault::VaultService::new(database.clone(), encryptor.clone(), audit.clone());
-            let profiles = profile::ProfileService::initialize(
-                database.clone(),
+            let account = account::AccountService::initialize_metadata(
+                crate::infrastructure::database::Database::initialize(
+                    data_dir.join("application.db"),
+                )?,
                 encryptor.clone(),
-                vault.clone(),
+                database.clone(),
             )?;
-            let groups = crate::group::GroupService::new(database.clone());
-            let backup = backup::BackupService::new(
-                database.clone(),
-                encryptor.clone(),
-                audit.clone(),
-                groups.clone(),
-                profiles.clone(),
-                vault.clone(),
-            );
-            let sync_repository = sync::SyncRepository::new(database.clone(), encryptor.clone());
-            let account = account::AccountService::initialize(
-                database.clone(),
-                encryptor.clone(),
-                sync_repository.clone(),
-            )?;
-            let sync = sync::SyncService::initialize(
-                sync_repository,
-                backup.clone(),
-                data_dir.join("backups"),
+            let workspace = super::WorkspaceManager::new(
+                data_dir.clone(),
+                database,
+                encryptor,
                 account.clone(),
+                app.handle().clone(),
             )?;
-            let runtime = tauri::async_runtime::handle();
-            sync.start_scheduler(runtime.inner())?;
-            install_oauth_deep_links(app, &sync)?;
-            let events = std::sync::Arc::new(super::TauriEventSink::new(app.handle().clone()));
-            let sessions = ssh::SshService::new(profiles.clone(), audit.clone(), events.clone());
-            let sftp = sftp::SftpService::new(profiles.clone(), audit.clone(), events);
-            app.manage(crate::snippet::SnippetService::new(database.clone()));
+            install_oauth_deep_links(app, &workspace)?;
+            if tauri::async_runtime::block_on(account.status())?.logged_in {
+                tauri::async_runtime::block_on(workspace.activate_account())?;
+            }
             app.manage(super::LifecycleCoordinator::new());
             app.manage(document_gateway);
-            app.manage(groups);
-            app.manage(vault);
-            app.manage(profiles);
-            app.manage(backup);
             app.manage(account);
-            app.manage(sync);
-            app.manage(sessions);
-            app.manage(sftp);
-            app.manage(audit);
+            app.manage(workspace);
             desktop::sweep_stale_drag_temps();
             if smoke {
                 let handle = app.handle().clone();
@@ -443,22 +464,18 @@ fn desktop_run() {
         .expect("error while building tauri application")
         .run(|app_handle, event| {
             if let tauri::RunEvent::ExitRequested { .. } = event {
-                let sync = app_handle.state::<sync::SyncService>().inner().clone();
-                let sessions = app_handle.state::<ssh::SshService>().inner().clone();
-                let sftp = app_handle.state::<sftp::SftpService>().inner().clone();
-                tauri::async_runtime::block_on(async {
-                    sessions.shutdown().await;
-                    sftp.shutdown().await;
-                    sync.stop_scheduler().await;
-                    sync.shutdown_backup().await;
-                });
+                let workspace = app_handle
+                    .state::<super::WorkspaceManager>()
+                    .inner()
+                    .clone();
+                tauri::async_runtime::block_on(workspace.shutdown());
             }
         });
 }
 
 fn install_oauth_deep_links<R: tauri::Runtime>(
     app: &tauri::App<R>,
-    sync: &sync::SyncService,
+    sync: &super::WorkspaceManager,
 ) -> Result<(), Box<dyn std::error::Error>> {
     use tauri::Emitter;
     use tauri_plugin_deep_link::DeepLinkExt;
@@ -477,7 +494,8 @@ fn install_oauth_deep_links<R: tauri::Runtime>(
             let handle = handle.clone();
             let state = state.clone();
             tauri::async_runtime::spawn(async move {
-                let result = state.complete_oauth_url(&raw).await;
+                let result =
+                    async { state.current(None)?.archive.complete_oauth_url(&raw).await }.await;
                 let payload = match result {
                     Ok(provider_id) => serde_json::json!({
                         "ok": true,
@@ -488,7 +506,7 @@ fn install_oauth_deep_links<R: tauri::Runtime>(
                         "error": error.message,
                     }),
                 };
-                let _ = handle.emit("sync-oauth-complete", payload);
+                let _ = handle.emit("backup-oauth-complete", payload);
             });
         }
     });
@@ -500,9 +518,10 @@ fn install_oauth_deep_links<R: tauri::Runtime>(
                 let handle = app.handle().clone();
                 let state = sync.clone();
                 tauri::async_runtime::spawn(async move {
-                    let result = state.complete_oauth_url(&raw).await;
+                    let result =
+                        async { state.current(None)?.archive.complete_oauth_url(&raw).await }.await;
                     let _ = handle.emit(
-                        "sync-oauth-complete",
+                        "backup-oauth-complete",
                         match result {
                             Ok(provider_id) => {
                                 serde_json::json!({"ok": true, "provider_id": provider_id})

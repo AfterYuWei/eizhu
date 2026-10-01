@@ -5,6 +5,7 @@ use rusqlite::Connection;
 use crate::infrastructure::database::StorageError;
 
 pub(super) fn migrate(connection: &Connection) -> Result<(), StorageError> {
+    connection.query_row("SELECT eizhu_capture_enabled(0)", [], |_| Ok(()))?;
     connection.execute_batch(
         "PRAGMA journal_mode = WAL;\
              CREATE TABLE IF NOT EXISTS groups (\
@@ -139,6 +140,8 @@ pub(super) fn migrate(connection: &Connection) -> Result<(), StorageError> {
         "UPDATE vault SET updated_at=created_at WHERE updated_at IS NULL",
         [],
     )?;
+    super::sync_migration::migrate(connection)?;
+    connection.query_row("SELECT eizhu_capture_enabled(1)", [], |_| Ok(()))?;
     Ok(())
 }
 

@@ -42,7 +42,9 @@ Rust 入口在 `src-tauri/src/lib.rs`，`app/bootstrap.rs` 按顺序初始化 SQ
 - `commands/`：全部 Tauri IPC adapter；不执行 SQL、加密或底层 SSH/SFTP 流程。
 - `infrastructure/database/`：SQLite schema、兼容迁移、WAL 与 busy timeout。
 - `profile/`、`vault/`、`group/`、`snippet/`、`audit/`：本地 feature 与各自 repository。
-- `backup/`、`sync/`：备份 aggregate、云 provider、OAuth 与 tracked scheduler。
+- `backup/`：完整版本和隔离恢复；`backup/archive/`：第三方/官方对象备份、OAuth 与独立调度。
+- `sync/`：账号条目加密、事务队列、实时提交、SSE、差异与冲突。
+- `app/workspace.rs`：账号空间隔离、装配和任务退出，协议与数据迁移见 `docs/DATA_SYNC.md`。
 - `ssh/transport.rs`：直连、SOCKS5、HTTP CONNECT、SSH jump 与认证。
 - `ssh/session.rs`、`session_manager.rs`：PTY、终端 I/O、补全、host-key 与生命周期。
 - `sftp/`：会话、文件操作、编辑、上传下载与跨会话传输。
@@ -58,7 +60,7 @@ React 的领域 API 位于 `web/src/api/`，统一使用 `invokeCommand`；实�
 ## 数据与安全
 
 数据保存在系统的 `eizhu` 用户目录：SQLite 数据库为
-`eizhu.db`，主密钥为 `key`。凭据只在 Rust 内存中解密，连接配置解析结构在析构时清零。
+`eizhu.db`，主密钥为 `key`。账号空间有独立数据库、设备密钥和备份目录；原库作为本地空间保留，认证元数据位于 `application.db`。凭据只在 Rust 内存中解密，连接配置解析结构在析构时清零。
 SSH 主机密钥以 SHA-256 指纹验证；未知指纹在成功连接后保存，变化时要求用户确认。
 
 ## 前端约定

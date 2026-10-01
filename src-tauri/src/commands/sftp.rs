@@ -6,35 +6,55 @@ use crate::{error::CommandError, sftp};
 
 #[tauri::command]
 pub(crate) async fn sftp_create_session(
-    service: State<'_, sftp::SftpService>,
+    service_workspace: State<'_, crate::app::WorkspaceManager>,
     profile_id: String,
+    workspace_generation: Option<u64>,
 ) -> Result<sftp::SftpCreateSessionResponse, CommandError> {
-    sftp::create_session(service.inner(), profile_id).await
+    let service = service_workspace
+        .current(workspace_generation)?
+        .sftp
+        .clone();
+    sftp::create_session(&service, profile_id).await
 }
 
 #[tauri::command]
 pub(crate) async fn sftp_get_session(
-    service: State<'_, sftp::SftpService>,
+    service_workspace: State<'_, crate::app::WorkspaceManager>,
     id: String,
+    workspace_generation: Option<u64>,
 ) -> Result<sftp::SftpSessionInfo, CommandError> {
-    sftp::get_session(service.inner(), id).await
+    let service = service_workspace
+        .current(workspace_generation)?
+        .sftp
+        .clone();
+    sftp::get_session(&service, id).await
 }
 
 #[tauri::command]
 pub(crate) async fn sftp_reconnect_session(
-    service: State<'_, sftp::SftpService>,
+    service_workspace: State<'_, crate::app::WorkspaceManager>,
     id: String,
+    workspace_generation: Option<u64>,
 ) -> Result<sftp::SftpCreateSessionResponse, CommandError> {
+    let service = service_workspace
+        .current(workspace_generation)?
+        .sftp
+        .clone();
     service.reconnect(&id).await
 }
 
 #[tauri::command]
 pub(crate) async fn sftp_host_key_decide(
-    service: State<'_, sftp::SftpService>,
+    service_workspace: State<'_, crate::app::WorkspaceManager>,
     request_id: String,
     fingerprint: String,
     decision: String,
+    workspace_generation: Option<u64>,
 ) -> Result<serde_json::Value, CommandError> {
+    let service = service_workspace
+        .current(workspace_generation)?
+        .sftp
+        .clone();
     service
         .decide_host_key(&request_id, fingerprint, &decision)
         .await
@@ -42,112 +62,179 @@ pub(crate) async fn sftp_host_key_decide(
 
 #[tauri::command]
 pub(crate) async fn sftp_list_sessions(
-    service: State<'_, sftp::SftpService>,
+    service_workspace: State<'_, crate::app::WorkspaceManager>,
+    workspace_generation: Option<u64>,
 ) -> Result<Vec<sftp::SftpSessionInfo>, CommandError> {
-    sftp::list_sessions(service.inner()).await
+    let service = service_workspace
+        .current(workspace_generation)?
+        .sftp
+        .clone();
+    sftp::list_sessions(&service).await
 }
 
 #[tauri::command]
 pub(crate) async fn sftp_close_session(
-    service: State<'_, sftp::SftpService>,
+    service_workspace: State<'_, crate::app::WorkspaceManager>,
     id: String,
+    workspace_generation: Option<u64>,
 ) -> Result<(), CommandError> {
-    sftp::close_session(service.inner(), id).await
+    let service = service_workspace
+        .current(workspace_generation)?
+        .sftp
+        .clone();
+    sftp::close_session(&service, id).await
 }
 
 #[tauri::command]
 pub(crate) async fn sftp_list(
-    service: State<'_, sftp::SftpService>,
+    service_workspace: State<'_, crate::app::WorkspaceManager>,
     session_id: String,
     path: String,
     show_hidden: Option<bool>,
+    workspace_generation: Option<u64>,
 ) -> Result<sftp::SftpListResponse, CommandError> {
-    sftp::list(service.inner(), session_id, path, show_hidden).await
+    let service = service_workspace
+        .current(workspace_generation)?
+        .sftp
+        .clone();
+    sftp::list(&service, session_id, path, show_hidden).await
 }
 
 #[tauri::command]
 pub(crate) async fn sftp_stat(
-    service: State<'_, sftp::SftpService>,
+    service_workspace: State<'_, crate::app::WorkspaceManager>,
     session_id: String,
     path: String,
+    workspace_generation: Option<u64>,
 ) -> Result<sftp::SftpEntry, CommandError> {
-    sftp::stat(service.inner(), session_id, path).await
+    let service = service_workspace
+        .current(workspace_generation)?
+        .sftp
+        .clone();
+    sftp::stat(&service, session_id, path).await
 }
 
 #[tauri::command]
 pub(crate) async fn sftp_tree(
-    service: State<'_, sftp::SftpService>,
+    service_workspace: State<'_, crate::app::WorkspaceManager>,
     session_id: String,
     path: String,
     depth: Option<u32>,
+    workspace_generation: Option<u64>,
 ) -> Result<sftp::SftpTreeResponse, CommandError> {
-    sftp::tree_entries(service.inner(), session_id, path, depth).await
+    let service = service_workspace
+        .current(workspace_generation)?
+        .sftp
+        .clone();
+    sftp::tree_entries(&service, session_id, path, depth).await
 }
 
 #[tauri::command]
 pub(crate) async fn sftp_mkdir(
-    service: State<'_, sftp::SftpService>,
+    service_workspace: State<'_, crate::app::WorkspaceManager>,
     session_id: String,
     path: String,
+    workspace_generation: Option<u64>,
 ) -> Result<sftp::SftpEntry, CommandError> {
-    sftp::mkdir(service.inner(), session_id, path).await
+    let service = service_workspace
+        .current(workspace_generation)?
+        .sftp
+        .clone();
+    sftp::mkdir(&service, session_id, path).await
 }
 
 #[tauri::command]
 pub(crate) async fn sftp_rename(
-    service: State<'_, sftp::SftpService>,
+    service_workspace: State<'_, crate::app::WorkspaceManager>,
     session_id: String,
     old_path: String,
     new_path: String,
+    workspace_generation: Option<u64>,
 ) -> Result<sftp::SftpEntry, CommandError> {
-    sftp::rename(service.inner(), session_id, old_path, new_path).await
+    let service = service_workspace
+        .current(workspace_generation)?
+        .sftp
+        .clone();
+    sftp::rename(&service, session_id, old_path, new_path).await
 }
 
 #[tauri::command]
 pub(crate) async fn sftp_delete(
-    service: State<'_, sftp::SftpService>,
+    service_workspace: State<'_, crate::app::WorkspaceManager>,
     session_id: String,
     paths: Vec<String>,
+    workspace_generation: Option<u64>,
 ) -> Result<sftp::SftpDeleteResponse, CommandError> {
-    sftp::delete(service.inner(), session_id, paths).await
+    let service = service_workspace
+        .current(workspace_generation)?
+        .sftp
+        .clone();
+    sftp::delete(&service, session_id, paths).await
 }
 
 #[tauri::command]
 pub(crate) async fn sftp_read_file(
-    service: State<'_, sftp::SftpService>,
+    service_workspace: State<'_, crate::app::WorkspaceManager>,
     session_id: String,
     path: String,
+    workspace_generation: Option<u64>,
 ) -> Result<sftp::SftpFileReadResponse, CommandError> {
-    sftp::read_file(service.inner(), session_id, path).await
+    let service = service_workspace
+        .current(workspace_generation)?
+        .sftp
+        .clone();
+    sftp::read_file(&service, session_id, path).await
 }
 
 #[tauri::command]
 pub(crate) async fn sftp_write_file(
-    service: State<'_, sftp::SftpService>,
+    service_workspace: State<'_, crate::app::WorkspaceManager>,
     session_id: String,
     path: String,
     request: sftp::SftpFileWriteRequest,
+    workspace_generation: Option<u64>,
 ) -> Result<sftp::SftpFileWriteResponse, CommandError> {
-    sftp::write_file(service.inner(), session_id, path, request).await
+    let service = service_workspace
+        .current(workspace_generation)?
+        .sftp
+        .clone();
+    sftp::write_file(&service, session_id, path, request).await
 }
 
 #[tauri::command]
 pub(crate) async fn sftp_upload_begin(
-    service: State<'_, sftp::SftpService>,
+    service_workspace: State<'_, crate::app::WorkspaceManager>,
     session_id: String,
     name: String,
     dest_dir: String,
     overwrite: bool,
     size: u64,
+    workspace_generation: Option<u64>,
 ) -> Result<sftp::SftpUploadBeginResponse, CommandError> {
-    sftp::sftp_upload_begin(service.inner(), session_id, name, dest_dir, overwrite, size).await
+    let service = service_workspace
+        .current(workspace_generation)?
+        .sftp
+        .clone();
+    sftp::sftp_upload_begin(&service, session_id, name, dest_dir, overwrite, size).await
 }
 
 #[tauri::command]
 pub(crate) async fn sftp_upload_chunk(
-    service: State<'_, sftp::SftpService>,
+    service_workspace: State<'_, crate::app::WorkspaceManager>,
     request: tauri::ipc::Request<'_>,
+    workspace_generation: Option<u64>,
 ) -> Result<sftp::SftpUploadChunkResponse, CommandError> {
+    let workspace_generation = workspace_generation.or_else(|| {
+        request
+            .headers()
+            .get("x-eizhu-workspace-generation")
+            .and_then(|v| v.to_str().ok())
+            .and_then(|v| v.parse().ok())
+    });
+    let service = service_workspace
+        .current(workspace_generation)?
+        .sftp
+        .clone();
     let upload_id = request
         .headers()
         .get("x-eizhu-upload-id")
@@ -159,109 +246,164 @@ pub(crate) async fn sftp_upload_chunk(
             "raw upload chunk is required",
         ));
     };
-    sftp::upload_chunk(service.inner(), upload_id, bytes).await
+    sftp::upload_chunk(&service, upload_id, bytes).await
 }
 
 #[tauri::command]
 pub(crate) async fn sftp_upload_chunk_base64(
-    service: State<'_, sftp::SftpService>,
+    service_workspace: State<'_, crate::app::WorkspaceManager>,
     upload_id: String,
     data: String,
+    workspace_generation: Option<u64>,
 ) -> Result<sftp::SftpUploadChunkResponse, CommandError> {
-    sftp::sftp_upload_chunk_base64(service.inner(), upload_id, data).await
+    let service = service_workspace
+        .current(workspace_generation)?
+        .sftp
+        .clone();
+    sftp::sftp_upload_chunk_base64(&service, upload_id, data).await
 }
 
 #[tauri::command]
 pub(crate) async fn sftp_upload_finish(
-    service: State<'_, sftp::SftpService>,
+    service_workspace: State<'_, crate::app::WorkspaceManager>,
     upload_id: String,
+    workspace_generation: Option<u64>,
 ) -> Result<sftp::SftpUploadResponse, CommandError> {
-    sftp::sftp_upload_finish(service.inner(), upload_id).await
+    let service = service_workspace
+        .current(workspace_generation)?
+        .sftp
+        .clone();
+    sftp::sftp_upload_finish(&service, upload_id).await
 }
 
 #[tauri::command]
 pub(crate) async fn sftp_upload_abort(
-    service: State<'_, sftp::SftpService>,
+    service_workspace: State<'_, crate::app::WorkspaceManager>,
     upload_id: String,
+    workspace_generation: Option<u64>,
 ) -> Result<(), CommandError> {
-    sftp::sftp_upload_abort(service.inner(), upload_id).await
+    let service = service_workspace
+        .current(workspace_generation)?
+        .sftp
+        .clone();
+    sftp::sftp_upload_abort(&service, upload_id).await
 }
 
 #[tauri::command]
 pub(crate) async fn sftp_download(
-    service: State<'_, sftp::SftpService>,
+    service_workspace: State<'_, crate::app::WorkspaceManager>,
     session_id: String,
     paths: Vec<String>,
+    workspace_generation: Option<u64>,
 ) -> Result<sftp::SftpDownloadResponse, CommandError> {
-    sftp::sftp_download(service.inner(), session_id, paths).await
+    let service = service_workspace
+        .current(workspace_generation)?
+        .sftp
+        .clone();
+    sftp::sftp_download(&service, session_id, paths).await
 }
 
 #[tauri::command]
 pub(crate) async fn sftp_download_chunk(
-    service: State<'_, sftp::SftpService>,
+    service_workspace: State<'_, crate::app::WorkspaceManager>,
     task_id: String,
     offset: u64,
     max_bytes: u32,
+    workspace_generation: Option<u64>,
 ) -> Result<tauri::ipc::Response, CommandError> {
-    let bytes = sftp::sftp_download_chunk(service.inner(), task_id, offset, max_bytes).await?;
+    let service = service_workspace
+        .current(workspace_generation)?
+        .sftp
+        .clone();
+    let bytes = sftp::sftp_download_chunk(&service, task_id, offset, max_bytes).await?;
     Ok(tauri::ipc::Response::new(bytes))
 }
 
 #[tauri::command]
 pub(crate) async fn sftp_download_chunk_base64(
-    service: State<'_, sftp::SftpService>,
+    service_workspace: State<'_, crate::app::WorkspaceManager>,
     task_id: String,
     offset: u64,
     max_bytes: u32,
+    workspace_generation: Option<u64>,
 ) -> Result<String, CommandError> {
-    sftp::sftp_download_chunk_base64(service.inner(), task_id, offset, max_bytes).await
+    let service = service_workspace
+        .current(workspace_generation)?
+        .sftp
+        .clone();
+    sftp::sftp_download_chunk_base64(&service, task_id, offset, max_bytes).await
 }
 
 #[tauri::command]
 pub(crate) async fn sftp_download_close(
-    service: State<'_, sftp::SftpService>,
+    service_workspace: State<'_, crate::app::WorkspaceManager>,
     task_id: String,
+    workspace_generation: Option<u64>,
 ) -> Result<(), CommandError> {
-    sftp::sftp_download_close(service.inner(), task_id).await
+    let service = service_workspace
+        .current(workspace_generation)?
+        .sftp
+        .clone();
+    sftp::sftp_download_close(&service, task_id).await
 }
 
 #[tauri::command]
 pub(crate) async fn sftp_list_transfers(
-    service: State<'_, sftp::SftpService>,
+    service_workspace: State<'_, crate::app::WorkspaceManager>,
     session_id: Option<String>,
     status: Option<String>,
+    workspace_generation: Option<u64>,
 ) -> Result<Vec<sftp::TransferTask>, CommandError> {
-    sftp::sftp_list_transfers(service.inner(), session_id, status).await
+    let service = service_workspace
+        .current(workspace_generation)?
+        .sftp
+        .clone();
+    sftp::sftp_list_transfers(&service, session_id, status).await
 }
 
 #[tauri::command]
 pub(crate) async fn sftp_cancel_transfer(
-    service: State<'_, sftp::SftpService>,
+    service_workspace: State<'_, crate::app::WorkspaceManager>,
     task_id: String,
+    workspace_generation: Option<u64>,
 ) -> Result<serde_json::Value, CommandError> {
-    sftp::sftp_cancel_transfer(service.inner(), task_id).await
+    let service = service_workspace
+        .current(workspace_generation)?
+        .sftp
+        .clone();
+    sftp::sftp_cancel_transfer(&service, task_id).await
 }
 
 #[tauri::command]
 pub(crate) async fn sftp_clear_completed_transfers(
-    service: State<'_, sftp::SftpService>,
+    service_workspace: State<'_, crate::app::WorkspaceManager>,
+    workspace_generation: Option<u64>,
 ) -> Result<(), CommandError> {
-    sftp::sftp_clear_completed_transfers(service.inner()).await
+    let service = service_workspace
+        .current(workspace_generation)?
+        .sftp
+        .clone();
+    sftp::sftp_clear_completed_transfers(&service).await
 }
 
 #[tauri::command]
 #[allow(clippy::too_many_arguments)]
 pub(crate) async fn sftp_transfer(
-    service: State<'_, sftp::SftpService>,
+    service_workspace: State<'_, crate::app::WorkspaceManager>,
     source_session_id: String,
     target_session_id: String,
     paths: Vec<String>,
     dest_dir: String,
     conflict_resolution: Option<String>,
     directory_mode: Option<String>,
+    workspace_generation: Option<u64>,
 ) -> Result<sftp::SftpTransferResponse, CommandError> {
+    let service = service_workspace
+        .current(workspace_generation)?
+        .sftp
+        .clone();
     sftp::sftp_transfer(
-        service.inner(),
+        &service,
         source_session_id,
         target_session_id,
         paths,
@@ -274,18 +416,16 @@ pub(crate) async fn sftp_transfer(
 
 #[tauri::command]
 pub(crate) async fn sftp_move(
-    service: State<'_, sftp::SftpService>,
+    service_workspace: State<'_, crate::app::WorkspaceManager>,
     session_id: String,
     paths: Vec<String>,
     dest_dir: String,
     conflict_resolution: Option<String>,
+    workspace_generation: Option<u64>,
 ) -> Result<sftp::SftpMoveResponse, CommandError> {
-    sftp::sftp_move(
-        service.inner(),
-        session_id,
-        paths,
-        dest_dir,
-        conflict_resolution,
-    )
-    .await
+    let service = service_workspace
+        .current(workspace_generation)?
+        .sftp
+        .clone();
+    sftp::sftp_move(&service, session_id, paths, dest_dir, conflict_resolution).await
 }

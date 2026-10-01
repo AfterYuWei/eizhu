@@ -1,3 +1,4 @@
+import { ItemSyncBadge } from '@/components/SyncIndicator'
 import { useRef, useState } from 'react'
 import { animate, motion, useMotionValue, useReducedMotion, useTransform } from 'motion/react'
 import { ChevronRight, Pencil, Trash2 } from 'lucide-react'
@@ -222,7 +223,7 @@ export function HostRow({ profile, status, onConnect, onEdit, onRequestDelete, o
       >
         <span className="m-row-icon"><ServerIcon iconKey={profile.icon} size={17} /></span>
         <span className="m-row-copy">
-          <span className="m-row-name">{profile.name}</span>
+          <span className="m-row-name">{profile.name}<ItemSyncBadge type="profile" id={profile.id} /></span>
           <span className="m-row-meta">{meta}</span>
         </span>
         <span className="m-row-tail">

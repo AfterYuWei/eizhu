@@ -4,7 +4,7 @@ use serde::Serialize;
 use std::sync::Mutex;
 use tauri::{AppHandle, Emitter, Manager, State, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
 
-use crate::{infrastructure::platform::desktop, sftp::SftpService};
+use crate::infrastructure::platform::desktop;
 
 const EDITOR_WINDOW_LABEL: &str = "editor";
 const EDITOR_OPEN_FILE_EVENT: &str = "eizhu-editor-open-file";
@@ -374,12 +374,18 @@ pub(crate) async fn save_blob_to_disk(
 
 #[tauri::command]
 pub(crate) async fn sftp_drag_out(
-    service: State<'_, SftpService>,
+    service_workspace: State<'_, crate::app::WorkspaceManager>,
     source_session_id: String,
     local_session_id: String,
     paths: Vec<String>,
+    workspace_generation: Option<u64>,
 ) -> Result<desktop::DragOutFiles, String> {
-    desktop::materialize_drag(service.inner(), source_session_id, local_session_id, paths)
+    let service = service_workspace
+        .current(workspace_generation)
+        .map_err(|error| error.to_string())?
+        .sftp
+        .clone();
+    desktop::materialize_drag(&service, source_session_id, local_session_id, paths)
         .await
         .map_err(|error| error.to_string())
 }

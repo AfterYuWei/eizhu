@@ -1,3 +1,4 @@
+import { SyncIndicator } from '@/components/SyncIndicator'
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { onBackButtonPress } from '@tauri-apps/api/app'
@@ -213,6 +214,7 @@ export function MobileLayout() {
       role="application"
       aria-label="eizhu 移动端"
     >
+      <SyncIndicator />
       <main className="mobile-main">
         {/* 整页平移跟随 TabBar 轨迹：新页与旧页同向滑动，无淡入淡出（custom 让离场页按最新方向滑出） */}
         <AnimatePresence initial={false} custom={slide.dir}>

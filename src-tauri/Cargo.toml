@@ -25,6 +25,7 @@ custom-protocol = ["tauri/custom-protocol"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
+tempfile = "3"
 tauri = { version = "2", features = [] }
 tauri-plugin-deep-link = "2"
 tauri-plugin-opener = "2"
@@ -38,7 +39,7 @@ base64 = "0.22"
 chrono = { version = "0.4", features = ["clock"] }
 hex = "0.4"
 rand_core = { version = "0.6", features = ["getrandom"] }
-rusqlite = { version = "0.37", features = ["bundled"] }
+rusqlite = { version = "0.37", features = ["bundled", "functions", "hooks"] }
 sha2 = "0.10"
 hmac = "0.12"
 percent-encoding = "2"
@@ -79,9 +80,6 @@ tauri-plugin-session-keepalive = { path = "plugins/session-keepalive" }
 tauri-plugin-document-gateway = { path = "plugins/document-gateway" }
 tauri-plugin-master-key-store = { path = "plugins/master-key-store" }
 tauri-plugin-system-insets = { path = "plugins/system-insets" }
-
-[dev-dependencies]
-tempfile = "3"
 
 [profile.release]
 strip = true

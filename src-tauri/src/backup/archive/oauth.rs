@@ -6,7 +6,7 @@ use zeroize::{Zeroize, ZeroizeOnDrop};
 
 use crate::error::CommandError;
 
-use super::{model::SyncProviderConfig, service::SyncService};
+use super::{model::BackupTargetConfig, service::ArchiveService};
 
 const GDRIVE_AUTH_URL: &str = "https://accounts.google.com/o/oauth2/v2/auth";
 const GDRIVE_TOKEN_URL: &str = "https://oauth2.googleapis.com/token";
@@ -42,7 +42,7 @@ struct TokenResponse {
     error_description: String,
 }
 
-impl SyncService {
+impl ArchiveService {
     pub fn build_oauth_url(
         &self,
         provider_type: &str,
@@ -145,7 +145,7 @@ impl SyncService {
 
 fn build_auth_url(
     provider_type: &str,
-    config: &SyncProviderConfig,
+    config: &BackupTargetConfig,
     state: &str,
 ) -> Result<String, CommandError> {
     let (endpoint, scope) = match provider_type {
@@ -176,7 +176,7 @@ fn build_auth_url(
 async fn exchange_code(
     client: &Client,
     provider_type: &str,
-    config: &SyncProviderConfig,
+    config: &BackupTargetConfig,
     code: &str,
 ) -> Result<OAuthToken, CommandError> {
     token_request(
@@ -196,7 +196,7 @@ async fn exchange_code(
 
 pub async fn refresh_tokens(
     client: &Client,
-    config: &SyncProviderConfig,
+    config: &BackupTargetConfig,
 ) -> Result<OAuthToken, CommandError> {
     token_request(
         client,
@@ -279,7 +279,7 @@ mod tests {
 
     #[test]
     fn auth_url_uses_native_deep_link_and_offline_access() {
-        let mut config = SyncProviderConfig::default();
+        let mut config = BackupTargetConfig::default();
         config.provider_type = "gdrive".into();
         config.name = "Drive".into();
         config.enabled = true;

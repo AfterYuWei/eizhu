@@ -10,9 +10,6 @@ use tauri_plugin_session_keepalive::{KeepaliveRequest, SessionKeepaliveExt};
 use crate::{
     app::{LifecycleCoordinator, LifecycleSnapshot, BACKGROUND_KEEPALIVE_SECONDS},
     error::CommandError,
-    sftp::SftpService,
-    ssh::SshService,
-    sync::SyncService,
 };
 
 #[derive(Debug, Deserialize)]
@@ -53,14 +50,26 @@ pub(crate) fn app_lifecycle_status(
 #[tauri::command]
 pub(crate) async fn app_network_update(
     lifecycle: State<'_, LifecycleCoordinator>,
-    sessions: State<'_, SshService>,
-    sftp: State<'_, SftpService>,
+    sessions_workspace: State<'_, crate::app::WorkspaceManager>,
+    sftp_workspace: State<'_, crate::app::WorkspaceManager>,
     online: bool,
     generation: Option<u64>,
+    workspace_generation: Option<u64>,
 ) -> Result<LifecycleSnapshot, CommandError> {
+    let sessions = sessions_workspace
+        .current(workspace_generation)?
+        .sessions
+        .clone();
+    let sftp = sftp_workspace.current(workspace_generation)?.sftp.clone();
     let before = lifecycle.snapshot(Utc::now().timestamp_millis());
     let snapshot = lifecycle.update_network(online, generation, Utc::now().timestamp_millis());
     log_lifecycle("network_change", &snapshot);
+    if online {
+        sessions_workspace
+            .current(workspace_generation)?
+            .sync
+            .retry_now();
+    }
     if online && !snapshot.expired && snapshot.network_generation != before.network_generation {
         if generation.is_some() {
             sessions.reconnect_active().await?;
@@ -77,9 +86,15 @@ pub(crate) async fn app_network_update(
 pub(crate) async fn app_diagnostics(
     app: AppHandle,
     lifecycle: State<'_, LifecycleCoordinator>,
-    sessions: State<'_, SshService>,
-    sftp: State<'_, SftpService>,
+    sessions_workspace: State<'_, crate::app::WorkspaceManager>,
+    sftp_workspace: State<'_, crate::app::WorkspaceManager>,
+    workspace_generation: Option<u64>,
 ) -> Result<AppDiagnostics, CommandError> {
+    let sessions = sessions_workspace
+        .current(workspace_generation)?
+        .sessions
+        .clone();
+    let sftp = sftp_workspace.current(workspace_generation)?.sftp.clone();
     let native = native_keepalive_status(&app)?;
     let lifecycle = native
         .network_state
@@ -112,23 +127,35 @@ pub(crate) async fn app_diagnostics(
 pub(crate) async fn app_lifecycle_update(
     app: AppHandle,
     lifecycle: State<'_, LifecycleCoordinator>,
-    sessions: State<'_, SshService>,
-    sftp: State<'_, SftpService>,
-    sync: State<'_, SyncService>,
+    sessions_workspace: State<'_, crate::app::WorkspaceManager>,
+    sftp_workspace: State<'_, crate::app::WorkspaceManager>,
+    sync_workspace: State<'_, crate::app::WorkspaceManager>,
     phase: LifecyclePhase,
+    workspace_generation: Option<u64>,
 ) -> Result<LifecycleSnapshot, CommandError> {
+    let sessions = sessions_workspace
+        .current(workspace_generation)?
+        .sessions
+        .clone();
+    let sftp = sftp_workspace.current(workspace_generation)?.sftp.clone();
+    let sync = sync_workspace.current(workspace_generation)?.sync.clone();
     let now = Utc::now().timestamp_millis();
     match phase {
         LifecyclePhase::Background => {
             let active = sessions.active_count().await + sftp.active_count().await;
             let snapshot = lifecycle.enter_background(now, active);
             log_lifecycle("entered_background", &snapshot);
-            sync.stop_scheduler().await;
+            sync.pause(true);
+            sync_workspace
+                .current(workspace_generation)?
+                .archive
+                .stop_scheduler()
+                .await;
             start_native_keepalive(&app, active)?;
 
             let lifecycle = lifecycle.inner().clone();
-            let sessions = sessions.inner().clone();
-            let sftp = sftp.inner().clone();
+            let sessions = sessions.clone();
+            let sftp = sftp.clone();
             let generation = snapshot.generation;
             tauri::async_runtime::spawn(async move {
                 tokio::time::sleep(std::time::Duration::from_secs(BACKGROUND_KEEPALIVE_SECONDS))
@@ -153,7 +180,11 @@ pub(crate) async fn app_lifecycle_update(
             let (snapshot, expired) = lifecycle.enter_foreground(now);
             log_lifecycle("entered_foreground", &snapshot);
             let runtime = tauri::async_runtime::handle();
-            sync.start_scheduler(runtime.inner())?;
+            sync.pause(false);
+            sync_workspace
+                .current(workspace_generation)?
+                .archive
+                .start_scheduler(runtime.inner())?;
             if expired {
                 sessions.reconnect_suspended().await?;
                 sftp.reconnect_suspended().await?;
@@ -173,9 +204,15 @@ pub(crate) async fn app_lifecycle_update(
 pub(crate) async fn app_disconnect_all_sessions(
     app: AppHandle,
     lifecycle: State<'_, LifecycleCoordinator>,
-    sessions: State<'_, SshService>,
-    sftp: State<'_, SftpService>,
+    sessions_workspace: State<'_, crate::app::WorkspaceManager>,
+    sftp_workspace: State<'_, crate::app::WorkspaceManager>,
+    workspace_generation: Option<u64>,
 ) -> Result<LifecycleSnapshot, CommandError> {
+    let sessions = sessions_workspace
+        .current(workspace_generation)?
+        .sessions
+        .clone();
+    let sftp = sftp_workspace.current(workspace_generation)?.sftp.clone();
     stop_native_keepalive(&app)?;
     sessions.shutdown().await;
     sftp.shutdown().await;
@@ -187,9 +224,15 @@ pub(crate) async fn app_disconnect_all_sessions(
 #[tauri::command]
 pub(crate) async fn app_background_expired(
     lifecycle: State<'_, LifecycleCoordinator>,
-    sessions: State<'_, SshService>,
-    sftp: State<'_, SftpService>,
+    sessions_workspace: State<'_, crate::app::WorkspaceManager>,
+    sftp_workspace: State<'_, crate::app::WorkspaceManager>,
+    workspace_generation: Option<u64>,
 ) -> Result<LifecycleSnapshot, CommandError> {
+    let sessions = sessions_workspace
+        .current(workspace_generation)?
+        .sessions
+        .clone();
+    let sftp = sftp_workspace.current(workspace_generation)?.sftp.clone();
     let now = Utc::now().timestamp_millis();
     let snapshot = lifecycle
         .force_expire(now)

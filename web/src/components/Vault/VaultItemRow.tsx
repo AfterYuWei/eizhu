@@ -1,3 +1,4 @@
+import { ItemSyncBadge } from '@/components/SyncIndicator'
 import { useState } from 'react'
 import { AlertTriangle, Pencil, KeyRound, Trash2 } from 'lucide-react'
 import { vaultApi } from '@/api/vault'
@@ -45,7 +46,7 @@ export function VaultItemRow({ item, onEdit, onDelete }: VaultItemRowProps) {
           <Icon size={16} />
         </div>
         <div className="vault-card-title-row">
-          <span className="vault-card-name">{displayName}</span>
+          <span className="vault-card-name">{displayName}<ItemSyncBadge type="vault" id={item.id} /></span>
           <span className={`vault-card-badge vault-card-badge-${item.type}`}>
             {VAULT_TYPE_LABELS[item.type]}
           </span>

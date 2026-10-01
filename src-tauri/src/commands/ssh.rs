@@ -6,104 +6,159 @@ use tauri::State;
 
 use crate::{
     error::CommandError,
-    profile::{ProfileCreateRequest, ProfileService, ProfileUpdateRequest},
+    profile::{ProfileCreateRequest, ProfileUpdateRequest},
     ssh::{
         self, ClientMessage, ProfileTestResult, SessionCreateRequest, SessionCreateResponse,
-        SessionInfo, SshService,
+        SessionInfo,
     },
 };
 
 #[tauri::command]
 pub(crate) async fn profile_test_new(
-    profiles: State<'_, ProfileService>,
+    profiles_workspace: State<'_, crate::app::WorkspaceManager>,
     request: ProfileCreateRequest,
+    workspace_generation: Option<u64>,
 ) -> Result<ProfileTestResult, CommandError> {
-    ssh::test_new_profile(profiles.inner(), request).await
+    let profiles = profiles_workspace
+        .current(workspace_generation)?
+        .profile
+        .clone();
+    ssh::test_new_profile(&profiles, request).await
 }
 
 #[tauri::command]
 pub(crate) async fn profile_test_existing(
-    profiles: State<'_, ProfileService>,
+    profiles_workspace: State<'_, crate::app::WorkspaceManager>,
     id: String,
     request: ProfileUpdateRequest,
+    workspace_generation: Option<u64>,
 ) -> Result<ProfileTestResult, CommandError> {
-    ssh::test_existing_profile(profiles.inner(), id, request).await
+    let profiles = profiles_workspace
+        .current(workspace_generation)?
+        .profile
+        .clone();
+    ssh::test_existing_profile(&profiles, id, request).await
 }
 
 #[tauri::command]
 pub(crate) async fn profile_confirm_host_key(
-    profiles: State<'_, ProfileService>,
+    profiles_workspace: State<'_, crate::app::WorkspaceManager>,
     id: String,
     fingerprint: String,
+    workspace_generation: Option<u64>,
 ) -> Result<Value, CommandError> {
-    ssh::confirm_profile_host_key(profiles.inner(), id, fingerprint).await
+    let profiles = profiles_workspace
+        .current(workspace_generation)?
+        .profile
+        .clone();
+    ssh::confirm_profile_host_key(&profiles, id, fingerprint).await
 }
 
 #[tauri::command]
 pub(crate) async fn session_create(
-    service: State<'_, SshService>,
+    service_workspace: State<'_, crate::app::WorkspaceManager>,
     request: SessionCreateRequest,
+    workspace_generation: Option<u64>,
 ) -> Result<SessionCreateResponse, CommandError> {
+    let service = service_workspace
+        .current(workspace_generation)?
+        .sessions
+        .clone();
     service.create(request).await
 }
 
 #[tauri::command]
 pub(crate) async fn session_list(
-    service: State<'_, SshService>,
+    service_workspace: State<'_, crate::app::WorkspaceManager>,
+    workspace_generation: Option<u64>,
 ) -> Result<Vec<SessionInfo>, CommandError> {
+    let service = service_workspace
+        .current(workspace_generation)?
+        .sessions
+        .clone();
     service.list().await
 }
 
 #[tauri::command]
 pub(crate) async fn session_attach(
-    service: State<'_, SshService>,
+    service_workspace: State<'_, crate::app::WorkspaceManager>,
     id: String,
+    workspace_generation: Option<u64>,
 ) -> Result<Vec<ClientMessage>, CommandError> {
+    let service = service_workspace
+        .current(workspace_generation)?
+        .sessions
+        .clone();
     service.attach(&id).await
 }
 
 #[tauri::command]
 pub(crate) async fn session_subscribe(
-    service: State<'_, SshService>,
+    service_workspace: State<'_, crate::app::WorkspaceManager>,
     id: String,
     on_event: Channel<ClientMessage>,
+    workspace_generation: Option<u64>,
 ) -> Result<String, CommandError> {
+    let service = service_workspace
+        .current(workspace_generation)?
+        .sessions
+        .clone();
     service.subscribe(&id, on_event).await
 }
 
 #[tauri::command]
 pub(crate) async fn session_unsubscribe(
-    service: State<'_, SshService>,
+    service_workspace: State<'_, crate::app::WorkspaceManager>,
     id: String,
     subscription_id: String,
+    workspace_generation: Option<u64>,
 ) -> Result<(), CommandError> {
+    let service = service_workspace
+        .current(workspace_generation)?
+        .sessions
+        .clone();
     service.unsubscribe(&id, &subscription_id).await
 }
 
 #[tauri::command]
 pub(crate) async fn session_reconnect(
-    service: State<'_, SshService>,
+    service_workspace: State<'_, crate::app::WorkspaceManager>,
     id: String,
+    workspace_generation: Option<u64>,
 ) -> Result<SessionCreateResponse, CommandError> {
+    let service = service_workspace
+        .current(workspace_generation)?
+        .sessions
+        .clone();
     service.reconnect(&id).await
 }
 
 #[tauri::command]
 pub(crate) async fn session_confirm_host_key(
-    service: State<'_, SshService>,
+    service_workspace: State<'_, crate::app::WorkspaceManager>,
     id: String,
     fingerprint: Option<String>,
+    workspace_generation: Option<u64>,
 ) -> Result<Value, CommandError> {
+    let service = service_workspace
+        .current(workspace_generation)?
+        .sessions
+        .clone();
     service.confirm_host_key(&id, fingerprint).await
 }
 
 #[tauri::command]
 pub(crate) async fn host_key_decide(
-    service: State<'_, SshService>,
+    service_workspace: State<'_, crate::app::WorkspaceManager>,
     request_id: String,
     fingerprint: String,
     decision: String,
+    workspace_generation: Option<u64>,
 ) -> Result<Value, CommandError> {
+    let service = service_workspace
+        .current(workspace_generation)?
+        .sessions
+        .clone();
     service
         .decide_host_key(&request_id, fingerprint, &decision)
         .await
@@ -111,55 +166,85 @@ pub(crate) async fn host_key_decide(
 
 #[tauri::command]
 pub(crate) async fn session_input(
-    service: State<'_, SshService>,
+    service_workspace: State<'_, crate::app::WorkspaceManager>,
     id: String,
     data: String,
+    workspace_generation: Option<u64>,
 ) -> Result<(), CommandError> {
+    let service = service_workspace
+        .current(workspace_generation)?
+        .sessions
+        .clone();
     service.input(&id, data).await
 }
 
 #[tauri::command]
 pub(crate) async fn session_resize(
-    service: State<'_, SshService>,
+    service_workspace: State<'_, crate::app::WorkspaceManager>,
     id: String,
     cols: u32,
     rows: u32,
+    workspace_generation: Option<u64>,
 ) -> Result<(), CommandError> {
+    let service = service_workspace
+        .current(workspace_generation)?
+        .sessions
+        .clone();
     service.resize(&id, cols, rows).await
 }
 
 #[tauri::command]
 pub(crate) async fn session_ping(
-    service: State<'_, SshService>,
+    service_workspace: State<'_, crate::app::WorkspaceManager>,
     id: String,
+    workspace_generation: Option<u64>,
 ) -> Result<(), CommandError> {
+    let service = service_workspace
+        .current(workspace_generation)?
+        .sessions
+        .clone();
     service.ping(&id).await
 }
 
 #[tauri::command]
 pub(crate) async fn session_auth_respond(
-    service: State<'_, SshService>,
+    service_workspace: State<'_, crate::app::WorkspaceManager>,
     request_id: String,
     responses: Vec<String>,
+    workspace_generation: Option<u64>,
 ) -> Result<(), CommandError> {
+    let service = service_workspace
+        .current(workspace_generation)?
+        .sessions
+        .clone();
     service.respond_auth(&request_id, responses).await
 }
 
 #[tauri::command]
 pub(crate) async fn session_complete(
-    service: State<'_, SshService>,
+    service_workspace: State<'_, crate::app::WorkspaceManager>,
     id: String,
     request_id: String,
     script: String,
     cwd: Option<String>,
+    workspace_generation: Option<u64>,
 ) -> Result<(), CommandError> {
+    let service = service_workspace
+        .current(workspace_generation)?
+        .sessions
+        .clone();
     service.complete(&id, request_id, script, cwd).await
 }
 
 #[tauri::command]
 pub(crate) async fn session_close(
-    service: State<'_, SshService>,
+    service_workspace: State<'_, crate::app::WorkspaceManager>,
     id: String,
+    workspace_generation: Option<u64>,
 ) -> Result<(), CommandError> {
+    let service = service_workspace
+        .current(workspace_generation)?
+        .sessions
+        .clone();
     service.close(&id).await
 }

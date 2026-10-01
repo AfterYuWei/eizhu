@@ -97,8 +97,10 @@ impl BackupService {
             let key = kdf
                 .derive(password)
                 .map_err(|error| CommandError::new("KDF_FAILED", error.to_string()))?;
-            let plaintext = serde_json::to_vec(&payload)
-                .map_err(|error| CommandError::new("EXPORT_FAILED", error.to_string()))?;
+            let plaintext = Zeroizing::new(
+                serde_json::to_vec(&payload)
+                    .map_err(|error| CommandError::new("EXPORT_FAILED", error.to_string()))?,
+            );
             file.payload = encrypt_backup(&key, &plaintext)
                 .map_err(|error| CommandError::new("ENCRYPT_FAILED", error.to_string()))?;
             file.kdf = Some(kdf);
@@ -121,7 +123,7 @@ impl BackupService {
 
     /// Sync 版本沿用同一 `.eizhubackup` 加密格式，但使用紧凑 JSON，并以加密前业务
     /// payload 的 SHA-256 做跨设备去重（随机 salt/nonce 不影响 hash）。
-    pub(crate) fn build_sync_version(
+    pub(crate) fn build_backup_version(
         &self,
         password: &str,
     ) -> Result<(Vec<u8>, String), CommandError> {
@@ -153,7 +155,7 @@ impl BackupService {
     }
 
     /// 校验、解密并覆盖恢复一个 Sync 版本。hash 在任何数据库写入前验证。
-    pub(crate) fn restore_sync_version(
+    pub(crate) fn restore_backup_version(
         &self,
         raw: &[u8],
         password: &str,
@@ -189,7 +191,7 @@ impl BackupService {
         }
         let payload = serde_json::from_slice(&plaintext)
             .map_err(|error| CommandError::new("SYNC_FAILED", format!("版本内容损坏: {error}")))?;
-        self.import_payload(payload, MODE_ENCRYPTED, STRATEGY_OVERWRITE, false)
+        self.import_payload(payload, MODE_ENCRYPTED, STRATEGY_OVERWRITE, false, None)
             .map(|_| ())
             .map_err(|error| {
                 CommandError::new("SYNC_FAILED", format!("恢复数据失败: {}", error.message))
@@ -224,6 +226,205 @@ impl BackupService {
         })
     }
 
+    pub(crate) fn prepare_restore(
+        &self,
+        path: &str,
+        password: &str,
+        expected_hash: Option<&str>,
+    ) -> Result<serde_json::Value, CommandError> {
+        let generation: i64 = self
+            .repository
+            .database
+            .connect()?
+            .query_row(
+                "SELECT next_generation FROM realtime_state WHERE id=1",
+                [],
+                |r| r.get(0),
+            )
+            .map_err(CommandError::database)?;
+        let raw = std::fs::read(path).map_err(CommandError::database)?;
+        if raw.len() as u64 > MAX_BACKUP_SIZE {
+            return Err(invalid_backup("备份文件超过 50MB 限制"));
+        }
+        let parsed = decode_backup_file(&raw, password)?;
+        let body =
+            Zeroizing::new(serde_json::to_string(&parsed.payload).map_err(CommandError::database)?);
+        if expected_hash
+            .is_some_and(|expected| expected != hex::encode(Sha256::digest(body.as_bytes())))
+        {
+            return Err(invalid_backup("备份内容校验失败"));
+        }
+        self.prepare_payload(parsed, generation)
+    }
+    fn prepare_payload(
+        &self,
+        parsed: ParsedBackup,
+        generation: i64,
+    ) -> Result<serde_json::Value, CommandError> {
+        let body =
+            Zeroizing::new(serde_json::to_string(&parsed.payload).map_err(CommandError::database)?);
+        let conflicts = self.conflicts(&parsed.payload)?;
+        let stats = stats(&parsed.payload);
+        // Validate in an isolated database; no operation reaches the current workspace.
+        let directory = tempfile::tempdir().map_err(CommandError::database)?;
+        let db = Database::initialize(directory.path().join("preview.db"))?;
+        let encryptor = Encryptor::load_or_create(directory.path().join("key"))
+            .map_err(CommandError::database)?;
+        let audit = AuditRepository::new(db.clone());
+        let groups = GroupService::new(db.clone());
+        let vault = VaultService::new(db.clone(), encryptor.clone(), audit.clone());
+        let profiles = ProfileService::initialize(db.clone(), encryptor.clone(), vault.clone())?;
+        let isolated = Self::new(db, encryptor, audit, groups, profiles, vault);
+        isolated.import_payload(
+            parsed.payload,
+            &parsed.mode,
+            STRATEGY_OVERWRITE,
+            false,
+            None,
+        )?;
+        let token = uuid::Uuid::new_v4().to_string();
+        let encrypted = self
+            .repository
+            .encryptor
+            .encrypt(&body)
+            .map_err(CommandError::database)?;
+        let c = self.repository.database.connect()?;
+        c.execute_batch("CREATE TABLE IF NOT EXISTS backup_restore_previews(token TEXT PRIMARY KEY,payload TEXT NOT NULL,generation INTEGER NOT NULL,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)").map_err(CommandError::database)?;
+        c.execute(
+            "DELETE FROM backup_restore_previews WHERE created_at<datetime('now','-15 minutes')",
+            [],
+        )
+        .map_err(CommandError::database)?;
+        c.execute(
+            "INSERT INTO backup_restore_previews(token,payload,generation) VALUES(?1,?2,?3)",
+            rusqlite::params![token, encrypted, generation],
+        )
+        .map_err(CommandError::database)?;
+        Ok(serde_json::json!({"token":token,"stats":stats,"conflicts":conflicts}))
+    }
+    pub(crate) fn capture_safety(&self) -> Result<(), CommandError> {
+        let payload = self.repository.export_payload()?;
+        let raw = Zeroizing::new(serde_json::to_string(&payload).map_err(CommandError::database)?);
+        let encrypted = self
+            .repository
+            .encryptor
+            .encrypt(&raw)
+            .map_err(CommandError::database)?;
+        let c = self.repository.database.connect()?;
+        c.execute_batch("CREATE TABLE IF NOT EXISTS backup_safety(id TEXT PRIMARY KEY,payload TEXT NOT NULL,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)").map_err(CommandError::database)?;
+        c.execute(
+            "INSERT INTO backup_safety(id,payload) VALUES(?1,?2)",
+            rusqlite::params![uuid::Uuid::new_v4().to_string(), encrypted],
+        )
+        .map_err(CommandError::database)?;
+        Ok(())
+    }
+    pub(crate) fn safety_versions(&self) -> Result<serde_json::Value, CommandError> {
+        let c = self.repository.database.connect()?;
+        let exists: bool = c
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE name='backup_safety')",
+                [],
+                |r| r.get(0),
+            )
+            .map_err(CommandError::database)?;
+        if !exists {
+            return Ok(serde_json::json!([]));
+        }
+        let mut statement = c
+            .prepare("SELECT id,created_at FROM backup_safety ORDER BY created_at DESC")
+            .map_err(CommandError::database)?;
+        let rows=statement.query_map([],|r|Ok(serde_json::json!({"id":r.get::<_,String>(0)?,"createdAt":r.get::<_,String>(1)?}))).map_err(CommandError::database)?.collect::<Result<Vec<_>,_>>().map_err(CommandError::database)?;
+        Ok(serde_json::json!(rows))
+    }
+    pub(crate) fn preview_safety(&self, id: &str) -> Result<serde_json::Value, CommandError> {
+        let c = self.repository.database.connect()?;
+        let generation: i64 = c
+            .query_row(
+                "SELECT next_generation FROM realtime_state WHERE id=1",
+                [],
+                |r| r.get(0),
+            )
+            .map_err(CommandError::database)?;
+        let encrypted: String = c
+            .query_row("SELECT payload FROM backup_safety WHERE id=?1", [id], |r| {
+                r.get(0)
+            })
+            .map_err(CommandError::database)?;
+        let body = Zeroizing::new(
+            self.repository
+                .encryptor
+                .decrypt(&encrypted)
+                .map_err(CommandError::database)?,
+        );
+        let payload = serde_json::from_str(&body).map_err(CommandError::database)?;
+        self.prepare_payload(
+            ParsedBackup {
+                payload,
+                mode: MODE_ENCRYPTED.into(),
+                exported_at: String::new(),
+            },
+            generation,
+        )
+    }
+    pub(crate) fn apply_restore(
+        &self,
+        token: &str,
+        mode: &str,
+    ) -> Result<BackupImportResult, CommandError> {
+        if !matches!(mode, "merge" | "replace") {
+            return Err(CommandError::new("INVALID_CHOICE", "请选择合并或替换"));
+        }
+        let c = self.repository.database.connect()?;
+        let(encrypted,generation):(String,i64)=c.query_row("SELECT payload,generation FROM backup_restore_previews WHERE token=?1 AND created_at>=datetime('now','-15 minutes')",[token],|r|Ok((r.get(0)?,r.get(1)?))).map_err(|_|CommandError::new("PREVIEW_EXPIRED","请重新预览备份"))?;
+        let current: i64 = c
+            .query_row(
+                "SELECT next_generation FROM realtime_state WHERE id=1",
+                [],
+                |r| r.get(0),
+            )
+            .map_err(CommandError::database)?;
+        if current != generation {
+            return Err(CommandError::new(
+                "PREVIEW_CHANGED",
+                "本地数据已变化，请重新预览",
+            ));
+        }
+        let body = Zeroizing::new(
+            self.repository
+                .encryptor
+                .decrypt(&encrypted)
+                .map_err(CommandError::database)?,
+        );
+        let payload = serde_json::from_str(&body).map_err(CommandError::database)?;
+        let result = self.import_payload(
+            payload,
+            MODE_ENCRYPTED,
+            if mode == "merge" {
+                STRATEGY_OVERWRITE
+            } else {
+                "replace"
+            },
+            true,
+            Some(generation),
+        )?;
+        c.execute(
+            "DELETE FROM backup_restore_previews WHERE token=?1",
+            [token],
+        )
+        .map_err(CommandError::database)?;
+        Ok(result)
+    }
+    pub(crate) fn import_bytes(
+        &self,
+        raw: &[u8],
+        password: &str,
+        strategy: &str,
+    ) -> Result<BackupImportResult, CommandError> {
+        let parsed = decode_backup_file(raw, password)?;
+        self.import_payload(parsed.payload, &parsed.mode, strategy, true, None)
+    }
+
     fn conflicts(&self, payload: &BackupPayload) -> Result<BackupStats, CommandError> {
         self.repository.conflicts(payload)
     }
@@ -244,7 +445,7 @@ impl BackupService {
             ));
         }
         let parsed = self.parse_path(path, password)?;
-        self.import_payload(parsed.payload, &parsed.mode, strategy, true)
+        self.import_payload(parsed.payload, &parsed.mode, strategy, true, None)
     }
 
     fn import_payload(
@@ -253,6 +454,7 @@ impl BackupService {
         mode: &str,
         strategy: &str,
         record_audit: bool,
+        expected_generation: Option<i64>,
     ) -> Result<BackupImportResult, CommandError> {
         if strategy == STRATEGY_REGENERATE {
             remap_ids(&mut payload);
@@ -260,9 +462,12 @@ impl BackupService {
         let group_order = topo_sort_groups(&payload.groups)
             .map_err(|error| CommandError::new("IMPORT_FAILED", error.to_string()))?;
 
-        let mut result = self
-            .repository
-            .import_payload(&payload, strategy, &group_order)?;
+        let mut result = self.repository.import_payload(
+            &payload,
+            strategy,
+            &group_order,
+            expected_generation,
+        )?;
 
         let group_snapshot = self.groups.list();
         let profile_snapshot = self.profiles.list(None, None);
@@ -448,6 +653,120 @@ mod tests {
             database,
             encryptor,
         )
+    }
+
+    #[test]
+    fn isolated_restore_guards_generation_and_keeps_encrypted_safety_and_one_transaction_queue() {
+        let (dir, service, database, encryptor) = state();
+        let c = database.connect().unwrap();
+        c.execute(
+            "INSERT INTO groups(id,name) VALUES('original','before restore')",
+            [],
+        )
+        .unwrap();
+        let payload = BackupFile {
+            format: FORMAT.into(),
+            version: VERSION,
+            credential_mode: MODE_PLAIN.into(),
+            groups: vec![BackupGroup {
+                id: "restored".into(),
+                name: "private restored name".into(),
+                parent_id: String::new(),
+                icon: "folder".into(),
+                sort_order: 0,
+                created_at: zero_time(),
+            }],
+            ..BackupFile::default()
+        };
+        let path = dir.path().join("restore.eizhubackup");
+        std::fs::write(&path, serde_json::to_vec(&payload).unwrap()).unwrap();
+        let preview = service
+            .prepare_restore(path.to_str().unwrap(), "", None)
+            .unwrap();
+        assert_eq!(service.groups.list().unwrap().len(), 1);
+        c.execute(
+            "UPDATE groups SET name='edited during preview' WHERE id='original'",
+            [],
+        )
+        .unwrap();
+        assert_eq!(
+            service
+                .apply_restore(preview["token"].as_str().unwrap(), "replace")
+                .unwrap_err()
+                .code,
+            "PREVIEW_CHANGED"
+        );
+        let preview = service
+            .prepare_restore(path.to_str().unwrap(), "", None)
+            .unwrap();
+        c.execute("DELETE FROM realtime_outbox", []).unwrap();
+        service
+            .apply_restore(preview["token"].as_str().unwrap(), "replace")
+            .unwrap();
+        let groups = service.groups.list().unwrap();
+        assert_eq!(groups.len(), 1);
+        assert_eq!(groups[0].id, "restored");
+        let batches: i64 = c
+            .query_row(
+                "SELECT count(DISTINCT batch_id) FROM realtime_outbox",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        let deletes: i64 = c
+            .query_row(
+                "SELECT count(*) FROM realtime_outbox WHERE item_id='original' AND deleted=1",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(batches, 1);
+        assert_eq!(deletes, 1);
+        let raw: String = c
+            .query_row(
+                "SELECT payload FROM backup_safety ORDER BY rowid DESC LIMIT 1",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert!(!raw.contains("edited during preview"));
+        assert!(encryptor
+            .decrypt(&raw)
+            .unwrap()
+            .contains("edited during preview"));
+        let safety = service.safety_versions().unwrap();
+        let prior = service
+            .preview_safety(safety[0]["id"].as_str().unwrap())
+            .unwrap();
+        assert_eq!(prior["stats"]["groups"], 1);
+    }
+
+    #[test]
+    fn restore_preview_rejects_missing_jump_references_without_touching_current_space() {
+        let (dir, service, database, _) = state();
+        let file = BackupFile {
+            format: FORMAT.into(),
+            version: VERSION,
+            credential_mode: MODE_PLAIN.into(),
+            profiles: vec![backup_profile(
+                "dependent",
+                "",
+                "",
+                r#"{"proxy":{"type":"jump","jump_profile_id":"missing"}}"#,
+            )],
+            ..BackupFile::default()
+        };
+        let path = dir.path().join("broken.eizhubackup");
+        std::fs::write(&path, serde_json::to_vec(&file).unwrap()).unwrap();
+        assert!(service
+            .prepare_restore(path.to_str().unwrap(), "", None)
+            .is_err());
+        let count: i64 = database
+            .connect()
+            .unwrap()
+            .query_row("SELECT count(*) FROM profiles", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(count, 0);
     }
 
     #[test]

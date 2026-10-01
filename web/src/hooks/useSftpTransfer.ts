@@ -1,7 +1,9 @@
+import { workspaceGeneration } from '@/lib/workspaceScope'
 import { useEffect, useRef } from 'react'
 import { listen } from '@tauri-apps/api/event'
 
 interface SftpEvent {
+  workspaceGeneration?: number
   type: string
   payload?: {
     task_id?: string
@@ -36,6 +38,7 @@ export function useSftpTransfer(sessionId: string | null, callbacks: SftpTransfe
     let cleanup: (() => void) | undefined
 
     void listen<SftpEvent>('eizhu-sftp-message', ({ payload: message }) => {
+      if (message.workspaceGeneration !== undefined && message.workspaceGeneration !== workspaceGeneration()) return
       const payload = message.payload ?? {}
       const eventSessionId = payload.session_id
       if (eventSessionId && eventSessionId !== sessionId) return

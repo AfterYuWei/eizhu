@@ -31,8 +31,9 @@
 - 移动 SFTP 默认单栏远端浏览，并发上限为 2；桌面双栏、拖放与并发上限 5 保持不变。
 - `MasterKeyStore` 在 Android 使用 Keystore AES-GCM 包装主密钥，在 iOS 使用 Keychain
   `AfterFirstUnlockThisDeviceOnly`；SQLite schema 与 AES-256-GCM 密文表示均不改变。
-- 移动旧密钥迁移会先验证 Vault、Profile、同步 Provider 和同步密码的全部已有密文，再写入并
+- 移动旧密钥迁移会先验证 Vault、Profile、备份目标/密码、同步密钥/队列和安全快照的全部已有密文，再写入并
   回读安全存储，最后删除旧文件；任一步失败均保留旧文件。
+  账号空间使用独立 Keystore/Keychain 命名空间，原默认命名空间继续兼容；详见 [DATA_SYNC.md](DATA_SYNC.md)。
 - 密码和私钥复制后显示 30 秒倒计时，仅当剪贴板仍等于应用写入值时清空，避免覆盖用户随后
   复制的其他内容。
 - SSH Agent、窗口拖出、桌面调试日志与传统路径迁移继续由 desktop capability / `cfg(desktop)`

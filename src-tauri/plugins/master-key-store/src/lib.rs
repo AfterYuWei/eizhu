@@ -13,7 +13,7 @@ mod models;
 pub use error::{Error, Result};
 #[cfg(mobile)]
 pub use mobile::MasterKeyStore;
-pub use models::{LoadResponse, StoreRequest};
+pub use models::{LoadRequest, LoadResponse, StoreRequest};
 
 #[cfg(mobile)]
 pub trait MasterKeyStoreExt<R: Runtime> {

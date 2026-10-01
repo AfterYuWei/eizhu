@@ -11,9 +11,9 @@ import {
 } from '@/components/ui/alert-dialog'
 import { toast } from 'sonner'
 import { openExternal } from '@/lib/desktop'
-import { syncApi } from '@/api/sync'
-import type { ProviderConfig, ProviderType, SyncProviderMeta } from '@/types/sync'
-import { PROVIDER_TYPE_LABELS } from '@/types/sync'
+import { archiveApi } from '@/api/archive'
+import type { ProviderConfig, ProviderType, BackupTargetMeta } from '@/types/backup'
+import { PROVIDER_TYPE_LABELS } from '@/types/backup'
 
 const typeOptions = (Object.keys(PROVIDER_TYPE_LABELS) as ProviderType[])
   .map((t) => ({ value: t, label: PROVIDER_TYPE_LABELS[t] }))
@@ -21,7 +21,7 @@ const typeOptions = (Object.keys(PROVIDER_TYPE_LABELS) as ProviderType[])
 const isOAuth = (t: ProviderType) => t === 'gdrive' || t === 'onedrive'
 
 interface Props {
-  providers: SyncProviderMeta[]
+  providers: BackupTargetMeta[]
   onChanged: () => void
 }
 
@@ -39,7 +39,7 @@ const PROVIDER_ICONS: Record<ProviderType, typeof Cloud> = {
 }
 
 type ProvStatus = { key: 'connected' | 'pending' | 'disabled'; label: string }
-type EditableProvider = SyncProviderMeta & { type: ProviderType }
+type EditableProvider = BackupTargetMeta & { type: ProviderType }
 
 function providerStatus(p: EditableProvider): ProvStatus {
   if (!p.enabled) return { key: 'disabled', label: '已禁用' }
@@ -55,7 +55,7 @@ export function ProviderSection({ providers, onChanged }: Props) {
   const [adding, setAdding] = useState(false)
   const [form, setForm] = useState<ProviderConfig>(emptyForm('webdav'))
   const [busy, setBusy] = useState(false)
-  const [providerToDelete, setProviderToDelete] = useState<SyncProviderMeta | null>(null)
+  const [providerToDelete, setProviderToDelete] = useState<BackupTargetMeta | null>(null)
 
   const patch = (k: keyof ProviderConfig, v: unknown) =>
     setForm((f) => ({ ...f, [k]: v }))
@@ -67,7 +67,7 @@ export function ProviderSection({ providers, onChanged }: Props) {
     }
     setBusy(true)
     try {
-      await syncApi.createProvider(form)
+      await archiveApi.createProvider(form)
       toast.success(`已添加「${form.name}」`)
       setAdding(false)
       setForm(emptyForm('webdav'))
@@ -81,7 +81,7 @@ export function ProviderSection({ providers, onChanged }: Props) {
 
   const handleToggle = async (p: EditableProvider) => {
     try {
-      await syncApi.updateProvider(p.id, {
+      await archiveApi.updateProvider(p.id, {
         type: p.type, name: p.name, enabled: !p.enabled,
       })
       onChanged()
@@ -90,15 +90,15 @@ export function ProviderSection({ providers, onChanged }: Props) {
     }
   }
 
-  const handleAuthorize = async (p: SyncProviderMeta) => {
+  const handleAuthorize = async (p: BackupTargetMeta) => {
     try {
-      const { url } = await syncApi.oauthURL(p.type as 'gdrive' | 'onedrive', p.id)
+      const { url } = await archiveApi.oauthURL(p.type as 'gdrive' | 'onedrive', p.id)
       // 桌面端走系统默认浏览器（等价 Electron 行为：OAuth 回调页在外部浏览器完成）
       await openExternal(url)
       toast.info('请在打开的页面中完成授权，完成后回到此处刷新')
       const timer = setInterval(() => void (async () => {
         try {
-          const list = await syncApi.providers()
+          const list = await archiveApi.providers()
           const me = list.find((x) => x.id === p.id)
           if (me?.authorized) {
             clearInterval(timer)
@@ -113,10 +113,10 @@ export function ProviderSection({ providers, onChanged }: Props) {
     }
   }
 
-  const handleTest = async (p: SyncProviderMeta) => {
+  const handleTest = async (p: BackupTargetMeta) => {
     setBusy(true)
     try {
-      await syncApi.testProvider(p.id)
+      await archiveApi.testProvider(p.id)
       toast.success(`「${p.name}」连接正常`)
     } catch (err) {
       toast.error(`「${p.name}」连接失败`, { description: errMessage(err) })
@@ -125,12 +125,12 @@ export function ProviderSection({ providers, onChanged }: Props) {
     }
   }
 
-  const handleDelete = (p: SyncProviderMeta) => setProviderToDelete(p)
+  const handleDelete = (p: BackupTargetMeta) => setProviderToDelete(p)
 
   const confirmDelete = async () => {
     if (!providerToDelete) return
     try {
-      await syncApi.deleteProvider(providerToDelete.id)
+      await archiveApi.deleteProvider(providerToDelete.id)
       toast.success('已删除')
       onChanged()
     } catch (err) {

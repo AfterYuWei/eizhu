@@ -2,20 +2,21 @@ use tauri::State;
 
 use crate::{
     error::CommandError,
-    sync::SyncService,
     vault::{
         generate_key_pair, Credential, GenerateKeyRequest, GenerateKeyResponse, ProfileRef,
-        VaultItem, VaultService, VaultWriteRequest,
+        VaultItem, VaultWriteRequest,
     },
 };
 
 #[tauri::command]
 pub(crate) async fn vault_list(
-    state: State<'_, VaultService>,
+    state_workspace: State<'_, crate::app::WorkspaceManager>,
     vault_type: Option<String>,
     q: Option<String>,
+    workspace_generation: Option<u64>,
 ) -> Result<Vec<VaultItem>, CommandError> {
-    let state = state.inner().clone();
+    let state = state_workspace.current(workspace_generation)?.vault.clone();
+    let state = state.clone();
     tauri::async_runtime::spawn_blocking(move || state.list(vault_type.as_deref(), q.as_deref()))
         .await
         .map_err(CommandError::database)?
@@ -23,10 +24,12 @@ pub(crate) async fn vault_list(
 
 #[tauri::command]
 pub(crate) async fn vault_get(
-    state: State<'_, VaultService>,
+    state_workspace: State<'_, crate::app::WorkspaceManager>,
     id: String,
+    workspace_generation: Option<u64>,
 ) -> Result<VaultItem, CommandError> {
-    let state = state.inner().clone();
+    let state = state_workspace.current(workspace_generation)?.vault.clone();
+    let state = state.clone();
     tauri::async_runtime::spawn_blocking(move || state.get(&id))
         .await
         .map_err(CommandError::database)?
@@ -34,53 +37,70 @@ pub(crate) async fn vault_get(
 
 #[tauri::command]
 pub(crate) async fn vault_create(
-    state: State<'_, VaultService>,
-    sync: State<'_, SyncService>,
+    state_workspace: State<'_, crate::app::WorkspaceManager>,
     request: VaultWriteRequest,
+    workspace_generation: Option<u64>,
 ) -> Result<VaultItem, CommandError> {
-    let state = state.inner().clone();
+    let workspace = state_workspace.current(workspace_generation)?;
+    let state = workspace.vault.clone();
+    let sync = workspace.sync.clone();
+    let archive = workspace.archive.clone();
+    let state = state.clone();
     let item = tauri::async_runtime::spawn_blocking(move || state.create(request))
         .await
         .map_err(CommandError::database)??;
     sync.notify_change();
+    archive.notify_change();
     Ok(item)
 }
 
 #[tauri::command]
 pub(crate) async fn vault_update(
-    state: State<'_, VaultService>,
-    sync: State<'_, SyncService>,
+    state_workspace: State<'_, crate::app::WorkspaceManager>,
     id: String,
     request: VaultWriteRequest,
+    workspace_generation: Option<u64>,
 ) -> Result<VaultItem, CommandError> {
-    let state = state.inner().clone();
+    let workspace = state_workspace.current(workspace_generation)?;
+    let state = workspace.vault.clone();
+    let sync = workspace.sync.clone();
+    let archive = workspace.archive.clone();
+    let state = state.clone();
     let item = tauri::async_runtime::spawn_blocking(move || state.update(&id, request))
         .await
         .map_err(CommandError::database)??;
     sync.notify_change();
+    archive.notify_change();
     Ok(item)
 }
 
 #[tauri::command]
 pub(crate) async fn vault_delete(
-    state: State<'_, VaultService>,
-    sync: State<'_, SyncService>,
+    state_workspace: State<'_, crate::app::WorkspaceManager>,
     id: String,
+    workspace_generation: Option<u64>,
 ) -> Result<(), CommandError> {
-    let state = state.inner().clone();
+    let workspace = state_workspace.current(workspace_generation)?;
+    let state = workspace.vault.clone();
+    let sync = workspace.sync.clone();
+    let archive = workspace.archive.clone();
+    let state = state.clone();
     tauri::async_runtime::spawn_blocking(move || state.delete(&id))
         .await
         .map_err(CommandError::database)??;
     sync.notify_change();
+    archive.notify_change();
     Ok(())
 }
 
 #[tauri::command]
 pub(crate) async fn vault_references(
-    state: State<'_, VaultService>,
+    state_workspace: State<'_, crate::app::WorkspaceManager>,
     id: String,
+    workspace_generation: Option<u64>,
 ) -> Result<Vec<ProfileRef>, CommandError> {
-    let state = state.inner().clone();
+    let state = state_workspace.current(workspace_generation)?.vault.clone();
+    let state = state.clone();
     tauri::async_runtime::spawn_blocking(move || state.references(&id))
         .await
         .map_err(CommandError::database)?
@@ -88,10 +108,12 @@ pub(crate) async fn vault_references(
 
 #[tauri::command]
 pub(crate) async fn vault_reveal(
-    state: State<'_, VaultService>,
+    state_workspace: State<'_, crate::app::WorkspaceManager>,
     id: String,
+    workspace_generation: Option<u64>,
 ) -> Result<Credential, CommandError> {
-    let state = state.inner().clone();
+    let state = state_workspace.current(workspace_generation)?.vault.clone();
+    let state = state.clone();
     tauri::async_runtime::spawn_blocking(move || state.reveal(&id))
         .await
         .map_err(CommandError::database)?

@@ -1,3 +1,4 @@
+import { ItemSyncBadge } from '@/components/SyncIndicator'
 import { lazy, Suspense, useState, useMemo, useEffect, useRef } from 'react'
 import { Plus, Edit, Trash2, Server, FolderPlus, FolderEdit } from 'lucide-react'
 import { ProfileForm } from '@/components/ProfileForm'
@@ -326,7 +327,7 @@ export function Sidebar() {
           <Icon size={14} />
         </div>
         <div className="srv-info">
-          <span className="srv-nm">{profile.name}</span>
+          <span className="srv-nm">{profile.name}<ItemSyncBadge type="profile" id={profile.id} /></span>
           <span className="srv-meta">{meta}</span>
         </div>
         <Button
@@ -407,7 +408,7 @@ export function Sidebar() {
                       >
                         <span className="grp-label-left">
                           <GroupIcon size={12} className="grp-label-icon" />
-                          <span className="grp-label-text">{grp.name}</span>
+                          <span className="grp-label-text">{grp.name}<ItemSyncBadge type="group" id={grp.id} /></span>
                           <span className="grp-cnt">{list.length}</span>
                         </span>
                       </div>

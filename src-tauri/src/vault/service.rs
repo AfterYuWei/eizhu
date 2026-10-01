@@ -31,6 +31,12 @@ pub(crate) struct VaultService {
 
 impl VaultService {
     pub fn new(database: Database, encryptor: Encryptor, audit: AuditRepository) -> Self {
+        let capture_encryptor = encryptor.clone();
+        database.configure_capture(move |raw| {
+            capture_encryptor
+                .encrypt(raw)
+                .map_err(|error| error.to_string())
+        });
         Self {
             repository: VaultRepository::new(database),
             encryptor,

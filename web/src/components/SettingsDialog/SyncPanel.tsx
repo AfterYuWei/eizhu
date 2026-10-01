@@ -1,591 +1,73 @@
-import { useCallback, useEffect, useState, type ChangeEvent } from 'react'
-import {
-  CloudSync, RefreshCw, History, Settings2, KeyRound, Clock,
-  RotateCcw, Trash2, Loader2, CheckCircle2, AlertTriangle,
-  CloudUpload, ArrowDownToLine, ArrowUpToLine, Eye, EyeOff,
-} from 'lucide-react'
+import { invokeCommand } from '@/api/tauri'
+import { useEffect, useState } from 'react'
+import { CloudSync, RefreshCw } from 'lucide-react'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Switch } from '@/components/ui/switch'
-import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
-import { toast } from 'sonner'
 import { syncApi } from '@/api/sync'
-import type {
-  SyncSettings, SyncStatus, SyncVersion,
-} from '@/types/sync'
-import { ORIGIN_LABELS, formatSize } from '@/types/sync'
-import { ProviderSection } from './ProviderForm'
-
-const syncModeOptions = [
-  { value: 'auto', label: '自动双向同步' },
-  { value: 'manual', label: '手动推送 / 拉取' },
-]
-const conflictOptions = [
-  { value: 'prompt', label: '提示我手动解决（推荐）' },
-  { value: 'latest', label: '以最新时间戳为准' },
-]
-const retentionOptions = [
-  { value: 'keep_forever', label: '云端永久保留（推荐）' },
-  { value: 'mirror_local', label: '云端跟随本地清理' },
-]
-
-type HeroTone = 'ok' | 'warning' | 'idle' | 'muted'
-type PendingAction =
-  | { kind: 'restore'; version: SyncVersion }
-  | { kind: 'delete'; version: SyncVersion; force: boolean; description: string }
-  | { kind: 'resolve'; choice: 'keep_local' | 'use_cloud'; description: string }
+import { useAccountStore } from '@/store/account'
+import { useSyncStore } from '@/store/sync'
+import { SYNC_STATUS_LABELS, SYNC_ITEM_LABELS, type SyncConflict, type SyncPreview } from '@/types/sync'
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 
 export function SyncPanel() {
-  const [status, setStatus] = useState<SyncStatus | null>(null)
-  const [versions, setVersions] = useState<SyncVersion[]>([])
-  const [settings, setSettings] = useState<SyncSettings | null>(null)
-  const [initial, setInitial] = useState<SyncSettings | null>(null)
+  const status = useSyncStore((s) => s.status)
+  const conflicts = useSyncStore((s) => s.conflicts)
+  const loggedIn = useAccountStore((s) => s.status?.loggedIn)
   const [password, setPassword] = useState('')
-  const [showPassword, setShowPassword] = useState(false)
-  const [revealed, setRevealed] = useState<string | null>(null)
-  const [backingUp, setBackingUp] = useState(false)
-  const [savingSettings, setSavingSettings] = useState(false)
-  const [busyVersionId, setBusyVersionId] = useState<string | null>(null)
-  const [syncing, setSyncing] = useState(false)
-  const [resolving, setResolving] = useState(false)
-  const [pendingAction, setPendingAction] = useState<PendingAction | null>(null)
-
-  const refresh = useCallback(async () => {
-    try {
-      const [st, vs, se] = await Promise.all([
-        syncApi.status(),
-        syncApi.versions(),
-        syncApi.settings(),
-      ])
-      setStatus(st)
-      setVersions(vs ?? [])
-      setSettings(se)
-      setInitial((prev) => prev ?? se)
-    } catch (err) {
-      console.error('load sync state failed', err)
-    }
-  }, [])
-
-  useEffect(() => {
-    const t = setTimeout(() => void refresh(), 0)
-    return () => clearTimeout(t)
-  }, [refresh])
-
-  const handleBackupNow = async () => {
-    setBackingUp(true)
-    try {
-      const res = await syncApi.backupNow()
-      if (res.created && res.version) {
-        toast.success(`已创建版本 v${res.version.version}`, {
-          description: formatSize(res.version.size),
-        })
-      } else {
-        toast.info(res.message ?? '没有需要备份的变更')
-      }
-      void refresh()
-    } catch (err) {
-      toast.error('备份失败', { description: errMessage(err) })
-    } finally {
-      setBackingUp(false)
-    }
+  const [busy, setBusy] = useState(false)
+  const [preview, setPreview] = useState<SyncPreview | null>(null)
+  const [mode, setMode] = useState<'merge' | 'use_local' | 'use_cloud' | null>(null)
+  useEffect(() => { void useSyncStore.getState().refresh() }, [])
+  async function run(work: () => Promise<unknown>, message?: string) {
+    setBusy(true)
+    try { await work(); setPassword(''); await useSyncStore.getState().refresh(); if (message) toast.success(message) }
+    catch (e) { toast.error(e instanceof Error ? e.message : String(e)); await useSyncStore.getState().refresh() }
+    finally { setBusy(false) }
   }
-
-  const handleRestore = (version: SyncVersion) => setPendingAction({ kind: 'restore', version })
-
-  const restoreVersion = async (v: SyncVersion) => {
-    setBusyVersionId(v.id)
-    try {
-      await syncApi.restoreVersion(v.id)
-      toast.success(`已恢复为 v${v.version}`)
-      void refresh()
-    } catch (err) {
-      toast.error('恢复失败', { description: errMessage(err) })
-    } finally {
-      setBusyVersionId(null)
-    }
-  }
-
-  const handleDelete = (v: SyncVersion, force: boolean) => {
-    const hint = v.synced_to.length === 0 && !force
-      ? ''
-      : `该版本${v.synced_to.length === 0 ? '未同步到云端，删除后不可恢复！' : '将仅从本地删除。'}`
-    setPendingAction({ kind: 'delete', version: v, force, description: `删除版本 v${v.version}？${hint ? ` ${hint}` : ''}` })
-  }
-
-  const deleteVersion = async (v: SyncVersion, force: boolean) => {
-    setBusyVersionId(v.id)
-    try {
-      await syncApi.deleteVersion(v.id, force)
-      toast.success(`已删除 v${v.version}`)
-      void refresh()
-    } catch (err) {
-      const msg = errMessage(err)
-      if (msg.includes('尚未同步') && !force) {
-        setPendingAction({ kind: 'delete', version: v, force: true, description: `${msg} 确定强制删除？` })
-      } else {
-        toast.error('删除失败', { description: msg })
-      }
-    } finally {
-      setBusyVersionId(null)
-    }
-  }
-
-  const handleSyncNow = async () => {
-    setSyncing(true)
-    try {
-      await syncApi.syncNow()
-      toast.info('同步已开始，稍后自动完成')
-      setTimeout(() => { void refresh(); setSyncing(false) }, 3000)
-    } catch (err) {
-      toast.error('同步失败', { description: errMessage(err) })
-      setSyncing(false)
-    }
-  }
-
-  const handleResolve = (choice: 'keep_local' | 'use_cloud') => {
-    const c = status?.conflict
-    if (!c) return
-    const msg = choice === 'keep_local'
-      ? `保留本地 v${c.local.version}，以其为基准生成新版本并同步到云端 v${Math.max(c.local.version, c.cloud.version) + 1}？`
-      : `采用云端 v${c.cloud.version}（本地数据将被覆盖），然后生成新版本同步双端？`
-    setPendingAction({ kind: 'resolve', choice, description: msg })
-  }
-
-  const resolveConflict = async (choice: 'keep_local' | 'use_cloud') => {
-    setResolving(true)
-    try {
-      await syncApi.resolveConflict(choice)
-      toast.success('冲突已解决，双端已收敛')
-      void refresh()
-    } catch (err) {
-      toast.error('解决失败', { description: errMessage(err) })
-    } finally {
-      setResolving(false)
-    }
-  }
-
-  const runPendingAction = async () => {
-    const action = pendingAction
-    setPendingAction(null)
-    if (!action) return
-    if (action.kind === 'restore') await restoreVersion(action.version)
-    else if (action.kind === 'delete') await deleteVersion(action.version, action.force)
-    else await resolveConflict(action.choice)
-  }
-
-  const patch = <K extends keyof SyncSettings>(key: K, value: SyncSettings[K]) => {
-    setSettings((s) => (s ? { ...s, [key]: value } : s))
-  }
-
-  const handleReset = () => {
-    if (initial) setSettings(JSON.parse(JSON.stringify(initial)))
-    setPassword('')
-    setRevealed(null)
-  }
-
-  const handleSaveSettings = async () => {
-    if (!settings) return
-    if (password && password.length < 6) {
-      toast.warning('同步密码至少 6 位')
-      return
-    }
-    setSavingSettings(true)
-    try {
-      await syncApi.updateSettings(settings, password || undefined)
-      toast.success('同步设置已保存')
-      setPassword('')
-      setRevealed(null)
-      setInitial(settings)
-      void refresh()
-    } catch (err) {
-      toast.error('保存失败', { description: errMessage(err) })
-    } finally {
-      setSavingSettings(false)
-    }
-  }
-
-  if (!settings || !status) {
-    return (
-      <div className="settings-section">
-        <div className="backup-row"><Loader2 size={14} className="animate-spin" /><span className="settings-field-desc">加载同步状态…</span></div>
-      </div>
-    )
-  }
-
-  const anyEnabled = status.providers.some((p) => p.enabled)
-  const heroTone: HeroTone = status.conflict
-    ? 'warning'
-    : status.last_sync_at && anyEnabled
-      ? 'ok'
-      : anyEnabled
-        ? 'idle'
-        : 'muted'
-  const heroText = status.conflict
-    ? '版本冲突待解决'
-    : status.last_sync_at && anyEnabled
-      ? '已同步至最新'
-      : anyEnabled
-        ? '尚未执行同步'
-        : '未配置云存储源'
-  const cloudTop = Object.values(status.cloud_latest).sort((a, b) => b.version - a.version)[0]
-
-  const dirty = !!initial && !!settings && (
-    JSON.stringify(initial) !== JSON.stringify(settings) || password.length > 0
-  )
-
-  const PASSWORD_MASK = '•'.repeat(12)
-  // What the input shows:
-  //  - typing a new password        -> that text
-  //  - eye opened & stored password  -> plaintext fetched from server
-  //  - a password is set (hidden)    -> mask bullets
-  //  - nothing set                   -> empty (placeholder)
-  const passwordDisplay =
-    password !== '' ? password
-      : showPassword && revealed != null ? revealed
-        : settings.sync_password_set ? PASSWORD_MASK
-          : ''
-  const passwordMasked = password === '' && !showPassword && settings.sync_password_set
-
-  const handlePasswordChange = (e: ChangeEvent<HTMLInputElement>) => {
-    let v = e.target.value
-    if (passwordMasked && v.startsWith(PASSWORD_MASK)) v = v.slice(PASSWORD_MASK.length)
-    setPassword(v)
-  }
-
-  const handleTogglePassword = async () => {
-    const next = !showPassword
-    setShowPassword(next)
-    if (!next) {
-      setRevealed(null) // drop plaintext from memory when hidden
-      return
-    }
-    if (password === '' && settings.sync_password_set && revealed == null) {
-      try {
-        const res = await syncApi.revealPassword()
-        setRevealed(res.sync_password)
-      } catch (err) {
-        setShowPassword(false)
-        toast.error('无法读取同步密码', { description: errMessage(err) })
-      }
-    }
-  }
-
-  return (
-    <div className="settings-section">
-      {/* ── 标题 ── */}
-      <div className="settings-section-title">
-        <CloudSync size={14} />
-        <span>云同步与版本控制</span>
-      </div>
-
-      {/* 冲突横幅 */}
-      {status.conflict && (
-        <div className="backup-card sync-conflict-banner">
-          <div className="backup-row">
-            <AlertTriangle size={14} />
-            <span style={{ fontWeight: 600 }}>版本冲突：本地 v{status.conflict.local.version} 与云端 v{status.conflict.cloud.version}（{status.conflict.provider_name}）已分叉</span>
-          </div>
-          <div className="backup-row" style={{ gap: 8 }}>
-            <Button size="sm" variant="outline" disabled={resolving} onClick={() => void handleResolve('keep_local')}>
-              {resolving ? <Loader2 size={12} className="animate-spin" /> : <ArrowUpToLine size={12} />}
-              保留本地 v{status.conflict.local.version}
-            </Button>
-            <Button size="sm" variant="outline" disabled={resolving} onClick={() => void handleResolve('use_cloud')}>
-              {resolving ? <Loader2 size={12} className="animate-spin" /> : <ArrowDownToLine size={12} />}
-              采用云端 v{status.conflict.cloud.version}
-            </Button>
-            <span className="settings-field-desc">选择后双端将收敛到新版本</span>
-          </div>
-        </div>
-      )}
-
-      {/* ── [1] 顶部核心状态与主操作 ── */}
-      <div className="sync-hero">
-        <div className="sync-hero-left">
-          <span className={`sync-hero-icon ${heroTone}`}><CloudSync size={22} /></span>
-          <div className="sync-hero-body">
-            <div className="sync-hero-status">
-              <span className={`sync-hero-dot ${heroTone}`} />
-              同步状态：{heroText}
-            </div>
-            <div className="sync-hero-meta">
-              {status.last_sync_at ? `上次同步：${new Date(status.last_sync_at).toLocaleString()}` : '尚未执行过同步'}
-            </div>
-            <div className="sync-hero-versions">
-              <span className="sync-hero-chip">本地版本 <b>v{status.local_latest?.version ?? '—'}</b></span>
-              <span className="sync-hero-chip">云端最新 <b>v{cloudTop?.version ?? '—'}</b></span>
-            </div>
-          </div>
-        </div>
-        <div className="sync-hero-actions">
-          <Button onClick={handleBackupNow} disabled={backingUp || !settings.sync_password_set} size="sm" variant="outline">
-            {backingUp ? <Loader2 size={13} className="animate-spin" /> : <CloudUpload size={13} />}
-            手动备份
-          </Button>
-          <Button onClick={handleSyncNow} disabled={syncing || !settings.sync_password_set || !anyEnabled} size="sm">
-            {syncing ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
-            立即同步
-          </Button>
-        </div>
-      </div>
-
-      {/* ── [2] 云服务存储源 ── */}
-      <div className="settings-divider" />
-      <ProviderSection providers={status.providers} onChanged={() => void refresh()} />
-
-      {/* ── [3] 安全与同步策略（仅本区修改需点击保存） ── */}
-      <div className="settings-divider" />
-      <div className="backup-card sync-settings-card">
-        <div className="settings-subsection-title"><Settings2 size={13} /><span>安全与同步策略</span></div>
-        <div className="sync-form">
-        <div className="sync-form-group">
-          <div className="sync-group-title">基础与安全</div>
-          <div className="settings-field">
-            <div className="settings-field-info">
-              <Label className="settings-field-label">
-                <KeyRound size={13} className="settings-field-icon" />
-                同步密码
-              </Label>
-              <span className="settings-field-desc">
-                {settings.sync_password_set ? '已设置（输入新密码可更换）' : '所有版本文件使用该密码加密（Argon2id + AES-256-GCM）'}
-              </span>
-            </div>
-            <div className="sync-password-wrap">
-              <Input
-                type={showPassword ? 'text' : 'password'}
-                value={passwordDisplay}
-                onChange={handlePasswordChange}
-                placeholder={settings.sync_password_set ? '已设置，输入新密码可更换' : '至少 6 位'}
-                style={{ width: 200 }}
-              />
-              <Button variant="ghost" size="sm" onClick={() => void handleTogglePassword()} title={showPassword ? '隐藏' : '显示'}>
-                {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
-              </Button>
-            </div>
-          </div>
-          {!settings.sync_password_set && (
-            <div className="backup-warning">
-              <KeyRound size={13} />
-              <span>请先设置同步密码后才能创建加密版本</span>
-            </div>
-          )}
-        </div>
-
-        <div className="sync-form-group">
-          <div className="sync-group-title">同步行为控制</div>
-          <div className="settings-field">
-            <div className="settings-field-info">
-              <Label className="settings-field-label">同步模式</Label>
-              <span className="settings-field-desc">手动模式仅在点击按钮时同步；自动模式双向保持一致</span>
-            </div>
-            <Select value={settings.sync_mode} onValueChange={(value) => patch('sync_mode', value as SyncSettings['sync_mode'])}>
-              <SelectTrigger className="settings-select"><SelectValue placeholder="请选择" /></SelectTrigger>
-              <SelectContent>{syncModeOptions.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent>
-            </Select>
-          </div>
-          <div className="settings-field">
-            <div className="settings-field-info">
-              <Label className="settings-field-label">版本冲突</Label>
-              <span className="settings-field-desc">本地与云端分叉时的处理方式</span>
-            </div>
-            <Select value={settings.conflict_policy} onValueChange={(value) => patch('conflict_policy', value as SyncSettings['conflict_policy'])}>
-              <SelectTrigger className="settings-select"><SelectValue placeholder="请选择" /></SelectTrigger>
-              <SelectContent>{conflictOptions.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent>
-            </Select>
-          </div>
-          <div className="settings-field">
-            <div className="settings-field-info">
-              <Label className="settings-field-label">云端清理</Label>
-              <span className="settings-field-desc">本地清理旧版本时云端的行为（M2 生效）</span>
-            </div>
-            <Select value={settings.cloud_retention} onValueChange={(value) => patch('cloud_retention', value as SyncSettings['cloud_retention'])}>
-              <SelectTrigger className="settings-select"><SelectValue placeholder="请选择" /></SelectTrigger>
-              <SelectContent>{retentionOptions.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent>
-            </Select>
-          </div>
-          <div className="settings-field">
-            <div className="settings-field-info">
-              <Label className="settings-field-label">本地保留版本数</Label>
-              <span className="settings-field-desc">超出后按 FIFO 清理最旧版本（未同步到云端的版本不会被清理）；0 = 不限制</span>
-            </div>
-            <div className="settings-number-group">
-              <Input type="number" min={0} max={500} value={settings.local_keep_versions}
-                onChange={(e) => patch('local_keep_versions', Math.max(0, Number(e.target.value) || 0))}
-                className="settings-number-input" />
-              <span className="settings-number-unit">个</span>
-            </div>
-          </div>
-        </div>
-
-        <div className="sync-form-group">
-          <div className="sync-group-title">自动化与版本保留</div>
-          <div className="settings-field">
-            <div className="settings-field-info">
-              <Label className="settings-field-label">启用定时备份</Label>
-              <span className="settings-field-desc">按下方规则自动创建版本</span>
-            </div>
-            <Switch checked={settings.scheduled_enabled}
-              onCheckedChange={(v) => patch('scheduled_enabled', v)} />
-          </div>
-          {settings.scheduled_enabled && (
-            <>
-              <div className="settings-field">
-                <div className="settings-field-info">
-                  <Label className="settings-field-label">
-                    <Clock size={13} className="settings-field-icon" />
-                    间隔备份
-                  </Label>
-                  <span className="settings-field-desc">每隔 X 小时备份一次；0 = 关闭</span>
-                </div>
-                <div className="settings-number-group">
-                  <Input type="number" min={0} max={720} value={settings.scheduled_interval_hours}
-                    onChange={(e) => patch('scheduled_interval_hours', Math.max(0, Number(e.target.value) || 0))}
-                    className="settings-number-input" />
-                  <span className="settings-number-unit">小时</span>
-                </div>
-              </div>
-              <div className="settings-field">
-                <div className="settings-field-info">
-                  <Label className="settings-field-label">每日定时</Label>
-                  <span className="settings-field-desc">每天在固定时间备份；留空 = 关闭</span>
-                </div>
-                <Input type="time" value={settings.scheduled_daily_time}
-                  onChange={(e) => patch('scheduled_daily_time', e.target.value)}
-                  style={{ width: 110 }} />
-              </div>
-            </>
-          )}
-          <div className="settings-field">
-            <div className="settings-field-info">
-              <Label className="settings-field-label">启用自动备份</Label>
-              <span className="settings-field-desc">数据变更时（防抖合并）与应用退出时自动创建版本</span>
-            </div>
-            <Switch checked={settings.auto_backup_enabled}
-              onCheckedChange={(v) => patch('auto_backup_enabled', v)} />
-          </div>
-          {settings.auto_backup_enabled && (
-            <div className="settings-field">
-              <div className="settings-field-info">
-                <Label className="settings-field-label">变更防抖窗口</Label>
-                <span className="settings-field-desc">连续变更在该窗口内合并为一次备份</span>
-              </div>
-              <div className="settings-number-group">
-                <Input type="number" min={5} max={600} value={settings.change_debounce_seconds}
-                  onChange={(e) => patch('change_debounce_seconds', Math.max(5, Number(e.target.value) || 30))}
-                  className="settings-number-input" />
-                <span className="settings-number-unit">秒</span>
-              </div>
-            </div>
-          )}
-        </div>
-
-        </div>
-
-        <div className="sync-settings-footer">
-          {dirty ? (
-            <span className="sync-dirty-hint"><span className="dot" /> 有未保存的更改</span>
-          ) : (
-            <span className="settings-field-desc">同步密码与策略修改后，需点击右侧「保存」才会生效</span>
-          )}
-          <div className="sync-settings-footer-actions">
-            {dirty && (
-              <Button variant="ghost" size="sm" onClick={handleReset} disabled={savingSettings}>重置</Button>
-            )}
-            <Button onClick={handleSaveSettings} disabled={savingSettings || !dirty}>
-              {savingSettings ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
-              保存同步设置
-            </Button>
-          </div>
-        </div>
-      </div>
-
-      {/* ── [4] 版本历史记录 ── */}
-      <div className="settings-divider" />
-      <div className="sync-version-header">
-        <div className="settings-subsection-title"><History size={13} /><span>版本历史（共 {versions.length} 个）</span></div>
-        <Button variant="ghost" size="sm" onClick={() => void refresh()} title="刷新">
-          <RefreshCw size={13} />
-        </Button>
-      </div>
-
-      {versions.length === 0 ? (
-        <div className="backup-row"><span className="settings-field-desc">尚无版本。设置同步密码后点击「手动备份」创建第一个版本。</span></div>
-      ) : (
-        <table className="sync-version-table">
-          <thead>
-            <tr>
-              <th>版本号</th>
-              <th>备份时间</th>
-              <th>类型</th>
-              <th>大小</th>
-              <th>状态</th>
-              <th>操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            {versions.map((v) => (
-              <tr key={v.id}>
-                <td><span className="sync-vtag">v{v.version}</span></td>
-                <td>{new Date(v.created_at).toLocaleString()}</td>
-                <td>{ORIGIN_LABELS[v.origin] ?? v.origin}</td>
-                <td>{formatSize(v.size)}</td>
-                <td>
-                  {v.synced_to.length > 0
-                    ? <span className="sync-vstatus cloud">本 / 云</span>
-                    : <span className="sync-vstatus local"><AlertTriangle size={11} /> 仅本地</span>}
-                </td>
-                <td>
-                  <div className="sync-vactions">
-                    <Button variant="outline" size="sm" disabled={busyVersionId === v.id}
-                      onClick={() => void handleRestore(v)}>
-                      {busyVersionId === v.id ? <Loader2 size={12} className="animate-spin" /> : <RotateCcw size={12} />}
-                      恢复
-                    </Button>
-                    <Button variant="ghost" size="sm" disabled={busyVersionId === v.id}
-                      onClick={() => void handleDelete(v, false)} title="删除">
-                      <Trash2 size={12} />
-                    </Button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-
-      <AlertDialog open={pendingAction !== null} onOpenChange={(open) => !open && setPendingAction(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>
-              {pendingAction?.kind === 'restore' ? '恢复历史版本？' : pendingAction?.kind === 'resolve' ? '解决同步冲突？' : '删除历史版本？'}
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              {pendingAction?.kind === 'restore'
-                ? `将当前数据恢复为 v${pendingAction.version.version}（${new Date(pendingAction.version.created_at).toLocaleString()}）。现有数据会被覆盖，并生成一个新版本。`
-                : pendingAction?.description}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>取消</AlertDialogCancel>
-            <AlertDialogAction
-              className={pendingAction?.kind === 'delete' ? 'bg-destructive text-white hover:bg-destructive/90' : undefined}
-              onClick={() => void runPendingAction()}
-            >
-              {pendingAction?.kind === 'restore' ? '恢复' : pendingAction?.kind === 'resolve' ? '确认解决' : '删除'}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+  if (!loggedIn) return <div className="settings-section"><div className="settings-section-title"><CloudSync size={14} />云同步</div><p className="settings-field-desc">登录云账号后可接入实时同步。本地数据仍可正常使用。</p></div>
+  return <div className="settings-section">
+    <div className="settings-section-title"><CloudSync size={14} />账号实时同步</div>
+    <div className="backup-card">
+      <div className="backup-row">{status ? SYNC_STATUS_LABELS[status.status] ?? status.status : '加载中…'}</div>
+      <p className="settings-field-desc">修改立即保存到本地，并异步提交云端。离线时修改保留；同条目冲突需逐条选择。</p>
+      <div className="backup-row">待同步 {status?.pendingCount ?? 0} 条 · 冲突 {status?.conflictCount ?? 0} 条</div>
+      {status?.lastConfirmed && <p className="settings-field-desc">最近云端确认：{new Date(status.lastConfirmed).toLocaleString()}</p>}
+      {status?.lastError && <p role="alert" className="backup-warning">{status.lastError}</p>}
+      <Button size="sm" disabled={busy} onClick={() => void run(() => syncApi.syncNow(), '已请求刷新和重试')}><RefreshCw size={14} />刷新／重试</Button>
     </div>
-  )
+    <div className="backup-card">
+      <label htmlFor="sync-password">独立同步密码</label>
+      <Input id="sync-password" type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder={status?.unlocked ? '输入新密码' : '首次设置或输入已有密码'} />
+      <p className="settings-field-desc">密码用于解锁账号数据；各设备使用相同密码。备份密码单独管理。</p>
+      <Button disabled={busy || password.length < 6} onClick={() => void run(() => status?.unlocked ? syncApi.changePassword(password) : syncApi.unlock(password), status?.unlocked ? '同步密码已更换' : '账号数据已解锁')}>{status?.unlocked ? '更换同步密码' : '设置／解锁'}</Button>
+    </div>
+    {status?.unlocked && !status.initialized && <div className="backup-card">
+      <Button variant="outline" disabled={busy} onClick={() => void run(() => invokeCommand('workspace_import_local'), '本地空间数据已合并到当前账号空间')}>导入原本地空间</Button>
+      <Button disabled={busy} onClick={() => void run(async () => setPreview(await syncApi.preview()))}>预览首次接入</Button>
+      {preview && <><p>本地 {preview.localCount} 条 · 云端 {preview.cloudCount} 条</p><div className="backup-row">
+        <Button disabled={busy} onClick={() => setMode('merge')}>合并</Button>
+        <Button variant="outline" disabled={busy} onClick={() => setMode('use_local')}>使用本地</Button>
+        <Button variant="outline" disabled={busy} onClick={() => setMode('use_cloud')}>使用云端</Button>
+      </div></>}
+    </div>}
+    {conflicts.map((c) => <div className="backup-card" key={`${c.itemType}:${c.itemId}`}>
+      <p>{c.name || c.itemId} · {SYNC_ITEM_LABELS[c.itemType] ?? c.itemType}</p>
+      <p className="settings-field-desc">{c.reason === 'dependency' ? '关联关系无法应用，请先处理依赖条目' : '本地与云端存在不同修改'}{c.localDeleted ? ' · 本地已删除' : ''}{c.remoteDeleted ? ' · 云端已删除' : ''}</p>
+      <ConflictDiff conflict={c} />
+      <div className="backup-row"><Button disabled={busy} onClick={() => void run(() => syncApi.resolveConflict(c.itemType, c.itemId, 'keep_local', c.remoteRevision), '已保留本地，等待云端确认')}>保留本地</Button><Button variant="outline" disabled={busy} onClick={() => void run(() => syncApi.resolveConflict(c.itemType, c.itemId, 'use_cloud', c.remoteRevision), '已采用云端内容')}>使用云端</Button></div>
+    </div>)}
+    {status && status.items.filter((i) => i.status !== 'synced').map((i) => <div className="backup-row" key={`${i.itemType}:${i.itemId}`}>{SYNC_ITEM_LABELS[i.itemType] ?? i.itemType} · {i.itemId}{i.deleted ? '（删除）' : ''} · {SYNC_STATUS_LABELS[i.status] ?? i.status}</div>)}
+    <AlertDialog open={mode !== null} onOpenChange={(open) => { if (!open) setMode(null) }}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>确认首次接入</AlertDialogTitle><AlertDialogDescription>{mode === 'use_cloud' ? '使用云端内容替换当前账号空间。应用前会保存加密安全快照。' : mode === 'use_local' ? '以当前账号空间的本地内容更新云端。其他设备将重新核对变化。' : '合并不同条目，同条目差异保留双方并提示处理。'}</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>取消</AlertDialogCancel><AlertDialogAction onClick={() => { const selected = mode; setMode(null); if (selected && preview) void run(() => syncApi.bootstrap(preview.token, selected), '接入已完成') }}>确认接入</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
+  </div>
 }
 
-function errMessage(err: unknown): string {
-  const e = err as { error?: { message?: string } }
-  return e?.error?.message ?? (err instanceof Error ? err.message : String(err))
+const FIELD_LABELS: Record<string, string> = { name: '名称', host: '主机', port: '端口', username: '用户名', auth_type: '认证方式', group_id: '分组', vault_id: '凭据', parent_id: '父分组', icon: '图标', sort_order: '排序', type: '类型', remark: '备注', fingerprint: '指纹', tags: '标签', note: '备注', content: '命令内容', description: '描述', is_global: '全局片段' }
+function ConflictDiff({ conflict }: { conflict: SyncConflict }) {
+  const fields = [...new Set([...Object.keys(conflict.local ?? {}), ...Object.keys(conflict.remote ?? {})])]
+  const display = (value: unknown) => value === null || value === undefined ? '—' : typeof value === 'string' ? value || '空' : JSON.stringify(value)
+  return <details><summary>查看本地与云端差异</summary>
+    <table className="w-full text-xs table-fixed"><thead><tr><th>字段</th><th>本地{conflict.localDeleted ? '（已删除）' : ''}</th><th>云端{conflict.remoteDeleted ? '（已删除）' : ''}</th></tr></thead><tbody>{fields.map((field) => <tr key={field}><td>{FIELD_LABELS[field] ?? field}</td><td className="break-all whitespace-pre-wrap">{display(conflict.local?.[field])}</td><td className="break-all whitespace-pre-wrap">{display(conflict.remote?.[field])}</td></tr>)}</tbody></table>
+    {(conflict.itemType === 'vault' || conflict.itemType === 'profile') && <p className="settings-field-desc">密码、私钥及代理密码不在摘要中显示。</p>}
+  </details>
 }

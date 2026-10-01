@@ -1,3 +1,4 @@
+import { SyncIndicator } from '@/components/SyncIndicator'
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { Search, X, FolderUp, Settings, KeyRound, Server } from 'lucide-react'
 import { Sidebar } from '@/components/Sidebar'
@@ -314,6 +315,7 @@ export function Layout() {
 
         {/* 右：设置 + 主题切换。容器空白区域可拖拽 */}
         <div className="header-right" data-tauri-drag-region={desktop || undefined}>
+          <SyncIndicator />
           <ThemeToggle className="hdr-icon-btn" showLabel buttonLabel="主题" />
           <Button
             type="button"

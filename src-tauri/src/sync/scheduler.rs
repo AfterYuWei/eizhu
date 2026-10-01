@@ -1,277 +1,162 @@
-use std::{future::pending, time::Duration};
-
-use chrono::{Local, NaiveTime, TimeZone};
-use tokio::{
-    runtime::Handle,
-    sync::mpsc,
-    time::{Instant, Sleep},
-};
-
-use crate::error::CommandError;
-
-use super::{
-    error::SyncError,
-    service::{SyncService, ORIGIN_CHANGE, ORIGIN_SCHEDULED, ORIGIN_SHUTDOWN},
-};
-
-const CHANNEL_CAPACITY: usize = 32;
-
-pub(super) struct SchedulerRuntime {
-    sender: mpsc::Sender<Message>,
-    task: tokio::task::JoinHandle<()>,
-}
-
-enum Message {
-    Reload,
-    Change,
-    Sync,
-    Push,
-    Stop,
-}
-
+use super::SyncService;
+use std::time::Duration;
 impl SyncService {
-    pub fn start_scheduler(&self, runtime: &Handle) -> Result<(), CommandError> {
-        let mut slot = self
-            .inner
-            .scheduler
-            .lock()
-            .map_err(|_| SyncError::SchedulerPoisoned)?;
-        if slot.is_some() {
-            return Ok(());
-        }
-        let (sender, receiver) = mpsc::channel(CHANNEL_CAPACITY);
-        let state = self.clone();
-        let task = runtime.spawn(async move { run(state, receiver).await });
-        *slot = Some(SchedulerRuntime { sender, task });
-        Ok(())
-    }
-
-    pub(crate) fn notify_change(&self) {
-        if let Err(error) = self.send_scheduler(Message::Change) {
-            crate::app::log_runtime_error("sync_change_queue_failed", &error.to_string());
-        }
-    }
-
-    pub(crate) fn reload_scheduler(&self) -> Result<(), CommandError> {
-        self.send_scheduler(Message::Reload).map_err(Into::into)
-    }
-
-    pub(crate) fn request_sync(&self) -> Result<(), CommandError> {
-        self.send_scheduler(Message::Sync).map_err(Into::into)
-    }
-
-    pub(crate) fn request_push(&self) -> Result<(), CommandError> {
-        self.send_scheduler(Message::Push).map_err(Into::into)
-    }
-
-    fn send_scheduler(&self, message: Message) -> Result<(), SyncError> {
-        let slot = self
-            .inner
-            .scheduler
-            .lock()
-            .map_err(|_| SyncError::SchedulerPoisoned)?;
-        let runtime = slot.as_ref().ok_or(SyncError::SchedulerNotStarted)?;
-        runtime
-            .sender
-            .try_send(message)
-            .map_err(|error| match error {
-                mpsc::error::TrySendError::Full(_) => SyncError::SchedulerBusy,
-                mpsc::error::TrySendError::Closed(_) => SyncError::SchedulerStopped,
-            })
-    }
-
-    pub async fn stop_scheduler(&self) {
-        let runtime = self
-            .inner
-            .scheduler
-            .lock()
-            .ok()
-            .and_then(|mut slot| slot.take());
-        if let Some(runtime) = runtime {
-            let _ = runtime.sender.send(Message::Stop).await;
-            let _ = runtime.task.await;
-        }
-    }
-
-    pub async fn shutdown_backup(&self) {
-        let Ok(settings) = self.inner.repository.load_settings() else {
-            return;
-        };
-        if !settings.auto_backup_enabled {
+    pub fn start(&self) {
+        if self.inner.user <= 0 {
             return;
         }
         let state = self.clone();
-        let work = async move {
-            tokio::task::spawn_blocking(move || state.create_version(ORIGIN_SHUTDOWN))
-                .await
-                .map_err(|error| {
-                    CommandError::new("SYNC_FAILED", format!("退出备份任务失败: {error}"))
-                })?
-        };
-        if let Ok(Err(error)) = tokio::time::timeout(Duration::from_secs(5), work).await {
-            if error.code != "SYNC_PASSWORD_REQUIRED" {
-                crate::app::log_runtime_error("shutdown_backup_failed", &error.to_string());
-            }
-        }
-    }
-}
-
-async fn run(state: SyncService, mut receiver: mpsc::Receiver<Message>) {
-    let mut scheduled_at = next_scheduled_in(&state).map(|delay| Instant::now() + delay);
-    let mut debounce_at: Option<Instant> = None;
-    loop {
-        tokio::select! {
-            message = receiver.recv() => match message {
-                Some(Message::Stop) | None => break,
-                Some(Message::Reload) => {
-                    scheduled_at = next_scheduled_in(&state).map(|delay| Instant::now() + delay);
-                }
-                Some(Message::Change) => {
-                    let delay = state.inner.repository.load_settings()
-                        .map(|settings| Duration::from_secs(settings.change_debounce_seconds.max(5) as u64))
-                        .unwrap_or(Duration::from_secs(30));
-                    debounce_at = Some(Instant::now() + delay);
-                }
-                Some(Message::Sync) => {
-                    if let Err(error) = state.sync_all().await {
-                        crate::app::log_runtime_error("manual_sync_failed", &error.to_string());
+        let worker = tauri::async_runtime::spawn(async move {
+            let mut retry = 1u64;
+            let mut tick = tokio::time::interval(Duration::from_secs(1));
+            tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+            let mut last_pull = std::time::Instant::now() - Duration::from_secs(60);
+            loop {
+                tokio::select! {
+                    _ = state.inner.stop.cancelled() => break,
+                    _ = state.inner.wake.notified() => {},
+                    _ = tick.tick() => {
+                        let pending = state.local(|r| {
+                            let status = r.status()?;
+                            Ok(status.pending_count > 0 && status.initialized && status.unlocked && r.has_work()?)
+                        }).await.unwrap_or(false);
+                        if !pending && last_pull.elapsed() < Duration::from_secs(60) { continue; }
                     }
                 }
-                Some(Message::Push) => {
-                    if let Err(error) = state.push_latest().await {
-                        crate::app::log_runtime_error("manual_push_failed", &error.to_string());
+                state.emit_async().await;
+                if state
+                    .inner
+                    .blocked
+                    .load(std::sync::atomic::Ordering::Acquire)
+                {
+                    continue;
+                }
+                if state
+                    .inner
+                    .paused
+                    .load(std::sync::atomic::Ordering::Acquire)
+                {
+                    continue;
+                }
+                match state.sync_once().await {
+                    Ok(()) => {
+                        retry = 1;
+                        last_pull = std::time::Instant::now();
+                    }
+                    Err(error) => {
+                        let status = if error.retryable { "offline" } else { "error" };
+                        let message = error.message.clone();
+                        let _ = state.local(move |r| r.set_status(status, &message)).await;
+                        state.emit_async().await;
+                        let transient = error.retryable;
+                        if !transient {
+                            state
+                                .inner
+                                .blocked
+                                .store(true, std::sync::atomic::Ordering::Release);
+                            continue;
+                        }
+                        let delay = retry;
+                        retry = (retry * 2).min(60);
+                        let mut random = [0u8; 1];
+                        let _ = getrandom::fill(&mut random);
+                        let delay = Duration::from_millis(
+                            (delay * 1000 + u64::from(random[0]) * 4).min(60000),
+                        );
+                        tokio::select! {_ = state.inner.stop.cancelled()=>break,_ = state.inner.wake.notified()=>{},_ = tokio::time::sleep(delay)=>{}}
                     }
                 }
-            },
-            _ = sleep_optional(scheduled_at) => {
-                fire(&state, ORIGIN_SCHEDULED).await;
-                scheduled_at = next_scheduled_in(&state).map(|delay| Instant::now() + delay);
             }
-            _ = sleep_optional(debounce_at) => {
-                debounce_at = None;
-                fire(&state, ORIGIN_CHANGE).await;
+        });
+        let state = self.clone();
+        let events = tauri::async_runtime::spawn(async move {
+            loop {
+                if state.inner.stop.is_cancelled() {
+                    break;
+                }
+                if state
+                    .inner
+                    .paused
+                    .load(std::sync::atomic::Ordering::Acquire)
+                {
+                    tokio::select! {_ = state.inner.stop.cancelled()=>break,_ = tokio::time::sleep(Duration::from_secs(1))=>{}}
+                    continue;
+                }
+                let response = tokio::select! {_ = state.inner.stop.cancelled()=>break,result=state.inner.account.response_for(state.inner.user,"api/sync/v2/events")=>result};
+                if response
+                    .as_ref()
+                    .is_err_and(|e| matches!(e.code, "ACCOUNT_NOT_LOGGED_IN" | "ACCOUNT_DISABLED"))
+                    || response
+                        .as_ref()
+                        .is_ok_and(|r| matches!(r.status().as_u16(), 401 | 403))
+                {
+                    tokio::select! {_ = state.inner.stop.cancelled()=>break,_=state.inner.resume.notified()=>{}}
+                    continue;
+                }
+                if let Ok(mut response) = response {
+                    if response.status().is_success() {
+                        state.notify_change();
+                        let mut buffered = Vec::new();
+                        loop {
+                            let chunk = tokio::select! {_ = state.inner.stop.cancelled()=>return,chunk=response.chunk()=>chunk};
+                            if state
+                                .inner
+                                .paused
+                                .load(std::sync::atomic::Ordering::Acquire)
+                            {
+                                break;
+                            }
+                            match chunk {
+                                Ok(Some(bytes)) => {
+                                    buffered.extend_from_slice(&bytes);
+                                    if buffered.len() > 65536 {
+                                        break;
+                                    }
+                                    while let Some(end) =
+                                        buffered.windows(2).position(|w| w == b"\n\n")
+                                    {
+                                        let event = buffered.drain(..end + 2).collect::<Vec<_>>();
+                                        if event.starts_with(b"event:change")
+                                            || event.starts_with(b"event: change")
+                                            || event.starts_with(b"event:ready")
+                                            || event.starts_with(b"event: ready")
+                                        {
+                                            state.notify_change();
+                                        }
+                                    }
+                                }
+                                _ => break,
+                            }
+                        }
+                    }
+                }
+                tokio::select! {_ = state.inner.stop.cancelled()=>break,_ = tokio::time::sleep(Duration::from_secs(5))=>{}}
             }
+        });
+        if let Ok(mut handles) = self.inner.runtime.lock() {
+            handles.push(worker);
+            handles.push(events);
         }
     }
-}
-
-async fn fire(state: &SyncService, origin: &'static str) {
-    let Ok(settings) = state.inner.repository.load_settings() else {
-        return;
-    };
-    if origin == ORIGIN_SCHEDULED && !settings.scheduled_enabled {
-        return;
-    }
-    if origin == ORIGIN_CHANGE && !settings.auto_backup_enabled {
-        return;
-    }
-    let cloned = state.clone();
-    let result = tokio::time::timeout(
-        Duration::from_secs(120),
-        tokio::task::spawn_blocking(move || cloned.create_version(origin)),
-    )
-    .await;
-    match result {
-        Ok(Ok(Ok(Some(version)))) => {
-            crate::app::log_runtime_error(
-                "sync_version_created",
-                &format!(
-                    "version={} origin={origin} size={}",
-                    version.version, version.size
-                ),
-            );
-            if let Err(error) = state.push_latest().await {
-                crate::app::log_runtime_error("automatic_cloud_push_failed", &error.to_string());
-            }
-            if settings.sync_mode == "auto" {
-                let _ = state.sync_all().await;
-            }
-        }
-        Ok(Ok(Ok(None))) => {}
-        Ok(Ok(Err(error))) if error.code == "SYNC_PASSWORD_REQUIRED" => {}
-        Ok(Ok(Err(error))) => {
-            state
-                .inner
-                .repository
-                .log_event("", "backup", 0, false, &error.message);
-        }
-        Ok(Err(error)) => state.inner.repository.log_event(
-            "",
-            "backup",
-            0,
-            false,
-            &format!("调度任务异常结束: {error}"),
-        ),
-        Err(_) => state
+    pub async fn stop(&self) {
+        self.inner.stop.cancel();
+        let handles = self
             .inner
-            .repository
-            .log_event("", "backup", 0, false, "同步备份超时"),
-    }
-}
-
-fn next_scheduled_in(state: &SyncService) -> Option<Duration> {
-    let settings = state.inner.repository.load_settings().ok()?;
-    if !settings.scheduled_enabled {
-        return None;
-    }
-    let mut delays = Vec::with_capacity(2);
-    if settings.scheduled_interval_hours > 0 {
-        delays.push(Duration::from_secs(
-            settings.scheduled_interval_hours as u64 * 3600,
-        ));
-    }
-    if let Ok(time) = NaiveTime::parse_from_str(&settings.scheduled_daily_time, "%H:%M") {
-        let now = Local::now();
-        let mut next = Local
-            .from_local_datetime(&now.date_naive().and_time(time))
-            .single()?;
-        if next <= now {
-            next += chrono::Duration::days(1);
+            .runtime
+            .lock()
+            .map(|mut h| std::mem::take(&mut *h))
+            .unwrap_or_default();
+        for handle in handles {
+            handle.abort();
+            let _ = handle.await;
         }
-        if let Ok(delay) = (next - now).to_std() {
-            delays.push(delay);
+        loop {
+            let idle = self.inner.quiescent.notified();
+            let count = self.inner.blocking.lock().map(|count| *count).unwrap_or(0);
+            if count == 0 {
+                break;
+            }
+            idle.await;
         }
-    }
-    delays.into_iter().min()
-}
-
-async fn sleep_optional(deadline: Option<Instant>) {
-    match deadline {
-        Some(deadline) => {
-            let sleep: Sleep = tokio::time::sleep_until(deadline);
-            sleep.await;
-        }
-        None => pending::<()>().await,
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::sync::model::SyncSettings;
-
-    #[test]
-    fn daily_and_interval_choose_earlier_deadline() {
-        let now = Local::now();
-        let daily = (now + chrono::Duration::minutes(10))
-            .format("%H:%M")
-            .to_string();
-        let mut settings = SyncSettings::default();
-        settings.scheduled_enabled = true;
-        settings.scheduled_interval_hours = 2;
-        settings.scheduled_daily_time = daily;
-        let mut delays = vec![Duration::from_secs(
-            settings.scheduled_interval_hours as u64 * 3600,
-        )];
-        let time = NaiveTime::parse_from_str(&settings.scheduled_daily_time, "%H:%M").unwrap();
-        let mut next = Local
-            .from_local_datetime(&now.date_naive().and_time(time))
-            .single()
-            .unwrap();
-        if next <= now {
-            next += chrono::Duration::days(1);
-        }
-        delays.push((next - now).to_std().unwrap());
-        assert!(delays.into_iter().min().unwrap() < Duration::from_secs(7200));
     }
 }

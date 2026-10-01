@@ -33,15 +33,17 @@ impl AccountRepository {
                     .encryptor
                     .decrypt(&value)
                     .map_err(|_| CommandError::new("ACCOUNT_FAILED", "本地账号登录态无法解密"))?;
-                serde_json::from_str(&plain)
+                serde_json::from_str(&zeroize::Zeroizing::new(plain))
                     .map_err(|_| CommandError::new("ACCOUNT_FAILED", "本地账号登录态已损坏"))
             })
             .transpose()
     }
 
     pub fn save(&self, session: &AccountSession) -> Result<(), CommandError> {
-        let plain = serde_json::to_string(session)
-            .map_err(|_| CommandError::new("ACCOUNT_FAILED", "无法保存账号登录态"))?;
+        let plain = zeroize::Zeroizing::new(
+            serde_json::to_string(session)
+                .map_err(|_| CommandError::new("ACCOUNT_FAILED", "无法保存账号登录态"))?,
+        );
         let encrypted = self
             .encryptor
             .encrypt(&plain)
@@ -79,6 +81,7 @@ mod tests {
         let encryptor = Encryptor::load_or_create(directory.path().join("key")).unwrap();
         let repository = AccountRepository::new(database.clone(), encryptor);
         let session = AccountSession {
+            user_id: 1,
             email: "user@example.com".into(),
             access_token: "access-secret".into(),
             refresh_token: "refresh-secret".into(),
