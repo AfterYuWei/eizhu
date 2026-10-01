@@ -1,3 +1,5 @@
+import { AccountEmailForm } from './AccountEmailForm'
+import { syncApi } from '@/api/sync'
 import { useEditorStore } from '@/store/editor'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { useState, type FormEvent } from 'react'
@@ -16,6 +18,8 @@ function formatSize(bytes = 0) {
 export function AccountPanel() {
   const { status, loading, error, login, register, logout, refresh } = useAccountStore()
   const [reauth, setReauth] = useState(false)
+  const [recovering, setRecovering] = useState(false)
+  const [notice, setNotice] = useState('')
   const [mode, setMode] = useState<'login' | 'register'>('login')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -46,6 +50,8 @@ export function AccountPanel() {
     setSwitchAction(mode)
   }
 
+  if (recovering) return <AccountEmailForm purpose="reset" email={email} onCancel={() => setRecovering(false)} onComplete={() => { setRecovering(false); setMode('login'); setReauth(true); setNotice('登录密码已重置，请使用新密码重新登录。') }} />
+
   if (status?.loggedIn && status.user && !reauth) {
     const used = status.user.storageUsed
     const quota = status.user.storageQuota
@@ -61,6 +67,7 @@ export function AccountPanel() {
         <div className="account-usage"><div><span>已使用 {formatSize(used)}</span><span>共 {formatSize(quota)}</span></div><i><em style={{ width: `${percent}%` }} /></i></div>
         <div className="backup-warning"><ShieldCheck size={13} /><span>同步密码与账号密码相互独立。首次同步前请前往「云同步」解锁同步数据并预览首次接入。</span></div>
       </div>
+      {!status.user.emailVerified && <AccountEmailForm key={status.user.id ?? status.user.email} purpose="verify" email={status.user.email} onComplete={async () => { await refresh(); await syncApi.syncNow().catch(() => undefined) }} />}
       {error && <div className="account-error">{error}</div>}
     </div>
   }
@@ -68,12 +75,14 @@ export function AccountPanel() {
   return <form className="account-panel" onSubmit={submit}>{switchDialog}
     {reauth && <Button variant="outline" type="button" onClick={() => setReauth(false)}>返回账号</Button>}
     <div className="account-welcome"><span><UserRound size={24} /></span><div><h3>{mode === 'login' ? '登录 eizhu 账号' : '注册 eizhu 账号'}</h3><p>登录后可使用按账号隔离的端到端加密同步。</p></div></div>
+    {notice && <p role="status" className="settings-field-desc">{notice}</p>}
     <div className="backup-card account-form-card">
       <div className="account-form-field"><Label htmlFor="account-email">邮箱</Label><Input id="account-email" type="email" autoComplete="username" value={email} onChange={(event) => setEmail(event.target.value)} required /></div>
       <div className="account-form-field"><Label htmlFor="account-password">密码</Label><Input id="account-password" type="password" autoComplete={mode === 'login' ? 'current-password' : 'new-password'} value={password} onChange={(event) => setPassword(event.target.value)} required /></div>
       {mode === 'register' && <div className="account-form-field"><Label htmlFor="account-confirm">确认密码</Label><Input id="account-confirm" type="password" autoComplete="new-password" value={confirm} onChange={(event) => setConfirm(event.target.value)} required /></div>}
       {(localError || error) && <div className="account-error">{localError || error}</div>}
       <Button type="submit" disabled={loading}>{loading ? <Loader2 size={14} className="animate-spin" /> : <UserRound size={14} />}{mode === 'login' ? '登录' : '创建账号'}</Button>
+      {mode === 'login' && <button type="button" className="account-mode-link" onClick={() => { setRecovering(true); setNotice('') }}>忘记登录密码？</button>}
       <button type="button" className="account-mode-link" onClick={() => { setMode(mode === 'login' ? 'register' : 'login'); setLocalError('') }}>{mode === 'login' ? '没有账号？注册新账号' : '已有账号？返回登录'}</button>
     </div>
   </form>

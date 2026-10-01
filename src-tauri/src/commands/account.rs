@@ -89,3 +89,36 @@ pub(crate) async fn workspace_import_local(
 ) -> Result<(), CommandError> {
     workspace.import_local(workspace_generation).await
 }
+
+#[tauri::command]
+pub(crate) async fn account_send_verification_email(
+    service: State<'_, AccountService>,
+) -> Result<(), CommandError> {
+    service.send_verification_email().await
+}
+#[tauri::command]
+pub(crate) async fn account_verify_email(
+    service: State<'_, AccountService>,
+    code: String,
+) -> Result<(), CommandError> {
+    let code = zeroize::Zeroizing::new(code);
+    service.verify_email(&code).await
+}
+#[tauri::command]
+pub(crate) async fn account_request_password_reset(
+    service: State<'_, AccountService>,
+    email: String,
+) -> Result<(), CommandError> {
+    service.request_password_reset(email.trim()).await
+}
+#[tauri::command]
+pub(crate) async fn account_reset_password(
+    service: State<'_, AccountService>,
+    email: String,
+    code: String,
+    new_password: String,
+) -> Result<(), CommandError> {
+    let code = zeroize::Zeroizing::new(code);
+    let password = zeroize::Zeroizing::new(new_password);
+    service.reset_password(email.trim(), &code, &password).await
+}

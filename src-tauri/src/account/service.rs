@@ -120,8 +120,54 @@ impl AccountService {
         current.email.clone_from(&me.email);
         current.storage_used = me.storage_used;
         current.storage_quota = me.storage_quota;
+        current.email_verified = me.email_verified;
+        current.verification_required = me.verification_required;
         self.repository.save(current)?;
         Ok(current.user())
+    }
+
+    pub async fn send_verification_email(&self) -> Result<(), CommandError> {
+        self.email_action("api/auth/email/send", serde_json::json!({}))
+            .await
+    }
+
+    pub async fn verify_email(&self, code: &str) -> Result<(), CommandError> {
+        self.email_action("api/auth/email/verify", serde_json::json!({ "code": code }))
+            .await
+    }
+
+    async fn email_action(&self, path: &str, body: serde_json::Value) -> Result<(), CommandError> {
+        let expected = self
+            .session
+            .lock()
+            .await
+            .as_ref()
+            .ok_or_else(not_logged_in)?
+            .user_id;
+        let body = serde_json::to_vec(&body).map_err(CommandError::database)?;
+        let response = self
+            .authorized_scoped(
+                Some(expected),
+                Method::POST,
+                path,
+                Some(body),
+                Some("application/json"),
+            )
+            .await?;
+        self.client.unit_from_response(response).await
+    }
+
+    pub async fn request_password_reset(&self, email: &str) -> Result<(), CommandError> {
+        self.client.request_password_reset(email).await
+    }
+
+    pub async fn reset_password(
+        &self,
+        email: &str,
+        code: &str,
+        password: &str,
+    ) -> Result<(), CommandError> {
+        self.client.reset_password(email, code, password).await
     }
 
     pub async fn logout(&self) -> Result<(), CommandError> {

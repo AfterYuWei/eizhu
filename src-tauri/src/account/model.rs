@@ -9,6 +9,10 @@ pub struct AccountUser {
     pub email: String,
     pub storage_used: i64,
     pub storage_quota: i64,
+    #[serde(default)]
+    pub email_verified: bool,
+    #[serde(default)]
+    pub verification_required: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -31,6 +35,10 @@ pub(super) struct AccountSession {
     pub expires_in: i64,
     pub storage_used: i64,
     pub storage_quota: i64,
+    #[serde(default)]
+    pub email_verified: bool,
+    #[serde(default)]
+    pub verification_required: bool,
 }
 
 impl AccountSession {
@@ -40,6 +48,8 @@ impl AccountSession {
             email: self.email.clone(),
             storage_used: self.storage_used,
             storage_quota: self.storage_quota,
+            email_verified: self.email_verified,
+            verification_required: self.verification_required,
         }
     }
 }
@@ -63,6 +73,8 @@ impl From<TokenResponse> for AccountSession {
             expires_in: value.expires_in,
             storage_used: value.user.storage_used,
             storage_quota: value.user.storage_quota,
+            email_verified: value.user.email_verified,
+            verification_required: value.user.verification_required,
         }
     }
 }
@@ -74,4 +86,30 @@ pub(super) struct MeResponse {
     pub email: String,
     pub storage_used: i64,
     pub storage_quota: i64,
+    #[serde(default)]
+    pub email_verified: bool,
+    #[serde(default)]
+    pub verification_required: bool,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn legacy_saved_sessions_keep_cloud_access_policy_when_fields_are_missing() {
+        let legacy = r#"{"userId":7,"email":"legacy@example.com","accessToken":"access","refreshToken":"refresh","expiresIn":1800,"storageUsed":8,"storageQuota":100}"#;
+        let session: AccountSession = serde_json::from_str(legacy).unwrap();
+        assert!(!session.user().verification_required);
+        assert!(!session.user().email_verified);
+        assert_eq!(session.user().id, 7);
+    }
+    #[test]
+    fn verification_policy_survives_login_response_and_session_round_trip() {
+        let response: TokenResponse = serde_json::from_str(r#"{"accessToken":"access","refreshToken":"refresh","expiresIn":1800,"user":{"id":8,"email":"new@example.com","storageUsed":0,"storageQuota":100,"emailVerified":false,"verificationRequired":true}}"#).unwrap();
+        let session = AccountSession::from(response);
+        let restored: AccountSession =
+            serde_json::from_str(&serde_json::to_string(&session).unwrap()).unwrap();
+        assert!(restored.user().verification_required);
+        assert!(!restored.user().email_verified);
+    }
 }

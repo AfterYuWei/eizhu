@@ -171,6 +171,10 @@ pub(crate) fn run() {
                 commands::account_status,
                 commands::account_login,
                 commands::account_register,
+                commands::account_send_verification_email,
+                commands::account_verify_email,
+                commands::account_request_password_reset,
+                commands::account_reset_password,
                 commands::account_logout,
                 commands::account_me,
                 commands::account_set_sync_enabled
@@ -407,6 +411,10 @@ fn desktop_run() {
             commands::account_status,
             commands::account_login,
             commands::account_register,
+            commands::account_send_verification_email,
+            commands::account_verify_email,
+            commands::account_request_password_reset,
+            commands::account_reset_password,
             commands::account_logout,
             commands::account_me,
             commands::account_set_sync_enabled

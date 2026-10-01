@@ -88,6 +88,8 @@ mod tests {
             expires_in: 1800,
             storage_used: 12,
             storage_quota: 100,
+            email_verified: false,
+            verification_required: false,
         };
         repository.save(&session).unwrap();
 

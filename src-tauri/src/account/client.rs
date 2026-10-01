@@ -62,6 +62,38 @@ impl AccountClient {
             .await
     }
 
+    pub async fn request_password_reset(&self, email: &str) -> Result<(), CommandError> {
+        self.public_unit(
+            "api/auth/password/forgot",
+            serde_json::json!({ "email": email }),
+        )
+        .await
+    }
+
+    pub async fn reset_password(
+        &self,
+        email: &str,
+        code: &str,
+        password: &str,
+    ) -> Result<(), CommandError> {
+        self.public_unit(
+            "api/auth/password/reset",
+            serde_json::json!({ "email": email, "code": code, "newPassword": password }),
+        )
+        .await
+    }
+
+    async fn public_unit(&self, path: &str, body: serde_json::Value) -> Result<(), CommandError> {
+        let response = self
+            .client
+            .post(self.url(path)?)
+            .json(&body)
+            .send()
+            .await
+            .map_err(network_error)?;
+        self.unit_from_response(response).await
+    }
+
     pub async fn refresh(&self, refresh_token: &str) -> Result<TokenResponse, CommandError> {
         let response = self
             .client
@@ -152,6 +184,19 @@ impl AccountClient {
             }
             (StatusCode::CONFLICT, Some("EMAIL_TAKEN")) => {
                 CommandError::new("ACCOUNT_EMAIL_TAKEN", "该邮箱已被注册")
+            }
+            (StatusCode::FORBIDDEN, Some("EMAIL_NOT_VERIFIED")) => {
+                CommandError::new("EMAIL_NOT_VERIFIED", "请先验证邮箱，再使用云同步和官方备份")
+            }
+            (StatusCode::BAD_REQUEST, Some("PASSWORD_TOO_LONG")) => CommandError::new(
+                "PASSWORD_TOO_LONG",
+                "登录密码不能超过 72 个 UTF-8 字节，请缩短密码",
+            ),
+            (StatusCode::BAD_REQUEST, Some("INVALID_EMAIL_CODE")) => {
+                CommandError::new("INVALID_EMAIL_CODE", "验证码无效或已过期，请重新获取")
+            }
+            (StatusCode::TOO_MANY_REQUESTS, _) => {
+                CommandError::new("RATE_LIMITED", "请求过于频繁，请稍后重试")
             }
             (StatusCode::FORBIDDEN, Some("ACCOUNT_DISABLED")) => {
                 CommandError::new("ACCOUNT_DISABLED", "账号已被禁用，请联系管理员")
