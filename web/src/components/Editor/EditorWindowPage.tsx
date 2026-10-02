@@ -1,3 +1,5 @@
+import { EditorMergeDialog } from './EditorMergeDialog'
+import { EditorSaveAsDialog } from './EditorSaveAsDialog'
 import { isEditorDirty as isDirty, saveBeforeEditorClose, type EditorCloseRequest } from '@/lib/editorCloseGuard'
 import { useCallback, useEffect, useState } from 'react'
 import { getCurrentWindow } from '@tauri-apps/api/window'
@@ -43,6 +45,8 @@ export function EditorWindowPage() {
   const saveFile = useEditorStore((state) => state.saveFile)
   const reloadFile = useEditorStore((state) => state.reloadFile)
   const [pendingClose, setPendingClose] = useState<PendingClose | null>(null)
+  const [saveAsId, setSaveAsId] = useState<string | null>(null)
+  const [reloadId, setReloadId] = useState<string | null>(null)
   const [closingBusy, setClosingBusy] = useState(false)
   const theme = useResolvedTheme()
   const { desktop, mac, showControls, maximized, minimize, toggleMaximize } = useWindowControls()
@@ -271,7 +275,9 @@ export function EditorWindowPage() {
               conflict={activeTab.conflict}
               hasSession={!!activeTab.sessionId}
               onSave={() => void saveFile(activeTab.id)}
-              onReload={() => void reloadFile(activeTab.id)}
+              onCompare={() => void useEditorStore.getState().compareFile(activeTab.id)}
+              onSaveAs={() => setSaveAsId(activeTab.id)}
+              onReload={() => { if (isDirty(activeTab)) setReloadId(activeTab.id); else void reloadFile(activeTab.id) }}
               onClose={requestCloseWindow}
             />
             <div className="editor-body">
@@ -348,6 +354,12 @@ export function EditorWindowPage() {
         </AlertDialogContent>
       </AlertDialog>
 
+      {activeTab?.mergePreview && <EditorMergeDialog key={`${activeTab.id}:${activeTab.readEpoch}`} tab={activeTab} />}
+      {saveAsId && tabs.find((t) => t.id === saveAsId) && <EditorSaveAsDialog tab={tabs.find((t) => t.id === saveAsId)!} onClose={() => setSaveAsId(null)} />}
+      <AlertDialog open={!!reloadId} onOpenChange={(open) => { if (!open) setReloadId(null) }}><AlertDialogContent>
+        <AlertDialogHeader><AlertDialogTitle>重新加载并放弃本地修改？</AlertDialogTitle><AlertDialogDescription>本地修改尚未保存，可先比较远端或另存为新文件。</AlertDialogDescription></AlertDialogHeader>
+        <AlertDialogFooter><AlertDialogCancel>继续编辑</AlertDialogCancel><AlertDialogAction onClick={() => { if (reloadId) void reloadFile(reloadId); setReloadId(null) }}>放弃修改并重新加载</AlertDialogAction></AlertDialogFooter>
+      </AlertDialogContent></AlertDialog>
       <Toaster theme={theme} />
     </div>
   )

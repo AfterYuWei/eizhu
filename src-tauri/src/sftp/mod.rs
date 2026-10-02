@@ -1,4 +1,5 @@
 mod backend;
+mod editor;
 mod error;
 mod events;
 mod state;

@@ -140,6 +140,7 @@ export interface SftpFileReadResponse {
   line_ending: LineEnding
   /** True when the file's owner-write bit is unset. */
   read_only: boolean
+  content_hash?: string
 }
 
 /** Editor write request. */
@@ -147,6 +148,8 @@ export interface SftpFileWriteRequest {
   content: string
   /** Must match the server's current ModTime; mismatch → 409 FILE_MODIFIED. */
   expected_mod_time: string
+  expected_content_hash?: string
+  create_new?: boolean
   line_ending?: LineEnding
 }
 
@@ -156,4 +159,5 @@ export interface SftpFileWriteResponse {
   path: string
   size: number
   mod_time: string
+  content_hash?: string
 }

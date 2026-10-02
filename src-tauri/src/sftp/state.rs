@@ -7,7 +7,7 @@ use std::{
     time::SystemTime,
 };
 
-use chrono::{DateTime, Local, SecondsFormat, Utc};
+use chrono::{Local, SecondsFormat, Utc};
 use serde::{Deserialize, Serialize};
 use tokio::{
     sync::{Mutex, Notify, RwLock},
@@ -100,6 +100,7 @@ pub(crate) struct SftpFileReadResponse {
     language: String,
     line_ending: String,
     read_only: bool,
+    content_hash: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -107,6 +108,10 @@ pub(crate) struct SftpFileWriteRequest {
     content: String,
     #[serde(default)]
     expected_mod_time: String,
+    #[serde(default)]
+    expected_content_hash: String,
+    #[serde(default)]
+    create_new: bool,
     #[serde(default)]
     line_ending: String,
 }
@@ -116,6 +121,7 @@ pub(crate) struct SftpFileWriteResponse {
     path: String,
     size: u64,
     mod_time: String,
+    content_hash: String,
 }
 
 struct SessionData {
@@ -348,6 +354,7 @@ impl SftpService {
                     }
                 }
                 let backend = Arc::new(FileBackend::Remote {
+                    atomic: FileBackend::probe_atomic(&route).await,
                     sftp,
                     _route: route,
                 });
@@ -1029,6 +1036,7 @@ pub(crate) async fn read_file(
             "该文件为二进制文件，无法在文本编辑器中打开",
         ));
     }
+    let content_hash = super::editor::content_hash(&bytes);
     let mut content = String::from_utf8(bytes).map_err(|_| {
         CommandError::new(
             "UNSUPPORTED_ENCODING",
@@ -1052,6 +1060,7 @@ pub(crate) async fn read_file(
         language: detect_language(&path),
         line_ending: line_ending.into(),
         read_only: !is_writable(&info.mode),
+        content_hash,
     })
 }
 
@@ -1063,31 +1072,6 @@ pub(crate) async fn write_file(
 ) -> Result<SftpFileWriteResponse, CommandError> {
     let (session, backend) = state.backend(&session_id).await?;
     let path = clean_path(&path);
-    let existing = backend.stat(&path).await.ok();
-    if let Some(info) = &existing {
-        if info.is_dir {
-            return Err(CommandError::new(
-                "IS_DIRECTORY",
-                "cannot write a directory",
-            ));
-        }
-        if !request.expected_mod_time.is_empty() {
-            let expected =
-                DateTime::parse_from_rfc3339(&request.expected_mod_time).map_err(|_| {
-                    CommandError::new(
-                        "INVALID_MOD_TIME",
-                        "expected_mod_time is not a valid RFC 3339 timestamp",
-                    )
-                })?;
-            let current: DateTime<Utc> = info.modified.into();
-            if current.timestamp_nanos_opt() != expected.timestamp_nanos_opt() {
-                return Err(CommandError::new(
-                    "FILE_MODIFIED",
-                    "文件在编辑期间已被其他进程修改，请重新加载以避免覆盖",
-                ));
-            }
-        }
-    }
     let content = if request.line_ending == "crlf" {
         request.content.replace('\n', "\r\n")
     } else {
@@ -1099,22 +1083,21 @@ pub(crate) async fn write_file(
             "保存后文件大小超过 10MB 上限",
         ));
     }
-    backend
-        .write(&path, content.as_bytes())
-        .await
-        .map_err(backend_error)?;
-    let updated = backend.stat(&path).await.ok();
-    let size = updated
-        .as_ref()
-        .map_or(content.len() as u64, |value| value.size);
-    let mod_time = updated.map_or_else(
-        || format_time(SystemTime::now()),
-        |value| format_time(value.modified),
-    );
-    let action = if existing.is_some() {
-        "sftp_write_file"
-    } else {
+    let updated = super::editor::save(
+        &backend,
+        &path,
+        content.as_bytes(),
+        &request.expected_mod_time,
+        &request.expected_content_hash,
+        request.create_new,
+    )
+    .await?;
+    let size = updated.size;
+    let mod_time = format_time(updated.modified);
+    let action = if request.expected_mod_time.is_empty() {
         "sftp_create_file"
+    } else {
+        "sftp_write_file"
     };
     let _ = state.audit.record(
         &session.profile_id,
@@ -1125,6 +1108,7 @@ pub(crate) async fn write_file(
         path,
         size,
         mod_time,
+        content_hash: super::editor::content_hash(content.as_bytes()),
     })
 }
 
