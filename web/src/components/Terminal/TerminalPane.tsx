@@ -3,6 +3,7 @@ import { useTerminal } from '@/hooks/useTerminal'
 import { useSessionChannel } from '@/hooks/useSessionChannel'
 import { useSessionStore } from '@/store/session'
 import { useProfileStore } from '@/store/profile'
+import { useHistoryStore } from '@/store/history'
 import {
   DEFAULT_DESKTOP_TERMINAL_FONT_SIZE,
   DEFAULT_MOBILE_TERMINAL_FONT_SIZE,
@@ -580,7 +581,13 @@ export function TerminalPane({ tab, isActive }: TerminalPaneProps) {
     sendComplete,
     getCwd,
     enabled: terminalPopupMenu,
+    profileId: tab.profileId,
+    tabId: tab.id,
   })
+
+  useEffect(() => {
+    if (tab.profileId) void useHistoryStore.getState().load(tab.profileId).catch(() => {})
+  }, [tab.profileId])
 
   useEffect(() => {
     channelStatusRef.current = channelStatus

@@ -5,6 +5,7 @@ import { useSessionStore } from '@/store/session'
 import { useEditorStore } from '@/store/editor'
 import { useServerDetailStore } from '@/store/serverDetail'
 import { useSyncStore } from '@/store/sync'
+import { useHistoryStore } from '@/store/history'
 export interface WorkspaceStatus { id: string; generation: number; userId: number }
 import { workspaceGeneration, setWorkspaceGeneration } from './workspaceScope'
 export { workspaceGeneration } from './workspaceScope'
@@ -17,6 +18,7 @@ export function applyWorkspace(workspace: WorkspaceStatus) {
   useEditorStore.setState(useEditorStore.getInitialState(), true)
   useServerDetailStore.setState(useServerDetailStore.getInitialState(), true)
   useSyncStore.setState(useSyncStore.getInitialState(), true)
+  useHistoryStore.setState(useHistoryStore.getInitialState(), true)
   void useProfileStore.getState().refreshAll()
   void useVaultStore.getState().fetchList()
   void useSyncStore.getState().refresh()

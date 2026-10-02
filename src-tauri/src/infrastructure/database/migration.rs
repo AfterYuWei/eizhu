@@ -140,6 +140,7 @@ pub(super) fn migrate(connection: &Connection) -> Result<(), StorageError> {
         "UPDATE vault SET updated_at=created_at WHERE updated_at IS NULL",
         [],
     )?;
+    connection.execute_batch("CREATE TABLE IF NOT EXISTS local_preferences(key TEXT PRIMARY KEY, payload TEXT NOT NULL); CREATE TABLE IF NOT EXISTS local_history(profile_id TEXT PRIMARY KEY, payload TEXT NOT NULL);")?;
     super::sync_migration::migrate(connection)?;
     connection.query_row("SELECT eizhu_capture_enabled(1)", [], |_| Ok(()))?;
     Ok(())

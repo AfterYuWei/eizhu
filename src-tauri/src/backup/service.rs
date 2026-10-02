@@ -656,6 +656,37 @@ mod tests {
     }
 
     #[test]
+    fn local_history_and_preferences_are_excluded_from_complete_backups() {
+        let (_dir, service, database, encryptor) = state();
+        database
+            .connect()
+            .unwrap()
+            .execute(
+                "INSERT INTO profiles(id,name,host) VALUES('local','local','host')",
+                [],
+            )
+            .unwrap();
+        let before = serde_json::to_value(service.export_payload().unwrap()).unwrap();
+        let local = crate::local_state::LocalStateService::new(database, encryptor);
+        local
+            .record("local", "echo private-history-marker", "/private")
+            .unwrap();
+        local
+            .write(
+                crate::local_state::LocalStateKey::TerminalLayout,
+                serde_json::json!({"privateLayout": "local"}),
+            )
+            .unwrap();
+        assert_eq!(
+            serde_json::to_value(service.export_payload().unwrap()).unwrap(),
+            before
+        );
+        let exported = String::from_utf8(service.export_bytes(MODE_PLAIN, "").unwrap()).unwrap();
+        assert!(!exported.contains("private-history-marker"));
+        assert!(!exported.contains("privateLayout"));
+    }
+
+    #[test]
     fn isolated_restore_guards_generation_and_keeps_encrypted_safety_and_one_transaction_queue() {
         let (dir, service, database, encryptor) = state();
         let c = database.connect().unwrap();

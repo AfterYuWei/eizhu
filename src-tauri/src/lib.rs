@@ -11,6 +11,7 @@ mod commands;
 mod error;
 mod group;
 mod infrastructure;
+mod local_state;
 mod profile;
 mod server_detail;
 mod sftp;

@@ -12,7 +12,7 @@ import {
   type Suggestion,
 } from '@/lib/completionEngine'
 import { createCompletionCache, type CompletionCache } from '@/lib/completionCache'
-import { recordCommand, queryHistory } from '@/lib/commandHistory'
+import { recordCommand, queryHistory, reliableHistoryCommand } from '@/lib/commandHistory'
 import {
   resyncFromTerminal,
   moveCursorInBuffer,
@@ -28,6 +28,8 @@ interface UseCompletionOptions {
   sendComplete: (requestId: string, script: string, cwd?: string) => void
   getCwd: () => string | undefined
   enabled: boolean
+  profileId?: string
+  tabId?: string
 }
 
 /** 级联菜单中的一列：一组候选 + 当前选中索引 */
@@ -74,7 +76,7 @@ const EMPTY_POPUP: CompletionPopupState = {
   cascade: false,
 }
 
-export function useCompletion({ getTerminal, sendInput, sendComplete, getCwd, enabled }: UseCompletionOptions) {
+export function useCompletion({ getTerminal, sendInput, sendComplete, getCwd, enabled, profileId = '', tabId = '' }: UseCompletionOptions) {
   const [popup, setPopup] = useState<CompletionPopupState>(EMPTY_POPUP)
 
   const bufferRef = useRef<BufferState>({ text: '', cursor: 0, stale: false })
@@ -107,7 +109,7 @@ export function useCompletion({ getTerminal, sendInput, sendComplete, getCwd, en
     const cwd = getCwdRef.current()
     // 用当前路径 token 作为历史匹配前缀；为空则用 cwd
     const pathPrefix = currentToken || cwd || ''
-    const historyItems = queryHistory(pathPrefix, cwd, 6).map<Suggestion>((h) => ({
+    const historyItems = queryHistory(profileId, pathPrefix, cwd, 6).map<Suggestion>((h) => ({
       name: h.command,
       type: 'history',
       count: h.count,
@@ -115,7 +117,7 @@ export function useCompletion({ getTerminal, sendInput, sendComplete, getCwd, en
       origin: 'dynamic',
     }))
     return [...historyItems, ...dirs]
-  }, [])
+  }, [profileId])
 
   const recompute = useCallback(() => {
     const buffer = bufferRef.current
@@ -335,7 +337,7 @@ export function useCompletion({ getTerminal, sendInput, sendComplete, getCwd, en
   }, [hoverSelect, applySelection])
 
   const handleData = useCallback((data: string): boolean => {
-    if (!enabledRef.current || inTuiRef.current) return false
+    if (inTuiRef.current && data !== '\x03') return false
 
     if (data === '\x1b[A' || data === '\x1b[B') {
       if (popupRef.current.open) {
@@ -356,10 +358,11 @@ export function useCompletion({ getTerminal, sendInput, sendComplete, getCwd, en
         }
         closePopup()
       }
-      // 采集历史命令（在清空前记录）
-      const cmdText = bufferRef.current.text.trim()
-      if (cmdText) {
-        recordCommand(cmdText, getCwdRef.current())
+      const cmdText = reliableHistoryCommand(bufferRef.current, getTerminal())
+      if (cmdText && profileId) {
+        void recordCommand(profileId, tabId, cmdText, getCwdRef.current()).catch(() => {
+          // 持久化失败不阻断远端输入；历史设置页仍提供读取错误提示。
+        })
       }
       if (isTuiCommand(bufferRef.current.text)) {
         inTuiRef.current = true
@@ -486,7 +489,7 @@ export function useCompletion({ getTerminal, sendInput, sendComplete, getCwd, en
     bufferRef.current.stale = true
     closePopup()
     return false
-  }, [applySelection, closePopup, collapseColumn, expandDirectory, getTerminal, navigateColumn, scheduleRecompute, selectFirstDirectory])
+  }, [applySelection, closePopup, collapseColumn, expandDirectory, getTerminal, navigateColumn, scheduleRecompute, selectFirstDirectory, profileId, tabId])
 
   const handleOutputData = useCallback((data: string) => {
     const state = detectTuiSequence(data)

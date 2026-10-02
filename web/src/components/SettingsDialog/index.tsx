@@ -14,6 +14,7 @@ import { BackupPanel } from './BackupPanel'
 import { SyncPanel } from './SyncPanel'
 import { AboutPanel } from './AboutPanel'
 import { LogPanel } from './LogPanel'
+import { HistoryPanel } from './HistoryPanel'
 import { isTestBuild } from '@/lib/updater'
 import { isDesktopRuntime, isMobileRuntime } from '@/lib/platform'
 import { MobileDiagnosticsPanel } from './MobileDiagnosticsPanel'
@@ -251,6 +252,7 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
                   />
                 </div>
               </div>
+              {isDesktopRuntime() && <HistoryPanel />}
             </TabsContent>
 
             <TabsContent value="backup" className="settings-content"><BackupPanel /></TabsContent>
