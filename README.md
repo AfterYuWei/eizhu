@@ -140,7 +140,7 @@ make web-dev
 
 ## 构建与验证
 
-构建桌面安装包：
+构建桌面安装包前，在环境中设置实际 HTTPS 账号服务地址 `EIZHU_ACCOUNT_SERVER`（打包会拒绝缺失或占位地址；开发和单元测试不受影响）：
 
 ```bash
 npm run desktop:build

@@ -3,12 +3,19 @@
 import { spawnSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
+import { validateAccountServer } from './account-server-config.mjs'
 
 const root = fileURLToPath(new URL('../', import.meta.url))
 const command = process.argv[2]
 if (!['dev', 'build', 'android', 'ios'].includes(command)) {
   console.error('用法: node scripts/run-tauri.mjs <dev|build|android|ios> [Tauri 参数...]')
   process.exit(1)
+}
+
+const environment = { ...process.env }
+if (command === 'build') {
+  try { environment.EIZHU_ACCOUNT_SERVER = validateAccountServer(environment.EIZHU_ACCOUNT_SERVER) }
+  catch (error) { console.error(error.message); process.exit(1) }
 }
 
 // 桌面端与移动端版本分开源文件管理：VERSION 供 dev/build（桌面）使用，
@@ -35,7 +42,7 @@ console.log(`[eizhu] Tauri ${command} 版本（${versionFile}）: ${version}`)
 // cannot spawn a .cmd shim directly with shell=false and returns EINVAL.
 const result = spawnSync(process.execPath, [cli, ...args], {
   cwd: root,
-  env: process.env,
+  env: environment,
   stdio: 'inherit',
 })
 if (result.error) {

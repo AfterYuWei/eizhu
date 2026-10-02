@@ -34,6 +34,12 @@ test 版本号由「提交计数 + 短 SHA」组成（如 `0.4.2-test.486.1a2b3c
 `-test.<sha>` 字典序回退导致覆盖安装被强制要求先卸载；短 SHA 提供构建可追溯性，
 同一提交重跑时版本不变、资产覆盖到同一个 test Release。
 
+## 账号服务地址与质量门禁
+
+配置仓库 Variables `EIZHU_ACCOUNT_SERVER_TEST` 与 `EIZHU_ACCOUNT_SERVER_STABLE` 为实际 HTTPS 账号服务地址。两个通道严格独立，正式通道缺失时不会回退测试服务。打包入口拒绝占位地址和携带认证信息的地址；本地 `desktop:build` 需要环境变量 `EIZHU_ACCOUNT_SERVER`，普通开发与单元测试不需要。
+
+桌面发布构建依赖同一提交的 `quality-core.yml`：前端测试、lint、构建，Rust 检查及桌面烟测全部通过才继续。Quality 产物与安装包产物分开筛选，前端静态文件不会混入 Release。
+
 ## 推荐发版流程
 
 1. 日常开发在 `dev` 分支进行；需要多人协作时，也可通过 PR 合入 `dev`。

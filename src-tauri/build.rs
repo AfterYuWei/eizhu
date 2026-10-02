@@ -1,5 +1,6 @@
 fn main() {
     println!("cargo:rerun-if-env-changed=EIZHU_BUILD_CHANNEL");
+    println!("cargo:rerun-if-env-changed=EIZHU_ACCOUNT_SERVER");
     println!("cargo:rerun-if-changed=../VERSION");
 
     let version = std::fs::read_to_string("../VERSION")
