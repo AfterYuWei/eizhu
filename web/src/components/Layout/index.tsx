@@ -1,3 +1,4 @@
+import { registerDesktopAction, runDesktopAction, shortcutAction } from '@/lib/desktopActions'
 import { SyncIndicator } from '@/components/SyncIndicator'
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { Search, X, FolderUp, Settings, KeyRound, Server } from 'lucide-react'
@@ -24,7 +25,7 @@ const SettingsDialog = lazy(() =>
 )
 
 export function Layout() {
-  const { tabs, openSftpTab, openVaultTab, openTab, setActiveTab } = useSessionStore()
+  const { tabs, openVaultTab, openTab, setActiveTab } = useSessionStore()
   const { sidebarWidth, setSidebarWidth, theme } = useSettingsStore()
   useSettingsStore((state) => state.systemRevision)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
@@ -144,21 +145,20 @@ export function Layout() {
     fetchGroups()
   }, [fetchProfiles, fetchGroups])
 
-  // Global keyboard shortcuts: ⌘K palette, ⌘B sidebar
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      const meta = e.metaKey || e.ctrlKey
-      if (meta && e.key === 'k') {
-        e.preventDefault()
-        setPaletteOpen((v) => !v)
-      }
-      if (meta && e.key === 'b') {
-        e.preventDefault()
-        setSidebarCollapsed((v) => !v)
-      }
+    const unregister = [
+      registerDesktopAction('palette', () => setPaletteOpen((v) => !v)),
+      registerDesktopAction('sidebar', () => setSidebarCollapsed((v) => !v)),
+    ]
+    const handler = (event: KeyboardEvent) => {
+      const action = shortcutAction(event)
+      if (!action || event.defaultPrevented || (document.querySelector('[role="dialog"]') && action !== 'palette')) return
+      event.preventDefault()
+      event.stopPropagation()
+      runDesktopAction(action)
     }
-    document.addEventListener('keydown', handler)
-    return () => document.removeEventListener('keydown', handler)
+    document.addEventListener('keydown', handler, true)
+    return () => { unregister.forEach((fn) => fn()); document.removeEventListener('keydown', handler, true) }
   }, [])
 
   return (
@@ -178,9 +178,9 @@ export function Layout() {
             type="button"
             variant="ghost"
             className="hdr-icon-btn"
-            title={sidebarCollapsed ? '展开侧边栏 (⌘B)' : '折叠侧边栏 (⌘B)'}
+            title={sidebarCollapsed ? '展开侧边栏 (Ctrl/Cmd+Shift+B)' : '折叠侧边栏 (Ctrl/Cmd+Shift+B)'}
             aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            onClick={() => setSidebarCollapsed((v) => !v)}
+            onClick={() => runDesktopAction('sidebar')}
           >
             {sidebarCollapsed ? (
               <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -201,7 +201,7 @@ export function Layout() {
             className="hdr-icon-btn"
             title="SFTP 文件管理"
             aria-label="打开 SFTP 文件管理"
-            onClick={() => openSftpTab()}
+            onClick={() => runDesktopAction('sftp')}
           >
             <FolderUp size={14} />
             <span className="hdr-icon-btn-label">SFTP</span>
@@ -417,7 +417,6 @@ export function Layout() {
       <CommandPalette
         open={paletteOpen}
         onClose={() => setPaletteOpen(false)}
-        onToggleSidebar={() => setSidebarCollapsed((v) => !v)}
       />
 
       {/* 设置面板 */}
@@ -448,7 +447,7 @@ function EmptyState() {
       </div>
       <div className="term-empty-title">暂无活跃会话</div>
       <div className="term-empty-desc">
-        从左侧选择一个服务器连接，或按 ⌘K 打开命令面板
+        从左侧选择一个服务器连接，或按 Ctrl/Cmd+Shift+K 打开命令面板
       </div>
     </div>
   )

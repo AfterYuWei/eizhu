@@ -25,7 +25,7 @@ import { MobileSftpView } from './MobileSftpView'
  *  Each SftpView mount creates its OWN store instance (via createSftpStore)
  *  and provides it through context, so opening multiple SFTP tabs yields
  *  fully independent state & rendering. */
-export function SftpView() {
+export function SftpView({ initialProfileId, initialPath }: { initialProfileId?: string; initialPath?: string } = {}) {
   const mobile = isMobileRuntime()
   const [tablet, setTablet] = useState(() => mobile
     && typeof window.matchMedia === 'function'
@@ -38,8 +38,16 @@ export function SftpView() {
 
   // Load available servers (profiles) on mount
   useEffect(() => {
-    store.getState().loadServers()
-  }, [store])
+    let active = true
+    void store.getState().loadServers().then(async () => {
+      if (!active || !initialProfileId) return
+      const server = store.getState().servers.find((s) => s.id === initialProfileId)
+      if (!server) return
+      await store.getState().connectServer('right', server)
+      if (active && initialPath) await store.getState().navigate('right', initialPath)
+    })
+    return () => { active = false }
+  }, [store, initialProfileId, initialPath])
 
   useEffect(() => {
     if (!mobile || typeof window.matchMedia !== 'function') return

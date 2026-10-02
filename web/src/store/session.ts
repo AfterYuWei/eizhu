@@ -40,7 +40,7 @@ interface SessionStore {
     targetTabId?: string,
   ) => Promise<string>
   openDraftTab: () => string
-  openSftpTab: () => string
+  openSftpTab: (profileId?: string, cwd?: string) => string
   openVaultTab: () => string
   closeTab: (tabId: string) => void
   setActiveTab: (tabId: string) => void
@@ -202,12 +202,13 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     }
   },
 
-  openSftpTab: () => {
+  openSftpTab: (profileId, cwd) => {
     const tabId = `sftp-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
     const newTab: SessionTab = {
       id: tabId,
       kind: 'sftp',
-      profileId: '',
+      profileId: profileId ?? '',
+      cwd,
       profileName: 'SFTP',
       sessionId: null,
       status: 'disconnected',

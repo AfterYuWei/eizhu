@@ -1,3 +1,6 @@
+import { registerTerminalActions } from '@/lib/terminalActions'
+import { TerminalFind } from './TerminalFind'
+import { ConnectionPicker } from './ConnectionPicker'
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { useTerminal } from '@/hooks/useTerminal'
 import { useSessionChannel } from '@/hooks/useSessionChannel'
@@ -99,6 +102,7 @@ export function TerminalPane({ tab, isActive }: TerminalPaneProps) {
 
   const [showDialog, setShowDialog] = useState(false)
   const [connectionError, setConnectionError] = useState('')
+  const [findOpen, setFindOpen] = useState(false)
   const [dialogStatus, setDialogStatus] = useState<'connecting' | 'connected' | 'error' | 'reconnecting' | 'hostkey'>(
     'connecting',
   )
@@ -370,6 +374,22 @@ export function TerminalPane({ tab, isActive }: TerminalPaneProps) {
     tab.profileId,
     updateTabStatus,
   ])
+
+  useEffect(() => registerTerminalActions(tab.id, {
+    focus: () => getTerminal()?.focus(),
+    reconnect: reconnectNow,
+    search: () => setFindOpen(true),
+    safeMultiline: () => !!getTerminal()?.modes.bracketedPasteMode,
+    insert: (content, execute = false) => {
+      if (tab.status !== 'connected') throw new Error('终端尚未连接')
+      const terminal = getTerminal()
+      if (!terminal) throw new Error('终端尚未就绪')
+      if (/[\r\n]/.test(content) && !terminal.modes.bracketedPasteMode) throw new Error('远端尚未启用安全的多行粘贴，请使用复制入口')
+      terminal.paste(content)
+      if (execute) sendInputRef.current('\r')
+      terminal.focus()
+    },
+  }), [tab.id, tab.status, getTerminal, reconnectNow])
 
   const currentHostKeyFingerprint = hostKeyPrompt.current
 
@@ -697,6 +717,8 @@ export function TerminalPane({ tab, isActive }: TerminalPaneProps) {
         '--terminal-ime-inset': `${toolbarImeInset}px`,
       } as CSSProperties}
     >
+      {!tab.profileId && <ConnectionPicker tabId={tab.id} />}
+      {findOpen && <TerminalFind getTerminal={getTerminal} onClose={() => { setFindOpen(false); getTerminal()?.focus() }} />}
       <div ref={containerRef} className="term-host relative min-h-0 flex-1">
         {isMobile && <TerminalSelectionHandles getTerminal={getTerminal} hostRef={containerRef} />}
       </div>

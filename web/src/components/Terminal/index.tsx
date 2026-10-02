@@ -46,7 +46,7 @@ export function TerminalView() {
                 className={`absolute inset-0 ${active ? 'block' : 'hidden'}`}
               >
                 <Suspense fallback={<div className="h-full bg-[var(--bg)]" />}>
-                  <SftpView />
+                  <SftpView initialProfileId={tab.profileId || undefined} initialPath={tab.cwd} />
                 </Suspense>
               </div>
             )

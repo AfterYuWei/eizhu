@@ -1,10 +1,11 @@
+import { runDesktopAction } from '@/lib/desktopActions'
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { FolderUp, ChevronLeft, ChevronRight, KeyRound, Plus } from 'lucide-react'
 import { useSessionStore } from '@/store/session'
 import { Button } from '@/components/ui/button'
 
 export function StatusBar() {
-  const { tabs, activeTabId, setActiveTab, closeTab, openDraftTab } = useSessionStore()
+  const { tabs, activeTabId, setActiveTab } = useSessionStore()
   const [time, setTime] = useState('')
   const [canScrollLeft, setCanScrollLeft] = useState(false)
   const [canScrollRight, setCanScrollRight] = useState(false)
@@ -151,7 +152,7 @@ export function StatusBar() {
                 aria-label={`关闭会话 ${tab.profileName}`}
                 onClick={(e) => {
                   e.stopPropagation()
-                  closeTab(tab.id)
+                  runDesktopAction('close', tab.id)
                 }}
               >
                 ×
@@ -166,7 +167,7 @@ export function StatusBar() {
             type="button"
             aria-label="新建连接标签页"
             title="新建连接标签页"
-            onClick={() => openDraftTab()}
+            onClick={() => runDesktopAction('new')}
           >
             <Plus size={11} aria-hidden="true" />
           </Button>
