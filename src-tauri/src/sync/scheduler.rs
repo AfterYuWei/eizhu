@@ -45,8 +45,8 @@ impl SyncService {
                     }
                     Err(error) => {
                         let status = if error.retryable { "offline" } else { "error" };
-                        let message = error.message.clone();
-                        let _ = state.local(move |r| r.set_status(status, &message)).await;
+                        let failure = error.clone();
+                        let _ = state.local(move |r| r.set_failure(status, &failure)).await;
                         state.emit_async().await;
                         let transient = error.retryable;
                         if !transient {

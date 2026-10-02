@@ -2,6 +2,7 @@ export interface ItemSyncStatus {
   itemType: string
   itemId: string
   generation: number
+  name?: string
   status: string
   deleted: boolean
 }
@@ -14,6 +15,7 @@ export interface SyncStatus {
   unlocked: boolean
   lastConfirmed: string | null
   lastError: string
+  lastErrorCode?: string
   items: ItemSyncStatus[]
 }
 export interface SyncConflict {

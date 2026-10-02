@@ -1,4 +1,7 @@
-import { invokeCommand } from '@/api/tauri'
+import { conflictDependencies, syncDiagnostic } from '@/lib/syncExperience'
+import { writeClipboardText } from '@/lib/clipboard'
+import { ErrorRecovery } from './ErrorRecovery'
+import { invokeCommand, normalizeCommandError } from '@/api/tauri'
 import { useEffect, useState } from 'react'
 import { CloudSync, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
@@ -13,16 +16,21 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 export function SyncPanel() {
   const status = useSyncStore((s) => s.status)
   const conflicts = useSyncStore((s) => s.conflicts)
+  const focusItem = useSyncStore((s) => s.focusItem)
   const loggedIn = useAccountStore((s) => s.status?.loggedIn)
   const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
+  const [operationError, setOperationError] = useState('')
   const [preview, setPreview] = useState<SyncPreview | null>(null)
   const [mode, setMode] = useState<'merge' | 'use_local' | 'use_cloud' | null>(null)
   useEffect(() => { void useSyncStore.getState().refresh() }, [])
+  useEffect(() => {
+    if (focusItem) document.getElementById(`sync-item-${focusItem.type}:${focusItem.id}`)?.scrollIntoView?.({ block: 'center' })
+  }, [focusItem, conflicts])
   async function run(work: () => Promise<unknown>, message?: string) {
-    setBusy(true)
+    setBusy(true); setOperationError('')
     try { await work(); setPassword(''); await useSyncStore.getState().refresh(); if (message) toast.success(message) }
-    catch (e) { toast.error(e instanceof Error ? e.message : String(e)); await useSyncStore.getState().refresh() }
+    catch (e) { setOperationError(normalizeCommandError(e).error.code); toast.error(e instanceof Error ? e.message : String(e)); await useSyncStore.getState().refresh() }
     finally { setBusy(false) }
   }
   if (!loggedIn) return <div className="settings-section"><div className="settings-section-title"><CloudSync size={14} />云同步</div><p className="settings-field-desc">登录云账号后可接入实时同步。本地数据仍可正常使用。</p></div>
@@ -34,6 +42,7 @@ export function SyncPanel() {
       <div className="backup-row">待同步 {status?.pendingCount ?? 0} 条 · 冲突 {status?.conflictCount ?? 0} 条</div>
       {status?.lastConfirmed && <p className="settings-field-desc">最近云端确认：{new Date(status.lastConfirmed).toLocaleString()}</p>}
       {status?.lastError && <p role="alert" className="backup-warning">{status.lastError}</p>}
+      {(operationError || status?.lastError || status?.status === 'locked') && <ErrorRecovery code={operationError || status?.lastErrorCode} status={status?.status} onRetry={() => { if (!busy) void run(() => syncApi.syncNow()) }} />}
       <Button size="sm" disabled={busy} onClick={() => void run(() => syncApi.syncNow(), '已请求刷新和重试')}><RefreshCw size={14} />刷新／重试</Button>
     </div>
     <div className="backup-card">
@@ -51,18 +60,23 @@ export function SyncPanel() {
         <Button variant="outline" disabled={busy} onClick={() => setMode('use_cloud')}>使用云端</Button>
       </div></>}
     </div>}
-    {conflicts.map((c) => <div className="backup-card" key={`${c.itemType}:${c.itemId}`}>
+    <Button variant="outline" size="sm" onClick={() => void run(async () => { await writeClipboardText(syncDiagnostic(status)); toast.success('已复制脱敏诊断，不含条目内容、凭据或原始错误') })}>复制脱敏诊断</Button>
+    {conflicts.map((c) => <div id={`sync-item-${c.itemType}:${c.itemId}`} tabIndex={-1} className={`backup-card ${focusItem?.type === c.itemType && focusItem.id === c.itemId ? 'ring-2 ring-ring' : ''}`} key={`${c.itemType}:${c.itemId}`}>
       <p>{c.name || c.itemId} · {SYNC_ITEM_LABELS[c.itemType] ?? c.itemType}</p>
       <p className="settings-field-desc">{c.reason === 'dependency' ? '关联关系无法应用，请先处理依赖条目' : '本地与云端存在不同修改'}{c.localDeleted ? ' · 本地已删除' : ''}{c.remoteDeleted ? ' · 云端已删除' : ''}</p>
       <ConflictDiff conflict={c} />
+      {conflictDependencies(c).map((dep) => {
+        const target = conflicts.find((item) => item.itemType === dep.type && item.itemId === dep.id)
+        return <Button key={`${dep.type}:${dep.id}`} variant="link" size="sm" disabled={!target} onClick={() => useSyncStore.getState().focusConflict(dep.type, dep.id)}>{SYNC_ITEM_LABELS[dep.type]}：{target?.name || dep.id}{target ? ' · 跳转处理' : ' · 依赖尚无可处理冲突'}</Button>
+      })}
       <div className="backup-row"><Button disabled={busy} onClick={() => void run(() => syncApi.resolveConflict(c.itemType, c.itemId, 'keep_local', c.remoteRevision), '已保留本地，等待云端确认')}>保留本地</Button><Button variant="outline" disabled={busy} onClick={() => void run(() => syncApi.resolveConflict(c.itemType, c.itemId, 'use_cloud', c.remoteRevision), '已采用云端内容')}>使用云端</Button></div>
     </div>)}
-    {status && status.items.filter((i) => i.status !== 'synced').map((i) => <div className="backup-row" key={`${i.itemType}:${i.itemId}`}>{SYNC_ITEM_LABELS[i.itemType] ?? i.itemType} · {i.itemId}{i.deleted ? '（删除）' : ''} · {SYNC_STATUS_LABELS[i.status] ?? i.status}</div>)}
+    {status && status.items.filter((i) => i.status !== 'synced').map((i) => <div id={`sync-queue-${i.itemType}:${i.itemId}`} className="backup-row" key={`${i.itemType}:${i.itemId}`}>{SYNC_ITEM_LABELS[i.itemType] ?? i.itemType} · {i.name || i.itemId}{i.deleted ? '（删除）' : ''} · {SYNC_STATUS_LABELS[i.status] ?? i.status}</div>)}
     <AlertDialog open={mode !== null} onOpenChange={(open) => { if (!open) setMode(null) }}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>确认首次接入</AlertDialogTitle><AlertDialogDescription>{mode === 'use_cloud' ? '使用云端内容替换当前账号空间。应用前会保存加密安全快照。' : mode === 'use_local' ? '以当前账号空间的本地内容更新云端。其他设备将重新核对变化。' : '合并不同条目，同条目差异保留双方并提示处理。'}</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>取消</AlertDialogCancel><AlertDialogAction onClick={() => { const selected = mode; setMode(null); if (selected && preview) void run(() => syncApi.bootstrap(preview.token, selected), '接入已完成') }}>确认接入</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
   </div>
 }
 
-const FIELD_LABELS: Record<string, string> = { name: '名称', host: '主机', port: '端口', username: '用户名', auth_type: '认证方式', group_id: '分组', vault_id: '凭据', parent_id: '父分组', icon: '图标', sort_order: '排序', type: '类型', remark: '备注', fingerprint: '指纹', tags: '标签', note: '备注', content: '命令内容', description: '描述', is_global: '全局片段' }
+const FIELD_LABELS: Record<string, string> = { name: '名称', host: '主机', port: '端口', username: '用户名', auth_type: '认证方式', group_id: '分组', vault_id: '凭据', jump_profile_id: '跳板服务器', parent_id: '父分组', icon: '图标', sort_order: '排序', type: '类型', remark: '备注', fingerprint: '指纹', tags: '标签', note: '备注', content: '命令内容', description: '描述', is_global: '全局片段' }
 function ConflictDiff({ conflict }: { conflict: SyncConflict }) {
   const fields = [...new Set([...Object.keys(conflict.local ?? {}), ...Object.keys(conflict.remote ?? {})])]
   const display = (value: unknown) => value === null || value === undefined ? '—' : typeof value === 'string' ? value || '空' : JSON.stringify(value)

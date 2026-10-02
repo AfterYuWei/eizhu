@@ -57,7 +57,7 @@ impl SyncRepository {
                 r.get::<_, i64>(0)
             })
             .map_err(CommandError::database)?;
-        let mut statement=c.prepare("SELECT q.item_type,q.item_id,max(q.generation),q.deleted,EXISTS(SELECT 1 FROM realtime_conflicts f WHERE f.item_type=q.item_type AND f.item_id=q.item_id) FROM realtime_outbox q GROUP BY q.item_type,q.item_id ORDER BY max(q.generation)").map_err(CommandError::database)?;
+        let mut statement=c.prepare("SELECT q.item_type,q.item_id,max(q.generation),q.deleted,q.payload,EXISTS(SELECT 1 FROM realtime_conflicts f WHERE f.item_type=q.item_type AND f.item_id=q.item_id) FROM realtime_outbox q GROUP BY q.item_type,q.item_id ORDER BY max(q.generation)").map_err(CommandError::database)?;
         let items = statement
             .query_map([], |r| {
                 Ok(ItemStatus {
@@ -65,7 +65,19 @@ impl SyncRepository {
                     item_id: r.get(1)?,
                     generation: r.get(2)?,
                     deleted: r.get(3)?,
-                    status: if r.get::<_, bool>(4)? {
+                    name: {
+                        let raw = Zeroizing::new(
+                            self.encryptor
+                                .decrypt(&r.get::<_, String>(4)?)
+                                .map_err(|_| rusqlite::Error::InvalidQuery)?,
+                        );
+                        let value = SensitiveJson(
+                            serde_json::from_str(&raw)
+                                .map_err(|_| rusqlite::Error::InvalidQuery)?,
+                        );
+                        value.0["name"].as_str().unwrap_or_default().to_owned()
+                    },
+                    status: if r.get::<_, bool>(5)? {
                         "conflict".into()
                     } else if status == "syncing" {
                         "syncing".into()
@@ -97,6 +109,13 @@ impl SyncRepository {
             unlocked: key.is_some(),
             last_confirmed,
             last_error,
+            last_error_code: c
+                .query_row(
+                    "SELECT last_error_code FROM realtime_state WHERE id=1",
+                    [],
+                    |r| r.get(0),
+                )
+                .map_err(CommandError::database)?,
             items,
         })
     }
@@ -104,8 +123,18 @@ impl SyncRepository {
         self.database
             .connect()?
             .execute(
-                "UPDATE realtime_state SET status=?1,last_error=?2 WHERE id=1",
+                "UPDATE realtime_state SET status=?1,last_error=?2,last_error_code='' WHERE id=1",
                 params![status, error],
+            )
+            .map_err(CommandError::database)?;
+        Ok(())
+    }
+    pub fn set_failure(&self, status: &str, error: &CommandError) -> Result<(), CommandError> {
+        self.database
+            .connect()?
+            .execute(
+                "UPDATE realtime_state SET status=?1,last_error=?2,last_error_code=?3 WHERE id=1",
+                params![status, error.message, error.code],
             )
             .map_err(CommandError::database)?;
         Ok(())
@@ -335,7 +364,7 @@ impl SyncRepository {
         )
         .map_err(CommandError::database)?;
         tx.execute(
-            "UPDATE realtime_state SET last_confirmed=CURRENT_TIMESTAMP,last_error='' WHERE id=1",
+            "UPDATE realtime_state SET last_confirmed=CURRENT_TIMESTAMP,last_error='',last_error_code='' WHERE id=1",
             [],
         )
         .map_err(CommandError::database)?;
@@ -1143,18 +1172,36 @@ fn safe_summary(value: &Value, kind: &str) -> Value {
             "auth_type",
             "group_id",
             "vault_id",
+            "jump_profile_id",
             "tags",
             "note",
         ],
         "snippet" => &["name", "content", "description", "tags", "is_global"],
         _ => &[],
     };
-    Value::Object(
-        fields
-            .iter()
-            .filter_map(|f| value.get(*f).map(|v| ((*f).to_owned(), v.clone())))
-            .collect(),
-    )
+    let mut summary: serde_json::Map<String, Value> = fields
+        .iter()
+        .filter_map(|f| value.get(*f).map(|v| ((*f).to_owned(), v.clone())))
+        .collect();
+    if kind == "profile" {
+        let options = value.get("options").and_then(|v| {
+            if let Some(raw) = v.as_str() {
+                serde_json::from_str::<Value>(raw).ok()
+            } else {
+                Some(v.clone())
+            }
+        });
+        if let Some(options) = options.map(SensitiveJson) {
+            if let Some(id) = options.0["proxy"]
+                .get("jump_profile_id")
+                .and_then(Value::as_str)
+                .filter(|s| !s.is_empty())
+            {
+                summary.insert("jump_profile_id".into(), Value::String(id.into()));
+            }
+        }
+    }
+    Value::Object(summary)
 }
 
 fn equivalent(a: &Value, b: &Value) -> bool {
@@ -1225,6 +1272,39 @@ mod tests {
             )
             .unwrap();
     }
+    #[test]
+    fn named_status_and_structured_error_are_safe_and_persistent() {
+        let (dir, r) = repository();
+        insert(&r, "one", "可读名称");
+        r.database
+            .connect()
+            .unwrap()
+            .execute("UPDATE groups SET name='最新名称' WHERE id='one'", [])
+            .unwrap();
+        r.set_failure(
+            "offline",
+            &CommandError::new("ACCOUNT_UNAVAILABLE", "连接失败"),
+        )
+        .unwrap();
+        let reopened = Database::initialize(dir.path().join("db")).unwrap();
+        let status = SyncRepository::new(reopened, r.encryptor.clone())
+            .status()
+            .unwrap();
+        assert_eq!(status.items[0].name, "最新名称");
+        assert_eq!(status.last_error_code, "ACCOUNT_UNAVAILABLE");
+        let raw = serde_json::to_string(&status).unwrap();
+        assert!(!raw.contains("parent_id"));
+        assert!(!raw.contains("payload"));
+        r.set_status("pending", "").unwrap();
+        assert!(r.status().unwrap().last_error_code.is_empty());
+        let summary = safe_summary(
+            &json!({"name":"host","options":json!({"proxy":{"type":"jump","jump_profile_id":"jump","password":"secret"}}).to_string(),"inline_credential":"secret"}),
+            "profile",
+        );
+        assert_eq!(summary["jump_profile_id"], "jump");
+        assert!(!summary.to_string().contains("secret"));
+    }
+
     #[test]
     fn pending_dependencies_preserve_transaction_order_when_parent_is_edited_again() {
         let (_dir, r) = repository();

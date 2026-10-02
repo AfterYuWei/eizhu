@@ -56,6 +56,8 @@ pub(crate) struct ItemStatus {
     pub item_type: String,
     pub item_id: String,
     pub generation: i64,
+    #[serde(default)]
+    pub name: String,
     pub status: String,
     pub deleted: bool,
 }
@@ -71,6 +73,8 @@ pub(crate) struct SyncStatus {
     pub unlocked: bool,
     pub last_confirmed: Option<String>,
     pub last_error: String,
+    #[serde(default)]
+    pub last_error_code: String,
     pub items: Vec<ItemStatus>,
 }
 

@@ -1,3 +1,4 @@
+import type { SettingsTab } from '@/components/SettingsDialog'
 import { workspaceGeneration } from '@/lib/workspaceScope'
 import { registerDesktopAction, runDesktopAction, shortcutAction } from '@/lib/desktopActions'
 import { SyncIndicator } from '@/components/SyncIndicator'
@@ -34,6 +35,7 @@ export function Layout() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [snippetsOpen, setSnippetsOpen] = useState(false)
+  const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTab>('appearance')
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [resizing, setResizing] = useState(false)
   const [globalSearch, setGlobalSearch] = useState('')
@@ -152,6 +154,8 @@ export function Layout() {
   useEffect(() => {
     const unregister = [
       registerDesktopAction('palette', () => setPaletteOpen((v) => !v)),
+      registerDesktopAction('sync-settings', () => { setSettingsInitialTab('sync'); setSettingsOpen(true) }),
+      registerDesktopAction('account-settings', () => { setSettingsInitialTab('account'); setSettingsOpen(true) }),
       registerDesktopAction('snippets', () => setSnippetsOpen(true)),
       registerDesktopAction('sidebar', () => setSidebarCollapsed((v) => !v)),
     ]
@@ -432,7 +436,7 @@ export function Layout() {
       {/* 设置面板 */}
       {settingsOpen && (
         <Suspense fallback={null}>
-          <SettingsDialog open onOpenChange={setSettingsOpen} />
+          <SettingsDialog key={settingsInitialTab} initialTab={settingsInitialTab} open onOpenChange={setSettingsOpen} />
         </Suspense>
       )}
 

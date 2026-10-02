@@ -214,6 +214,7 @@ impl ArchiveService {
         }
         let _operation = self.inner.operation.try_enter()?;
         let row = self.inner.repository.get_provider(id)?;
+        let provider_name = row.meta.name.clone();
         let bytes = if row.config.provider_type == "account" {
             self.inner
                 .account
@@ -242,7 +243,7 @@ impl ArchiveService {
             .inner
             .backup_dir
             .join(format!("download-{}", uuid::Uuid::new_v4()));
-        tokio::task::spawn_blocking(move || {
+        let mut preview = tokio::task::spawn_blocking(move || {
             super::service::write_private_file(&path, &bytes).map_err(CommandError::database)?;
             let result = backup.prepare_restore(
                 path.to_str()
@@ -254,7 +255,10 @@ impl ArchiveService {
             result
         })
         .await
-        .map_err(join_error)?
+        .map_err(join_error)??;
+        preview["source"] =
+            serde_json::json!({"kind":"cloud","providerName":provider_name,"object":object});
+        Ok(preview)
     }
 
     pub async fn test_provider(&self, id: &str) -> Result<(), CommandError> {

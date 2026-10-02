@@ -12,6 +12,15 @@ export interface BackupVersion {
   created_at: string
 }
 
+export interface RestorePreview {
+  token: string
+  stats: Record<'groups' | 'vault' | 'profiles' | 'snippets', number>
+  changes: Record<keyof RestorePreview['stats'], { added: number; changed: number; unchanged: number; removedInReplace: number }>
+  credentialMode: string
+  exportedAt: string
+  source: { kind: 'file' | 'local_version' | 'cloud' | 'safety' | 'legacy_account'; name?: string; version?: number; createdAt?: string; origin?: string; providerName?: string; object?: string }
+}
+
 export interface BackupVersionInfo {
   version: number
   hash: string

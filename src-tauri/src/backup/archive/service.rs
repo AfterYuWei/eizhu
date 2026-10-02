@@ -303,89 +303,53 @@ impl ArchiveService {
             .await?;
         let index: super::model::CloudIndex =
             serde_json::from_slice(&index_bytes).map_err(CommandError::database)?;
-        let latest = index
+        let version = index
             .latest()
-            .ok_or_else(|| CommandError::new("VERSION_NOT_FOUND", "旧账号空间没有完整版本"))?
-            .version;
-        let row = self
-            .inner
-            .repository
-            .list_providers(true)?
-            .into_iter()
-            .find(|r| r.config.provider_type == "account")
-            .ok_or_else(|| CommandError::new("ACCOUNT_NOT_LOGGED_IN", "官方备份目标不可用"))?;
-        let mut provider = super::provider::CloudProvider::new(
-            row.meta.id,
-            row.config,
-            self.inner.repository.clone(),
-            self.inner.account.clone(),
-            self.inner.user,
-        )?;
-        let mut migrated = super::model::CloudIndex::default();
-        let mut preview = None;
-        for version in index.versions {
-            if version.object.is_empty()
-                || version.object.len() > 200
-                || !version
-                    .object
-                    .bytes()
-                    .all(|c| c.is_ascii_alphanumeric() || b"._-".contains(&c))
-            {
-                return Err(CommandError::new(
-                    "INVALID_OBJECT_NAME",
-                    "旧备份对象名称无效",
-                ));
-            }
-            let bytes = self
-                .inner
-                .account
-                .backup_object(
-                    self.inner.user,
-                    reqwest::Method::GET,
-                    &format!("api/store/objects/{}", version.object),
-                    None,
-                    false,
-                )
-                .await?;
-            let path = self
-                .inner
-                .backup_dir
-                .join(format!("legacy-{}", version.object));
-            let copy = path.clone();
-            let backup = self.inner.backup.clone();
-            let owned = password.clone();
-            let hash = version.hash.clone();
-            let fixture = bytes.clone();
-            let prepared = tokio::task::spawn_blocking(move || {
-                write_private_file(&copy, &fixture).map_err(CommandError::database)?;
-                backup.prepare_restore(
-                    copy.to_str()
-                        .ok_or_else(|| CommandError::new("INVALID_PATH", "备份路径无效"))?,
-                    &owned,
-                    Some(&hash),
-                )
-            })
-            .await
-            .map_err(CommandError::database)??;
-            provider
-                .put_object(&format!("legacy-{}", version.object), bytes)
-                .await?;
-            if version.version == latest {
-                preview = Some(prepared);
-            }
-            migrated.add(super::model::CloudVersionInfo {
-                object: format!("legacy-{}", version.object),
-                ..version
-            });
+            .ok_or_else(|| CommandError::new("VERSION_NOT_FOUND", "旧账号空间没有完整版本"))?;
+        if version.object.is_empty()
+            || version.object.len() > 200
+            || !version
+                .object
+                .bytes()
+                .all(|c| c.is_ascii_alphanumeric() || b"._-".contains(&c))
+        {
+            return Err(CommandError::new(
+                "INVALID_OBJECT_NAME",
+                "旧备份对象名称无效",
+            ));
         }
-        // Keep the legacy directory intact; official objects are immutable and verified by the server.
-        provider
-            .put_object(
-                "legacy-index.json",
-                serde_json::to_vec(&migrated).map_err(CommandError::database)?,
+        let bytes = self
+            .inner
+            .account
+            .backup_object(
+                self.inner.user,
+                reqwest::Method::GET,
+                &format!("api/store/objects/{}", version.object),
+                None,
+                false,
             )
             .await?;
-        preview.ok_or_else(|| CommandError::new("VERSION_NOT_FOUND", "旧备份预览不存在"))
+        let path = self
+            .inner
+            .backup_dir
+            .join(format!("preview-legacy-{}", uuid::Uuid::new_v4()));
+        let backup = self.inner.backup.clone();
+        let hash = version.hash.clone();
+        let mut preview = tokio::task::spawn_blocking(move || {
+            write_private_file(&path, &bytes).map_err(CommandError::database)?;
+            let result = backup.prepare_restore(
+                path.to_str()
+                    .ok_or_else(|| CommandError::new("INVALID_PATH", "备份路径无效"))?,
+                &password,
+                Some(&hash),
+            );
+            let _ = std::fs::remove_file(path);
+            result
+        })
+        .await
+        .map_err(CommandError::database)??;
+        preview["source"] = serde_json::json!({"kind":"legacy_account", "version":version.version, "object":version.object, "createdAt":version.created_at});
+        Ok(preview)
     }
 
     pub fn list_providers(&self) -> Result<Vec<BackupTargetMeta>, CommandError> {

@@ -364,9 +364,11 @@ pub(crate) async fn backup_preview_version(
         None => workspace.archive.reveal_password()?,
     });
     tokio::task::spawn_blocking(move || {
-        workspace
+        let mut preview = workspace
             .backup
-            .prepare_restore(&version.file_path, &password, Some(&version.hash))
+            .prepare_restore(&version.file_path, &password, Some(&version.hash))?;
+        preview["source"] = serde_json::json!({"kind":"local_version","version":version.version,"createdAt":version.created_at,"origin":version.origin});
+        Ok(preview)
     })
     .await
     .map_err(join_error)?

@@ -1,5 +1,9 @@
+import { normalizeCommandError } from '@/api/tauri'
+import { backupDiagnostic, restoreSourceLabel } from '@/lib/syncExperience'
+import { writeClipboardText } from '@/lib/clipboard'
+import { ErrorRecovery } from './ErrorRecovery'
 import { useAccountStore } from '@/store/account'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -23,10 +27,11 @@ export function ArchivePanel() {
   const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
   const [preview, setPreview] = useState<Awaited<ReturnType<typeof archiveApi.previewVersion>> | null>(null)
-  const [restore, setRestore] = useState<BackupVersion | null>(null)
+  const [errorCode, setErrorCode] = useState('')
+  const lastOperation = useRef<{ work: () => Promise<unknown>; message: string } | null>(null)
   const refresh = useCallback(async () => {
     try { const [s, st, vs, safety] = await Promise.all([archiveApi.settings(), archiveApi.status(), archiveApi.versions(), archiveApi.safetyVersions()]); setSettings(s); setStatus(st); setVersions(vs); setSafety(safety) }
-    catch (e) { toast.error(e instanceof Error ? e.message : String(e)) }
+    catch (e) { setErrorCode(normalizeCommandError(e).error.code); toast.error(e instanceof Error ? e.message : String(e)) }
   }, [])
   useEffect(() => {
     void refresh()
@@ -36,15 +41,17 @@ export function ArchivePanel() {
     return () => window.clearInterval(timer)
   }, [refresh])
   async function run(work: () => Promise<unknown>, message: string) {
-    setBusy(true)
+    lastOperation.current = { work, message }; setBusy(true); setErrorCode('')
     try { await work(); toast.success(message); await refresh() }
-    catch (e) { toast.error(e instanceof Error ? e.message : String(e)) }
+    catch (e) { setErrorCode(normalizeCommandError(e).error.code); toast.error(e instanceof Error ? e.message : String(e)) }
     finally { setBusy(false) }
   }
-  if (!settings || !status) return <p>加载备份配置…</p>
+  if (!settings || !status) return errorCode ? <ErrorRecovery code={errorCode} onRetry={() => void refresh()} /> : <p>加载备份配置…</p>
   return <div className="settings-section">
     <div className="settings-section-title">完整版本与云备份</div>
     <p className="settings-field-desc">每次提交当前最新完整版本，各备份目标独立处理。备份可在未登录账号时使用。</p>
+    {errorCode && <ErrorRecovery code={errorCode} unlockId={errorCode === 'INVALID_PASSWORD' ? 'backup-restore-password' : 'backup-password'} onRetry={() => { const op = lastOperation.current; if (op && !busy) void run(op.work, op.message) }} />}
+    <Button variant="outline" size="sm" disabled={busy} onClick={() => void run(() => writeClipboardText(backupDiagnostic(status, events)), '已复制脱敏备份诊断')}>复制脱敏诊断</Button>
     <ProviderSection providers={status.providers} onChanged={() => void refresh()} />
     <div className="backup-card">
       <label htmlFor="backup-password">备份密码{settings.backup_password_set ? '（已设置）' : ''}</label>
@@ -61,11 +68,16 @@ export function ArchivePanel() {
       const event = events.find((e) => e.provider_id === target.id && e.action === 'push')
       return event ? <p key={target.id} role={event.success ? 'status' : 'alert'} className="settings-field-desc">{target.name} · v{event.version} · {event.success ? '已提交' : `提交失败，等待独立重试：${event.error || '云端暂时不可用'}`}</p> : null
     })}
-    <Input type="password" value={restorePassword} onChange={(e) => setRestorePassword(e.target.value)} aria-label="本地旧版本恢复密码" placeholder="旧版本可输入原备份密码，留空使用当前密码" />
-    {versions.map((v) => <div className="backup-card" key={v.id}><div className="backup-row">v{v.version} · {formatSize(v.size)} · {new Date(v.created_at).toLocaleString()} · 已提交 {v.synced_to.length} 个目标</div><Button variant="outline" size="sm" disabled={busy} onClick={() => void run(async () => { setPreview(await archiveApi.previewVersion(v.id, restorePassword || undefined)); setRestore(v) }, "备份预览已准备")}>恢复预览</Button></div>)}
-    <div className="backup-card"><label htmlFor="cloud-backup-target">云端备份恢复</label><select id="cloud-backup-target" className="settings-select" value={cloudTarget} onChange={(e) => { setCloudTarget(e.target.value); setCloudVersions([]) }}><option value="">选择备份目标</option>{status.providers.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select><Button disabled={busy || !cloudTarget} onClick={() => void run(async () => setCloudVersions(await archiveApi.cloudVersions(cloudTarget)), '已读取云端备份目录')}>查看备份目录</Button><Input type="password" value={restorePassword} onChange={(e) => setRestorePassword(e.target.value)} aria-label="备份恢复密码" placeholder="留空使用当前备份密码，可输入其他设备的备份密码" />{cloudVersions.map((v) => <div className="backup-row" key={v.object}><span className="truncate" title={v.object}>{v.object} · {formatSize(v.size)}</span><Button variant="outline" size="sm" disabled={busy} onClick={() => void run(async () => { setPreview(await archiveApi.previewCloud(cloudTarget, v.object, restorePassword || undefined)); setRestorePassword(''); setRestore({ id: v.object, version: 0, hash: '', size: v.size, origin: 'cloud', synced_to: [], created_at: v.createdAt }) }, '云端备份已校验，等待确认应用')}>预览恢复</Button></div>)}</div>
-    {loggedIn && <div className="backup-card"><label htmlFor="legacy-backup-password">旧账号完整备份接入</label><Input id="legacy-backup-password" type="password" value={legacyPassword} onChange={(e) => setLegacyPassword(e.target.value)} placeholder="旧版本的同步密码" /><p className="settings-field-desc">验证旧完整备份后复制到官方对象存储，预览确认后合并或替换本地；随后作为条目实时同步。</p><Button disabled={busy || !legacyPassword} onClick={() => void run(async () => { setPreview(await archiveApi.previewLegacyAccount(legacyPassword)); setLegacyPassword(''); setRestore({ id: 'legacy', version: 0, hash: '', size: 0, origin: 'legacy', synced_to: [], created_at: '' }) }, '旧备份已校验，等待确认应用')}>校验并预览旧账号备份</Button></div>}
-    {safety.length > 0 && <><p>覆盖前安全快照（设备密钥保护）</p>{safety.map((v) => <div className="backup-row" key={v.id}>{new Date(v.createdAt).toLocaleString()}<Button variant="outline" size="sm" disabled={busy} onClick={() => void run(async () => { setPreview(await archiveApi.previewSafety(v.id)); setRestore({ id: v.id, version: 0, hash: '', size: 0, origin: 'safety', synced_to: [], created_at: v.createdAt }) }, '安全快照预览已准备')}>预览恢复</Button></div>)}</>}
-    <AlertDialog open={restore !== null} onOpenChange={(open) => { if (!open) setRestore(null) }}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>恢复完整版本</AlertDialogTitle><AlertDialogDescription>版本 v{restore?.version}：分组 {preview?.stats.groups}、凭据 {preview?.stats.vault}、服务器 {preview?.stats.profiles}、片段 {preview?.stats.snippets}。仅查看可取消；合并保留其他本地条目，替换采用完整备份内容。</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>取消</AlertDialogCancel><AlertDialogAction onClick={() => { setRestore(null); if (preview) void run(() => archiveApi.applyRestore(preview.token, 'merge'), '备份内容已恢复到本地，账号同步将异步提交变化') }}>合并到当前空间</AlertDialogAction><AlertDialogAction onClick={() => { setRestore(null); if (preview) void run(() => archiveApi.applyRestore(preview.token, 'replace'), '备份内容已恢复到本地，账号同步将异步提交变化') }}>替换当前空间</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
+    <Input id="backup-restore-password" type="password" value={restorePassword} onChange={(e) => setRestorePassword(e.target.value)} aria-label="本地旧版本恢复密码" placeholder="旧版本可输入原备份密码，留空使用当前密码" />
+    {versions.map((v) => <div className="backup-card" key={v.id}><div className="backup-row">v{v.version} · {formatSize(v.size)} · {new Date(v.created_at).toLocaleString()} · 已提交 {v.synced_to.length} 个目标</div><Button variant="outline" size="sm" disabled={busy} onClick={() => void run(async () => { setPreview(await archiveApi.previewVersion(v.id, restorePassword || undefined)); setRestorePassword('') }, "备份预览已准备")}>恢复预览</Button></div>)}
+    <div className="backup-card"><label htmlFor="cloud-backup-target">云端备份恢复</label><select id="cloud-backup-target" className="settings-select" value={cloudTarget} onChange={(e) => { setCloudTarget(e.target.value); setCloudVersions([]) }}><option value="">选择备份目标</option>{status.providers.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select><Button disabled={busy || !cloudTarget} onClick={() => void run(async () => setCloudVersions(await archiveApi.cloudVersions(cloudTarget)), '已读取云端备份目录')}>查看备份目录</Button><Input type="password" value={restorePassword} onChange={(e) => setRestorePassword(e.target.value)} aria-label="备份恢复密码" placeholder="留空使用当前备份密码，可输入其他设备的备份密码" />{cloudVersions.map((v) => <div className="backup-row" key={v.object}><span className="truncate" title={v.object}>{v.object} · {formatSize(v.size)}</span><Button variant="outline" size="sm" disabled={busy} onClick={() => void run(async () => { setPreview(await archiveApi.previewCloud(cloudTarget, v.object, restorePassword || undefined)); setRestorePassword('') }, '云端备份已校验，等待确认应用')}>预览恢复</Button></div>)}</div>
+    {loggedIn && <div className="backup-card"><label htmlFor="legacy-backup-password">旧账号完整备份接入</label><Input id="legacy-backup-password" type="password" value={legacyPassword} onChange={(e) => setLegacyPassword(e.target.value)} placeholder="旧版本的同步密码" /><p className="settings-field-desc">校验并预览旧完整备份；确认后合并或替换本地，再通过条目实时同步。取消预览保留当前空间。</p><Button disabled={busy || !legacyPassword} onClick={() => void run(async () => { setPreview(await archiveApi.previewLegacyAccount(legacyPassword)); setLegacyPassword('') }, '旧备份已校验，等待确认应用')}>校验并预览旧账号备份</Button></div>}
+    {safety.length > 0 && <><p>覆盖前安全快照（设备密钥保护）</p>{safety.map((v) => <div className="backup-row" key={v.id}>{new Date(v.createdAt).toLocaleString()}<Button variant="outline" size="sm" disabled={busy} onClick={() => void run(async () => { setPreview(await archiveApi.previewSafety(v.id)) }, '安全快照预览已准备')}>预览恢复</Button></div>)}</>}
+    <AlertDialog open={preview !== null} onOpenChange={(open) => { if (!open) setPreview(null) }}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>恢复完整版本</AlertDialogTitle><AlertDialogDescription>{preview && restoreSourceLabel(preview.source)}。仅查看可取消；合并保留其他本地条目，替换采用完整备份内容。</AlertDialogDescription></AlertDialogHeader>
+      {preview && <div className="space-y-2 text-xs">
+        <p>导出时间：{preview.exportedAt || preview.source.createdAt || '未记录'} · 凭据：{preview.credentialMode === 'none' ? '不包含' : preview.credentialMode === 'plain' ? '明文备份' : '加密保护'}</p>
+        <table className="w-full"><thead><tr><th>类型</th><th>新增</th><th>变更</th><th>相同</th><th>替换时移除</th></tr></thead><tbody>{([['groups', '分组'], ['vault', '凭据'], ['profiles', '服务器'], ['snippets', '片段']] as const).map(([key, label]) => <tr key={key}><td>{label}</td><td>{preview.changes[key].added}</td><td>{preview.changes[key].changed}</td><td>{preview.changes[key].unchanged}</td><td>{preview.changes[key].removedInReplace}</td></tr>)}</tbody></table>
+      </div>}
+      <AlertDialogFooter><AlertDialogCancel>取消</AlertDialogCancel><AlertDialogAction onClick={() => { const token = preview?.token; setPreview(null); if (token) void run(() => archiveApi.applyRestore(token, 'merge'), '备份已恢复到本地，云端确认会单独显示') }}>合并到当前空间</AlertDialogAction><AlertDialogAction onClick={() => { const token = preview?.token; setPreview(null); if (token) void run(() => archiveApi.applyRestore(token, 'replace'), '备份已恢复到本地，云端确认会单独显示') }}>替换当前空间</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
   </div>
 }

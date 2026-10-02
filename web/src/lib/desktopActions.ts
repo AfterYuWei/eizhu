@@ -7,6 +7,8 @@ import { workspaceGeneration } from './workspaceScope'
 import type { Profile } from '@/types/profile'
 
 export const desktopActions = [
+  { id: 'sync-settings', label: '同步状态与冲突', key: 'y' },
+  { id: 'account-settings', label: '账号设置', key: 'u' },
   { id: 'palette', label: '命令面板', key: 'k' },
   { id: 'new', label: '新建连接', key: 't' },
   { id: 'close', label: '关闭当前标签', key: 'w' },

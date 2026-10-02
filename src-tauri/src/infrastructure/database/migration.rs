@@ -142,6 +142,12 @@ pub(super) fn migrate(connection: &Connection) -> Result<(), StorageError> {
     )?;
     connection.execute_batch("CREATE TABLE IF NOT EXISTS local_preferences(key TEXT PRIMARY KEY, payload TEXT NOT NULL); CREATE TABLE IF NOT EXISTS local_history(profile_id TEXT PRIMARY KEY, payload TEXT NOT NULL);")?;
     super::sync_migration::migrate(connection)?;
+    add_column_if_missing(
+        connection,
+        "realtime_state",
+        "last_error_code",
+        "TEXT NOT NULL DEFAULT ''",
+    )?;
     connection.query_row("SELECT eizhu_capture_enabled(1)", [], |_| Ok(()))?;
     Ok(())
 }

@@ -29,9 +29,10 @@ import {
 interface SettingsDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
+  initialTab?: SettingsTab
 }
 
-type SettingsTab = 'appearance' | 'terminal' | 'backup' | 'account' | 'sync' | 'logs' | 'diagnostics' | 'about'
+export type SettingsTab = 'appearance' | 'terminal' | 'backup' | 'account' | 'sync' | 'logs' | 'diagnostics' | 'about'
 
 const baseTabs: { key: SettingsTab; label: string; icon: typeof Monitor }[] = [
   { key: 'appearance', label: '外观', icon: Palette },
@@ -42,8 +43,8 @@ const baseTabs: { key: SettingsTab; label: string; icon: typeof Monitor }[] = [
   { key: 'about', label: '关于', icon: Info },
 ]
 
-export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
-  const [activeTab, setActiveTab] = useState<SettingsTab>('appearance')
+export function SettingsDialog({ open, onOpenChange, initialTab = 'appearance' }: SettingsDialogProps) {
+  const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab)
   const [themePickerOpen, setThemePickerOpen] = useState(false)
   const {
     theme, setTheme,

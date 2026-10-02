@@ -1,7 +1,7 @@
 import { invokeCommand } from './tauri'
 import type {
   BackupSettings, BackupStatus, BackupVersion, BackupEvent,
-  BackupTargetMeta, ProviderConfig,
+  BackupTargetMeta, ProviderConfig, RestorePreview,
 } from '@/types/backup'
 
 export const archiveApi = {
@@ -15,16 +15,16 @@ export const archiveApi = {
   restoreVersion: (id: string) =>
     invokeCommand<{ restored: boolean }>('backup_restore_version', { id }),
 
-  previewVersion: (id: string, password?: string) => invokeCommand<{ token: string; stats: { groups: number; vault: number; profiles: number; snippets: number } }>('backup_preview_version', { id, password }),
+  previewVersion: (id: string, password?: string) => invokeCommand<RestorePreview>('backup_preview_version', { id, password }),
   applyRestore: (token: string, mode: 'merge' | 'replace') => invokeCommand<void>('backup_apply_restore', { token, mode }),
 
   safetyVersions: () => invokeCommand<Array<{ id: string; createdAt: string }>>('backup_safety_versions'),
-  previewSafety: (id: string) => invokeCommand<{ token: string; stats: { groups: number; vault: number; profiles: number; snippets: number } }>('backup_preview_safety', { id }),
+  previewSafety: (id: string) => invokeCommand<RestorePreview>('backup_preview_safety', { id }),
 
-  previewLegacyAccount: (password: string) => invokeCommand<{ token: string; stats: { groups: number; vault: number; profiles: number; snippets: number } }>('backup_preview_legacy_account', { password }),
+  previewLegacyAccount: (password: string) => invokeCommand<RestorePreview>('backup_preview_legacy_account', { password }),
 
   cloudVersions: (providerId: string) => invokeCommand<Array<{ object: string; size: number; createdAt: string }>>('backup_cloud_versions', { providerId }),
-  previewCloud: (providerId: string, object: string, password?: string) => invokeCommand<{ token: string; stats: { groups: number; vault: number; profiles: number; snippets: number } }>('backup_preview_cloud', { providerId, object, password }),
+  previewCloud: (providerId: string, object: string, password?: string) => invokeCommand<RestorePreview>('backup_preview_cloud', { providerId, object, password }),
 
   deleteVersion: (id: string, force = false) =>
     invokeCommand<void>('backup_delete_version', { id, force }),

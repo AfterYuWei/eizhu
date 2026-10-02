@@ -254,7 +254,9 @@ impl BackupService {
         {
             return Err(invalid_backup("备份内容校验失败"));
         }
-        self.prepare_payload(parsed, generation)
+        let mut preview = self.prepare_payload(parsed, generation)?;
+        preview["source"] = serde_json::json!({"kind":"file", "name":std::path::Path::new(path).file_name().and_then(|s|s.to_str()).unwrap_or("备份文件")});
+        Ok(preview)
     }
     fn prepare_payload(
         &self,
@@ -265,6 +267,9 @@ impl BackupService {
             Zeroizing::new(serde_json::to_string(&parsed.payload).map_err(CommandError::database)?);
         let conflicts = self.conflicts(&parsed.payload)?;
         let stats = stats(&parsed.payload);
+        let changes = restore_changes(&self.export_payload()?, &parsed.payload)?;
+        let exported_at = parsed.exported_at.clone();
+        let credential_mode = parsed.mode.clone();
         // Validate in an isolated database; no operation reaches the current workspace.
         let directory = tempfile::tempdir().map_err(CommandError::database)?;
         let db = Database::initialize(directory.path().join("preview.db"))?;
@@ -300,7 +305,9 @@ impl BackupService {
             rusqlite::params![token, encrypted, generation],
         )
         .map_err(CommandError::database)?;
-        Ok(serde_json::json!({"token":token,"stats":stats,"conflicts":conflicts}))
+        Ok(
+            serde_json::json!({"token":token,"stats":stats,"conflicts":conflicts,"changes":changes,"exportedAt":exported_at,"credentialMode":credential_mode}),
+        )
     }
     pub(crate) fn capture_safety(&self) -> Result<(), CommandError> {
         let payload = self.repository.export_payload()?;
@@ -346,10 +353,12 @@ impl BackupService {
                 |r| r.get(0),
             )
             .map_err(CommandError::database)?;
-        let encrypted: String = c
-            .query_row("SELECT payload FROM backup_safety WHERE id=?1", [id], |r| {
-                r.get(0)
-            })
+        let (encrypted, created_at): (String, String) = c
+            .query_row(
+                "SELECT payload,created_at FROM backup_safety WHERE id=?1",
+                [id],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
             .map_err(CommandError::database)?;
         let body = Zeroizing::new(
             self.repository
@@ -358,14 +367,16 @@ impl BackupService {
                 .map_err(CommandError::database)?,
         );
         let payload = serde_json::from_str(&body).map_err(CommandError::database)?;
-        self.prepare_payload(
+        let mut preview = self.prepare_payload(
             ParsedBackup {
                 payload,
                 mode: MODE_ENCRYPTED.into(),
                 exported_at: String::new(),
             },
             generation,
-        )
+        )?;
+        preview["source"] = serde_json::json!({"kind":"safety", "createdAt":created_at});
+        Ok(preview)
     }
     pub(crate) fn apply_restore(
         &self,
@@ -604,6 +615,52 @@ fn remap_jump_profile(options: &mut String, ids: &HashMap<String, String>) {
     }
 }
 
+/// Compare locally; only counts cross IPC. Serialized credentials are zeroized after hashing.
+fn restore_changes(
+    current: &BackupPayload,
+    restored: &BackupPayload,
+) -> Result<Value, CommandError> {
+    fn compare<T: serde::Serialize>(
+        current: &[T],
+        restored: &[T],
+        id: impl Fn(&T) -> &str,
+    ) -> Result<Value, CommandError> {
+        let hashes = |items: &[T]| -> Result<HashMap<String, Vec<u8>>, CommandError> {
+            items
+                .iter()
+                .map(|item| {
+                    let raw =
+                        Zeroizing::new(serde_json::to_vec(item).map_err(CommandError::database)?);
+                    Ok((id(item).to_owned(), Sha256::digest(&raw).to_vec()))
+                })
+                .collect()
+        };
+        let before = hashes(current)?;
+        let after = hashes(restored)?;
+        let added = after
+            .keys()
+            .filter(|key| !before.contains_key(*key))
+            .count();
+        let changed = after
+            .iter()
+            .filter(|(key, hash)| before.get(*key).is_some_and(|old| old != *hash))
+            .count();
+        let removed = before
+            .keys()
+            .filter(|key| !after.contains_key(*key))
+            .count();
+        Ok(
+            serde_json::json!({"added":added,"changed":changed,"unchanged":after.len()-added-changed,"removedInReplace":removed}),
+        )
+    }
+    Ok(serde_json::json!({
+        "groups":compare(&current.groups,&restored.groups,|item|&item.id)?,
+        "vault":compare(&current.vault,&restored.vault,|item|&item.id)?,
+        "profiles":compare(&current.profiles,&restored.profiles,|item|&item.id)?,
+        "snippets":compare(&current.snippets,&restored.snippets,|item|&item.id)?
+    }))
+}
+
 fn stats(payload: &BackupPayload) -> BackupStats {
     BackupStats {
         groups: payload.groups.len(),
@@ -714,6 +771,11 @@ mod tests {
         let preview = service
             .prepare_restore(path.to_str().unwrap(), "", None)
             .unwrap();
+        assert_eq!(preview["source"]["kind"], "file");
+        assert_eq!(preview["source"]["name"], "restore.eizhubackup");
+        assert_eq!(preview["changes"]["groups"]["added"], 1);
+        assert_eq!(preview["changes"]["groups"]["removedInReplace"], 1);
+        assert!(!preview.to_string().contains("private restored name"));
         assert_eq!(service.groups.list().unwrap().len(), 1);
         c.execute(
             "UPDATE groups SET name='edited during preview' WHERE id='original'",
@@ -770,6 +832,7 @@ mod tests {
             .preview_safety(safety[0]["id"].as_str().unwrap())
             .unwrap();
         assert_eq!(prior["stats"]["groups"], 1);
+        assert_eq!(prior["source"]["kind"], "safety");
     }
 
     #[test]
