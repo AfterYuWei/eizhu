@@ -385,8 +385,11 @@ export function TerminalPane({ tab, isActive }: TerminalPaneProps) {
       const terminal = getTerminal()
       if (!terminal) throw new Error('终端尚未就绪')
       if (/[\r\n]/.test(content) && !terminal.modes.bracketedPasteMode) throw new Error('远端尚未启用安全的多行粘贴，请使用复制入口')
-      terminal.paste(content)
-      if (execute) sendInputRef.current('\r')
+      if (execute) {
+        const text = content.replace(/\r?\n/g, '\r')
+        const payload = terminal.modes.bracketedPasteMode ? `\x1b[200~${text}\x1b[201~\r` : `${text}\r`
+        terminal.input(payload, true)
+      } else terminal.paste(content)
       terminal.focus()
     },
   }), [tab.id, tab.status, getTerminal, reconnectNow])

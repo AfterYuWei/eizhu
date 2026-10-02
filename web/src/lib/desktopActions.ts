@@ -14,6 +14,7 @@ export const desktopActions = [
   { id: 'reconnect', label: '重连当前终端', key: 'r' },
   { id: 'sftp', label: '打开 SFTP 文件管理', key: 'e' },
   { id: 'copy-ssh', label: '复制 SSH 命令', key: 'c' },
+  { id: 'snippets', label: '命令片段', key: 's' },
   { id: 'search', label: '查找终端内容', key: 'f' },
 ] as const
 export type DesktopActionId = typeof desktopActions[number]['id']

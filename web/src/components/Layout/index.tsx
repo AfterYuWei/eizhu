@@ -1,7 +1,8 @@
+import { workspaceGeneration } from '@/lib/workspaceScope'
 import { registerDesktopAction, runDesktopAction, shortcutAction } from '@/lib/desktopActions'
 import { SyncIndicator } from '@/components/SyncIndicator'
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
-import { Search, X, FolderUp, Settings, KeyRound, Server } from 'lucide-react'
+import { Search, X, FolderUp, Settings, KeyRound, Server, SquareTerminal } from 'lucide-react'
 import { Sidebar } from '@/components/Sidebar'
 import { TerminalView } from '@/components/Terminal'
 import { StatusBar } from '@/components/StatusBar'
@@ -24,12 +25,15 @@ const SettingsDialog = lazy(() =>
   import('@/components/SettingsDialog').then((module) => ({ default: module.SettingsDialog })),
 )
 
+const SnippetDialog = lazy(() => import('@/components/Snippets/SnippetDialog').then((m) => ({ default: m.SnippetDialog })))
+
 export function Layout() {
   const { tabs, openVaultTab, openTab, setActiveTab } = useSessionStore()
   const { sidebarWidth, setSidebarWidth, theme } = useSettingsStore()
   useSettingsStore((state) => state.systemRevision)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [paletteOpen, setPaletteOpen] = useState(false)
+  const [snippetsOpen, setSnippetsOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [resizing, setResizing] = useState(false)
   const [globalSearch, setGlobalSearch] = useState('')
@@ -148,6 +152,7 @@ export function Layout() {
   useEffect(() => {
     const unregister = [
       registerDesktopAction('palette', () => setPaletteOpen((v) => !v)),
+      registerDesktopAction('snippets', () => setSnippetsOpen(true)),
       registerDesktopAction('sidebar', () => setSidebarCollapsed((v) => !v)),
     ]
     const handler = (event: KeyboardEvent) => {
@@ -216,6 +221,9 @@ export function Layout() {
           >
             <KeyRound size={14} />
             <span className="hdr-icon-btn-label">Vaults</span>
+          </Button>
+          <Button variant="ghost" className="hdr-icon-btn" title="命令片段 (Ctrl/Cmd+Shift+S)" onClick={() => runDesktopAction('snippets')}>
+            <SquareTerminal size={14} /><span className="hdr-icon-btn-label">片段</span>
           </Button>
         </div>
 
@@ -418,6 +426,8 @@ export function Layout() {
         open={paletteOpen}
         onClose={() => setPaletteOpen(false)}
       />
+
+      {snippetsOpen && <Suspense fallback={null}><SnippetDialog key={workspaceGeneration()} open onOpenChange={setSnippetsOpen} /></Suspense>}
 
       {/* 设置面板 */}
       {settingsOpen && (
