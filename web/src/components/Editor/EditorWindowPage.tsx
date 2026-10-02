@@ -1,3 +1,4 @@
+import { isEditorDirty as isDirty, saveBeforeEditorClose, type EditorCloseRequest } from '@/lib/editorCloseGuard'
 import { useCallback, useEffect, useState } from 'react'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { listen } from '@tauri-apps/api/event'
@@ -25,16 +26,9 @@ interface EditorOpenRequest {
   path: string
 }
 
-type PendingClose =
-  | { kind: 'application' }
-  | { kind: 'window' }
-  | { kind: 'tab'; tabId: string }
+type PendingClose = EditorCloseRequest
 
 const SKELETON_WIDTHS = [52, 74, 43, 81, 61, 36, 69, 48, 86, 57, 72, 39, 64, 78, 45, 83, 55, 68]
-
-function isDirty(tab: { content: string; originalContent: string }): boolean {
-  return tab.content !== tab.originalContent
-}
 
 /** Standalone desktop editor webview with its own multi-file tab strip. */
 export function EditorWindowPage() {
@@ -75,6 +69,7 @@ export function EditorWindowPage() {
   useEffect(() => {
     let disposed = false
     let unlistenOpen: (() => void) | undefined
+    let unlistenTransition: (() => void) | undefined
     let unlistenAppClose: (() => void) | undefined
 
     void Promise.all([
@@ -82,12 +77,18 @@ export function EditorWindowPage() {
         void openFile(payload.sessionId, payload.sessionType, payload.path)
       }),
       listen('eizhu-app-close-request', handleAppCloseRequest),
-    ]).then(([stopOpen, stopAppClose]) => {
+      listen<{ requestId: string }>('eizhu-editor-transition', ({ payload }) => {
+        if (useEditorStore.getState().tabs.some(isDirty)) setPendingClose({ kind: 'workspace', requestId: payload.requestId })
+        else void invoke('resolve_editor_transition', { requestId: payload.requestId, accepted: true }).catch((e) => toast.error(String(e)))
+      }),
+    ]).then(([stopOpen, stopAppClose, stopTransition]) => {
       if (disposed) {
         stopOpen()
         stopAppClose()
+        stopTransition()
         return
       }
+      unlistenTransition = stopTransition
       unlistenOpen = stopOpen
       unlistenAppClose = stopAppClose
       return getCurrentWindow().label === 'editor' ? invoke('editor_window_ready') : undefined
@@ -100,6 +101,7 @@ export function EditorWindowPage() {
       disposed = true
       unlistenOpen?.()
       unlistenAppClose?.()
+      unlistenTransition?.()
     }
   }, [handleAppCloseRequest, openFile])
 
@@ -111,7 +113,7 @@ export function EditorWindowPage() {
       const hasDirtyTabs = useEditorStore.getState().tabs.some(isDirty)
       if (hasDirtyTabs) {
         event.preventDefault()
-        setPendingClose({ kind: 'window' })
+        setPendingClose((current) => current ?? { kind: 'window' })
       }
     }).then((stopListening) => {
       if (disposed) stopListening()
@@ -167,6 +169,10 @@ export function EditorWindowPage() {
   const discardPendingClose = () => {
     const request = pendingClose
     if (!request) return
+    if (request.kind === 'workspace') {
+      void invoke('resolve_editor_transition', { requestId: request.requestId, accepted: true }).catch((e) => toast.error(String(e)))
+      return
+    }
     if (request.kind === 'application') {
       void resolveAppClose(true)
       return
@@ -185,25 +191,13 @@ export function EditorWindowPage() {
     if (!request || closingBusy) return
     setClosingBusy(true)
     try {
-      const ids = request.kind === 'tab'
-        ? [request.tabId]
-        : useEditorStore.getState().tabs.filter(isDirty).map((tab) => tab.id)
-
-      for (const tabId of ids) {
-        if (!await saveFile(tabId)) return
-      }
-
-      const currentTabs = useEditorStore.getState().tabs
-      if (request.kind === 'tab') {
-        const tab = currentTabs.find((item) => item.id === request.tabId)
-        if (tab && isDirty(tab)) return
-      } else if (currentTabs.some(isDirty)) {
-        return
-      }
+      if (!await saveBeforeEditorClose(request, () => useEditorStore.getState().tabs, saveFile)) return
 
       if (request.kind === 'tab') {
         setPendingClose(null)
         await closeFileTab(request.tabId)
+      } else if (request.kind === 'workspace') {
+        await invoke('resolve_editor_transition', { requestId: request.requestId, accepted: true })
       } else if (request.kind === 'application') {
         await resolveAppClose(true)
       } else {
@@ -219,7 +213,10 @@ export function EditorWindowPage() {
   const cancelPendingClose = () => {
     const request = pendingClose
     if (!request) return
-    if (request.kind === 'application') {
+    if (request.kind === 'workspace') {
+      void invoke('resolve_editor_transition', { requestId: request.requestId, accepted: false }).catch((e) => toast.error(String(e)))
+      setPendingClose(null)
+    } else if (request.kind === 'application') {
       void resolveAppClose(false)
     } else {
       setPendingClose(null)
@@ -320,12 +317,12 @@ export function EditorWindowPage() {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              {pendingClose?.kind === 'application'
+              {pendingClose?.kind === 'workspace' ? '切换账号前保存修改？' : pendingClose?.kind === 'application'
                 ? '关闭应用前保存修改？'
                 : pendingClose?.kind === 'tab' ? '关闭前保存文件？' : '关闭前保存修改？'}
             </AlertDialogTitle>
             <AlertDialogDescription>
-              {pendingClose?.kind === 'application'
+              {pendingClose?.kind === 'workspace' ? '切换账号或退出登录将关闭旧空间的编辑器。请选择保存所有修改、放弃修改，或继续编辑并取消切换。' : pendingClose?.kind === 'application'
                 ? '关闭主窗口会同时关闭编辑器。保存所有修改、放弃修改，或继续编辑。'
                 : pendingClose?.kind === 'tab'
                   ? '当前文件有未保存的修改。保存后关闭、放弃修改，或继续编辑。'
@@ -345,7 +342,7 @@ export function EditorWindowPage() {
               放弃修改
             </AlertDialogAction>
             <Button type="button" disabled={closingBusy} onClick={() => void saveAndClose()}>
-              {closingBusy ? '保存中…' : '保存并关闭'}
+              {closingBusy ? '保存中…' : pendingClose?.kind === 'workspace' ? '保存并切换' : '保存并关闭'}
             </Button>
           </AlertDialogFooter>
         </AlertDialogContent>

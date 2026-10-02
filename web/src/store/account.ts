@@ -1,3 +1,4 @@
+import { confirmAccountEditorChange } from '@/lib/accountEditorGuard'
 import { refreshWorkspace } from '@/lib/workspace'
 import { create } from 'zustand'
 import { accountApi } from '@/api/account'
@@ -28,6 +29,7 @@ export const useAccountStore = create<AccountStore>((set) => ({
     }
   },
   login: async (email, password) => {
+    if (!await confirmAccountEditorChange()) return
     set({ loading: true, error: null })
     try {
       const status = await accountApi.login(email, password)
@@ -39,6 +41,7 @@ export const useAccountStore = create<AccountStore>((set) => ({
     }
   },
   register: async (email, password) => {
+    if (!await confirmAccountEditorChange()) return
     set({ loading: true, error: null })
     try {
       const status = await accountApi.register(email, password)
@@ -63,6 +66,7 @@ export const useAccountStore = create<AccountStore>((set) => ({
     }
   },
   logout: async () => {
+    if (!await confirmAccountEditorChange()) return
     set({ loading: true, error: null })
     try {
       await accountApi.logout()

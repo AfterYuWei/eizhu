@@ -1,6 +1,9 @@
+import { confirmAccountEditorChange } from '@/lib/accountEditorGuard'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { accountApi } from '@/api/account'
 import { useAccountStore } from './account'
+
+vi.mock('@/lib/accountEditorGuard', () => ({ confirmAccountEditorChange: vi.fn().mockResolvedValue(true) }))
 
 vi.mock('@/lib/workspace', () => ({ refreshWorkspace: vi.fn().mockResolvedValue(undefined) }))
 
@@ -46,4 +49,16 @@ describe('account store', () => {
     expect(useAccountStore.getState().status).toEqual(loggedIn)
   })
 
+})
+
+it('account changes are cancelled before authentication or workspace mutation when editor declines', async () => {
+  vi.mocked(confirmAccountEditorChange).mockResolvedValueOnce(false).mockResolvedValueOnce(false).mockResolvedValueOnce(false)
+  useAccountStore.setState({ status: loggedIn })
+  await useAccountStore.getState().login('email', 'password')
+  await useAccountStore.getState().register('email', 'password')
+  await useAccountStore.getState().logout()
+  expect(accountApi.login).not.toHaveBeenCalled()
+  expect(accountApi.register).not.toHaveBeenCalled()
+  expect(accountApi.logout).not.toHaveBeenCalled()
+  expect(useAccountStore.getState().status).toEqual(loggedIn)
 })

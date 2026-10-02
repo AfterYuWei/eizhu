@@ -277,6 +277,8 @@ fn desktop_run() {
             commands::frontend_ready,
             commands::request_app_close,
             commands::resolve_app_close,
+            commands::request_editor_transition,
+            commands::resolve_editor_transition,
             commands::open_editor_window,
             commands::editor_window_ready,
             commands::editor_window_show,
