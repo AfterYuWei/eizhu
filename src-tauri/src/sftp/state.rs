@@ -17,6 +17,7 @@ use tokio::{
 #[cfg(test)]
 use super::backend::join_path;
 use super::backend::{base_name, clean_path, format_time, local_home_dir, FileBackend, FileInfo};
+use super::task_repository::TransferRepository;
 use super::transfer::TransferManager;
 use super::{SftpError, SftpEventSink};
 use crate::{
@@ -151,6 +152,7 @@ pub(crate) struct SftpService {
     pub(super) audit: AuditRepository,
     pub(super) events: Arc<dyn SftpEventSink>,
     pub(super) transfers: TransferManager,
+    pub(super) transfer_repository: TransferRepository,
 }
 
 struct SftpHostKeyDecision {
@@ -229,6 +231,7 @@ impl SftpService {
         profiles: ProfileService,
         audit: AuditRepository,
         events: Arc<dyn SftpEventSink>,
+        transfer_repository: TransferRepository,
     ) -> Self {
         Self {
             sessions: Arc::new(RwLock::new(HashMap::new())),
@@ -237,6 +240,7 @@ impl SftpService {
             audit,
             events,
             transfers: TransferManager::new(),
+            transfer_repository,
         }
     }
 

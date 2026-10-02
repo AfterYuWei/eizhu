@@ -141,6 +141,7 @@ pub(super) fn migrate(connection: &Connection) -> Result<(), StorageError> {
         [],
     )?;
     connection.execute_batch("CREATE TABLE IF NOT EXISTS local_preferences(key TEXT PRIMARY KEY, payload TEXT NOT NULL); CREATE TABLE IF NOT EXISTS local_history(profile_id TEXT PRIMARY KEY, payload TEXT NOT NULL);")?;
+    connection.execute_batch("CREATE TABLE IF NOT EXISTS local_transfers(id TEXT PRIMARY KEY,generation INTEGER NOT NULL,payload TEXT NOT NULL);")?;
     super::sync_migration::migrate(connection)?;
     add_column_if_missing(
         connection,

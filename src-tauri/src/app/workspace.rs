@@ -158,7 +158,12 @@ impl WorkspaceManager {
             current,
         ));
         let sessions = SshService::new(profile.clone(), audit.clone(), events.clone());
-        let sftp = SftpService::new(profile.clone(), audit.clone(), events);
+        let sftp = SftpService::new(
+            profile.clone(),
+            audit.clone(),
+            events,
+            crate::sftp::TransferRepository::new(database.clone(), encryptor.clone())?,
+        );
         let runtime = tauri::async_runtime::handle();
         archive.start_scheduler(runtime.inner())?;
         sync.start();

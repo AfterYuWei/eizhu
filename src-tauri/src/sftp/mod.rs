@@ -3,7 +3,9 @@ mod editor;
 mod error;
 mod events;
 mod state;
+mod task_repository;
 mod transfer;
+pub(crate) use task_repository::TransferRepository;
 
 pub(crate) use error::SftpError;
 pub(crate) use events::SftpEventSink;

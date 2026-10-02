@@ -7,7 +7,7 @@ use std::{
 };
 
 use base64::{engine::general_purpose::STANDARD, Engine};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tokio::{
     io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt},
     sync::{Mutex, OwnedSemaphorePermit, RwLock, Semaphore},
@@ -27,23 +27,54 @@ const DOWNLOAD_TEMP_PREFIX: &str = "eizhu-dl-";
 const DOWNLOAD_STAGE_PREFIX: &str = "eizhu-dl-stage-";
 const MAX_IPC_CHUNK_SIZE: usize = 1024 * 1024;
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct TransferTask {
-    id: String,
-    file_name: String,
-    direction: String,
-    size: u64,
-    transferred: u64,
-    status: String,
-    speed: u64,
-    started_at: i64,
+    pub(super) id: String,
+    pub(super) file_name: String,
+    pub(super) direction: String,
+    pub(super) size: u64,
+    pub(super) transferred: u64,
+    pub(super) status: String,
+    pub(super) speed: u64,
+    pub(super) started_at: i64,
     #[serde(skip_serializing_if = "Option::is_none")]
-    finished_at: Option<i64>,
-    #[serde(skip_serializing_if = "String::is_empty")]
-    error_message: String,
-    #[serde(skip_serializing_if = "String::is_empty")]
-    error_code: String,
-    retryable: bool,
+    pub(super) finished_at: Option<i64>,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub(super) error_message: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub(super) error_code: String,
+    pub(super) retryable: bool,
+    #[serde(default)]
+    pub(super) execution_generation: u64,
+    #[serde(default)]
+    pub(super) confirmed_offset: u64,
+    #[serde(default)]
+    pub(super) source_profile: String,
+    #[serde(default)]
+    pub(super) target_profile: String,
+}
+
+impl TransferTask {
+    pub(super) fn new(id: String, file_name: String, direction: &str, size: u64) -> Self {
+        Self {
+            id,
+            file_name,
+            direction: direction.into(),
+            size,
+            transferred: 0,
+            status: "queued".into(),
+            speed: 0,
+            started_at: now_millis(),
+            finished_at: None,
+            error_message: String::new(),
+            error_code: String::new(),
+            retryable: false,
+            execution_generation: 0,
+            confirmed_offset: 0,
+            source_profile: String::new(),
+            target_profile: String::new(),
+        }
+    }
 }
 
 struct TransferEntry {
@@ -188,20 +219,7 @@ impl TransferManager {
             &uuid::Uuid::new_v4().to_string()[..6]
         );
         let entry = Arc::new(TransferEntry {
-            task: Mutex::new(TransferTask {
-                id: id.clone(),
-                file_name,
-                direction: direction.into(),
-                size,
-                transferred: 0,
-                status: "queued".into(),
-                speed: 0,
-                started_at: now_millis(),
-                finished_at: None,
-                error_message: String::new(),
-                error_code: String::new(),
-                retryable: false,
-            }),
+            task: Mutex::new(TransferTask::new(id.clone(), file_name, direction, size)),
             speed_meter: Mutex::new(SpeedMeter::new(Instant::now())),
             cancel: CancellationToken::new(),
             session_id,
@@ -872,6 +890,17 @@ pub(crate) async fn sftp_list_transfers(
         }
         result.push(task);
     }
+    if session_id.is_none() {
+        for record in state.transfer_repository.list()? {
+            if !result.iter().any(|task| task.id == record.task.id)
+                && status
+                    .as_ref()
+                    .is_none_or(|value| value == &record.task.status)
+            {
+                result.push(record.task);
+            }
+        }
+    }
     result.sort_by_key(|task| std::cmp::Reverse(task.started_at));
     Ok(result)
 }
@@ -925,6 +954,11 @@ pub(crate) async fn sftp_clear_completed_transfers(
                 let _ = tokio::fs::remove_file(path).await;
             }
             remove.push(id);
+        }
+    }
+    for record in state.transfer_repository.list()? {
+        if matches!(record.task.status.as_str(), "completed" | "cancelled") {
+            state.transfer_repository.remove(&record.task.id)?;
         }
     }
     let mut tasks = state.transfers.tasks.write().await;
