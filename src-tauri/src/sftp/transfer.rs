@@ -1,32 +1,23 @@
-use std::{
-    collections::HashMap,
-    io::{Read, Write},
-    path::{Path, PathBuf},
-    sync::Arc,
-    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
-};
-
-use base64::{engine::general_purpose::STANDARD, Engine};
-use serde::{Deserialize, Serialize};
-use tokio::{
-    io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt},
-    sync::{Mutex, OwnedSemaphorePermit, RwLock, Semaphore},
-    task::JoinHandle,
-};
-use tokio_util::sync::CancellationToken;
-
 use super::{
-    backend::{base_name, clean_path, join_path, local_path_to_api, BackendWriter, FileBackend},
+    backend::{base_name, clean_path, join_path, FileBackend},
     error::SftpError,
-    events::SftpEventSink,
     state::SftpService,
+    task_repository::TransferDescriptor,
 };
 use crate::error::CommandError;
-
-const DOWNLOAD_TEMP_PREFIX: &str = "eizhu-dl-";
-const DOWNLOAD_STAGE_PREFIX: &str = "eizhu-dl-stage-";
+use base64::{engine::general_purpose::STANDARD, Engine};
+use serde::{Deserialize, Serialize};
+use std::{
+    io::{Read, Write},
+    path::{Path, PathBuf},
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
+};
+use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
+use tokio_util::sync::CancellationToken;
 const MAX_IPC_CHUNK_SIZE: usize = 1024 * 1024;
-
+fn now_millis() -> i64 {
+    chrono::Utc::now().timestamp_millis()
+}
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct TransferTask {
     pub(super) id: String,
@@ -76,23 +67,14 @@ impl TransferTask {
         }
     }
 }
-
-struct TransferEntry {
-    task: Mutex<TransferTask>,
-    speed_meter: Mutex<SpeedMeter>,
-    cancel: CancellationToken,
-    session_id: String,
-    download_path: Mutex<Option<PathBuf>>,
-}
-
-struct SpeedMeter {
+pub(super) struct SpeedMeter {
     sampled_at: Instant,
     sampled_bytes: u64,
     speed: u64,
 }
 
 impl SpeedMeter {
-    fn new(now: Instant) -> Self {
+    pub(super) fn new(now: Instant) -> Self {
         Self {
             sampled_at: now,
             sampled_bytes: 0,
@@ -100,7 +82,7 @@ impl SpeedMeter {
         }
     }
 
-    fn record(&mut self, total_bytes: u64, now: Instant) -> u64 {
+    pub(super) fn record(&mut self, total_bytes: u64, now: Instant) -> u64 {
         let elapsed = now.saturating_duration_since(self.sampled_at);
         if elapsed >= Duration::from_millis(250) {
             self.speed = (total_bytes.saturating_sub(self.sampled_bytes) as f64
@@ -111,27 +93,6 @@ impl SpeedMeter {
         self.speed
     }
 }
-
-struct UploadIngress {
-    session_id: String,
-    destination: String,
-    expected_size: u64,
-    received: Mutex<u64>,
-    writer: Mutex<Option<BackendWriter>>,
-    backend: Arc<FileBackend>,
-    transfer: Arc<TransferEntry>,
-    profile_id: String,
-    _permit: OwnedSemaphorePermit,
-}
-
-#[derive(Clone)]
-pub(super) struct TransferManager {
-    tasks: Arc<RwLock<HashMap<String, Arc<TransferEntry>>>>,
-    uploads: Arc<RwLock<HashMap<String, Arc<UploadIngress>>>>,
-    workers: Arc<Mutex<HashMap<String, JoinHandle<()>>>>,
-    semaphore: Arc<Semaphore>,
-}
-
 #[derive(Debug, Serialize)]
 pub(crate) struct SftpUploadResponse {
     pub(crate) tasks: Vec<TransferTask>,
@@ -150,7 +111,7 @@ pub(crate) struct SftpUploadChunkResponse {
 
 #[derive(Debug, Serialize)]
 pub(crate) struct SftpDownloadResponse {
-    tasks: Vec<TransferTask>,
+    pub(super) tasks: Vec<TransferTask>,
     download_url: String,
 }
 
@@ -167,7 +128,7 @@ pub(crate) struct SftpConflictInfo {
 #[derive(Debug, Serialize)]
 pub(crate) struct SftpTransferResponse {
     #[serde(skip_serializing_if = "String::is_empty")]
-    task_id: String,
+    pub(super) task_id: String,
     #[serde(skip_serializing_if = "String::is_empty")]
     method: String,
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -190,366 +151,6 @@ pub(crate) struct SftpMoveResponse {
     #[serde(skip_serializing_if = "Vec::is_empty")]
     conflicts: Vec<SftpConflictInfo>,
 }
-
-impl TransferManager {
-    pub(super) fn new() -> Self {
-        sweep_stale_transfers();
-        Self {
-            tasks: Arc::new(RwLock::new(HashMap::new())),
-            uploads: Arc::new(RwLock::new(HashMap::new())),
-            workers: Arc::new(Mutex::new(HashMap::new())),
-            semaphore: Arc::new(Semaphore::new(if cfg!(mobile) { 2 } else { 5 })),
-        }
-    }
-
-    async fn create(
-        &self,
-        session_id: String,
-        file_name: String,
-        direction: &str,
-        size: u64,
-    ) -> Arc<TransferEntry> {
-        self.reap_finished_workers().await;
-        let id = format!(
-            "tx-{}-{}",
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_secs(),
-            &uuid::Uuid::new_v4().to_string()[..6]
-        );
-        let entry = Arc::new(TransferEntry {
-            task: Mutex::new(TransferTask::new(id.clone(), file_name, direction, size)),
-            speed_meter: Mutex::new(SpeedMeter::new(Instant::now())),
-            cancel: CancellationToken::new(),
-            session_id,
-            download_path: Mutex::new(None),
-        });
-        self.tasks.write().await.insert(id, entry.clone());
-        entry
-    }
-
-    async fn track_worker(&self, id: String, worker: JoinHandle<()>) {
-        self.workers.lock().await.insert(id, worker);
-    }
-
-    async fn abort_worker(&self, id: &str) {
-        let worker = self.workers.lock().await.remove(id);
-        if let Some(worker) = worker {
-            worker.abort();
-            let _ = worker.await;
-        }
-    }
-
-    async fn reap_finished_workers(&self) {
-        self.workers
-            .lock()
-            .await
-            .retain(|_, worker| !worker.is_finished());
-    }
-
-    async fn snapshot(entry: &TransferEntry) -> TransferTask {
-        entry.task.lock().await.clone()
-    }
-
-    async fn set_transferring(entry: &TransferEntry) -> bool {
-        let mut task = entry.task.lock().await;
-        if entry.cancel.is_cancelled() || task.status == "cancelled" {
-            return false;
-        }
-        task.status = "transferring".into();
-        drop(task);
-        *entry.speed_meter.lock().await = SpeedMeter::new(Instant::now());
-        true
-    }
-
-    async fn advance(entry: &TransferEntry, transferred: u64) -> TransferTask {
-        let mut meter = entry.speed_meter.lock().await;
-        let speed = meter.record(transferred, Instant::now());
-        let mut task = entry.task.lock().await;
-        task.transferred = transferred;
-        task.speed = speed;
-        task.clone()
-    }
-
-    async fn complete(entry: &TransferEntry, events: &dyn SftpEventSink) {
-        let task = {
-            let mut task = entry.task.lock().await;
-            task.status = "completed".into();
-            task.transferred = task.size;
-            task.speed = 0;
-            task.finished_at = Some(now_millis());
-            task.clone()
-        };
-        emit(
-            events,
-            "transfer_complete",
-            serde_json::json!({
-                "task_id":task.id,"status":task.status,"finished_at":task.finished_at
-            }),
-        );
-    }
-
-    async fn fail(entry: &TransferEntry, events: &dyn SftpEventSink, message: impl Into<String>) {
-        let task = {
-            let mut task = entry.task.lock().await;
-            if task.status == "cancelled" {
-                return;
-            }
-            task.status = "failed".into();
-            task.speed = 0;
-            task.finished_at = Some(now_millis());
-            task.error_message = message.into();
-            task.error_code = "INTERNAL".into();
-            task.clone()
-        };
-        emit(
-            events,
-            "transfer_failed",
-            serde_json::json!({
-                "task_id":task.id,"status":task.status,"error_message":task.error_message,
-                "error_code":task.error_code,"retryable":task.retryable
-            }),
-        );
-    }
-
-    async fn mark_background_limit(entry: &TransferEntry, events: &dyn SftpEventSink) -> bool {
-        let task = {
-            let mut task = entry.task.lock().await;
-            if !matches!(task.status.as_str(), "queued" | "transferring") {
-                return false;
-            }
-            task.status = "failed".into();
-            task.speed = 0;
-            task.finished_at = Some(now_millis());
-            task.error_message = "后台恢复窗口已结束，可在回到前台后重试".into();
-            task.error_code = "BACKGROUND_LIMIT".into();
-            task.retryable = true;
-            task.clone()
-        };
-        entry.cancel.cancel();
-        emit(
-            events,
-            "transfer_failed",
-            serde_json::json!({
-                "task_id":task.id,"status":task.status,"error_message":task.error_message,
-                "error_code":task.error_code,"retryable":task.retryable
-            }),
-        );
-        true
-    }
-
-    pub(super) async fn shutdown(&self) {
-        let tasks = self
-            .tasks
-            .read()
-            .await
-            .values()
-            .cloned()
-            .collect::<Vec<_>>();
-        for entry in tasks {
-            entry.cancel.cancel();
-            if let Some(path) = entry.download_path.lock().await.take() {
-                let _ = tokio::fs::remove_file(path).await;
-            }
-        }
-        let workers = self
-            .workers
-            .lock()
-            .await
-            .drain()
-            .map(|(_, worker)| worker)
-            .collect::<Vec<_>>();
-        for worker in &workers {
-            worker.abort();
-        }
-        for worker in workers {
-            let _ = worker.await;
-        }
-        self.remove_uploads(None).await;
-    }
-
-    pub(super) async fn cancel_session(&self, session_id: &str) {
-        let entries = self
-            .tasks
-            .read()
-            .await
-            .values()
-            .filter(|entry| entry.session_id == session_id)
-            .cloned()
-            .collect::<Vec<_>>();
-        let mut ids = Vec::with_capacity(entries.len());
-        for entry in &entries {
-            ids.push(entry.task.lock().await.id.clone());
-        }
-        for entry in entries {
-            entry.cancel.cancel();
-        }
-        for id in ids {
-            self.abort_worker(&id).await;
-        }
-        self.remove_uploads(Some(session_id)).await;
-    }
-
-    pub(super) async fn cancel_session_for_background(
-        &self,
-        session_id: &str,
-        events: &dyn SftpEventSink,
-    ) {
-        let entries = self
-            .tasks
-            .read()
-            .await
-            .values()
-            .filter(|entry| entry.session_id == session_id)
-            .cloned()
-            .collect::<Vec<_>>();
-        let mut ids = Vec::new();
-        for entry in &entries {
-            if Self::mark_background_limit(entry, events).await {
-                ids.push(entry.task.lock().await.id.clone());
-                if let Some(path) = entry.download_path.lock().await.take() {
-                    let _ = tokio::fs::remove_file(path).await;
-                }
-            }
-        }
-        for id in ids {
-            self.abort_worker(&id).await;
-        }
-
-        let uploads = self
-            .uploads
-            .read()
-            .await
-            .values()
-            .filter(|upload| upload.session_id == session_id)
-            .cloned()
-            .collect::<Vec<_>>();
-        for upload in uploads {
-            if let Some(mut writer) = upload.writer.lock().await.take() {
-                let _ = writer.shutdown().await;
-            }
-            let _ = upload.backend.remove_file(&upload.destination).await;
-        }
-    }
-
-    async fn remove_uploads(&self, session_id: Option<&str>) {
-        let uploads = {
-            let mut active = self.uploads.write().await;
-            let ids = active
-                .iter()
-                .filter(|(_, upload)| session_id.is_none_or(|id| upload.session_id == id))
-                .map(|(id, _)| id.clone())
-                .collect::<Vec<_>>();
-            ids.into_iter()
-                .filter_map(|id| active.remove(&id))
-                .collect::<Vec<_>>()
-        };
-        for upload in uploads {
-            if let Some(mut writer) = upload.writer.lock().await.take() {
-                let _ = writer.shutdown().await;
-            }
-            let _ = upload.backend.remove_file(&upload.destination).await;
-            upload.transfer.cancel.cancel();
-            let mut task = upload.transfer.task.lock().await;
-            if matches!(task.status.as_str(), "queued" | "transferring") {
-                task.status = "cancelled".into();
-                task.finished_at = Some(now_millis());
-            }
-        }
-    }
-}
-
-fn sweep_stale_transfers() {
-    let Ok(entries) = std::env::temp_dir().read_dir() else {
-        return;
-    };
-    let now = SystemTime::now();
-    for entry in entries.flatten() {
-        let name = entry.file_name();
-        let name = name.to_string_lossy();
-        if !name.starts_with(DOWNLOAD_TEMP_PREFIX) && !name.starts_with(DOWNLOAD_STAGE_PREFIX) {
-            continue;
-        }
-        let stale = entry
-            .metadata()
-            .and_then(|metadata| metadata.modified())
-            .ok()
-            .and_then(|modified| now.duration_since(modified).ok())
-            .is_some_and(|age| age > Duration::from_secs(60 * 60));
-        if stale {
-            let path = entry.path();
-            if path.is_dir() {
-                let _ = std::fs::remove_dir_all(path);
-            } else {
-                let _ = std::fs::remove_file(path);
-            }
-        }
-    }
-}
-
-fn emit(events: &dyn SftpEventSink, event_type: &'static str, payload: serde_json::Value) {
-    events.emit_sftp(event_type, payload);
-}
-
-fn now_millis() -> i64 {
-    chrono::Utc::now().timestamp_millis()
-}
-
-async fn cancelled_transfer_error(entry: &TransferEntry) -> CommandError {
-    let task = entry.task.lock().await;
-    if task.error_code == "BACKGROUND_LIMIT" {
-        CommandError::new("BACKGROUND_LIMIT", task.error_message.clone())
-            .retryable()
-            .with_session(entry.session_id.clone(), "background")
-            .with_details(serde_json::json!({"task_id": task.id}))
-    } else {
-        CommandError::new("CANCELLED", "transfer was cancelled")
-    }
-}
-
-async fn copy_with_progress(
-    source: &FileBackend,
-    source_path: &str,
-    target: &FileBackend,
-    target_path: &str,
-    entry: &TransferEntry,
-    events: &dyn SftpEventSink,
-) -> Result<(), SftpError> {
-    let mut reader = source.open_read(source_path).await?;
-    let mut writer = target.open_write(target_path).await?;
-    let mut buffer = vec![0_u8; 128 * 1024];
-    loop {
-        let read = tokio::select! {
-            _ = entry.cancel.cancelled() => return Err("transfer cancelled".into()),
-            result = reader.read(&mut buffer) => result.map_err(|error| error.to_string())?,
-        };
-        if read == 0 {
-            break;
-        }
-        tokio::select! {
-            _ = entry.cancel.cancelled() => return Err("transfer cancelled".into()),
-            result = writer.write_all(&buffer[..read]) => result.map_err(|error| error.to_string())?,
-        }
-        let transferred = entry
-            .task
-            .lock()
-            .await
-            .transferred
-            .saturating_add(read as u64);
-        let snapshot = TransferManager::advance(entry, transferred).await;
-        emit(
-            events,
-            "transfer_progress",
-            serde_json::json!({
-                "task_id":snapshot.id,"transferred":snapshot.transferred,"size":snapshot.size,
-                "speed":snapshot.speed,"status":snapshot.status
-            }),
-        );
-    }
-    Ok(writer.shutdown().await.map_err(|error| error.to_string())?)
-}
-
 fn validate_upload_name(name: &str) -> Result<(), CommandError> {
     if name.is_empty() || matches!(name, "." | "..") || name.contains(['/', '\\']) {
         return Err(CommandError::new(
@@ -578,405 +179,239 @@ pub(crate) async fn sftp_upload_begin(
     dest_dir: String,
     overwrite: bool,
     size: u64,
+    last_modified: Option<u64>,
 ) -> Result<SftpUploadBeginResponse, CommandError> {
-    sftp_upload_begin_with_resolution(
-        state,
-        session_id,
-        name,
-        dest_dir,
-        if overwrite { "overwrite" } else { "ask" },
-        size,
-    )
-    .await?
-    .ok_or_else(|| CommandError::new("INTERNAL", "upload was unexpectedly skipped"))
+    validate_upload_name(&name)?;
+    state
+        .transfers
+        .begin_upload(
+            state,
+            &session_id,
+            name,
+            dest_dir,
+            if overwrite { "overwrite" } else { "ask" },
+            size,
+            last_modified,
+        )
+        .await?
+        .map(|(upload_id, task)| SftpUploadBeginResponse {
+            upload_id,
+            tasks: vec![task],
+        })
+        .ok_or_else(|| CommandError::new("INTERNAL", "上传意外跳过"))
 }
-
 pub(crate) async fn sftp_upload_begin_with_resolution(
     state: &SftpService,
     session_id: String,
     name: String,
     dest_dir: String,
-    conflict_resolution: &str,
+    resolution: &str,
     size: u64,
 ) -> Result<Option<SftpUploadBeginResponse>, CommandError> {
     validate_upload_name(&name)?;
-    validate_conflict_resolution(conflict_resolution)?;
-    let (session, backend) = state.backend(&session_id).await?;
-    let destination_dir = clean_path(&dest_dir);
-    backend
-        .mkdir_all(&destination_dir)
-        .await
-        .map_err(internal)?;
-    let permit = state
+    validate_conflict_resolution(resolution)?;
+    Ok(state
         .transfers
-        .semaphore
-        .clone()
-        .acquire_owned()
-        .await
-        .map_err(|_| CommandError::new("INTERNAL", "transfer manager stopped"))?;
-    let requested_destination = join_path(&destination_dir, &name);
-    let (destination, writer) = match conflict_resolution {
-        "overwrite" => {
-            let destination =
-                resolve_destination(&backend, requested_destination, conflict_resolution)
-                    .await
-                    .map_err(internal)?
-                    .expect("overwrite always resolves a destination");
-            let writer = backend.open_write(&destination).await.map_err(internal)?;
-            (destination, writer)
-        }
-        "rename" => {
-            let mut destination = if backend.stat(&requested_destination).await.is_ok() {
-                auto_rename(&backend, &requested_destination)
-                    .await
-                    .map_err(internal)?
-            } else {
-                requested_destination.clone()
-            };
-            loop {
-                match backend.open_write_new(&destination).await {
-                    Ok(writer) => break (destination, writer),
-                    Err(_) if backend.stat(&destination).await.is_ok() => {
-                        destination = auto_rename(&backend, &requested_destination)
-                            .await
-                            .map_err(internal)?;
-                    }
-                    Err(error) => return Err(internal(error)),
-                }
-            }
-        }
-        "ask" | "skip" => {
-            if backend.stat(&requested_destination).await.is_ok() {
-                if conflict_resolution == "skip" {
-                    return Ok(None);
-                }
-                return Err(upload_path_exists(&requested_destination));
-            }
-            match backend.open_write_new(&requested_destination).await {
-                Ok(writer) => (requested_destination, writer),
-                Err(_) if backend.stat(&requested_destination).await.is_ok() => {
-                    if conflict_resolution == "skip" {
-                        return Ok(None);
-                    }
-                    return Err(upload_path_exists(&requested_destination));
-                }
-                Err(error) => return Err(internal(error)),
-            }
-        }
-        _ => unreachable!("validated conflict resolution"),
-    };
-    let task_name = base_name(&destination);
-    let transfer = state
-        .transfers
-        .create(session_id.clone(), task_name, "upload", size)
-        .await;
-    TransferManager::set_transferring(&transfer).await;
-    let upload_id = format!("ul-{}", uuid::Uuid::new_v4());
-    state.transfers.uploads.write().await.insert(
-        upload_id.clone(),
-        Arc::new(UploadIngress {
-            session_id,
-            destination,
-            expected_size: size,
-            received: Mutex::new(0),
-            writer: Mutex::new(Some(writer)),
-            backend,
-            transfer: transfer.clone(),
-            profile_id: session.profile_id.clone(),
-            _permit: permit,
-        }),
-    );
-    Ok(Some(SftpUploadBeginResponse {
-        upload_id,
-        tasks: vec![TransferManager::snapshot(&transfer).await],
-    }))
+        .begin_upload(state, &session_id, name, dest_dir, resolution, size, None)
+        .await?
+        .map(|(upload_id, task)| SftpUploadBeginResponse {
+            upload_id,
+            tasks: vec![task],
+        }))
 }
-
-fn upload_path_exists(destination: &str) -> CommandError {
-    CommandError::new("PATH_EXISTS", format!("file already exists: {destination}"))
-        .with_details(serde_json::json!({ "dest_path": destination }))
-}
-
 pub(crate) async fn upload_chunk(
     state: &SftpService,
     upload_id: &str,
     bytes: &[u8],
 ) -> Result<SftpUploadChunkResponse, CommandError> {
-    write_upload_chunk(state, upload_id, bytes).await
+    upload_chunk_sequenced(state, upload_id, bytes, None).await
 }
-
+pub(crate) async fn upload_chunk_sequenced(
+    state: &SftpService,
+    upload_id: &str,
+    bytes: &[u8],
+    sequence: Option<u64>,
+) -> Result<SftpUploadChunkResponse, CommandError> {
+    Ok(SftpUploadChunkResponse {
+        received: state
+            .transfers
+            .upload_chunk(upload_id, bytes, sequence, state.events.as_ref())
+            .await?,
+    })
+}
 pub(crate) async fn sftp_upload_chunk_base64(
     state: &SftpService,
     upload_id: String,
     data: String,
+    sequence: Option<u64>,
 ) -> Result<SftpUploadChunkResponse, CommandError> {
     if data.len() > MAX_IPC_CHUNK_SIZE.div_ceil(3) * 4 {
-        return Err(CommandError::new(
-            "PAYLOAD_TOO_LARGE",
-            "encoded upload chunk is too large",
-        ));
+        return Err(CommandError::new("VALIDATION", "上传块过大"));
     }
     let bytes = STANDARD
         .decode(data)
-        .map_err(|error| CommandError::new("INVALID_FORM", error.to_string()))?;
-    write_upload_chunk(state, &upload_id, &bytes).await
+        .map_err(|_| CommandError::new("VALIDATION", "上传块编码无效"))?;
+    upload_chunk_sequenced(state, &upload_id, &bytes, sequence).await
 }
-
-async fn write_upload_chunk(
-    state: &SftpService,
-    upload_id: &str,
-    bytes: &[u8],
-) -> Result<SftpUploadChunkResponse, CommandError> {
-    if bytes.len() > MAX_IPC_CHUNK_SIZE {
-        return Err(CommandError::new(
-            "PAYLOAD_TOO_LARGE",
-            format!("upload chunk exceeds {MAX_IPC_CHUNK_SIZE} bytes"),
-        ));
-    }
-    let upload = state
-        .transfers
-        .uploads
-        .read()
-        .await
-        .get(upload_id)
-        .cloned()
-        .ok_or_else(|| CommandError::new("NOT_FOUND", "upload stream not found"))?;
-    if upload.transfer.cancel.is_cancelled() {
-        return Err(cancelled_transfer_error(&upload.transfer).await);
-    }
-    let mut received = upload.received.lock().await;
-    let next = received.saturating_add(bytes.len() as u64);
-    if next > upload.expected_size {
-        return Err(CommandError::new(
-            "INVALID_SIZE",
-            "upload contains more bytes than declared",
-        ));
-    }
-    let mut writer = upload.writer.lock().await;
-    let writer = writer
-        .as_mut()
-        .ok_or_else(|| CommandError::new("INVALID_STATE", "upload stream is already closed"))?;
-    tokio::select! {
-        _ = upload.transfer.cancel.cancelled() => {
-            return Err(cancelled_transfer_error(&upload.transfer).await);
-        }
-        result = writer.write_all(bytes) => {
-            result.map_err(|error| CommandError::new("INTERNAL", error.to_string()))?;
-        }
-    }
-    *received = next;
-    let snapshot = TransferManager::advance(&upload.transfer, next).await;
-    emit(
-        state.events.as_ref(),
-        "transfer_progress",
-        serde_json::json!({
-            "task_id":snapshot.id,"transferred":snapshot.transferred,"size":snapshot.size,
-            "speed":snapshot.speed,"status":snapshot.status
-        }),
-    );
-    Ok(SftpUploadChunkResponse { received: next })
-}
-
 pub(crate) async fn sftp_upload_finish(
     state: &SftpService,
     upload_id: String,
 ) -> Result<SftpUploadResponse, CommandError> {
-    let upload = state
-        .transfers
-        .uploads
-        .write()
-        .await
-        .remove(&upload_id)
-        .ok_or_else(|| CommandError::new("NOT_FOUND", "upload stream not found"))?;
-    let received = *upload.received.lock().await;
-    if upload.transfer.cancel.is_cancelled() {
-        if let Some(mut writer) = upload.writer.lock().await.take() {
-            let _ = writer.shutdown().await;
-        }
-        let _ = upload.backend.remove_file(&upload.destination).await;
-        return Err(cancelled_transfer_error(&upload.transfer).await);
-    }
-    if received != upload.expected_size {
-        if let Some(mut writer) = upload.writer.lock().await.take() {
-            let _ = writer.shutdown().await;
-        }
-        let _ = upload.backend.remove_file(&upload.destination).await;
-        TransferManager::fail(
-            &upload.transfer,
-            state.events.as_ref(),
-            "upload size mismatch",
-        )
-        .await;
-        return Err(CommandError::new(
-            "INVALID_SIZE",
-            format!(
-                "upload ended after {received} bytes; expected {}",
-                upload.expected_size
-            ),
-        ));
-    }
-    if let Some(mut writer) = upload.writer.lock().await.take() {
-        if let Err(error) = async {
-            writer.flush().await?;
-            writer.shutdown().await
-        }
-        .await
-        {
-            let _ = upload.backend.remove_file(&upload.destination).await;
-            TransferManager::fail(&upload.transfer, state.events.as_ref(), error.to_string()).await;
-            return Err(CommandError::new("INTERNAL", error.to_string()));
-        }
-    }
-    TransferManager::complete(&upload.transfer, state.events.as_ref()).await;
-    let _ = state.audit.record(
-        &upload.profile_id,
-        "sftp_upload",
-        format!("dest={} size={}", upload.destination, upload.expected_size),
-    );
     Ok(SftpUploadResponse {
-        tasks: vec![TransferManager::snapshot(&upload.transfer).await],
+        tasks: vec![
+            state
+                .transfers
+                .finish_upload(&upload_id, state.events.as_ref())
+                .await?,
+        ],
     })
 }
-
 pub(crate) async fn sftp_upload_abort(
     state: &SftpService,
     upload_id: String,
 ) -> Result<(), CommandError> {
-    if let Some(upload) = state.transfers.uploads.write().await.remove(&upload_id) {
-        if let Some(mut writer) = upload.writer.lock().await.take() {
-            let _ = writer.shutdown().await;
-        }
-        let _ = upload.backend.remove_file(&upload.destination).await;
-        upload.transfer.cancel.cancel();
-        let status = {
-            let mut task = upload.transfer.task.lock().await;
-            task.status = "cancelled".into();
-            task.finished_at = Some(now_millis());
-            task.status.clone()
-        };
-        emit(
-            state.events.as_ref(),
-            "transfer_complete",
-            serde_json::json!({"task_id":upload.transfer.task.lock().await.id,"status":status,"finished_at":now_millis()}),
-        );
-    }
-    Ok(())
+    state.transfers.abort_upload(&upload_id, state).await
 }
-
 pub(crate) async fn sftp_list_transfers(
     state: &SftpService,
     session_id: Option<String>,
     status: Option<String>,
 ) -> Result<Vec<TransferTask>, CommandError> {
-    let entries = state
+    Ok(state
         .transfers
-        .tasks
-        .read()
-        .await
-        .values()
-        .cloned()
-        .collect::<Vec<_>>();
-    let mut result = Vec::new();
-    for entry in entries {
-        let task = TransferManager::snapshot(&entry).await;
-        if session_id
-            .as_ref()
-            .is_some_and(|id| id != &entry.session_id)
-        {
-            continue;
-        }
-        if status.as_ref().is_some_and(|value| value != &task.status) {
-            continue;
-        }
-        result.push(task);
-    }
-    if session_id.is_none() {
-        for record in state.transfer_repository.list()? {
-            if !result.iter().any(|task| task.id == record.task.id)
-                && status
-                    .as_ref()
-                    .is_none_or(|value| value == &record.task.status)
-            {
-                result.push(record.task);
-            }
-        }
-    }
-    result.sort_by_key(|task| std::cmp::Reverse(task.started_at));
-    Ok(result)
+        .list(session_id.as_deref(), status.as_deref())
+        .await)
 }
-
 pub(crate) async fn sftp_cancel_transfer(
     state: &SftpService,
     task_id: String,
 ) -> Result<serde_json::Value, CommandError> {
-    let entry = state
-        .transfers
-        .tasks
-        .read()
-        .await
-        .get(&task_id)
-        .cloned()
-        .ok_or_else(|| CommandError::new("NOT_FOUND", "transfer task not found"))?;
-    entry.cancel.cancel();
-    state.transfers.abort_worker(&task_id).await;
-    let status = {
-        let mut task = entry.task.lock().await;
-        if task.status == "queued" || task.status == "transferring" {
-            task.status = "cancelled".into();
-            task.finished_at = Some(now_millis());
-        }
-        task.status.clone()
-    };
-    emit(
-        state.events.as_ref(),
-        "transfer_complete",
-        serde_json::json!({"task_id":task_id,"status":status,"finished_at":now_millis()}),
-    );
-    Ok(serde_json::json!({"id":task_id,"status":status}))
+    serde_json::to_value(state.transfers.cancel(state, &task_id).await?)
+        .map_err(CommandError::database)
 }
-
 pub(crate) async fn sftp_clear_completed_transfers(
     state: &SftpService,
 ) -> Result<(), CommandError> {
-    let entries = state
-        .transfers
-        .tasks
-        .read()
-        .await
-        .iter()
-        .map(|(id, entry)| (id.clone(), entry.clone()))
-        .collect::<Vec<_>>();
-    let mut remove = Vec::new();
-    for (id, entry) in entries {
-        let status = entry.task.lock().await.status.clone();
-        if matches!(status.as_str(), "completed" | "failed" | "cancelled") {
-            if let Some(path) = entry.download_path.lock().await.take() {
-                let _ = tokio::fs::remove_file(path).await;
-            }
-            remove.push(id);
-        }
-    }
-    for record in state.transfer_repository.list()? {
-        if matches!(record.task.status.as_str(), "completed" | "cancelled") {
-            state.transfer_repository.remove(&record.task.id)?;
-        }
-    }
-    let mut tasks = state.transfers.tasks.write().await;
-    for id in &remove {
-        tasks.remove(id);
-    }
-    drop(tasks);
-    for id in remove {
-        state.transfers.abort_worker(&id).await;
-    }
-    Ok(())
+    state.transfers.clear_completed(state).await
 }
-
+pub(crate) async fn sftp_pause_transfer(
+    state: &SftpService,
+    task_id: String,
+) -> Result<TransferTask, CommandError> {
+    state.transfers.pause(&task_id, state.events.as_ref()).await
+}
+pub(crate) async fn sftp_resume_transfer(
+    state: &SftpService,
+    task_id: String,
+) -> Result<TransferTask, CommandError> {
+    state.transfers.resume(state, &task_id, false).await
+}
+pub(crate) async fn sftp_retry_transfer(
+    state: &SftpService,
+    task_id: String,
+    restart: bool,
+) -> Result<TransferTask, CommandError> {
+    state.transfers.resume(state, &task_id, restart).await
+}
+pub(crate) async fn sftp_upload_checkpoint(
+    state: &SftpService,
+    task_id: String,
+) -> Result<serde_json::Value, CommandError> {
+    state.transfers.upload_checkpoint(&task_id).await
+}
+pub(crate) async fn sftp_resume_upload(
+    state: &SftpService,
+    task_id: String,
+    size: u64,
+    last_modified: Option<u64>,
+    digests: Vec<String>,
+    restart: bool,
+) -> Result<serde_json::Value, CommandError> {
+    let (upload_id, task, received, sequence) = state
+        .transfers
+        .resume_upload(state, &task_id, size, last_modified, digests, restart)
+        .await?;
+    Ok(
+        serde_json::json!({"upload_id":upload_id,"tasks":[task],"received":received,"sequence":sequence}),
+    )
+}
+pub(crate) async fn sftp_download(
+    state: &SftpService,
+    session_id: String,
+    paths: Vec<String>,
+) -> Result<SftpDownloadResponse, CommandError> {
+    if paths.is_empty() {
+        return Err(CommandError::new("VALIDATION", "请选择下载文件"));
+    }
+    let (session, backend) = state.backend(&session_id).await?;
+    let zipped = paths.len() != 1 || backend.stat(&paths[0]).await.map_err(internal)?.is_dir;
+    let name = if zipped {
+        "download.zip".into()
+    } else {
+        base_name(&paths[0])
+    };
+    let task = state
+        .transfers
+        .create(
+            TransferDescriptor::Download {
+                source_profile: session.profile_id.clone(),
+                paths,
+                artifact: String::new(),
+            },
+            name,
+            "download",
+            0,
+            state.events.as_ref(),
+        )
+        .await?;
+    let task = state.transfers.resume(state, &task.id, false).await?;
+    Ok(SftpDownloadResponse {
+        download_url: format!("tauri://download/{}", task.id),
+        tasks: vec![task],
+    })
+}
+pub(crate) async fn sftp_download_chunk(
+    state: &SftpService,
+    task_id: String,
+    offset: u64,
+    max_bytes: u32,
+) -> Result<Vec<u8>, CommandError> {
+    if max_bytes == 0 || max_bytes as usize > MAX_IPC_CHUNK_SIZE {
+        return Err(CommandError::new(
+            "VALIDATION",
+            "下载块必须在 1 B 至 1 MiB 之间",
+        ));
+    }
+    let (path, _) = state.transfers.download_artifact(&task_id).await?;
+    read_file_chunk(&path, offset, max_bytes as usize)
+        .await
+        .map_err(internal)
+}
+pub(crate) async fn sftp_download_chunk_base64(
+    state: &SftpService,
+    task_id: String,
+    offset: u64,
+    max_bytes: u32,
+) -> Result<String, CommandError> {
+    Ok(STANDARD.encode(sftp_download_chunk(state, task_id, offset, max_bytes).await?))
+}
+pub(crate) async fn sftp_download_close(
+    state: &SftpService,
+    task_id: String,
+) -> Result<(), CommandError> {
+    state.transfers.close_download(&task_id).await
+}
+pub(crate) async fn sftp_download_artifact(
+    state: &SftpService,
+    task_id: &str,
+) -> Result<(PathBuf, String), CommandError> {
+    state.transfers.download_artifact(task_id).await
+}
 fn internal(error: SftpError) -> CommandError {
     CommandError::new("INTERNAL", error.to_string())
 }
 
-fn archive_name(path: &str) -> String {
+pub(super) fn archive_name(path: &str) -> String {
     let name = base_name(path);
     format!(
         "{}.tar.gz",
@@ -1059,7 +494,7 @@ fn append_tar_directory(
     Ok(())
 }
 
-fn make_tar_gz_from_directory(
+pub(super) fn make_tar_gz_from_directory(
     source: &Path,
     output: &Path,
     cancel: &CancellationToken,
@@ -1135,7 +570,7 @@ fn append_zip_directory(
     Ok(())
 }
 
-fn make_zip_from_directory(
+pub(super) fn make_zip_from_directory(
     source: &Path,
     output: &Path,
     cancel: &CancellationToken,
@@ -1152,6 +587,9 @@ fn tree_size<'a>(
     path: &'a str,
 ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<u64, SftpError>> + Send + 'a>> {
     Box::pin(async move {
+        if backend.entry_kind(path).await? == Some(true) {
+            return Err("目录含符号链接，请单独处理".into());
+        }
         let info = backend.stat(path).await?;
         if !info.is_dir {
             return Ok(info.size);
@@ -1163,234 +601,6 @@ fn tree_size<'a>(
         Ok(size)
     })
 }
-
-pub(crate) async fn sftp_download(
-    state: &SftpService,
-    session_id: String,
-    paths: Vec<String>,
-) -> Result<SftpDownloadResponse, CommandError> {
-    if paths.is_empty() {
-        return Err(CommandError::new("VALIDATION", "paths is required"));
-    }
-    let (session, backend) = state.backend(&session_id).await?;
-    let paths = paths
-        .into_iter()
-        .map(|path| clean_path(&path))
-        .collect::<Vec<_>>();
-    let first = backend.stat(&paths[0]).await.map_err(internal)?;
-    let zipped = paths.len() > 1 || first.is_dir;
-    let file_name = if zipped {
-        if paths.len() == 1 {
-            format!("{}.zip", base_name(&paths[0]))
-        } else {
-            "download.zip".into()
-        }
-    } else {
-        first.name.clone()
-    };
-    let size = if zipped {
-        let mut size = 0_u64;
-        for path in &paths {
-            size = size.saturating_add(tree_size(&backend, path).await.map_err(internal)?);
-        }
-        size
-    } else {
-        first.size
-    };
-    let transfer = state
-        .transfers
-        .create(session_id, file_name.clone(), "download", size)
-        .await;
-    let task_id = transfer.task.lock().await.id.clone();
-    let response = SftpDownloadResponse {
-        tasks: vec![TransferManager::snapshot(&transfer).await],
-        download_url: task_id.clone(),
-    };
-    let manager = state.transfers.clone();
-    let worker_manager = manager.clone();
-    let events = state.events.clone();
-    let audit = state.audit.clone();
-    let profile_id = session.profile_id.clone();
-    let worker = tokio::spawn(async move {
-        let permit = worker_manager.semaphore.acquire().await;
-        if permit.is_err() {
-            TransferManager::fail(&transfer, events.as_ref(), "transfer manager stopped").await;
-            return;
-        }
-        if !TransferManager::set_transferring(&transfer).await {
-            return;
-        }
-        let task_id = transfer.task.lock().await.id.clone();
-        let temp_path = std::env::temp_dir().join(format!(
-            "{DOWNLOAD_TEMP_PREFIX}{task_id}{}",
-            if zipped { ".zip" } else { "" }
-        ));
-        *transfer.download_path.lock().await = Some(temp_path.clone());
-        let stage_path = std::env::temp_dir().join(format!("{DOWNLOAD_STAGE_PREFIX}{task_id}"));
-        let result = async {
-            if zipped {
-                tokio::fs::create_dir_all(&stage_path)
-                    .await
-                    .map_err(|error| error.to_string())?;
-                let local = FileBackend::Local;
-                let stage_root = local_path_to_api(&stage_path);
-                for path in &paths {
-                    if transfer.cancel.is_cancelled() {
-                        return Err("transfer cancelled".into());
-                    }
-                    let info = backend.stat(path).await?;
-                    let relative = clean_path(path).trim_start_matches('/').replace(':', "_");
-                    let destination = if relative.is_empty() {
-                        stage_root.clone()
-                    } else {
-                        join_path(&stage_root, &relative)
-                    };
-                    if info.is_dir {
-                        copy_directory(
-                            &backend,
-                            path,
-                            &local,
-                            &destination,
-                            &transfer,
-                            events.as_ref(),
-                        )
-                        .await?;
-                    } else {
-                        let parent = parent_path(&destination);
-                        local.mkdir_all(&parent).await?;
-                        copy_with_progress(
-                            &backend,
-                            path,
-                            &local,
-                            &destination,
-                            &transfer,
-                            events.as_ref(),
-                        )
-                        .await?;
-                    }
-                }
-                let stage = stage_path.clone();
-                let output = temp_path.clone();
-                let cancel = transfer.cancel.clone();
-                tokio::task::spawn_blocking(move || {
-                    make_zip_from_directory(&stage, &output, &cancel)
-                })
-                .await
-                .map_err(|error| error.to_string())??;
-            } else {
-                copy_with_progress(
-                    &backend,
-                    &paths[0],
-                    &FileBackend::Local,
-                    &local_path_to_api(&temp_path),
-                    &transfer,
-                    events.as_ref(),
-                )
-                .await?;
-            }
-            Ok::<(), SftpError>(())
-        }
-        .await;
-        if zipped {
-            let _ = tokio::fs::remove_dir_all(&stage_path).await;
-        }
-        match result {
-            Ok(()) => {
-                TransferManager::complete(&transfer, events.as_ref()).await;
-                let _ = audit.record(
-                    profile_id,
-                    "sftp_download",
-                    format!("file={file_name} size={size}"),
-                );
-            }
-            Err(error) => {
-                if let Some(path) = transfer.download_path.lock().await.take() {
-                    let _ = tokio::fs::remove_file(path).await;
-                }
-                TransferManager::fail(&transfer, events.as_ref(), error.to_string()).await;
-            }
-        }
-    });
-    manager.track_worker(task_id, worker).await;
-    Ok(response)
-}
-
-pub(crate) async fn sftp_download_chunk(
-    state: &SftpService,
-    task_id: String,
-    offset: u64,
-    max_bytes: u32,
-) -> Result<Vec<u8>, CommandError> {
-    if max_bytes == 0 || max_bytes as usize > MAX_IPC_CHUNK_SIZE {
-        return Err(CommandError::new(
-            "VALIDATION",
-            format!("max_bytes must be between 1 and {MAX_IPC_CHUNK_SIZE}"),
-        ));
-    }
-    let entry = state
-        .transfers
-        .tasks
-        .read()
-        .await
-        .get(&task_id)
-        .cloned()
-        .ok_or_else(|| CommandError::new("NOT_FOUND", "transfer task not found"))?;
-    if entry.task.lock().await.status != "completed" {
-        if entry.cancel.is_cancelled() {
-            return Err(cancelled_transfer_error(&entry).await);
-        }
-        return Err(CommandError::new("NOT_READY", "transfer is not completed"));
-    }
-    let path = entry
-        .download_path
-        .lock()
-        .await
-        .clone()
-        .ok_or_else(|| CommandError::new("NOT_FOUND", "download file expired or cleaned up"))?;
-    let bytes = read_file_chunk(&path, offset, max_bytes as usize)
-        .await
-        .map_err(|error| CommandError::new("INTERNAL", error.to_string()))?;
-    Ok(bytes)
-}
-
-pub(crate) async fn sftp_download_chunk_base64(
-    state: &SftpService,
-    task_id: String,
-    offset: u64,
-    max_bytes: u32,
-) -> Result<String, CommandError> {
-    if max_bytes == 0 || max_bytes as usize > MAX_IPC_CHUNK_SIZE {
-        return Err(CommandError::new(
-            "VALIDATION",
-            format!("max_bytes must be between 1 and {MAX_IPC_CHUNK_SIZE}"),
-        ));
-    }
-    let entry = state
-        .transfers
-        .tasks
-        .read()
-        .await
-        .get(&task_id)
-        .cloned()
-        .ok_or_else(|| CommandError::new("NOT_FOUND", "transfer task not found"))?;
-    if entry.task.lock().await.status != "completed" {
-        if entry.cancel.is_cancelled() {
-            return Err(cancelled_transfer_error(&entry).await);
-        }
-        return Err(CommandError::new("NOT_READY", "transfer is not completed"));
-    }
-    let path = entry
-        .download_path
-        .lock()
-        .await
-        .clone()
-        .ok_or_else(|| CommandError::new("NOT_FOUND", "download file expired or cleaned up"))?;
-    let bytes = read_file_chunk(&path, offset, max_bytes as usize)
-        .await
-        .map_err(|error| CommandError::new("INTERNAL", error.to_string()))?;
-    Ok(STANDARD.encode(bytes))
-}
-
 async fn read_file_chunk(path: &Path, offset: u64, max_bytes: usize) -> Result<Vec<u8>, SftpError> {
     let mut file = tokio::fs::File::open(path)
         .await
@@ -1406,50 +616,7 @@ async fn read_file_chunk(path: &Path, offset: u64, max_bytes: usize) -> Result<V
     bytes.truncate(read);
     Ok(bytes)
 }
-
-pub(crate) async fn sftp_download_close(
-    state: &SftpService,
-    task_id: String,
-) -> Result<(), CommandError> {
-    if let Some(entry) = state.transfers.tasks.write().await.remove(&task_id) {
-        entry.cancel.cancel();
-        state.transfers.abort_worker(&task_id).await;
-        if let Some(path) = entry.download_path.lock().await.take() {
-            let _ = tokio::fs::remove_file(path).await;
-        }
-    }
-    Ok(())
-}
-
-pub(crate) async fn sftp_download_artifact(
-    state: &SftpService,
-    task_id: &str,
-) -> Result<(PathBuf, String), CommandError> {
-    let entry = state
-        .transfers
-        .tasks
-        .read()
-        .await
-        .get(task_id)
-        .cloned()
-        .ok_or_else(|| CommandError::new("NOT_FOUND", "download task not found"))?;
-    let task = entry.task.lock().await.clone();
-    if task.status != "completed" {
-        return Err(CommandError::new(
-            "TRANSFER_NOT_READY",
-            format!("download task is {}", task.status),
-        ));
-    }
-    let path = entry
-        .download_path
-        .lock()
-        .await
-        .clone()
-        .ok_or_else(|| CommandError::new("NOT_FOUND", "download artifact not found"))?;
-    Ok((path, task.file_name))
-}
-
-async fn auto_rename(backend: &FileBackend, path: &str) -> Result<String, SftpError> {
+pub(super) async fn auto_rename(backend: &FileBackend, path: &str) -> Result<String, SftpError> {
     let (stem, extension) = match base_name(path).rsplit_once('.') {
         Some((stem, extension)) if !stem.is_empty() => (stem.to_owned(), format!(".{extension}")),
         _ => (base_name(path), String::new()),
@@ -1464,7 +631,7 @@ async fn auto_rename(backend: &FileBackend, path: &str) -> Result<String, SftpEr
     Err("cannot find an available destination name".into())
 }
 
-fn parent_path(path: &str) -> String {
+pub(super) fn parent_path(path: &str) -> String {
     let path = clean_path(path);
     path.rsplit_once('/')
         .map(|(parent, _)| if parent.is_empty() { "/" } else { parent })
@@ -1506,10 +673,7 @@ async fn resolve_destination(
         return Ok(Some(destination));
     }
     match resolution {
-        "overwrite" => {
-            remove_all(backend, &destination).await?;
-            Ok(Some(destination))
-        }
+        "overwrite" => Ok(Some(destination)),
         "rename" => Ok(Some(auto_rename(backend, &destination).await?)),
         "skip" | "ask" => Ok(None),
         _ => Err("invalid conflict_resolution".into()),
@@ -1531,30 +695,6 @@ fn remove_all<'a>(
         backend.remove_dir(path).await
     })
 }
-
-fn copy_directory<'a>(
-    source: &'a FileBackend,
-    source_root: &'a str,
-    target: &'a FileBackend,
-    target_root: &'a str,
-    transfer: &'a TransferEntry,
-    events: &'a dyn SftpEventSink,
-) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), SftpError>> + Send + 'a>> {
-    Box::pin(async move {
-        target.mkdir_all(target_root).await?;
-        for child in source.list(source_root).await? {
-            let destination = join_path(target_root, &child.name);
-            if child.is_dir {
-                copy_directory(source, &child.path, target, &destination, transfer, events).await?;
-            } else {
-                copy_with_progress(source, &child.path, target, &destination, transfer, events)
-                    .await?;
-            }
-        }
-        Ok(())
-    })
-}
-
 async fn copy_plain(
     source: &FileBackend,
     source_path: &str,
@@ -1632,55 +772,46 @@ pub(crate) async fn sftp_transfer(
     directory_mode: Option<String>,
 ) -> Result<SftpTransferResponse, CommandError> {
     if paths.is_empty() {
-        return Err(CommandError::new("VALIDATION", "paths is required"));
+        return Err(CommandError::new("VALIDATION", "请选择传输文件"));
     }
-    let (_, source) = state.backend(&source_session_id).await?;
-    let (_, target) = state.backend(&target_session_id).await?;
+    let (source_session, source) = state.backend(&source_session_id).await?;
+    let (target_session, target) = state.backend(&target_session_id).await?;
     let resolution = conflict_resolution.unwrap_or_else(|| "ask".into());
     let directory_mode = directory_mode.unwrap_or_else(|| "archive".into());
-    if !matches!(resolution.as_str(), "ask" | "overwrite" | "rename" | "skip") {
-        return Err(CommandError::new(
-            "VALIDATION",
-            "invalid conflict_resolution",
-        ));
+    validate_conflict_resolution(&resolution)?;
+    if !matches!(directory_mode.as_str(), "preserve" | "archive") {
+        return Err(CommandError::new("VALIDATION", "目录模式无效"));
     }
-    if !matches!(directory_mode.as_str(), "archive" | "preserve") {
-        return Err(CommandError::new(
-            "VALIDATION",
-            "directory_mode must be preserve or archive",
-        ));
-    }
-    let paths = paths
+    let paths: Vec<_> = paths
         .into_iter()
         .map(|path| normalize_transfer_source_path(&source, &path))
-        .collect::<Vec<_>>();
+        .collect();
     let dest_dir = clean_path(&dest_dir);
     let mut conflicts = Vec::new();
-    let mut size = 0_u64;
+    let mut size = 0;
     for path in &paths {
         let info = source.stat(path).await.map_err(internal)?;
-        if info.is_dir && source_session_id == target_session_id && path_within(&dest_dir, path) {
-            return Err(CommandError::new(
-                "INVALID_DESTINATION",
-                "cannot copy a directory into itself",
-            ));
-        }
-        let destination_name = if info.is_dir && directory_mode == "archive" {
+        let name = if info.is_dir && directory_mode == "archive" {
             archive_name(path)
         } else {
             info.name.clone()
         };
-        let destination = join_path(&dest_dir, &destination_name);
-        if source_session_id == target_session_id
-            && clean_path(path) == destination
-            && resolution == "overwrite"
+        let destination = join_path(&dest_dir, &name);
+        if source_session.profile_id == target_session.profile_id
+            && ((info.is_dir && path_within(&dest_dir, path)) || clean_path(path) == destination)
         {
             return Err(CommandError::new(
                 "INVALID_DESTINATION",
-                "cannot overwrite a source item with itself; choose rename or skip",
+                "不能将文件覆盖到自身或将目录复制到内部",
             ));
         }
-        if let Ok(existing) = target.stat(&destination).await {
+        if target
+            .entry_kind(&destination)
+            .await
+            .map_err(internal)?
+            .is_some()
+        {
+            let existing = target.stat(&destination).await.map_err(internal)?;
             conflicts.push(SftpConflictInfo {
                 source_path: path.clone(),
                 dest_path: destination,
@@ -1690,163 +821,46 @@ pub(crate) async fn sftp_transfer(
                 dest_is_dir: existing.is_dir,
             });
         }
-        size = size.saturating_add(tree_size(&source, path).await.map_err(internal)?);
+        size += tree_size(&source, path).await.map_err(internal)?;
     }
     if resolution == "ask" && !conflicts.is_empty() {
         return Ok(SftpTransferResponse {
             task_id: String::new(),
             method: String::new(),
-            tasks: Vec::new(),
+            tasks: vec![],
             conflicts,
         });
     }
-    let transfer = state
+    let name = paths
+        .iter()
+        .map(|path| base_name(path))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let task = state
         .transfers
         .create(
-            source_session_id,
-            paths
-                .iter()
-                .map(|path| base_name(path))
-                .collect::<Vec<_>>()
-                .join(", "),
+            TransferDescriptor::Copy {
+                source_profile: source_session.profile_id.clone(),
+                target_profile: target_session.profile_id.clone(),
+                paths,
+                destination: dest_dir,
+                resolution,
+                directory_mode,
+            },
+            name,
             "transfer",
             size,
+            state.events.as_ref(),
         )
-        .await;
-    let task_id = transfer.task.lock().await.id.clone();
-    let response = SftpTransferResponse {
-        task_id: task_id.clone(),
+        .await?;
+    let task = state.transfers.resume(state, &task.id, false).await?;
+    Ok(SftpTransferResponse {
+        task_id: task.id.clone(),
         method: "relay".into(),
-        tasks: vec![TransferManager::snapshot(&transfer).await],
-        conflicts: Vec::new(),
-    };
-    let manager = state.transfers.clone();
-    let worker_manager = manager.clone();
-    let worker_task_id = task_id.clone();
-    let events = state.events.clone();
-    let worker = tokio::spawn(async move {
-        let permit = worker_manager.semaphore.acquire().await;
-        if permit.is_err() {
-            TransferManager::fail(&transfer, events.as_ref(), "transfer manager stopped").await;
-            return;
-        }
-        if !TransferManager::set_transferring(&transfer).await {
-            return;
-        }
-        let result = async {
-            target.mkdir_all(&dest_dir).await?;
-            let mut failures = Vec::new();
-            for path in &paths {
-                let result = async {
-                    let info = source.stat(path).await?;
-                    let destination_name = if info.is_dir && directory_mode == "archive" {
-                        archive_name(path)
-                    } else {
-                        info.name.clone()
-                    };
-                    let destination = join_path(&dest_dir, &destination_name);
-                    let Some(destination) =
-                        resolve_destination(&target, destination, &resolution).await?
-                    else {
-                        return Ok::<(), SftpError>(());
-                    };
-                    if info.is_dir && directory_mode == "preserve" {
-                        copy_directory(
-                            &source,
-                            path,
-                            &target,
-                            &destination,
-                            &transfer,
-                            events.as_ref(),
-                        )
-                        .await
-                    } else if info.is_dir {
-                        let staging = std::env::temp_dir().join(format!(
-                            "eizhu-tx-stage-{worker_task_id}-{}",
-                            uuid::Uuid::new_v4()
-                        ));
-                        let archive_path = std::env::temp_dir().join(format!(
-                            "eizhu-tx-archive-{worker_task_id}-{}.tar.gz",
-                            uuid::Uuid::new_v4()
-                        ));
-                        let local = FileBackend::Local;
-                        let staged_source = staging.join(base_name(path));
-                        let staged_source_api = local_path_to_api(&staged_source);
-                        let archive_api = local_path_to_api(&archive_path);
-                        let archive_result = async {
-                            local.mkdir_all(&local_path_to_api(&staging)).await?;
-                            copy_directory(
-                                &source,
-                                path,
-                                &local,
-                                &staged_source_api,
-                                &transfer,
-                                events.as_ref(),
-                            )
-                            .await?;
-                            let source_path = staged_source.clone();
-                            let output_path = archive_path.clone();
-                            let cancel = transfer.cancel.clone();
-                            tokio::task::spawn_blocking(move || {
-                                make_tar_gz_from_directory(&source_path, &output_path, &cancel)
-                            })
-                            .await
-                            .map_err(|error| error.to_string())??;
-                            copy_with_progress(
-                                &local,
-                                &archive_api,
-                                &target,
-                                &destination,
-                                &transfer,
-                                events.as_ref(),
-                            )
-                            .await
-                        }
-                        .await;
-                        let _ = tokio::fs::remove_dir_all(&staging).await;
-                        let _ = tokio::fs::remove_file(&archive_path).await;
-                        archive_result
-                    } else {
-                        copy_with_progress(
-                            &source,
-                            path,
-                            &target,
-                            &destination,
-                            &transfer,
-                            events.as_ref(),
-                        )
-                        .await
-                    }
-                }
-                .await;
-                if let Err(error) = result {
-                    failures.push(format!("{path}: {error}"));
-                }
-            }
-            if failures.len() == paths.len() {
-                Err(SftpError::transfer(format!(
-                    "all paths failed: {}",
-                    failures.join("; ")
-                )))
-            } else {
-                if !failures.is_empty() {
-                    transfer.task.lock().await.error_message = failures.join("; ");
-                }
-                Ok(())
-            }
-        }
-        .await;
-        match result {
-            Ok(()) => TransferManager::complete(&transfer, events.as_ref()).await,
-            Err(error) => {
-                TransferManager::fail(&transfer, events.as_ref(), error.to_string()).await
-            }
-        }
-    });
-    manager.track_worker(task_id, worker).await;
-    Ok(response)
+        tasks: vec![task],
+        conflicts: vec![],
+    })
 }
-
 pub(crate) async fn sftp_move(
     state: &SftpService,
     session_id: String,
@@ -1913,7 +927,19 @@ pub(crate) async fn sftp_move(
     for (path, info) in prepared {
         let destination = join_path(&dest_dir, &info.name);
         match resolve_destination(&backend, destination, &resolution).await {
-            Ok(Some(destination)) => match backend.rename(&path, &destination).await {
+            Ok(Some(destination)) => match backend
+                .commit_staged(
+                    &path,
+                    &destination,
+                    resolution == "overwrite"
+                        && backend
+                            .entry_kind(&destination)
+                            .await
+                            .map_err(internal)?
+                            .is_some(),
+                )
+                .await
+            {
                 Ok(()) => response.moved.push(destination),
                 Err(message) => response.failures.push(SftpMoveFailure {
                     path,
@@ -1940,18 +966,11 @@ pub(crate) async fn sftp_move(
     );
     Ok(response)
 }
-
 #[cfg(test)]
 mod tests {
     use std::io::Read;
 
     use super::*;
-
-    struct TestEvents;
-
-    impl SftpEventSink for TestEvents {
-        fn emit_sftp(&self, _event_type: &'static str, _payload: serde_json::Value) {}
-    }
 
     #[test]
     fn windows_local_transfer_uses_only_the_file_name_at_destination() {
@@ -2013,7 +1032,7 @@ mod tests {
         let backend = FileBackend::Local;
         let original_api = original.to_string_lossy().into_owned();
 
-        assert!(backend.open_write_new(&original_api).await.is_err());
+        assert!(backend.write_private_new(&original_api, &[]).await.is_err());
         assert_eq!(tokio::fs::read(&original).await.unwrap(), b"old");
 
         let renamed = resolve_destination(&backend, original_api.clone(), "rename")
@@ -2030,30 +1049,7 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!(overwritten, original_api);
-        assert!(!original.exists());
-    }
-
-    #[tokio::test]
-    async fn background_limit_marks_active_transfer_retryable() {
-        let manager = TransferManager::new();
-        let entry = manager
-            .create("session-1".into(), "large.bin".into(), "download", 1024)
-            .await;
-        assert!(TransferManager::set_transferring(&entry).await);
-
-        manager
-            .cancel_session_for_background("session-1", &TestEvents)
-            .await;
-
-        let task = TransferManager::snapshot(&entry).await;
-        assert_eq!(task.status, "failed");
-        assert_eq!(task.error_code, "BACKGROUND_LIMIT");
-        assert!(task.retryable);
-        let error = serde_json::to_value(cancelled_transfer_error(&entry).await).unwrap();
-        assert_eq!(error["code"], "BACKGROUND_LIMIT");
-        assert_eq!(error["retryable"], true);
-        assert_eq!(error["session_id"], "session-1");
-        assert_eq!(error["stage"], "background");
+        assert_eq!(tokio::fs::read(original).await.unwrap(), b"old");
     }
 
     #[test]

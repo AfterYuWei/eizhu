@@ -163,7 +163,7 @@ impl WorkspaceManager {
             audit.clone(),
             events,
             crate::sftp::TransferRepository::new(database.clone(), encryptor.clone())?,
-        );
+        )?;
         let runtime = tauri::async_runtime::handle();
         archive.start_scheduler(runtime.inner())?;
         sync.start();

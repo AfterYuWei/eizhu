@@ -142,6 +142,7 @@ pub(super) fn migrate(connection: &Connection) -> Result<(), StorageError> {
     )?;
     connection.execute_batch("CREATE TABLE IF NOT EXISTS local_preferences(key TEXT PRIMARY KEY, payload TEXT NOT NULL); CREATE TABLE IF NOT EXISTS local_history(profile_id TEXT PRIMARY KEY, payload TEXT NOT NULL);")?;
     connection.execute_batch("CREATE TABLE IF NOT EXISTS local_transfers(id TEXT PRIMARY KEY,generation INTEGER NOT NULL,payload TEXT NOT NULL);")?;
+    connection.execute_batch("CREATE TABLE IF NOT EXISTS local_transfer_files(task_id TEXT NOT NULL REFERENCES local_transfers(id) ON DELETE CASCADE,file_index INTEGER NOT NULL,payload TEXT NOT NULL,PRIMARY KEY(task_id,file_index)); CREATE TABLE IF NOT EXISTS local_transfer_blocks(task_id TEXT NOT NULL,file_index INTEGER NOT NULL,block_index INTEGER NOT NULL,payload TEXT NOT NULL,PRIMARY KEY(task_id,file_index,block_index),FOREIGN KEY(task_id,file_index) REFERENCES local_transfer_files(task_id,file_index) ON DELETE CASCADE);")?;
     super::sync_migration::migrate(connection)?;
     add_column_if_missing(
         connection,

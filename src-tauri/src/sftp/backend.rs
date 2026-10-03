@@ -5,7 +5,7 @@ use russh_sftp::{
     client::{RawSftpSession, SftpSession},
     protocol::{FileAttributes, OpenFlags, Packet, StatusCode},
 };
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
 
 use crate::{infrastructure::platform::local_files, ssh::transport::ConnectedRoute};
 
@@ -325,15 +325,125 @@ impl FileBackend {
     }
 
     pub async fn open_read(&self, path: &str) -> Result<BackendReader, SftpError> {
+        self.open_read_at(path, 0).await
+    }
+    pub async fn open_read_at(&self, path: &str, offset: u64) -> Result<BackendReader, SftpError> {
         match self {
-            Self::Local => tokio::fs::File::open(local_files::path_from_api(path))
+            Self::Local => {
+                let mut file = tokio::fs::File::open(local_files::path_from_api(path))
+                    .await
+                    .map_err(file_error)?;
+                file.seek(std::io::SeekFrom::Start(offset))
+                    .await
+                    .map_err(file_error)?;
+                Ok(Box::new(file))
+            }
+            Self::Remote { sftp, .. } => {
+                let mut file = sftp.open(path).await.map_err(sftp_error)?;
+                file.seek(std::io::SeekFrom::Start(offset))
+                    .await
+                    .map_err(file_error)?;
+                Ok(Box::new(file))
+            }
+        }
+    }
+
+    /// Acknowledged, seekable writes never truncate the original destination.
+    pub async fn write_chunk_at(
+        &self,
+        path: &str,
+        offset: u64,
+        data: &[u8],
+    ) -> Result<(), SftpError> {
+        match self {
+            Self::Local => {
+                let mut file = tokio::fs::OpenOptions::new()
+                    .write(true)
+                    .open(local_files::path_from_api(path))
+                    .await
+                    .map_err(file_error)?;
+                file.seek(std::io::SeekFrom::Start(offset))
+                    .await
+                    .map_err(file_error)?;
+                file.write_all(data).await.map_err(file_error)?;
+                file.sync_data().await.map_err(file_error)
+            }
+            Self::Remote { sftp, .. } => {
+                let mut file = sftp
+                    .open_with_flags(path, OpenFlags::WRITE)
+                    .await
+                    .map_err(sftp_error)?;
+                file.seek(std::io::SeekFrom::Start(offset))
+                    .await
+                    .map_err(file_error)?;
+                file.write_all(data).await.map_err(file_error)?;
+                file.flush().await.map_err(file_error)?;
+                file.sync_all().await.map_err(sftp_error)?;
+                file.close().await.map_err(file_error)
+            }
+        }
+    }
+    /// Read a bounded range and await remote CLOSE, including when READ fails.
+    pub async fn read_chunk_at(
+        &self,
+        path: &str,
+        offset: u64,
+        length: usize,
+    ) -> Result<Vec<u8>, SftpError> {
+        let mut bytes = vec![0; length];
+        match self {
+            Self::Local => {
+                let mut file = tokio::fs::File::open(local_files::path_from_api(path))
+                    .await
+                    .map_err(file_error)?;
+                file.seek(std::io::SeekFrom::Start(offset))
+                    .await
+                    .map_err(file_error)?;
+                file.read_exact(&mut bytes)
+                    .await
+                    .map_err(|e| SftpError::transfer(e.to_string()))?;
+                Ok(bytes)
+            }
+            Self::Remote { sftp, .. } => {
+                let mut file = sftp.open(path).await.map_err(sftp_error)?;
+                let result = async {
+                    file.seek(std::io::SeekFrom::Start(offset))
+                        .await
+                        .map_err(file_error)?;
+                    file.read_exact(&mut bytes).await.map_err(file_error)?;
+                    Ok::<_, SftpError>(bytes)
+                }
+                .await;
+                let closed = file.close().await.map_err(file_error);
+                match result {
+                    Ok(bytes) => {
+                        closed?;
+                        Ok(bytes)
+                    }
+                    Err(error) => Err(error),
+                }
+            }
+        }
+    }
+    pub async fn truncate(&self, path: &str, size: u64) -> Result<(), SftpError> {
+        match self {
+            Self::Local => tokio::fs::OpenOptions::new()
+                .write(true)
+                .open(local_files::path_from_api(path))
                 .await
-                .map(|file| Box::new(file) as BackendReader)
+                .map_err(file_error)?
+                .set_len(size)
+                .await
                 .map_err(file_error),
             Self::Remote { sftp, .. } => sftp
-                .open(path)
+                .set_metadata(
+                    path,
+                    FileAttributes {
+                        size: Some(size),
+                        ..Default::default()
+                    },
+                )
                 .await
-                .map(|file| Box::new(file) as BackendReader)
                 .map_err(sftp_error),
         }
     }
@@ -346,28 +456,6 @@ impl FileBackend {
                 .map_err(file_error),
             Self::Remote { sftp, .. } => sftp
                 .create(path)
-                .await
-                .map(|file| Box::new(file) as BackendWriter)
-                .map_err(sftp_error),
-        }
-    }
-
-    /// Create a new file for writing without replacing an entry that appeared
-    /// after conflict preflight.
-    pub async fn open_write_new(&self, path: &str) -> Result<BackendWriter, SftpError> {
-        match self {
-            Self::Local => tokio::fs::OpenOptions::new()
-                .write(true)
-                .create_new(true)
-                .open(local_files::path_from_api(path))
-                .await
-                .map(|file| Box::new(file) as BackendWriter)
-                .map_err(file_error),
-            Self::Remote { sftp, .. } => sftp
-                .open_with_flags(
-                    path,
-                    OpenFlags::CREATE | OpenFlags::EXCLUDE | OpenFlags::WRITE,
-                )
                 .await
                 .map(|file| Box::new(file) as BackendWriter)
                 .map_err(sftp_error),

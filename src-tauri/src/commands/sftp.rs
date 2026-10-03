@@ -202,6 +202,7 @@ pub(crate) async fn sftp_write_file(
 }
 
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub(crate) async fn sftp_upload_begin(
     service_workspace: State<'_, crate::app::WorkspaceManager>,
     session_id: String,
@@ -209,13 +210,23 @@ pub(crate) async fn sftp_upload_begin(
     dest_dir: String,
     overwrite: bool,
     size: u64,
+    last_modified: Option<u64>,
     workspace_generation: Option<u64>,
 ) -> Result<sftp::SftpUploadBeginResponse, CommandError> {
     let service = service_workspace
         .current(workspace_generation)?
         .sftp
         .clone();
-    sftp::sftp_upload_begin(&service, session_id, name, dest_dir, overwrite, size).await
+    sftp::sftp_upload_begin(
+        &service,
+        session_id,
+        name,
+        dest_dir,
+        overwrite,
+        size,
+        last_modified,
+    )
+    .await
 }
 
 #[tauri::command]
@@ -246,7 +257,18 @@ pub(crate) async fn sftp_upload_chunk(
             "raw upload chunk is required",
         ));
     };
-    sftp::upload_chunk(&service, upload_id, bytes).await
+    let sequence = request
+        .headers()
+        .get("x-eizhu-chunk-sequence")
+        .map(|value| {
+            value
+                .to_str()
+                .ok()
+                .and_then(|v| v.parse::<u64>().ok())
+                .ok_or_else(|| CommandError::new("VALIDATION", "上传块序号无效"))
+        })
+        .transpose()?;
+    sftp::upload_chunk_sequenced(&service, upload_id, bytes, sequence).await
 }
 
 #[tauri::command]
@@ -254,13 +276,14 @@ pub(crate) async fn sftp_upload_chunk_base64(
     service_workspace: State<'_, crate::app::WorkspaceManager>,
     upload_id: String,
     data: String,
+    sequence: Option<u64>,
     workspace_generation: Option<u64>,
 ) -> Result<sftp::SftpUploadChunkResponse, CommandError> {
     let service = service_workspace
         .current(workspace_generation)?
         .sftp
         .clone();
-    sftp::sftp_upload_chunk_base64(&service, upload_id, data).await
+    sftp::sftp_upload_chunk_base64(&service, upload_id, data, sequence).await
 }
 
 #[tauri::command]
@@ -428,4 +451,70 @@ pub(crate) async fn sftp_move(
         .sftp
         .clone();
     sftp::sftp_move(&service, session_id, paths, dest_dir, conflict_resolution).await
+}
+
+#[tauri::command]
+pub(crate) async fn sftp_pause_transfer(
+    service_workspace: State<'_, crate::app::WorkspaceManager>,
+    task_id: String,
+    workspace_generation: Option<u64>,
+) -> Result<sftp::TransferTask, CommandError> {
+    let service = service_workspace
+        .current(workspace_generation)?
+        .sftp
+        .clone();
+    sftp::sftp_pause_transfer(&service, task_id).await
+}
+#[tauri::command]
+pub(crate) async fn sftp_resume_transfer(
+    service_workspace: State<'_, crate::app::WorkspaceManager>,
+    task_id: String,
+    workspace_generation: Option<u64>,
+) -> Result<sftp::TransferTask, CommandError> {
+    let service = service_workspace
+        .current(workspace_generation)?
+        .sftp
+        .clone();
+    sftp::sftp_resume_transfer(&service, task_id).await
+}
+#[tauri::command]
+pub(crate) async fn sftp_retry_transfer(
+    service_workspace: State<'_, crate::app::WorkspaceManager>,
+    task_id: String,
+    restart: bool,
+    workspace_generation: Option<u64>,
+) -> Result<sftp::TransferTask, CommandError> {
+    let service = service_workspace
+        .current(workspace_generation)?
+        .sftp
+        .clone();
+    sftp::sftp_retry_transfer(&service, task_id, restart).await
+}
+#[tauri::command]
+pub(crate) async fn sftp_upload_checkpoint(
+    service_workspace: State<'_, crate::app::WorkspaceManager>,
+    task_id: String,
+    workspace_generation: Option<u64>,
+) -> Result<serde_json::Value, CommandError> {
+    let service = service_workspace
+        .current(workspace_generation)?
+        .sftp
+        .clone();
+    sftp::sftp_upload_checkpoint(&service, task_id).await
+}
+#[tauri::command]
+pub(crate) async fn sftp_resume_upload(
+    service_workspace: State<'_, crate::app::WorkspaceManager>,
+    task_id: String,
+    size: u64,
+    last_modified: Option<u64>,
+    digests: Vec<String>,
+    restart: bool,
+    workspace_generation: Option<u64>,
+) -> Result<serde_json::Value, CommandError> {
+    let service = service_workspace
+        .current(workspace_generation)?
+        .sftp
+        .clone();
+    sftp::sftp_resume_upload(&service, task_id, size, last_modified, digests, restart).await
 }

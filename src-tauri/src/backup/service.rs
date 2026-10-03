@@ -724,6 +724,16 @@ mod tests {
             )
             .unwrap();
         let before = serde_json::to_value(service.export_payload().unwrap()).unwrap();
+        let encrypted = encryptor.encrypt("private-transfer-marker").unwrap();
+        let connection = database.connect().unwrap();
+        connection
+            .execute(
+                "INSERT INTO local_transfers(id,generation,payload) VALUES('private-task',1,?1)",
+                [&encrypted],
+            )
+            .unwrap();
+        connection.execute("INSERT INTO local_transfer_files(task_id,file_index,payload) VALUES('private-task',0,?1)",[&encrypted]).unwrap();
+        connection.execute("INSERT INTO local_transfer_blocks(task_id,file_index,block_index,payload) VALUES('private-task',0,0,?1)",[encrypted]).unwrap();
         let local = crate::local_state::LocalStateService::new(database, encryptor);
         local
             .record("local", "echo private-history-marker", "/private")
@@ -741,6 +751,8 @@ mod tests {
         let exported = String::from_utf8(service.export_bytes(MODE_PLAIN, "").unwrap()).unwrap();
         assert!(!exported.contains("private-history-marker"));
         assert!(!exported.contains("privateLayout"));
+        assert!(!exported.contains("private-transfer-marker"));
+        assert!(!exported.contains("private-task"));
     }
 
     #[test]

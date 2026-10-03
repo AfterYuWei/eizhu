@@ -17,8 +17,8 @@ use tokio::{
 #[cfg(test)]
 use super::backend::join_path;
 use super::backend::{base_name, clean_path, format_time, local_home_dir, FileBackend, FileInfo};
+use super::resumable::ResumableTransfers;
 use super::task_repository::TransferRepository;
-use super::transfer::TransferManager;
 use super::{SftpError, SftpEventSink};
 use crate::{
     app::RECONNECT_BACKOFF_SECONDS,
@@ -151,8 +151,7 @@ pub(crate) struct SftpService {
     pub(super) profiles: ProfileService,
     pub(super) audit: AuditRepository,
     pub(super) events: Arc<dyn SftpEventSink>,
-    pub(super) transfers: TransferManager,
-    pub(super) transfer_repository: TransferRepository,
+    pub(super) transfers: ResumableTransfers,
 }
 
 struct SftpHostKeyDecision {
@@ -232,16 +231,15 @@ impl SftpService {
         audit: AuditRepository,
         events: Arc<dyn SftpEventSink>,
         transfer_repository: TransferRepository,
-    ) -> Self {
-        Self {
+    ) -> Result<Self, CommandError> {
+        Ok(Self {
             sessions: Arc::new(RwLock::new(HashMap::new())),
             connection_tasks: Arc::new(Mutex::new(HashMap::new())),
             profiles,
             audit,
             events,
-            transfers: TransferManager::new(),
-            transfer_repository,
-        }
+            transfers: ResumableTransfers::new(transfer_repository)?,
+        })
     }
 
     async fn create_session(
@@ -548,7 +546,7 @@ impl SftpService {
                 continue;
             }
             self.transfers
-                .cancel_session_for_background(&session.id, self.events.as_ref())
+                .pause_session(&session.id, self.events.as_ref())
                 .await;
             let mut data = session.data.write().await;
             if let Some(backend) = data.backend.take() {
@@ -711,7 +709,31 @@ impl SftpService {
         }
     }
 
+    pub(super) async fn backend_for_profile(
+        &self,
+        profile: &str,
+    ) -> Result<(String, Arc<FileBackend>), CommandError> {
+        let ids: Vec<_> = self
+            .sessions
+            .read()
+            .await
+            .values()
+            .filter(|s| s.profile_id == profile)
+            .map(|s| s.id.clone())
+            .collect();
+        for id in ids {
+            if let Ok((_, backend)) = self.backend(&id).await {
+                return Ok((id, backend));
+            }
+        }
+        Err(CommandError::new(
+            "SFTP_CONNECT_REQUIRED",
+            format!("请先连接任务所需服务器：{profile}"),
+        )
+        .retryable())
+    }
     pub async fn shutdown(&self) {
+        self.transfers.shutdown(self.events.as_ref()).await;
         let connection_tasks = self
             .connection_tasks
             .lock()
@@ -737,7 +759,6 @@ impl SftpService {
                 backend.close().await;
             }
         }
-        self.transfers.shutdown().await;
     }
 
     pub(crate) async fn exec(
@@ -869,7 +890,10 @@ pub(crate) async fn close_session(state: &SftpService, id: String) -> Result<(),
         task.abort();
         let _ = task.await;
     }
-    state.transfers.cancel_session(&id).await;
+    state
+        .transfers
+        .pause_session(&id, state.events.as_ref())
+        .await;
     if let Some(backend) = session.data.write().await.backend.take() {
         backend.close().await;
     }
