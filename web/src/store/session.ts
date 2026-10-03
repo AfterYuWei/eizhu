@@ -24,6 +24,7 @@ export interface SessionTab {
   nextRetryAt?: number
   hostKeyFingerprint?: string
   knownHostKeyFingerprint?: string
+  manualConnect?: boolean
   detailAttached?: boolean
 }
 

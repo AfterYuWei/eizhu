@@ -1,3 +1,4 @@
+import { useTerminalLayoutStore } from '@/store/terminalLayout'
 import { toast } from 'sonner'
 import { useSessionStore } from '@/store/session'
 import { useProfileStore } from '@/store/profile'
@@ -7,6 +8,12 @@ import { workspaceGeneration } from './workspaceScope'
 import type { Profile } from '@/types/profile'
 
 export const desktopActions = [
+  { id: 'split-right', label: '向右分屏', key: 'h' },
+  { id: 'split-down', label: '向下分屏', key: 'j' },
+  { id: 'focus-next', label: '聚焦下一个窗格', key: 'n' },
+  { id: 'focus-previous', label: '聚焦上一个窗格', key: 'p' },
+  { id: 'maximize-pane', label: '最大化或还原窗格', key: 'm' },
+  { id: 'merge-panes', label: '合并窗格并保留连接', key: 'g' },
   { id: 'sync-settings', label: '同步状态与冲突', key: 'y' },
   { id: 'account-settings', label: '账号设置', key: 'u' },
   { id: 'palette', label: '命令面板', key: 'k' },
@@ -53,6 +60,10 @@ export async function executeDesktopAction(id: DesktopActionId, tabId?: string):
   try {
     const custom = handlers.get(id)
     if (custom) await custom()
+    else if (id === 'split-right' || id === 'split-down') useTerminalLayoutStore.getState().split(id === 'split-right' ? 'horizontal' : 'vertical')
+    else if (id === 'focus-next' || id === 'focus-previous') useTerminalLayoutStore.getState().focusNext(id === 'focus-next' ? 1 : -1)
+    else if (id === 'maximize-pane') useTerminalLayoutStore.getState().maximize()
+    else if (id === 'merge-panes') useTerminalLayoutStore.getState().merge()
     else if (id === 'new') useSessionStore.getState().openDraftTab()
     else if (id === 'close') { const active = tabId ?? useSessionStore.getState().activeTabId; if (active) useSessionStore.getState().closeTab(active) }
     else if (id === 'sftp') { const tab = activeTerminal(); useSessionStore.getState().openSftpTab(tab?.profileId, tab?.cwd) }

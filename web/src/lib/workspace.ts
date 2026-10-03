@@ -1,3 +1,4 @@
+import { resetTerminalLayout, restoreTerminalLayout } from '@/store/terminalLayout'
 import { invoke } from '@tauri-apps/api/core'
 import { useProfileStore } from '@/store/profile'
 import { useVaultStore } from '@/store/vault'
@@ -11,6 +12,7 @@ import { workspaceGeneration, setWorkspaceGeneration } from './workspaceScope'
 export { workspaceGeneration } from './workspaceScope'
 export function applyWorkspace(workspace: WorkspaceStatus) {
   if (workspaceGeneration() === workspace.generation) return
+  resetTerminalLayout()
   setWorkspaceGeneration(workspace.generation)
   useProfileStore.setState(useProfileStore.getInitialState(), true)
   useVaultStore.setState(useVaultStore.getInitialState(), true)
@@ -19,7 +21,7 @@ export function applyWorkspace(workspace: WorkspaceStatus) {
   useServerDetailStore.setState(useServerDetailStore.getInitialState(), true)
   useSyncStore.setState(useSyncStore.getInitialState(), true)
   useHistoryStore.setState(useHistoryStore.getInitialState(), true)
-  void useProfileStore.getState().refreshAll()
+  void useProfileStore.getState().refreshAll().then(() => { if (workspaceGeneration() === workspace.generation) return restoreTerminalLayout() }).catch(() => {})
   void useVaultStore.getState().fetchList()
   void useSyncStore.getState().refresh()
 }

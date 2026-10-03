@@ -1,3 +1,4 @@
+import { Button } from '@/components/ui/button'
 import { registerTerminalActions } from '@/lib/terminalActions'
 import { TerminalFind } from './TerminalFind'
 import { ConnectionPicker } from './ConnectionPicker'
@@ -50,6 +51,7 @@ interface TerminalPaneProps {
     id: string
     profileId: string
     profileName: string
+    manualConnect?: boolean
     sessionId: string | null
     status: 'connecting' | 'connected' | 'disconnected' | 'error' | 'reconnecting'
     host?: string
@@ -63,9 +65,10 @@ interface TerminalPaneProps {
     knownHostKeyFingerprint?: string
   }
   isActive: boolean
+  isVisible?: boolean
 }
 
-export function TerminalPane({ tab, isActive }: TerminalPaneProps) {
+export function TerminalPane({ tab, isActive, isVisible = isActive }: TerminalPaneProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const {
     updateTabStatus,
@@ -199,6 +202,7 @@ export function TerminalPane({ tab, isActive }: TerminalPaneProps) {
     fontFamilyCN,
     terminalTheme: effectiveTerminalTheme,
     onData: (data) => {
+      if (useSessionStore.getState().activeTabId !== tab.id || !tab.sessionId) return
       if (tab.sessionId && tab.status === 'connected' && channelStatusRef.current === 'connected') {
         const consumed = handleDataRef.current(data)
         if (!consumed) sendInputRef.current(data)
@@ -679,7 +683,7 @@ export function TerminalPane({ tab, isActive }: TerminalPaneProps) {
   // hold stale dimensions. Container resizes (sidebar collapse, window
   // drag, panel split) are debounced; fit() reports the size via onResize.
   useEffect(() => {
-    if (!isActive) return
+    if (!isVisible) return
 
     fit()
     let observerTimer: ReturnType<typeof setTimeout> | null = null
@@ -696,7 +700,9 @@ export function TerminalPane({ tab, isActive }: TerminalPaneProps) {
       observer.disconnect()
       if (observerTimer) clearTimeout(observerTimer)
     }
-  }, [fit, isActive])
+  }, [fit, isVisible])
+
+  useEffect(() => { if (isActive && tab.profileId && tab.sessionId) getTerminal()?.focus() }, [isActive, getTerminal, tab.profileId, tab.sessionId])
 
   useEffect(() => {
     return () => {
@@ -721,7 +727,10 @@ export function TerminalPane({ tab, isActive }: TerminalPaneProps) {
         '--terminal-ime-inset': `${toolbarImeInset}px`,
       } as CSSProperties}
     >
-      {!tab.profileId && <ConnectionPicker tabId={tab.id} />}
+      {!tab.profileId && <ConnectionPicker tabId={tab.id} isActive={isActive} />}
+      {tab.manualConnect && tab.profileId && !tab.sessionId && <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-background p-4 text-sm">
+        <p>已恢复布局 · {tab.profileName}</p><Button onClick={() => void reconnectNow()}>连接服务器</Button>
+      </div>}
       {findOpen && <TerminalFind getTerminal={getTerminal} onClose={() => { setFindOpen(false); getTerminal()?.focus() }} />}
       <div ref={containerRef} className="term-host relative min-h-0 flex-1">
         {isMobile && <TerminalSelectionHandles getTerminal={getTerminal} hostRef={containerRef} />}
