@@ -1,5 +1,6 @@
 mod authentication;
 mod completion;
+mod connection_scope;
 mod error;
 mod events;
 mod forwarding;

@@ -600,3 +600,95 @@ async fn dynamic_incomplete_handshakes_count_towards_limit_and_stop_releases_por
     drop(streams);
     f.close().await;
 }
+
+#[tokio::test]
+async fn stopping_during_ssh_handshake_closes_the_owned_transport() {
+    let f = Fixture::new().await;
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let ssh_port = listener.local_addr().unwrap().port();
+    let (accepted_tx, accepted_rx) = tokio::sync::oneshot::channel();
+    let peer = tokio::spawn(async move {
+        let (mut socket, _) = listener.accept().await.unwrap();
+        socket.write_all(b"SSH-2.0-stalled\r\n").await.unwrap();
+        let _ = accepted_tx.send(());
+        let mut data = Vec::new();
+        let result = timeout(Duration::from_secs(4), socket.read_to_end(&mut data))
+            .await
+            .unwrap();
+        if let Err(error) = result {
+            assert_eq!(error.kind(), std::io::ErrorKind::ConnectionReset);
+        }
+    });
+    let profile = f.service.profiles.create(serde_json::from_value::<ProfileCreateRequest>(json!({"name":"挂起握手","host":"127.0.0.1","port":ssh_port,"username":"test","auth_type":"password","password":"secret"})).unwrap()).unwrap();
+    let mut config = f.config();
+    config.profile_id = profile.id;
+    let config = f.service.save(config).await.unwrap();
+    let port = f
+        .service
+        .start(&config.id)
+        .await
+        .unwrap()
+        .bound_port
+        .unwrap();
+    accepted_rx.await.unwrap();
+    timeout(Duration::from_secs(3), f.service.stop(&config.id))
+        .await
+        .unwrap()
+        .unwrap();
+    peer.await.unwrap();
+    let listener = TcpListener::bind(("127.0.0.1", port)).await.unwrap();
+    drop(listener);
+    f.close().await;
+}
+
+#[tokio::test]
+async fn stopping_during_host_confirmation_closes_the_prompt_and_route() {
+    struct RecordingEvents(Arc<StdMutex<Vec<Value>>>);
+    impl SessionEventSink for RecordingEvents {
+        fn emit_session(&self, event: Value) {
+            self.0.lock().unwrap().push(event);
+        }
+    }
+    let mut f = Fixture::new().await;
+    f.service
+        .profiles
+        .persist_host_key(&f.profile_id, "")
+        .unwrap();
+    let events = Arc::new(StdMutex::new(Vec::new()));
+    f.service.events = Arc::new(RecordingEvents(events.clone()));
+    let config = f.service.save(f.config()).await.unwrap();
+    f.service.start(&config.id).await.unwrap();
+    let request = timeout(Duration::from_secs(3), async {
+        loop {
+            if let Some(request) = events
+                .lock()
+                .unwrap()
+                .iter()
+                .find(|e| e["type"] == "tunnel_host_key_request")
+                .cloned()
+            {
+                break request;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .unwrap();
+    let request_id = request["payload"]["request_id"].as_str().unwrap();
+    timeout(Duration::from_secs(3), f.service.stop(&config.id))
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(events
+        .lock()
+        .unwrap()
+        .iter()
+        .any(|event| event["type"] == "tunnel_auth_closed"
+            && event["payload"]["request_id"] == request_id));
+    assert!(f
+        .service
+        .authentication
+        .respond(request_id, vec!["trust_once".into(), "old".into()])
+        .is_err());
+    f.close().await;
+}

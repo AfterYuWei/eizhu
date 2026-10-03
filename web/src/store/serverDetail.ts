@@ -1,3 +1,5 @@
+import { appendMetricSample, type MetricSample } from '@/lib/metricSamples'
+import { workspaceGeneration } from '@/lib/workspaceScope'
 import { create } from 'zustand'
 import { serverDetailApi } from '@/api/serverDetail'
 import { editApi } from '@/api/edit'
@@ -28,6 +30,8 @@ interface ServerDetailState {
   info: ServerInfo
   files: FileTreeNode[]
   metrics: ServerMetrics
+  samples: MetricSample[]
+  requestId: number
   wsConnected: boolean
   homeDir: string
   currentPath: string
@@ -106,6 +110,8 @@ const defaultState = (): ServerDetailState => ({
   info: emptyInfo(),
   files: [],
   metrics: emptyMetrics(),
+  samples: [],
+  requestId: 0,
   wsConnected: false,
   homeDir: '/',
   currentPath: '/',
@@ -134,10 +140,14 @@ function mapEntriesToNodes(entries: Awaited<ReturnType<typeof serverDetailApi.li
     }))
 }
 
+let nextRequestId = 0
+
 export const useServerDetailStore = create<ServerDetailStore>((set, get) => ({
   details: {},
 
   connect: async (profileId: string) => {
+    const generation = workspaceGeneration()
+    const requestId = ++nextRequestId
     const current = get().details[profileId]
     const nextRefCount = (current?.refCount ?? 0) + 1
 
@@ -159,6 +169,7 @@ export const useServerDetailStore = create<ServerDetailStore>((set, get) => ({
           [profileId]: {
             ...previous,
             status: 'connecting',
+            requestId,
             error: null,
             selected: new Set(),
             refCount: nextRefCount,
@@ -173,6 +184,10 @@ export const useServerDetailStore = create<ServerDetailStore>((set, get) => ({
       }
 
       const res = await serverDetailApi.createSession(profileId)
+      if (generation !== workspaceGeneration() || get().details[profileId]?.requestId !== requestId || !get().details[profileId]?.refCount) {
+        void serverDetailApi.closeSession(res.session_id).catch(() => {})
+        return
+      }
       const homeDir = res.home_dir || '/'
       const browsePath = current?.currentPath || homeDir
 
@@ -195,7 +210,8 @@ export const useServerDetailStore = create<ServerDetailStore>((set, get) => ({
       void get().getInfo(profileId)
       void get().listFiles(profileId, browsePath)
     } catch (err) {
-      const msg = err instanceof Error ? err.message : '杩炴帴澶辫触'
+      if (generation !== workspaceGeneration() || get().details[profileId]?.requestId !== requestId) return
+      const msg = err instanceof Error ? err.message : '连接失败'
       set((s) => {
         const detail = s.details[profileId] ?? defaultState()
         return {
@@ -240,6 +256,8 @@ export const useServerDetailStore = create<ServerDetailStore>((set, get) => ({
   },
 
   ensureConnected: async (profileId: string) => {
+    const generation = workspaceGeneration()
+    const requestId = ++nextRequestId
     const detail = get().details[profileId]
     if (!detail || detail.refCount <= 0) return
     if (detail.status === 'connecting' || detail.status === 'connected') return
@@ -250,6 +268,7 @@ export const useServerDetailStore = create<ServerDetailStore>((set, get) => ({
         [profileId]: {
           ...s.details[profileId],
           status: 'connecting',
+          requestId,
           error: null,
         },
       },
@@ -261,6 +280,10 @@ export const useServerDetailStore = create<ServerDetailStore>((set, get) => ({
       }
 
       const res = await serverDetailApi.createSession(profileId)
+      if (generation !== workspaceGeneration() || get().details[profileId]?.requestId !== requestId || !get().details[profileId]?.refCount) {
+        void serverDetailApi.closeSession(res.session_id).catch(() => {})
+        return
+      }
       const homeDir = res.home_dir || '/'
 
       set((s) => {
@@ -286,7 +309,8 @@ export const useServerDetailStore = create<ServerDetailStore>((set, get) => ({
         void get().listFiles(profileId, next.currentPath || next.homeDir)
       }
     } catch (err) {
-      const msg = err instanceof Error ? err.message : '杩炴帴澶辫触'
+      if (generation !== workspaceGeneration() || get().details[profileId]?.requestId !== requestId) return
+      const msg = err instanceof Error ? err.message : '连接失败'
       set((s) => {
         const current = s.details[profileId]
         if (!current) return s
@@ -413,10 +437,12 @@ export const useServerDetailStore = create<ServerDetailStore>((set, get) => ({
     set((s) => {
       const detail = s.details[profileId]
       if (!detail) return s
+      const samples = appendMetricSample(detail.samples, metrics)
+      if (samples === detail.samples) return s
       return {
         details: {
           ...s.details,
-          [profileId]: { ...detail, metrics },
+          [profileId]: { ...detail, metrics, samples },
         },
       }
     })

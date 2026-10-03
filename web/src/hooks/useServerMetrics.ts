@@ -1,9 +1,19 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { serverDetailApi } from '@/api/serverDetail'
 import { useServerDetailStore } from '@/store/serverDetail'
+import { workspaceGeneration } from '@/lib/workspaceScope'
+
+// A hidden/visible transition cannot start a second request for the same session.
+const pending = new Set<string>()
 
 /** 通过细粒度 Tauri command 每 3 秒采集一次服务器指标。 */
 export function useServerMetrics(profileId: string, active: boolean) {
+  const [visible, setVisible] = useState(() => document.visibilityState !== 'hidden')
+  useEffect(() => {
+    const change = () => setVisible(document.visibilityState !== 'hidden')
+    document.addEventListener('visibilitychange', change)
+    return () => document.removeEventListener('visibilitychange', change)
+  }, [])
   const sessionId = useServerDetailStore((state) => state.details[profileId]?.sessionId ?? null)
   const status = useServerDetailStore((state) => state.details[profileId]?.status ?? 'idle')
   const updateMetrics = useServerDetailStore((state) => state.updateMetrics)
@@ -12,7 +22,7 @@ export function useServerMetrics(profileId: string, active: boolean) {
   const ensureConnected = useServerDetailStore((state) => state.ensureConnected)
 
   useEffect(() => {
-    if (!active) return
+    if (!active || !visible) return
     if (status === 'idle' || status === 'disconnected') {
       void ensureConnected(profileId)
       return
@@ -20,22 +30,23 @@ export function useServerMetrics(profileId: string, active: boolean) {
     if (!sessionId || status !== 'connected') return
 
     let disposed = false
-    let collecting = false
+    const generation = workspaceGeneration()
+    const key = `${generation}:${sessionId}`
     setWsConnected(profileId, true)
 
     const collect = async () => {
-      if (disposed || collecting) return
-      collecting = true
+      if (disposed || pending.has(key) || document.visibilityState === 'hidden' || generation !== workspaceGeneration()) return
+      pending.add(key)
       try {
         const metrics = await serverDetailApi.getMetrics(sessionId)
-        if (!disposed) updateMetrics(profileId, metrics)
+        if (!disposed && generation === workspaceGeneration() && useServerDetailStore.getState().details[profileId]?.sessionId === sessionId) updateMetrics(profileId, metrics)
       } catch (error) {
-        if (!disposed) {
+        if (!disposed && generation === workspaceGeneration() && useServerDetailStore.getState().details[profileId]?.sessionId === sessionId) {
           setWsConnected(profileId, false)
           markDisconnected(profileId, error instanceof Error ? error.message : '管理连接已断开')
         }
       } finally {
-        collecting = false
+        pending.delete(key)
       }
     }
 
@@ -44,7 +55,7 @@ export function useServerMetrics(profileId: string, active: boolean) {
     return () => {
       disposed = true
       clearInterval(timer)
-      setWsConnected(profileId, false)
+      if (generation === workspaceGeneration() && useServerDetailStore.getState().details[profileId]?.sessionId === sessionId) setWsConnected(profileId, false)
     }
-  }, [active, ensureConnected, markDisconnected, profileId, sessionId, setWsConnected, status, updateMetrics])
+  }, [active, visible, ensureConnected, markDisconnected, profileId, sessionId, setWsConnected, status, updateMetrics])
 }

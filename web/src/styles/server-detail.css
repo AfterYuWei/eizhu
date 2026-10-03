@@ -776,3 +776,8 @@
   }
   .sdetail-info-summary > span:first-child { max-width: 38%; }
 }
+
+.metric-trend-cpu, .metric-trend-net_tx { color: var(--accent); }
+.metric-trend-mem_percent { color: var(--cyan); }
+.metric-trend-net_rx { color: var(--cyan); }
+.metric-trend-disk_percent { color: var(--magenta); }

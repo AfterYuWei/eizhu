@@ -1,3 +1,4 @@
+import { MetricTrends } from './MetricTrends'
 import React, { useEffect, useRef, useState } from 'react'
 import {
   File, Folder, HardDrive, Cpu, Loader2, AlertCircle,
@@ -570,6 +571,7 @@ export function ServerDetail({
           </button>
           {!detail.metricsCollapsed && (
             <div className="psec-body sdetail-metrics-body">
+              <MetricTrends samples={serverDetail.samples} />
               <DetailTooltip
                 side="top"
                 content={metrics?.cpu_detail?.length ? (

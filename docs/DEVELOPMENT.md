@@ -47,6 +47,8 @@ Rust 入口在 `src-tauri/src/lib.rs`，`app/bootstrap.rs` 按顺序初始化 SQ
 - `app/workspace.rs`：账号空间隔离、装配和任务退出，协议与数据迁移见 `docs/DATA_SYNC.md`。
 - `ssh/transport.rs`：直连、SOCKS5、HTTP CONNECT、SSH jump 与认证。
 - `ssh/session.rs`、`session_manager.rs`：PTY、终端 I/O、补全、host-key 与生命周期。
+- `ssh/authentication.rs`：终端/隧道共用认证请求；`ssh/tunnel.rs`、`forwarding.rs`、`socks.rs`：三类隧道、回传通道与 SOCKS5。
+- `local_state/`：账号/服务器隔离的加密历史与本地配置；布局、传输和隧道均排除云同步/完整备份。
 - `sftp/`：会话、文件操作、编辑、上传下载与跨会话传输。
 - `app/events.rs`：SSH/SFTP feature event port 的 Tauri adapter。
 - `infrastructure/platform/desktop/`：对话框、drag-out、日志、legacy path/settings。
@@ -70,3 +72,17 @@ SSH 主机密钥以 SHA-256 指纹验证；未知指纹在成功连接后保存�
 - 颜色使用语义 CSS 变量，圆角与 `DESIGN.md` 一致。
 - 类名合并使用 `cn()`。
 - Profile/Group 图标只能使用 `web/src/lib/serverIcons.tsx` 与 `groupIcons.tsx` 的稳定 key。
+
+## 桌面改造回归与原生验收
+
+本轮实现与提交记录见 [DESKTOP_ROADMAP.md](DESKTOP_ROADMAP.md)，交付状态和原生验收步骤见 [DESKTOP_DELIVERY.md](DESKTOP_DELIVERY.md)。不运行本地完整构建时，可单独执行 TypeScript 静态检查：
+
+```bash
+node --test scripts/*.test.mjs
+./web/node_modules/.bin/tsc --noEmit -p web/tsconfig.app.json
+./web/node_modules/.bin/tsc --noEmit -p web/tsconfig.node.json
+cd src-tauri
+cargo test --all-features --locked --lib
+```
+
+SSH/SFTP 协议测试使用进程内回环服务，执行环境必须允许监听回环地址。指标沿用现有收集器，仅可见详情按三秒轮询；后台和侧栏折叠停止后续采样，内存只保留每主机最近 120 个紧凑样本，账号切换清空。完整构建、桌面烟测和安装更新由远端 CI 及原生验收完成。

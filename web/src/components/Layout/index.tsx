@@ -408,7 +408,7 @@ export function Layout() {
           role="navigation"
           aria-label="Server list"
         >
-          <Sidebar />
+          <Sidebar visible={!sidebarCollapsed} />
         </aside>
 
         {/* Resize handle */}

@@ -27,7 +27,7 @@ const ServerDetail = lazy(() =>
 
 const UNGROUPED_ID = '__ungrouped__'
 
-export function Sidebar() {
+export function Sidebar({ visible = true }: { visible?: boolean }) {
   const mobile = isMobileRuntime()
   const {
     profiles: rawProfiles,
@@ -463,7 +463,7 @@ export function Sidebar() {
                   host={tab.host || '未知'}
                   port={tab.port || 22}
                   username={tab.username || 'root'}
-                    active={tab.id === effectiveTabId}
+                    active={visible && tab.id === effectiveTabId}
                   />
                 </Suspense>
               </div>

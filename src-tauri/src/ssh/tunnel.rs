@@ -426,15 +426,8 @@ impl TunnelService {
         listener: Option<TcpListener>,
         cancel: CancellationToken,
     ) {
-        let auth = Arc::new(TunnelAuthentication {
-            id: config.id.clone(),
-            profile: self.profiles.clone(),
-            coordinator: self.authentication.clone(),
-            events: self.events.clone(),
-            cancel: cancel.clone(),
-            trusted_once: Arc::new(StdMutex::new(HashSet::new())),
-        });
-        'attempts: for attempt in 0..=10 {
+        let trusted_once = Arc::new(StdMutex::new(HashSet::new()));
+        for attempt in 0..=10 {
             if cancel.is_cancelled() {
                 break;
             }
@@ -459,19 +452,32 @@ impl TunnelService {
                 .into();
                 s.retry_attempt = attempt;
             });
+            let scope = super::connection_scope::ConnectionScope::new();
+            let auth_cancel = cancel.child_token();
+            let auth = Arc::new(TunnelAuthentication {
+                id: config.id.clone(),
+                profile: self.profiles.clone(),
+                coordinator: self.authentication.clone(),
+                events: self.events.clone(),
+                cancel: auth_cancel.clone(),
+                trusted_once: trusted_once.clone(),
+            });
             let (registration, incoming) = super::forwarding::ForwardingRegistration::new();
-            let connecting = connect_forwarding_route(
-                resolved,
-                auth.clone(),
-                auth.clone(),
-                registration.clone(),
-            );
-            tokio::pin!(connecting);
-            let route = loop {
-                tokio::select! {
-                    _ = cancel.cancelled() => break 'attempts,
-                    result = &mut connecting => break result,
-                    accepted = accept_local(listener.as_ref()) => { if let Ok((stream, _)) = accepted { drop(stream); } },
+            let route = {
+                let connecting = connect_forwarding_route(
+                    resolved,
+                    auth.clone(),
+                    auth,
+                    registration.clone(),
+                    scope.clone(),
+                );
+                tokio::pin!(connecting);
+                loop {
+                    tokio::select! {
+                        _ = cancel.cancelled() => break Err("隧道已取消".into()),
+                        result = &mut connecting => break result,
+                        accepted = accept_local(listener.as_ref()) => { if let Ok((stream, _)) = accepted { drop(stream); } },
+                    }
                 }
             };
             let outcome = match route {
@@ -490,7 +496,9 @@ impl TunnelService {
                 }
                 Err(e) => Err(e.to_string()),
             };
-            if cancel.is_cancelled() {
+            let rejected = auth_cancel.is_cancelled();
+            scope.finish().await;
+            if cancel.is_cancelled() || rejected {
                 break;
             }
             let error = outcome.err().unwrap_or_else(|| "SSH 连接已断开".into());
@@ -522,7 +530,7 @@ impl TunnelService {
             tokio::pin!(waiting);
             loop {
                 tokio::select! {
-                    _ = cancel.cancelled() => break 'attempts,
+                    _ = cancel.cancelled() => break,
                     _ = &mut waiting => break,
                     accepted = accept_local(listener.as_ref()) => { if let Ok((stream, _)) = accepted { drop(stream); } },
                 }

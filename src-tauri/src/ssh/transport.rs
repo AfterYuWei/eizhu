@@ -180,7 +180,7 @@ pub(crate) async fn connect_route(
     verifier: Arc<dyn HostKeyVerifier>,
     auth_responder: Option<Arc<dyn AuthenticationResponder>>,
 ) -> Result<ConnectedRoute, SshError> {
-    connect_node(root, verifier, auth_responder, None).await
+    connect_node(root, verifier, auth_responder, None, None).await
 }
 
 pub(super) async fn connect_forwarding_route(
@@ -188,8 +188,16 @@ pub(super) async fn connect_forwarding_route(
     verifier: Arc<dyn HostKeyVerifier>,
     auth_responder: Arc<dyn AuthenticationResponder>,
     forwarding: super::forwarding::ForwardingRegistration,
+    scope: super::connection_scope::ConnectionScope,
 ) -> Result<ConnectedRoute, SshError> {
-    connect_node(root, verifier, Some(auth_responder), Some(forwarding)).await
+    connect_node(
+        root,
+        verifier,
+        Some(auth_responder),
+        Some(forwarding),
+        Some(scope),
+    )
+    .await
 }
 
 fn connect_node(
@@ -197,11 +205,18 @@ fn connect_node(
     verifier: Arc<dyn HostKeyVerifier>,
     auth_responder: Option<Arc<dyn AuthenticationResponder>>,
     forwarding: Option<super::forwarding::ForwardingRegistration>,
+    scope: Option<super::connection_scope::ConnectionScope>,
 ) -> Pin<Box<dyn Future<Output = Result<ConnectedRoute, SshError>> + Send>> {
     Box::pin(async move {
         let (stream, jump_handles, mut host_keys) = if let Some(jump) = node.jump.take() {
-            let mut route =
-                connect_node(*jump, verifier.clone(), auth_responder.clone(), None).await?;
+            let mut route = connect_node(
+                *jump,
+                verifier.clone(),
+                auth_responder.clone(),
+                None,
+                scope.clone(),
+            )
+            .await?;
             let channel = timeout(
                 CONNECT_TIMEOUT,
                 route.handle.channel_open_direct_tcpip(
@@ -228,6 +243,11 @@ fn connect_node(
             )
         };
 
+        let stream = if let Some(scope) = &scope {
+            scope.wrap(stream)
+        } else {
+            stream
+        };
         let current = Arc::new(Mutex::new(None));
         let handler = ClientHandler {
             profile_id: node.profile_id.clone(),

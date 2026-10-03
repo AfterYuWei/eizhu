@@ -435,7 +435,12 @@ pub(crate) async fn get_metrics(
     service: &SftpService,
     session_id: String,
 ) -> Result<ServerMetrics, CommandError> {
-    let (output, code) = service.exec(&session_id, METRICS_COMMAND).await?;
+    let (output, code) = tokio::time::timeout(
+        std::time::Duration::from_secs(15),
+        service.exec(&session_id, METRICS_COMMAND),
+    )
+    .await
+    .map_err(|_| CommandError::new("METRICS_TIMEOUT", "指标采样超时，请重新连接"))??;
     if code != 0 {
         return Err(CommandError::new(
             "EXEC_FAILED",
