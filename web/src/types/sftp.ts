@@ -18,7 +18,7 @@ export interface SftpTreeNode extends SftpEntry {
 
 export type TransferDirection = 'upload' | 'download' | 'transfer'
 export type DirectoryTransferMode = 'preserve' | 'archive'
-export type TransferStatus = 'queued' | 'transferring' | 'completed' | 'failed' | 'cancelled'
+export type TransferStatus = 'queued' | 'transferring' | 'completed' | 'failed' | 'cancelled' | 'paused' | 'recoverable'
 
 export interface TransferTask {
   id: string
@@ -34,6 +34,10 @@ export interface TransferTask {
   error_message?: string
   error_code?: string
   retryable?: boolean
+  execution_generation?: number
+  confirmed_offset?: number
+  source_profile?: string
+  target_profile?: string
 }
 
 /** A connected SFTP target server. */
@@ -75,6 +79,8 @@ export interface SftpUploadResponse {
 
 export interface SftpUploadBeginResponse extends SftpUploadResponse {
   upload_id: string
+  received?: number
+  sequence?: number
 }
 
 /** Response from the SFTP download command. */

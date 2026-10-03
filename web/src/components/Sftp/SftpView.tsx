@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, useContext } from 'react'
+import { useState, useEffect, useContext } from 'react'
 import { FilePane } from './FilePane'
 import { TransferQueue } from './TransferQueue'
 import { ServerPicker } from './ServerPicker'
@@ -69,51 +69,22 @@ export function SftpView({ initialProfileId, initialPath }: { initialProfileId?:
     }
   }, [mobile, store])
 
-  // Track the primary session ID for event subscription.
-  // We use a ref + manual subscription to avoid creating new array objects in
-  // the selector (which would break useSyncExternalStore's getSnapshot caching
-  // and cause infinite render loops).
-  const [primarySessionId, setPrimarySessionId] = useState<string | null>(null)
-  const prevSessionIdRef = useRef<string | null>(null)
-
+  // One workspace queue subscribes before a session exists, including restored tasks.
+  const [sessionIds, setSessionIds] = useState<string[]>([])
   useEffect(() => {
-    const updatePrimary = () => {
+    const update = () => {
       const state = store.getState()
-      const ids: string[] = []
-      for (const tab of [...state.leftTabs, ...state.rightTabs]) {
-        if (tab.sessionId) ids.push(tab.sessionId)
-      }
-      const next = ids[0] ?? null
-      if (next !== prevSessionIdRef.current) {
-        prevSessionIdRef.current = next
-        setPrimarySessionId(next)
-      }
+      const next = [...state.leftTabs, ...state.rightTabs].flatMap((tab) => tab.sessionId ? [tab.sessionId] : [])
+      setSessionIds((current) => current.join('|') === next.join('|') ? current : next)
     }
-    updatePrimary()
-    const unsub = store.subscribe(updatePrimary)
-    return unsub
+    update()
+    return store.subscribe(update)
   }, [store])
-
-  // Transfer event callbacks
-  const handleProgress = useCallback((taskId: string, transferred: number, size: number, speed: number, status: string) => {
-    store.getState().updateTransferProgress(taskId, transferred, size, speed, status)
+  useEffect(() => {
+    void store.getState().reloadTransfers().catch(() => undefined)
   }, [store])
-
-  const handleComplete = useCallback((taskId: string, status: string, finishedAt: number) => {
-    store.getState().completeTransfer(taskId, status, finishedAt)
-  }, [store])
-
-  const handleFailed = useCallback((taskId: string, status: string, errorMessage: string) => {
-    store.getState().failTransfer(taskId, status, errorMessage)
-  }, [store])
-
-  // Subscribe to the first active session's events (transfers are global
-  // per SFTP view; additional sessions' progress is handled by their own
-  // connection if needed in the future)
-  useSftpTransfer(primarySessionId, {
-    onProgress: handleProgress,
-    onComplete: handleComplete,
-    onFailed: handleFailed,
+  useSftpTransfer(sessionIds, {
+    onTask: (task) => store.getState().acceptTransferTasks([task]),
   })
 
   return (

@@ -12,6 +12,8 @@ import type {
   SftpConflictInfo,
   DirectoryTransferMode,
 } from '@/types/sftp'
+import { workspaceGeneration } from '@/lib/workspaceScope'
+import { mergeTransferTasks } from '@/lib/transferTasks'
 import { toast } from 'sonner'
 
 /* ────────────────────────────────────────────────────────────────
@@ -291,6 +293,10 @@ export interface SftpStore {
     targetTabId: string,
     destDir: string,
   ) => Promise<void>
+  reloadTransfers: () => Promise<void>
+  acceptTransferTasks: (tasks: TransferTask[]) => void
+  pauseTransfer: (id: string) => Promise<void>
+  resumeTransfer: (id: string, restart?: boolean, file?: File) => Promise<void>
   cancelTransfer: (id: string) => Promise<void>
   clearCompleted: () => Promise<void>
 
@@ -361,6 +367,7 @@ export interface SftpStoreOptions {
  * own store so multiple SFTP pages never share state.
  */
 export function createSftpStore(options: SftpStoreOptions = {}): SftpStoreApi {
+  const generation = workspaceGeneration()
   const includeLocalTab = options.includeLocalTab ?? true
   const initialLocalTab = includeLocalTab ? makeTab(LOCAL_SERVER) : null
 
@@ -626,13 +633,10 @@ export function createSftpStore(options: SftpStoreOptions = {}): SftpStoreApi {
           files,
           target.destDir,
           false,
-          (tasks) => set((state) => ({ transfers: [...state.transfers, ...tasks] })),
+          get().acceptTransferTasks,
         )
         if (res.tasks.length === 0) return
-        const completed = new Map(res.tasks.map((task) => [task.id, task]))
-        set((state) => ({
-          transfers: state.transfers.map((task) => completed.get(task.id) ?? task),
-        }))
+        get().acceptTransferTasks(res.tasks)
         void monitorUploadTasks(get, set, res.tasks.map((task) => task.id), target)
       } catch (err) {
         toast.error(err instanceof Error ? err.message : '上传失败')
@@ -738,32 +742,35 @@ export function createSftpStore(options: SftpStoreOptions = {}): SftpStoreApi {
       }
     },
 
-    cancelTransfer: async (id) => {
-      try {
-        await sftpApi.cancelTransfer(id)
-      } catch {
-        // Optimistic update even if API fails
-      }
-      set((state) => ({
-        transfers: state.transfers.map((t) =>
-          t.id === id && (t.status === 'transferring' || t.status === 'queued')
-            ? { ...t, status: 'cancelled', finished_at: Date.now() }
-            : t
-        ),
-      }))
+    acceptTransferTasks: (tasks) => {
+      if (generation !== workspaceGeneration()) return
+      set((state) => ({ transfers: mergeTransferTasks(state.transfers, tasks) }))
     },
-
-    clearCompleted: async () => {
-      try {
-        await sftpApi.clearCompletedTransfers()
-      } catch {
-        // ignore
+    reloadTransfers: async () => {
+      const tasks = await sftpApi.listTransfers()
+      if (generation !== workspaceGeneration()) return
+      set((state) => ({ transfers: mergeTransferTasks(state.transfers.filter((task) => tasks.some((next) => next.id === task.id)), tasks) }))
+    },
+    pauseTransfer: async (id) => {
+      get().acceptTransferTasks([await sftpApi.pauseTransfer(id)])
+    },
+    resumeTransfer: async (id, restart = false, file) => {
+      if (file) {
+        const result = await sftpApi.resumeUpload(id, file, restart, get().acceptTransferTasks)
+        get().acceptTransferTasks(result.tasks)
+      } else {
+        const task = get().transfers.find((task) => task.id === id)
+        const result = restart || task?.status === 'failed'
+          ? await sftpApi.retryTransfer(id, restart) : await sftpApi.resumeTransfer(id)
+        get().acceptTransferTasks([result])
       }
-      set((state) => ({
-        transfers: state.transfers.filter(
-          (t) => t.status !== 'completed' && t.status !== 'cancelled' && t.status !== 'failed'
-        ),
-      }))
+    },
+    cancelTransfer: async (id) => {
+      get().acceptTransferTasks([await sftpApi.cancelTransfer(id)])
+    },
+    clearCompleted: async () => {
+      await sftpApi.clearCompletedTransfers()
+      await get().reloadTransfers()
     },
 
     // --- Tauri event progress callbacks ---
@@ -1058,14 +1065,10 @@ async function runTransfer(
   if (!res.task_id || !res.tasks || res.tasks.length === 0) return
 
   // Add the backend-created task(s) to the store for progress tracking
-  set((s) => ({
-    transfers: [
-      ...s.transfers,
-      ...res.tasks!.map((task) => ({ ...task, direction: params.direction })),
-    ],
-  }))
+  get().acceptTransferTasks(res.tasks.map((task) => ({ ...task, direction: params.direction })))
 
-  // Poll the task status in background until completion
+  // Polling is a fallback for missed events; it cannot cross account spaces.
+  const generation = workspaceGeneration()
   const taskId = res.task_id
   ;(async () => {
     const deadline = Date.now() + 10 * 60 * 1000 // 10 min timeout
@@ -1076,23 +1079,10 @@ async function runTransfer(
         const t = tasks.find((x) => x.id === taskId)
         if (!t) continue
 
-        set((s) => ({
-          transfers: s.transfers.map((x) =>
-            x.id === taskId
-              ? {
-                  ...x,
-                  transferred: t.transferred,
-                  size: t.size,
-                  speed: t.speed,
-                  status: t.status,
-                  finished_at: t.finished_at,
-                  error_message: t.error_message,
-                }
-              : x
-          ),
-        }))
+        if (generation !== workspaceGeneration()) return
+        set((s) => ({ transfers: mergeTransferTasks(s.transfers, [t]) }))
 
-        if (t.status === 'completed' || t.status === 'failed' || t.status === 'cancelled') {
+        if (['completed', 'failed', 'cancelled', 'paused', 'recoverable'].includes(t.status)) {
           if (t.status === 'completed') {
             await refreshTabById(get, set, params.targetPane, params.targetTabId)
             if (t.error_message) toast.warning(`传输部分完成：${t.error_message}`)
@@ -1114,20 +1104,22 @@ async function monitorUploadTasks(
   taskIds: string[],
   target: SftpDropTarget,
 ) {
+  const generation = workspaceGeneration()
   const pending = new Set(taskIds)
   const deadline = Date.now() + 10 * 60 * 1000
   while (pending.size > 0 && Date.now() < deadline) {
     await new Promise((resolve) => setTimeout(resolve, 800))
     try {
       const tasks = await sftpApi.listTransfers()
+      if (generation !== workspaceGeneration()) return
       const byId = new Map(tasks.map((task) => [task.id, task]))
       set((state) => ({
-        transfers: state.transfers.map((task) => byId.get(task.id) ?? task),
+        transfers: mergeTransferTasks(state.transfers, tasks),
       }))
       for (const id of [...pending]) {
         const task = byId.get(id)
         if (!task) continue
-        if (task.status === 'completed' || task.status === 'failed' || task.status === 'cancelled') {
+        if (['completed', 'failed', 'cancelled', 'paused', 'recoverable'].includes(task.status)) {
           pending.delete(id)
         }
       }

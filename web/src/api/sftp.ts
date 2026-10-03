@@ -132,57 +132,53 @@ export const sftpApi = {
     overwrite = false,
     onTasks?: (tasks: TransferTask[]) => void,
   ) => {
+    const generation = workspaceGeneration()
     const responses: SftpUploadResponse[] = []
     for (const file of files) {
-      let uploadId: string | undefined
-      try {
-        const begin = await invokeCommand<SftpUploadBeginResponse>('sftp_upload_begin', {
-          sessionId,
-          name: file.name,
-          destDir,
-          overwrite,
-          size: file.size,
-        })
-        uploadId = begin.upload_id
-        onTasks?.(begin.tasks)
-        const reader = file.stream().getReader()
-        try {
-          while (true) {
-            const { done, value } = await reader.read()
-            if (done) break
-            for (let offset = 0; offset < value.byteLength; offset += IPC_CHUNK_BYTES) {
-              const chunk = value.subarray(offset, offset + IPC_CHUNK_BYTES)
-              if (USE_BASE64_IPC) {
-                await invokeCommand('sftp_upload_chunk_base64', {
-                  uploadId,
-                  data: bytesToBase64(chunk),
-                })
-              } else {
-                await invoke(
-                  'sftp_upload_chunk',
-                  chunk,
-                  { headers: { 'x-eizhu-upload-id': uploadId, ...(workspaceGeneration() !== undefined ? { 'x-eizhu-workspace-generation': String(workspaceGeneration()) } : {}) } },
-                )
-              }
-            }
-          }
-        } finally {
-          reader.releaseLock()
-        }
-        responses.push(await invokeCommand<SftpUploadResponse>('sftp_upload_finish', { uploadId }))
-      } catch (cause) {
-        if (uploadId) {
-          try {
-            await invokeCommand<void>('sftp_upload_abort', { uploadId })
-          } catch {
-            // Preserve the original upload error.
-          }
-        }
-        throw normalizeCommandError(cause)
-      }
+      assertWorkspace(generation)
+      const begin = await invokeCommand<SftpUploadBeginResponse>('sftp_upload_begin', {
+        sessionId, name: file.name, destDir, overwrite, size: file.size, lastModified: file.lastModified,
+      })
+      assertWorkspace(generation)
+      onTasks?.(begin.tasks)
+      responses.push(await sendUpload(file, begin, generation))
     }
     return { tasks: responses.flatMap((response) => response.tasks) }
   },
+
+  resumeUpload: async (taskId: string, file: File, restart = false, onTasks?: (tasks: TransferTask[]) => void) => {
+    const generation = workspaceGeneration()
+    const checkpoint = await invokeCommand<{
+      size: number; last_modified?: number; blocks: { length: number; sha256: string }[]
+    }>('sftp_upload_checkpoint', { taskId })
+    const digests: string[] = []
+    if (!restart) {
+      if (file.size !== checkpoint.size || (checkpoint.last_modified !== undefined && file.lastModified !== checkpoint.last_modified)) {
+        throw new Error('所选文件的大小或修改时间已变化，请选择原文件或重新开始')
+      }
+      let offset = 0
+      for (const block of checkpoint.blocks) {
+        assertWorkspace(generation)
+        const hash = await crypto.subtle.digest('SHA-256', await file.slice(offset, offset + block.length).arrayBuffer())
+        const digest = [...new Uint8Array(hash)].map((byte) => byte.toString(16).padStart(2, '0')).join('')
+        if (digest !== block.sha256) throw new Error('所选文件已传部分发生变化，请选择原文件或重新开始')
+        digests.push(digest)
+        offset += block.length
+      }
+    }
+    assertWorkspace(generation)
+    const begin = await invokeCommand<SftpUploadBeginResponse>('sftp_resume_upload', {
+      taskId, size: file.size, lastModified: file.lastModified, digests, restart,
+    })
+    assertWorkspace(generation)
+    onTasks?.(begin.tasks)
+    if (!begin.upload_id) return { tasks: begin.tasks }
+    return sendUpload(file.slice(begin.received ?? 0), begin, generation)
+  },
+
+  pauseTransfer: (taskId: string) => invokeCommand<TransferTask>('sftp_pause_transfer', { taskId }),
+  resumeTransfer: (taskId: string) => invokeCommand<TransferTask>('sftp_resume_transfer', { taskId }),
+  retryTransfer: (taskId: string, restart = false) => invokeCommand<TransferTask>('sftp_retry_transfer', { taskId, restart }),
 
   uploadDocument: (
     sessionId: string,
@@ -217,7 +213,7 @@ export const sftpApi = {
           .find((candidate) => candidate.id === task.id)
         if (!current) throw new Error('下载任务已丢失')
         onProgress?.(current)
-        if (current.status === 'failed' || current.status === 'cancelled') {
+        if (['failed', 'cancelled', 'paused', 'recoverable'].includes(current.status)) {
           throw new Error(current.error_message || '下载未完成')
         }
         if (current.status === 'completed') break
@@ -278,7 +274,7 @@ export const sftpApi = {
   },
 
   cancelTransfer: (taskId: string) =>
-    invokeCommand<{ id: string; status: string }>('sftp_cancel_transfer', { taskId }),
+    invokeCommand<TransferTask>('sftp_cancel_transfer', { taskId }),
 
   clearCompletedTransfers: () =>
     invokeCommand<void>('sftp_clear_completed_transfers'),
@@ -316,4 +312,46 @@ function base64ToBytes(value: string): Uint8Array {
     bytes[index] = binary.charCodeAt(index)
   }
   return bytes
+}
+
+function assertWorkspace(generation: number | undefined) {
+  if (generation !== workspaceGeneration()) throw normalizeCommandError({ code: 'WORKSPACE_CHANGED', message: '数据空间已切换，请重试' })
+}
+
+async function sendUpload(file: Blob, begin: SftpUploadBeginResponse, generation: number | undefined): Promise<SftpUploadResponse> {
+  const uploadId = begin.upload_id
+  const reader = file.stream().getReader()
+  let sequence = begin.sequence ?? 0
+  try {
+    while (true) {
+      assertWorkspace(generation)
+      const { done, value } = await reader.read()
+      assertWorkspace(generation)
+      if (done) break
+      for (let offset = 0; offset < value.byteLength; offset += IPC_CHUNK_BYTES) {
+        assertWorkspace(generation)
+        const chunk = value.subarray(offset, offset + IPC_CHUNK_BYTES)
+        if (USE_BASE64_IPC) {
+          await invokeCommand('sftp_upload_chunk_base64', { uploadId, data: bytesToBase64(chunk), sequence })
+        } else {
+          await invoke('sftp_upload_chunk', chunk, { headers: {
+            'x-eizhu-upload-id': uploadId,
+            'x-eizhu-chunk-sequence': String(sequence),
+            ...(generation !== undefined ? { 'x-eizhu-workspace-generation': String(generation) } : {}),
+          } })
+        }
+        assertWorkspace(generation)
+        sequence++
+      }
+    }
+    return await invokeCommand<SftpUploadResponse>('sftp_upload_finish', { uploadId })
+  } catch (cause) {
+    if (generation === workspaceGeneration() && begin.tasks[0]) {
+      try { await sftpApi.pauseTransfer(begin.tasks[0].id) } catch { /* Keep the original error and durable checkpoint. */ }
+    }
+    throw normalizeCommandError(cause)
+  } finally {
+    await reader.cancel().catch(() => undefined)
+    reader.releaseLock()
+  }
 }
