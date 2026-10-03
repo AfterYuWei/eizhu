@@ -13,7 +13,7 @@ use crate::{
     profile::ProfileService,
     sftp::SftpService,
     snippet::SnippetService,
-    ssh::SshService,
+    ssh::{SshService, TunnelRepository, TunnelService},
     sync::SyncService,
     vault::{Encryptor, VaultService},
 };
@@ -42,6 +42,7 @@ pub(crate) struct Workspace {
     pub archive: ArchiveService,
     pub sync: SyncService,
     pub sessions: SshService,
+    pub tunnels: TunnelService,
     pub sftp: SftpService,
 }
 #[derive(Clone)]
@@ -158,6 +159,12 @@ impl WorkspaceManager {
             current,
         ));
         let sessions = SshService::new(profile.clone(), audit.clone(), events.clone());
+        let tunnels = TunnelService::new(
+            profile.clone(),
+            TunnelRepository::new(database.clone(), encryptor.clone()),
+            events.clone(),
+            sessions.authentication(),
+        );
         let sftp = SftpService::new(
             profile.clone(),
             audit.clone(),
@@ -181,6 +188,7 @@ impl WorkspaceManager {
             archive,
             sync,
             sessions,
+            tunnels,
             sftp,
         })
     }
@@ -274,6 +282,7 @@ impl WorkspaceManager {
             Ok(workspace) => {
                 old.sync.stop().await;
                 old.archive.stop_scheduler().await;
+                old.tunnels.shutdown().await;
                 old.sessions.shutdown().await;
                 old.sftp.shutdown().await;
                 self.generation.store(next, Ordering::Release);
@@ -317,6 +326,7 @@ impl WorkspaceManager {
         if let Ok(active) = self.current(None) {
             active.sync.stop().await;
             active.archive.stop_scheduler().await;
+            active.tunnels.shutdown().await;
             active.sessions.shutdown().await;
             active.sftp.shutdown().await;
             active.archive.shutdown_backup().await;

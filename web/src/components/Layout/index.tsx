@@ -1,3 +1,4 @@
+import { TunnelDialog, TunnelPrompts } from '@/components/Terminal/TunnelDialog'
 import type { SettingsTab } from '@/components/SettingsDialog'
 import { workspaceGeneration } from '@/lib/workspaceScope'
 import { registerDesktopAction, runDesktopAction, shortcutAction } from '@/lib/desktopActions'
@@ -34,6 +35,7 @@ export function Layout() {
   useSettingsStore((state) => state.systemRevision)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [paletteOpen, setPaletteOpen] = useState(false)
+  const [tunnelsOpen, setTunnelsOpen] = useState(false)
   const [snippetsOpen, setSnippetsOpen] = useState(false)
   const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTab>('appearance')
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -153,6 +155,7 @@ export function Layout() {
 
   useEffect(() => {
     const unregister = [
+      registerDesktopAction('tunnels', () => setTunnelsOpen(true)),
       registerDesktopAction('palette', () => setPaletteOpen((v) => !v)),
       registerDesktopAction('sync-settings', () => { setSettingsInitialTab('sync'); setSettingsOpen(true) }),
       registerDesktopAction('account-settings', () => { setSettingsInitialTab('account'); setSettingsOpen(true) }),
@@ -425,6 +428,8 @@ export function Layout() {
       {/* Status bar — full width */}
       <StatusBar />
 
+      <TunnelDialog open={tunnelsOpen} onOpenChange={setTunnelsOpen} />
+      <TunnelPrompts />
       {/* Command Palette */}
       <CommandPalette
         open={paletteOpen}

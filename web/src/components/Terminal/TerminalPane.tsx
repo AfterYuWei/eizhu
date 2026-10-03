@@ -505,6 +505,12 @@ export function TerminalPane({ tab, isActive, isVisible = isActive }: TerminalPa
           break
         }
 
+        case 'auth_request_closed': {
+          const payload = msg.payload as { request_id?: string }
+          setAuthRequest((current) => current?.request_id === payload?.request_id ? undefined : current)
+          break
+        }
+
         case 'auth_request': {
           const payload = msg.payload as AuthenticationRequestPayload
           if (payload?.request_id) {

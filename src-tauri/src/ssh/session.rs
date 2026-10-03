@@ -129,8 +129,7 @@ pub(super) struct Session {
     host_key_decision: StdMutex<Option<HostKeyDecision>>,
     trusted_once_host_keys: StdMutex<HashSet<String>>,
     host_key_notify: Notify,
-    pending_auth: StdMutex<Option<PendingAuthentication>>,
-    auth_notify: Notify,
+    authentication: super::AuthenticationCoordinator,
     cancel: CancellationToken,
     commands: Mutex<Option<mpsc::Sender<SessionCommand>>>,
     pending_resize: StdMutex<Option<(u32, u32)>>,
@@ -190,11 +189,6 @@ impl SessionDelivery {
 struct HostKeyDecision {
     fingerprint: String,
     persist: bool,
-}
-
-struct PendingAuthentication {
-    request_id: String,
-    responses: Option<Vec<String>>,
 }
 
 impl Session {
@@ -266,8 +260,7 @@ impl Session {
             host_key_decision: StdMutex::new(None),
             trusted_once_host_keys: StdMutex::new(HashSet::new()),
             host_key_notify: Notify::new(),
-            pending_auth: StdMutex::new(None),
-            auth_notify: Notify::new(),
+            authentication: super::AuthenticationCoordinator::default(),
             cancel: CancellationToken::new(),
             commands: Mutex::new(None),
             pending_resize: StdMutex::new(None),
@@ -303,7 +296,6 @@ impl Session {
     pub(super) fn cancel(&self) {
         self.cancel.cancel();
         self.host_key_notify.notify_waiters();
-        self.auth_notify.notify_waiters();
     }
 
     pub(super) fn dimensions(&self) -> (u32, u32) {
@@ -449,23 +441,6 @@ impl Session {
         );
     }
 
-    fn provide_auth_response(&self, request_id: &str, responses: Vec<String>) -> bool {
-        let mut pending = self
-            .pending_auth
-            .lock()
-            .expect("authentication mutex poisoned");
-        let Some(request) = pending.as_mut() else {
-            return false;
-        };
-        if request.request_id != request_id || request.responses.is_some() {
-            return false;
-        }
-        request.responses = Some(responses);
-        drop(pending);
-        self.auth_notify.notify_waiters();
-        true
-    }
-
     fn emit_message(&self, message_type: &str, data: &str, payload: Option<Value>) {
         let message = ClientMessage {
             session_id: self.id.clone(),
@@ -609,61 +584,23 @@ impl AuthenticationResponder for Session {
         request: AuthenticationRequest,
     ) -> Pin<Box<dyn Future<Output = Result<Vec<String>, String>> + Send + 'a>> {
         Box::pin(async move {
-            let request_id = uuid::Uuid::new_v4().to_string();
-            let prompts = request
-                .prompts
-                .iter()
-                .map(|prompt| json!({"prompt":prompt.prompt,"echo":prompt.echo}))
-                .collect::<Vec<_>>();
-            *self
-                .pending_auth
-                .lock()
-                .expect("authentication mutex poisoned") = Some(PendingAuthentication {
-                request_id: request_id.clone(),
-                responses: None,
-            });
-            self.stage("auth_interactive", "warn", "服务器需要补充交互式认证信息");
-            self.emit_message(
-                "auth_request",
-                "",
-                Some(json!({
-                    "request_id":request_id,
-                    "profile_id":request.profile_id,
-                    "name":request.name,
-                    "instructions":request.instructions,
-                    "prompts":prompts,
-                })),
-            );
-            loop {
-                let response = {
-                    let mut pending = self
-                        .pending_auth
-                        .lock()
-                        .expect("authentication mutex poisoned");
-                    pending
-                        .as_mut()
-                        .and_then(|request| request.responses.take())
-                };
-                if let Some(response) = response {
-                    *self
-                        .pending_auth
-                        .lock()
-                        .expect("authentication mutex poisoned") = None;
-                    return Ok(response);
-                }
-                tokio::select! {
-                    _ = self.cancel.cancelled() => {
-                        return Err("用户取消了 keyboard-interactive 认证".into());
+            self.authentication
+                .request(request, &self.cancel, |payload| {
+                    if payload["closed"] == true {
+                        self.emit_message("auth_request_closed", "", Some(payload));
+                    } else {
+                        self.stage("auth_interactive", "warn", "服务器需要补充交互式认证信息");
+                        self.emit_message("auth_request", "", Some(payload));
                     }
-                    _ = self.auth_notify.notified() => {}
-                }
-            }
+                })
+                .await
         })
     }
 }
 
 #[derive(Clone)]
 pub(crate) struct SshService {
+    authentication: super::AuthenticationCoordinator,
     manager: SessionManager,
     profiles: ProfileService,
     audit: AuditRepository,
@@ -677,6 +614,7 @@ impl SshService {
         events: Arc<dyn SessionEventSink>,
     ) -> Self {
         Self {
+            authentication: super::AuthenticationCoordinator::default(),
             manager: SessionManager::default(),
             profiles,
             audit,
@@ -694,7 +632,9 @@ impl SshService {
         let resolved = self.profiles.resolve_connection(&request.profile_id)?;
         let cols = request.cols.filter(|value| *value > 0).unwrap_or(80);
         let rows = request.rows.filter(|value| *value > 0).unwrap_or(24);
-        let session = Arc::new(Session::new(&resolved, self.events.clone(), cols, rows));
+        let mut session = Session::new(&resolved, self.events.clone(), cols, rows);
+        session.authentication = self.authentication.clone();
+        let session = Arc::new(session);
         let response = SessionCreateResponse {
             session_id: session.id.clone(),
             status: "connecting".into(),
@@ -1199,21 +1139,10 @@ impl SshService {
         request_id: &str,
         responses: Vec<String>,
     ) -> Result<(), CommandError> {
-        if responses.len() > 32 {
-            return Err(CommandError::new(
-                "VALIDATION",
-                "too many authentication responses",
-            ));
-        }
-        for session in self.manager.sessions().await {
-            if session.provide_auth_response(request_id, responses.clone()) {
-                return Ok(());
-            }
-        }
-        Err(CommandError::new(
-            "AUTH_REQUEST_NOT_FOUND",
-            "authentication request is no longer active",
-        ))
+        self.authentication.respond(request_id, responses)
+    }
+    pub(crate) fn authentication(&self) -> super::AuthenticationCoordinator {
+        self.authentication.clone()
     }
 
     pub(crate) async fn close(&self, id: &str) -> Result<(), CommandError> {
@@ -1305,14 +1234,16 @@ impl SshService {
         let previous = self.manager.get(id).await?;
         let resolved = self.profiles.resolve_connection(&previous.profile_id)?;
         let (cols, rows) = previous.dimensions();
-        let session = Arc::new(Session::reconnecting(
+        let mut session = Session::reconnecting(
             &resolved,
             self.events.clone(),
             id.to_owned(),
             cols,
             rows,
             previous.is_attached(),
-        ));
+        );
+        session.authentication = self.authentication.clone();
+        let session = Arc::new(session);
         session.stage("reconnecting", "info", "正在恢复 SSH 会话");
         self.manager.replace(id, session.clone()).await;
         let state = self.clone();

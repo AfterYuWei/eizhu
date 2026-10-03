@@ -1,4 +1,6 @@
 //! Tauri IPC adapter layer.
+mod tunnel;
+pub(crate) use tunnel::*;
 
 mod account;
 mod audit;

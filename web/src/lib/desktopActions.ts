@@ -8,6 +8,7 @@ import { workspaceGeneration } from './workspaceScope'
 import type { Profile } from '@/types/profile'
 
 export const desktopActions = [
+  { id: 'tunnels', label: 'SSH 隧道管理', key: 'l' },
   { id: 'split-right', label: '向右分屏', key: 'h' },
   { id: 'split-down', label: '向下分屏', key: 'j' },
   { id: 'focus-next', label: '聚焦下一个窗格', key: 'n' },

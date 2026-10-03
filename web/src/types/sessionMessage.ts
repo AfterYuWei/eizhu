@@ -8,6 +8,7 @@ export type SessionMessageType =
   | 'pong'
   | 'auth'
   | 'auth_request'
+  | 'auth_request_closed'
   | 'metadata'
   | 'cwd'
   | 'complete_request'

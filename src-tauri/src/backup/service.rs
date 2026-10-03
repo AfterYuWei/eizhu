@@ -734,6 +734,12 @@ mod tests {
             .unwrap();
         connection.execute("INSERT INTO local_transfer_files(task_id,file_index,payload) VALUES('private-task',0,?1)",[&encrypted]).unwrap();
         connection.execute("INSERT INTO local_transfer_blocks(task_id,file_index,block_index,payload) VALUES('private-task',0,0,?1)",[encrypted]).unwrap();
+        connection
+            .execute(
+                "INSERT INTO local_tunnels(id,payload) VALUES('private-tunnel',?1)",
+                [encryptor.encrypt("private-tunnel-marker").unwrap()],
+            )
+            .unwrap();
         let local = crate::local_state::LocalStateService::new(database, encryptor);
         local
             .record("local", "echo private-history-marker", "/private")
@@ -753,6 +759,8 @@ mod tests {
         assert!(!exported.contains("privateLayout"));
         assert!(!exported.contains("private-transfer-marker"));
         assert!(!exported.contains("private-task"));
+        assert!(!exported.contains("private-tunnel-marker"));
+        assert!(!exported.contains("private-tunnel"));
     }
 
     #[test]

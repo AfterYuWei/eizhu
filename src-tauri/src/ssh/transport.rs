@@ -98,6 +98,21 @@ pub(crate) struct ConnectedRoute {
 }
 
 impl ConnectedRoute {
+    pub(super) async fn shutdown(&self) {
+        let _ = timeout(
+            Duration::from_secs(5),
+            self.handle
+                .disconnect(russh::Disconnect::ByApplication, "tunnel stopped", "zh-CN"),
+        )
+        .await;
+        for jump in self._jump_handles.iter().rev() {
+            let _ = timeout(
+                Duration::from_secs(5),
+                jump.disconnect(russh::Disconnect::ByApplication, "tunnel stopped", "zh-CN"),
+            )
+            .await;
+        }
+    }
     pub(crate) fn host_keys(&self) -> &[(String, String)] {
         &self.host_keys
     }
