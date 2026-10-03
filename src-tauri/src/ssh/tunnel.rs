@@ -33,6 +33,7 @@ use tokio_util::sync::CancellationToken;
 pub(crate) enum TunnelKind {
     Local,
     Remote,
+    Dynamic,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -57,6 +58,9 @@ impl TunnelConfig {
             return Err(CommandError::new("VALIDATION", "隧道名称或服务器配置非法"));
         }
         self.bind_address()?;
+        if self.kind == TunnelKind::Dynamic {
+            return Ok(());
+        }
         if self.target_port == 0
             || self.target_host.is_empty()
             || self.target_host.len() > 253
@@ -339,7 +343,7 @@ impl TunnelService {
         let config = self.repository.get(id)?;
         config.validate()?;
         self.profiles.resolve_connection(&config.profile_id)?;
-        let listener = if config.kind == TunnelKind::Local {
+        let listener = if config.kind != TunnelKind::Remote {
             Some(
                 TcpListener::bind(config.bind_address()?)
                     .await
@@ -674,6 +678,9 @@ async fn local_relay(
     route: &ConnectedRoute,
     config: &TunnelConfig,
 ) -> Result<(), String> {
+    if config.kind == TunnelKind::Dynamic {
+        return super::socks::relay(stream, peer, route).await;
+    }
     let channel = timeout(
         Duration::from_secs(30),
         route.handle.channel_open_direct_tcpip(

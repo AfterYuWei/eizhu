@@ -45,8 +45,22 @@ impl russh::server::Handler for ForwardServer {
         reply: russh::server::ChannelOpenHandle,
         _session: &mut russh::server::Session,
     ) -> Result<(), Self::Error> {
-        assert_eq!(host, "localhost");
-        let socket = TcpStream::connect((host, port as u16)).await.unwrap();
+        assert!(matches!(
+            host,
+            "localhost" | "ssh-only.invalid.tld" | "127.0.0.1"
+        ));
+        let destination = if host == "ssh-only.invalid.tld" {
+            "127.0.0.1"
+        } else {
+            host
+        };
+        let socket = match TcpStream::connect((destination, port as u16)).await {
+            Ok(socket) => socket,
+            Err(_) => {
+                reply.reject(russh::ChannelOpenFailure::ConnectFailed).await;
+                return Ok(());
+            }
+        };
         reply.accept().await;
         self.relays.lock().unwrap().push(tokio::spawn(async move {
             let mut socket = socket;
@@ -466,6 +480,121 @@ async fn remote_busy_port_and_connection_limit_release_all_forwarding_workers() 
     f.service.stop(&config.id).await.unwrap();
     assert_eq!(f.remote_cancels.load(Ordering::Acquire), 1);
     assert_eq!(f.service.statuses().unwrap()[0].active_connections, 0);
+    let listener = TcpListener::bind(("127.0.0.1", port)).await.unwrap();
+    drop(listener);
+    drop(streams);
+    f.close().await;
+}
+
+#[tokio::test]
+async fn dynamic_socks_fragmented_remote_dns_half_close_rejection_and_cancel() {
+    let f = Fixture::new().await;
+    let mut config = f.config();
+    config.kind = TunnelKind::Dynamic;
+    config.target_host.clear();
+    config.target_port = 0;
+    let config = f.service.save(config).await.unwrap();
+    let port = f
+        .service
+        .start(&config.id)
+        .await
+        .unwrap()
+        .bound_port
+        .unwrap();
+    f.wait(&config.id, |s| s.status == "running").await;
+    let mut socket = TcpStream::connect(("127.0.0.1", port)).await.unwrap();
+    for byte in [5, 1, 0] {
+        socket.write_all(&[byte]).await.unwrap();
+        tokio::task::yield_now().await;
+    }
+    let mut greeting = [0; 2];
+    socket.read_exact(&mut greeting).await.unwrap();
+    assert_eq!(greeting, [5, 0]);
+    let mut request = vec![5, 1, 0, 3, 20];
+    request.extend(b"ssh-only.invalid.tld");
+    request.extend(f.target_port.to_be_bytes());
+    for byte in request {
+        socket.write_all(&[byte]).await.unwrap();
+        tokio::task::yield_now().await;
+    }
+    let mut response = [0; 10];
+    timeout(Duration::from_secs(3), socket.read_exact(&mut response))
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(response[..4], [5, 0, 0, 1]);
+    let data = "动态代理".repeat(8192).into_bytes();
+    socket.write_all(&data).await.unwrap();
+    socket.shutdown().await.unwrap();
+    let mut response = Vec::new();
+    timeout(Duration::from_secs(5), socket.read_to_end(&mut response))
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(response, data);
+    let unused = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let unused_port = unused.local_addr().unwrap().port();
+    drop(unused);
+    let mut socket = TcpStream::connect(("127.0.0.1", port)).await.unwrap();
+    socket.write_all(&[5, 1, 0]).await.unwrap();
+    socket.read_exact(&mut greeting).await.unwrap();
+    let mut request = vec![5, 1, 0, 1, 127, 0, 0, 1];
+    request.extend(unused_port.to_be_bytes());
+    socket.write_all(&request).await.unwrap();
+    let mut response = [0; 10];
+    timeout(Duration::from_secs(3), socket.read_exact(&mut response))
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(response[1], 5);
+    let mut unfinished = TcpStream::connect(("127.0.0.1", port)).await.unwrap();
+    unfinished.write_all(&[5]).await.unwrap();
+    f.wait(&config.id, |s| s.active_connections >= 1).await;
+    timeout(Duration::from_secs(3), f.service.stop(&config.id))
+        .await
+        .unwrap()
+        .unwrap();
+    let mut byte = [0];
+    assert_eq!(unfinished.read(&mut byte).await.unwrap(), 0);
+    let listener = TcpListener::bind(("127.0.0.1", port)).await.unwrap();
+    drop(listener);
+    f.close().await;
+}
+
+#[tokio::test]
+async fn dynamic_incomplete_handshakes_count_towards_limit_and_stop_releases_port() {
+    let f = Fixture::new().await;
+    let mut config = f.config();
+    config.kind = TunnelKind::Dynamic;
+    let config = f.service.save(config).await.unwrap();
+    let port = f
+        .service
+        .start(&config.id)
+        .await
+        .unwrap()
+        .bound_port
+        .unwrap();
+    f.wait(&config.id, |s| s.status == "running").await;
+    let mut streams = Vec::new();
+    for _ in 0..32 {
+        let mut socket = TcpStream::connect(("127.0.0.1", port)).await.unwrap();
+        socket.write_all(&[5]).await.unwrap();
+        streams.push(socket);
+    }
+    f.wait(&config.id, |s| s.active_connections == 32).await;
+    let mut extra = TcpStream::connect(("127.0.0.1", port)).await.unwrap();
+    let mut byte = [0];
+    assert_eq!(
+        timeout(Duration::from_secs(2), extra.read(&mut byte))
+            .await
+            .unwrap()
+            .unwrap(),
+        0
+    );
+    timeout(Duration::from_secs(3), f.service.stop(&config.id))
+        .await
+        .unwrap()
+        .unwrap();
     let listener = TcpListener::bind(("127.0.0.1", port)).await.unwrap();
     drop(listener);
     drop(streams);

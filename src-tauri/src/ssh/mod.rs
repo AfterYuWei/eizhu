@@ -6,6 +6,7 @@ mod forwarding;
 mod profile_test;
 mod session;
 mod session_manager;
+mod socks;
 pub(crate) mod transport;
 mod tunnel;
 mod tunnel_repository;
