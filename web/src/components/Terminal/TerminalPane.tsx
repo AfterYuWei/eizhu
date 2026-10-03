@@ -606,6 +606,7 @@ export function TerminalPane({ tab, isActive }: TerminalPaneProps) {
     enabled: terminalPopupMenu,
     profileId: tab.profileId,
     tabId: tab.id,
+    connectionKey: `${tab.sessionId ?? ''}:${tab.status}`,
   })
 
   useEffect(() => {

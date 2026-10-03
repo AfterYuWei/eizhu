@@ -76,8 +76,8 @@ function normalizeCommandToken(token: string): string {
 
 function readLogicalLine(terminal: Terminal): string {
   const active = terminal.buffer.active
-  let start = active.cursorY
-  let end = active.cursorY
+  let start = active.baseY + active.cursorY
+  let end = active.baseY + active.cursorY
 
   while (start > 0) {
     const line = active.getLine(start)

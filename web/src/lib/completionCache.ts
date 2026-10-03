@@ -1,46 +1,33 @@
 import type { CompletionData } from '@/types/completion'
-// 动态补全候选缓存:按 script+cwd 分级 TTL 缓存
-// 每个 TerminalPane/useCompletion 实例独立持有,避免跨 tab 泄露
-
-interface CacheEntry {
-  data: CompletionData // 脚本 stdout 按行切分后的原始输出
-  timestamp: number
-}
-
+interface CacheEntry { data: CompletionData; timestamp: number; bytes: number }
 export interface CompletionCache {
-  get(script: string, cwd: string | undefined, ttl: number): CompletionData | null
-  set(script: string, cwd: string | undefined, data: CompletionData): void
+  get(generatorKey: string, cwd: string | undefined, ttl: number): CompletionData | null
+  set(generatorKey: string, cwd: string | undefined, data: CompletionData): void
   clear(): void
 }
-
-function makeKey(script: string, cwd: string | undefined): string {
-  return `${script}\0${cwd ?? ''}`
-}
-
-// 读取缓存。过期返回 null 并清理条目
-function getCached(cache: Map<string, CacheEntry>, script: string, cwd: string | undefined, ttl: number): CompletionData | null {
-  const key = makeKey(script, cwd)
-  const entry = cache.get(key)
-  if (!entry) return null
-  if (Date.now() - entry.timestamp > ttl) {
-    cache.delete(key)
-    return null
-  }
-  return entry.data
-}
-
-// 写入缓存。lines 为脚本 stdout 按行切分(已 trim,已过滤空行)
-function setCached(cache: Map<string, CacheEntry>, script: string, cwd: string | undefined, data: CompletionData) {
-  const key = makeKey(script, cwd)
-  cache.set(key, { data, timestamp: Date.now() })
-}
-
-// 为每个补全实例创建独立缓存
-export function createCompletionCache(): CompletionCache {
+/** One cache per terminal, including workspace/profile/connection identity in every key. */
+export function createCompletionCache(scope: () => string = () => ''): CompletionCache {
   const cache = new Map<string, CacheEntry>()
+  let bytes = 0
+  const keyOf = (generator: string, cwd?: string) => JSON.stringify([scope(), cwd ?? '', generator])
+  const remove = (key: string) => { bytes -= cache.get(key)?.bytes ?? 0; cache.delete(key) }
   return {
-    get: (script, cwd, ttl) => getCached(cache, script, cwd, ttl),
-    set: (script, cwd, data) => setCached(cache, script, cwd, data),
-    clear: () => cache.clear(),
+    get(generator, cwd, ttl) {
+      const key = keyOf(generator, cwd), entry = cache.get(key)
+      if (!entry) return null
+      if (Date.now() - entry.timestamp >= ttl) { remove(key); return null }
+      cache.delete(key); cache.set(key, entry)
+      return entry.data
+    },
+    set(generator, cwd, input) {
+      const key = keyOf(generator, cwd)
+      const data: CompletionData = { output: input.output.split('\n').slice(0, 200).join('\n'), ...(input.candidates ? { candidates: input.candidates.slice(0, 200) } : {}) }
+      const size = new TextEncoder().encode(key + JSON.stringify(data)).byteLength
+      remove(key)
+      if (size > 1024 * 1024) return
+      cache.set(key, { data, bytes: size, timestamp: Date.now() }); bytes += size
+      while (cache.size > 128 || bytes > 1024 * 1024) remove(cache.keys().next().value!)
+    },
+    clear() { cache.clear(); bytes = 0 },
   }
 }

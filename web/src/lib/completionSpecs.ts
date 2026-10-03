@@ -36,6 +36,8 @@ export interface Arg {
 }
 
 export interface Option {
+  repeatable?: boolean
+  exclusiveWith?: string[]
   name: string
   description?: string
   args?: Arg
@@ -138,10 +140,10 @@ const gitSpec: Spec = {
   ],
   subcommands: [
     { name: 'add', description: '添加文件到暂存区', options: [{ name: '-A' }, { name: '-u' }, { name: '-p' }], args: fileArg() },
-    { name: 'commit', description: '提交暂存区', options: [{ name: '-m', args: { name: 'message' } }, { name: '--amend' }, { name: '-a' }] },
+    { name: 'commit', description: '提交暂存区', options: [{ name: '-m', repeatable: true, args: { name: 'message' } }, { name: '--amend' }, { name: '-a' }] },
     { name: 'push', description: '推送提交', options: [{ name: '-u' }, { name: '-f' }, { name: '--tags' }] },
     { name: 'pull', description: '拉取并合并', options: [{ name: '--rebase' }, { name: '--no-commit' }] },
-    { name: 'checkout', description: '切换分支或恢复文件', options: [{ name: '-b' }, { name: '-B' }], args: gitBranchArg },
+    { name: 'checkout', description: '切换分支或恢复文件', options: [{ name: '-b', exclusiveWith: ['-B'] }, { name: '-B', exclusiveWith: ['-b'] }], args: gitBranchArg },
     { name: 'branch', description: '管理分支', options: [{ name: '-a' }, { name: '-d' }, { name: '-m' }], args: gitBranchArg },
     { name: 'merge', description: '合并分支', options: [{ name: '--no-ff' }, { name: '--squash' }], args: gitBranchArg },
     { name: 'rebase', description: '变基', options: [{ name: '-i' }, { name: '--abort' }], args: gitBranchArg },
@@ -191,7 +193,7 @@ const dockerSpec: Spec = {
         { name: '--name', args: { name: 'name' } },
         { name: '-p', args: { name: 'port' } },
         { name: '-v', args: { name: 'volume' } },
-        { name: '-e', args: { name: 'env' } },
+        { name: '-e', repeatable: true, args: { name: 'env' } },
         { name: '--rm' },
         { name: '--network', args: { name: 'network' } },
       ],
@@ -232,8 +234,8 @@ const kubectlSpec: Spec = {
   description: 'Kubernetes CLI',
   options: [
     { name: '--help', description: '显示帮助' },
-    { name: '-n', description: '指定命名空间', args: namespaceArg },
-    { name: '--namespace', description: '指定命名空间', args: namespaceArg },
+    { name: '-n', exclusiveWith: ['--namespace'], description: '指定命名空间', args: namespaceArg },
+    { name: '--namespace', exclusiveWith: ['-n'], description: '指定命名空间', args: namespaceArg },
     { name: '--kubeconfig', description: '指定 kubeconfig 文件', args: fileArg() },
     { name: '-o', description: '输出格式', args: outputFormatArg },
     { name: '-v', description: '日志级别', args: { name: 'level' } },
@@ -243,8 +245,8 @@ const kubectlSpec: Spec = {
       name: 'get',
       description: '获取资源',
       options: [
-        { name: '-n', args: namespaceArg },
-        { name: '--namespace', args: namespaceArg },
+        { name: '-n', exclusiveWith: ['--namespace'], args: namespaceArg },
+        { name: '--namespace', exclusiveWith: ['-n'], args: namespaceArg },
         { name: '-o', args: outputFormatArg },
         { name: '-w' },
         { name: '--all-namespaces' },
@@ -252,14 +254,14 @@ const kubectlSpec: Spec = {
       subcommands: k8sResourceTypes,
     },
     { name: 'describe', description: '查看资源详情', subcommands: k8sResourceTypes },
-    { name: 'logs', description: '查看日志', options: [{ name: '-n', args: namespaceArg }, { name: '--namespace', args: namespaceArg }, { name: '-f' }, { name: '--tail', args: { name: 'lines' } }, { name: '-p' }, { name: '--previous' }], args: kubectlPodArg },
-    { name: 'exec', description: '进入容器', options: [{ name: '-n', args: namespaceArg }, { name: '--namespace', args: namespaceArg }, { name: '-it' }, { name: '--' }], args: kubectlPodArg },
+    { name: 'logs', description: '查看日志', options: [{ name: '-n', exclusiveWith: ['--namespace'], args: namespaceArg }, { name: '--namespace', exclusiveWith: ['-n'], args: namespaceArg }, { name: '-f' }, { name: '--tail', args: { name: 'lines' } }, { name: '-p' }, { name: '--previous' }], args: kubectlPodArg },
+    { name: 'exec', description: '进入容器', options: [{ name: '-n', exclusiveWith: ['--namespace'], args: namespaceArg }, { name: '--namespace', exclusiveWith: ['-n'], args: namespaceArg }, { name: '-it' }, { name: '--' }], args: kubectlPodArg },
     { name: 'apply', description: '应用配置', options: [{ name: '-f', args: fileArg() }, { name: '-k', args: fileArg(true) }, { name: '--dry-run' }] },
     { name: 'delete', description: '删除资源', options: [{ name: '-f', args: fileArg() }, { name: '--grace-period', args: { name: 'seconds' } }], subcommands: k8sResourceTypes },
     { name: 'create', description: '创建资源' },
     { name: 'edit', description: '编辑资源', subcommands: k8sResourceTypes },
     { name: 'scale', description: '伸缩副本', subcommands: k8sResourceTypes },
-    { name: 'port-forward', description: '端口转发', options: [{ name: '-n', args: namespaceArg }, { name: '--namespace', args: namespaceArg }], args: kubectlPodArg },
+    { name: 'port-forward', description: '端口转发', options: [{ name: '-n', exclusiveWith: ['--namespace'], args: namespaceArg }, { name: '--namespace', exclusiveWith: ['-n'], args: namespaceArg }], args: kubectlPodArg },
     {
       name: 'rollout',
       description: '滚动管理',

@@ -890,6 +890,19 @@ impl SshService {
         let mut output_flush = tokio::time::interval(OUTPUT_BATCH_INTERVAL);
         output_flush.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
         output_flush.tick().await;
+        // Poll completion alongside PTY I/O; its timeout must not stall terminal input.
+        type CompletionFuture<'a> = Pin<
+            Box<
+                dyn Future<
+                        Output = (
+                            String,
+                            Result<super::completion::CompletionResult, SshError>,
+                        ),
+                    > + Send
+                    + 'a,
+            >,
+        >;
+        let mut completion: Option<CompletionFuture<'_>> = None;
         loop {
             tokio::select! {
                 _ = session.cancel.cancelled() => {
@@ -922,26 +935,27 @@ impl SshService {
                         let _ = response.send(result);
                     }
                     Some(SessionCommand::Complete { request_id, generator_id, params, cwd }) => {
-                        let result = super::completion::run(&route.handle, generator_id, params, cwd).await;
-                        let payload = match result {
-                            Ok(result) => json!({
-                                "request_id":request_id,
-                                "output":result.output,
-                                "candidates":result.candidates,
-                                "error":"",
-                                "exit_code":result.exit_code,
-                            }),
-                            Err(error) => json!({
-                                "request_id":request_id,
-                                "output":"",
-                                "error":error.to_string(),
-                                "exit_code":-1,
-                            }),
-                        };
-                        session.emit_message("complete_response", "", Some(payload));
+                        if completion.is_some() {
+                            session.emit_message("complete_response", "", Some(json!({"request_id": request_id, "output": "", "error": "正在处理补全请求", "exit_code": -1})));
+                        } else {
+                            let handle = &route.handle;
+                            completion = Some(Box::pin(async move {
+                                let result = super::completion::run(handle, generator_id, params, cwd).await;
+                                (request_id, result)
+                            }));
+                        }
                     }
                     None => session.cancel.cancel(),
                 },
+                response = async { completion.as_mut().expect("guarded completion").await }, if completion.is_some() => {
+                    completion = None;
+                    let (request_id, result) = response;
+                    let payload = match result {
+                        Ok(result) => json!({"request_id":request_id, "output":result.output, "candidates":result.candidates, "error":"", "exit_code":result.exit_code}),
+                        Err(error) => json!({"request_id":request_id, "output":"", "error":error.to_string(), "exit_code":-1}),
+                    };
+                    session.emit_message("complete_response", "", Some(payload));
+                }
                 _ = output_flush.tick(), if !pending_output.is_empty() => {
                     session.emit_message("output", &std::mem::take(&mut pending_output), None);
                 }

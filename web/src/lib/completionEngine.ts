@@ -41,6 +41,8 @@ interface ResolutionState {
   path: Array<Spec | Subcommand>
   level: Spec | Subcommand
   argSource?: Arg
+  usedOptions: Set<string>
+  endOfOptions: boolean
 }
 
 interface TokenParseState {
@@ -103,19 +105,20 @@ export function getSuggestions(ctx: CompletionContext): CompletionResult {
   const state = resolveState(ctx)
   if (!state) return { suggestions: [] }
 
-  const currentArgSource = state.argSource ?? resolveCurrentTokenArgSource(state.path, ctx.currentToken)
+  const currentArgSource = state.argSource ?? (!state.endOfOptions ? resolveCurrentTokenArgSource(state.path, ctx.currentToken) : undefined)
   if (currentArgSource) {
     return { suggestions: getArgSuggestions(currentArgSource, currentValue) }
   }
 
   const suggestions: Suggestion[] = []
+  if (state.endOfOptions) return { suggestions: getArgSuggestions(state.level.args, currentValue) }
   if (currentValue.startsWith('-')) {
-    appendOptionSuggestions(suggestions, getAvailableOptions(state.path), currentValue)
+    appendOptionSuggestions(suggestions, getAvailableOptions(state.path).filter((option) => (option.repeatable || !state.usedOptions.has(option.name)) && !option.exclusiveWith?.some((name) => state.usedOptions.has(name))), currentValue)
     return { suggestions: dedupeSuggestions(suggestions) }
   }
 
   appendSubcommandSuggestions(suggestions, state.level.subcommands, currentValue)
-  appendOptionSuggestions(suggestions, getAvailableOptions(state.path), currentValue)
+  appendOptionSuggestions(suggestions, getAvailableOptions(state.path).filter((option) => (option.repeatable || !state.usedOptions.has(option.name)) && !option.exclusiveWith?.some((name) => state.usedOptions.has(name))), currentValue)
   suggestions.push(...getArgSuggestions(state.level.args, currentValue))
   return { suggestions: dedupeSuggestions(suggestions) }
 }
@@ -140,10 +143,10 @@ export function getDynamicGenerator(ctx: CompletionContext): DynamicGenerator | 
   if (!state) return null
 
   const currentValue = getCurrentCompletionValue(ctx.currentToken)
-  const currentArgSource = state.argSource ?? resolveCurrentTokenArgSource(state.path, ctx.currentToken)
-  if (!currentArgSource && currentValue.startsWith('-')) return null
+  const currentArgSource = state.argSource ?? (!state.endOfOptions ? resolveCurrentTokenArgSource(state.path, ctx.currentToken) : undefined)
+  if (!state.endOfOptions && !currentArgSource && currentValue.startsWith('-')) return null
 
-  const arg = currentArgSource ?? state.level.args
+  const arg = state.endOfOptions && ctx.tokens[0] === 'git' ? { fileGenerator: { dirsOnly: false } } : currentArgSource ?? state.level.args
   if (!arg) return null
 
   if (arg.fileGenerator) {
@@ -398,6 +401,8 @@ function resolveState(ctx: CompletionContext): ResolutionState | null {
   let level: Spec | Subcommand = spec
   const path: Array<Spec | Subcommand> = [spec]
   let pendingArg: Arg | undefined
+  let endOfOptions = false
+  const usedOptions = new Set<string>()
 
   for (let i = 1; i < ctx.cursorTokenIndex; i++) {
     const token = decodeToken(ctx.tokens[i] ?? '')
@@ -406,8 +411,11 @@ function resolveState(ctx: CompletionContext): ResolutionState | null {
       continue
     }
 
+    if (token === '--') { endOfOptions = true; continue }
+    if (endOfOptions) continue
     const optionMatch = matchOptionToken(path, token)
     if (optionMatch) {
+      usedOptions.add(optionMatch.option.name)
       if (!optionMatch.usesEquals) {
         pendingArg = optionMatch.option.args
       }
@@ -432,7 +440,7 @@ function resolveState(ctx: CompletionContext): ResolutionState | null {
     return null
   }
 
-  return { path, level, argSource: pendingArg }
+  return { path, level, argSource: pendingArg, usedOptions, endOfOptions }
 }
 
 function findOption(path: Array<Spec | Subcommand>, token: string): Option | undefined {
@@ -592,4 +600,17 @@ export function parseCompletionData(data: CompletionData, currentToken: string, 
       .map((candidate) => ({ name: directory + candidate.name + (candidate.is_dir ? '/' : ''), displayName: candidate.name + (candidate.is_dir ? '/' : ''), type: parser === 'directory-list' ? 'directory' as const : 'arg' as const, isDir: candidate.is_dir, origin: 'dynamic' as const }))
   }
   return parseDynamicOutputByParser(data.output, currentToken, parser, dirsOnly)
+}
+
+
+/** Static entries remain first; deterministic ties avoid selection jumping on async merges. */
+export function rankCompletionCandidates(input: Suggestion[]): Suggestion[] {
+  return dedupeSuggestions(input).sort((a, b) => {
+    const origin = Number(b.origin === 'static') - Number(a.origin === 'static')
+    if (origin) return origin
+    if (a.type === 'history' && b.type === 'history' && a.count !== b.count) return (b.count ?? 0) - (a.count ?? 0)
+    const directory = Number(Boolean(b.isDir)) - Number(Boolean(a.isDir))
+    if (directory) return directory
+    return a.name < b.name ? -1 : a.name > b.name ? 1 : a.type < b.type ? -1 : a.type > b.type ? 1 : 0
+  }).slice(0, 200)
 }

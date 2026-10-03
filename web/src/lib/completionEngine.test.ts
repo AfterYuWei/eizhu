@@ -162,3 +162,20 @@ it('结构化文件候选保留后缀、空格、中文及引号并安全编码�
   expect(parseCompletionData(data, '', 'directory-list', true).map((item) => item.name)).toEqual(["目录's/"])
   expect(buildCompletionInsertPlan('', "目录's/").insertText).toBe("目录\\'s/")
 })
+
+it('处理 -- 之后的文件名、重复选项、互斥选项及重复可用选项', () => {
+  const names = (input: string) => getSuggestions(tokenize(input)).suggestions.map((s) => s.name)
+  expect(names('git checkout -b feature -')).not.toContain('-B')
+  expect(names('git checkout -b feature -')).not.toContain('-b')
+  expect(names('git commit -m one -')).toContain('-m')
+  expect(names('kubectl get pods -n default -')).not.toContain('--namespace')
+  expect(names('git checkout -- -')).not.toContain('--help')
+  expect(getDynamicGenerator(tokenize('git checkout -- -'))?.generatorId).toBe('paths')
+})
+it('异步候选顺序稳定、静态在前且最多 200 项', async () => {
+  const { rankCompletionCandidates } = await import('./completionEngine')
+  const input = [{ name: 'z', type: 'arg' as const, origin: 'static' as const }, { name: 'b', type: 'arg' as const, origin: 'dynamic' as const }, { name: 'a', type: 'arg' as const, origin: 'dynamic' as const }]
+  expect(rankCompletionCandidates(input).map((s) => s.name)).toEqual(['z', 'a', 'b'])
+  expect(rankCompletionCandidates([...input].reverse())).toEqual(rankCompletionCandidates(input))
+  expect(rankCompletionCandidates(Array.from({ length: 210 }, (_, i) => ({ name: String(i), type: 'arg' })))).toHaveLength(200)
+})
