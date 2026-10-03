@@ -45,7 +45,7 @@ export function TunnelDialog({ open, onOpenChange }: { open: boolean; onOpenChan
       {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
       <div className="flex justify-end"><Button disabled={busy} onClick={() => setEditing(initial())}>新增隧道</Button></div>
       {configs.map((config) => { const status = states[config.id]; const running = status && ['running', 'connecting', 'reconnecting'].includes(status.status)
-        return <div key={config.id} className="space-y-2 rounded-md border p-3 text-sm"><div className="flex items-center justify-between gap-2"><strong>{config.name}</strong><span>{labels[status?.status ?? 'stopped']}</span></div>
+        return <div key={config.id} className="space-y-2 rounded-md border p-3 text-sm"><div className="flex items-center justify-between gap-2"><strong>{config.name} · {config.kind === 'remote' ? '远端' : '本地'}</strong><span>{labels[status?.status ?? 'stopped']}</span></div>
           <p className="break-all text-muted-foreground">{config.bind_host}:{status?.bound_port ?? config.bind_port} → {config.target_host}:{config.target_port} · {profiles.find((profile) => profile.id === config.profile_id)?.name ?? '服务器配置已删除'}</p>
           <p>活动连接 {status?.active_connections ?? 0} / 32{status?.retry_attempt ? ` · 重试 ${status.retry_attempt} / 10` : ''}</p>
           {status?.error_message && <details><summary className="text-destructive">错误详情 · {status.error_code}</summary><p className="whitespace-pre-wrap break-all">{status.error_message}</p></details>}
@@ -55,9 +55,10 @@ export function TunnelDialog({ open, onOpenChange }: { open: boolean; onOpenChan
       })}
       {!configs.length && <p className="text-sm text-muted-foreground">暂无隧道配置</p>}
     </DialogContent></Dialog>
-    <Dialog open={editing !== null} onOpenChange={(open) => { if (!open && !busy) setEditing(null) }}><DialogContent><DialogTitle>{editing?.id ? '编辑隧道' : '新增隧道'}</DialogTitle><DialogDescription>本地转发：连接本机监听端口，由 SSH 服务器访问目标。</DialogDescription>
+    <Dialog open={editing !== null} onOpenChange={(open) => { if (!open && !busy) setEditing(null) }}><DialogContent><DialogTitle>{editing?.id ? '编辑隧道' : '新增隧道'}</DialogTitle><DialogDescription>{editing?.kind === 'remote' ? '远端转发：在 SSH 服务器回环监听，转发到本机可访问的目标。' : '本地转发：连接本机监听端口，由 SSH 服务器访问目标。'}</DialogDescription>
       {editing && <form className="space-y-3" onSubmit={(event) => { event.preventDefault(); void run(async () => { await tunnelApi.save(editing); setEditing(null) }) }}>
         <Label>名称<Input required value={editing.name} onChange={(event) => setEditing({ ...editing, name: event.target.value })} /></Label>
+        <Label>类型<select className="w-full rounded-md border bg-background p-2" value={editing.kind} onChange={(event) => setEditing({ ...editing, kind: event.target.value as TunnelConfig['kind'] })}><option value="local">本地转发</option><option value="remote">远端转发</option></select></Label>
         <Label>SSH 服务器<select required className="w-full rounded-md border bg-background p-2" value={editing.profile_id} onChange={(event) => setEditing({ ...editing, profile_id: event.target.value })}><option value="">选择服务器</option>{profiles.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select></Label>
         {(['bind_host', 'bind_port', 'target_host', 'target_port'] as const).map((key) => <Label key={key}>{({ bind_host: '回环监听地址', bind_port: '监听端口（0 自动分配）', target_host: '目标域名或 IP', target_port: '目标端口' })[key]}<Input required type={key.endsWith('port') ? 'number' : 'text'} min={key === 'bind_port' ? 0 : 1} max={65535} value={editing[key]} onChange={(event) => setEditing({ ...editing, [key]: key.endsWith('port') ? Number(event.target.value) : event.target.value })} /></Label>)}
         {error && <p role="alert" className="text-sm text-destructive">{error}</p>}

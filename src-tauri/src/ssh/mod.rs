@@ -2,6 +2,7 @@ mod authentication;
 mod completion;
 mod error;
 mod events;
+mod forwarding;
 mod profile_test;
 mod session;
 mod session_manager;
