@@ -1,3 +1,4 @@
+import type { CompletionGeneratorRequest } from '@/types/completion'
 import { useState, useRef, useCallback, useEffect } from 'react'
 import type { Terminal } from '@xterm/xterm'
 import {
@@ -7,8 +8,7 @@ import {
   isCdPathContext,
   type ParserKey,
   buildCompletionInsertPlan,
-  parseDynamicOutputByParser,
-  splitOutputLines,
+  parseCompletionData,
   type Suggestion,
 } from '@/lib/completionEngine'
 import { createCompletionCache, type CompletionCache } from '@/lib/completionCache'
@@ -25,7 +25,7 @@ import type { CompleteResponsePayload } from '@/types/sessionMessage'
 interface UseCompletionOptions {
   getTerminal: () => Terminal | null
   sendInput: (data: string) => void
-  sendComplete: (requestId: string, script: string, cwd?: string) => void
+  sendComplete: (requestId: string, generator: CompletionGeneratorRequest, cwd?: string) => void
   getCwd: () => string | undefined
   enabled: boolean
   profileId?: string
@@ -50,7 +50,8 @@ export interface CompletionPopupState {
 }
 
 interface RequestMeta {
-  script: string
+  key: string
+  generator: CompletionGeneratorRequest
   cwd?: string
 }
 
@@ -134,7 +135,7 @@ export function useCompletion({ getTerminal, sendInput, sendComplete, getCwd, en
 
     const isCd = isCdPathContext(ctx)
     const staticSuggestions = getSuggestions(ctx).suggestions
-    const generator = getDynamicGenerator(ctx, getCwdRef.current())
+    const generator = getDynamicGenerator(ctx)
 
     const openWith = (suggestions: Suggestion[], parser: ParserKey | null) => {
       const cols: CompletionColumn[] = [{ suggestions, selectedIndex: -1 }]
@@ -151,9 +152,10 @@ export function useCompletion({ getTerminal, sendInput, sendComplete, getCwd, en
     }
 
     const cwd = getCwdRef.current()
-    const cached = cache.get(generator.script, cwd, generator.cacheTtl)
+    const key = JSON.stringify(generator)
+    const cached = cache.get(key, cwd, generator.cacheTtl)
     if (cached) {
-      const dynamicSuggestions = parseDynamicOutputByParser(cached.join('\n'), ctx.currentToken, generator.parser, generator.dirsOnly)
+      const dynamicSuggestions = parseCompletionData(cached, ctx.currentToken, generator.parser, generator.dirsOnly)
       let suggestions = mergeSuggestions(staticSuggestions, dynamicSuggestions)
       if (isCd) {
         suggestions = buildCdRootColumn(dynamicSuggestions, ctx.currentToken)
@@ -175,15 +177,15 @@ export function useCompletion({ getTerminal, sendInput, sendComplete, getCwd, en
     const pendingId = pendingRequestRef.current
     if (pendingId) {
       const pendingMeta = requestMetaRef.current.get(pendingId)
-      if (pendingMeta?.script === generator.script && pendingMeta.cwd === cwd) {
+      if (pendingMeta?.key === key && pendingMeta.cwd === cwd) {
         return
       }
     }
 
     const requestId = nextRequestId()
     pendingRequestRef.current = requestId
-    requestMetaRef.current.set(requestId, { script: generator.script, cwd })
-    sendCompleteRef.current(requestId, generator.script, cwd)
+    requestMetaRef.current.set(requestId, { key, generator, cwd })
+    sendCompleteRef.current(requestId, generator, cwd)
   }, [closePopup, buildCdRootColumn, cache])
 
   const scheduleRecompute = useCallback(() => {
@@ -245,7 +247,8 @@ export function useCompletion({ getTerminal, sendInput, sendComplete, getCwd, en
     if (suggestion.type !== 'directory' || !suggestion.isDir) return false
 
     const dirPath = suggestion.name // 如 "Projects/" 或 "/Projects/lanya/"
-    const script = `ls -1 -A -F '${dirPath.replace(/'/g, `'\\''`)}' 2>/dev/null`
+    const generator: CompletionGeneratorRequest = { generatorId: 'paths', params: { directory: dirPath, prefix: '' } }
+    const key = JSON.stringify(generator)
     const cwd = getCwdRef.current()
 
     const appendColumn = (dirs: Suggestion[]) => {
@@ -259,15 +262,15 @@ export function useCompletion({ getTerminal, sendInput, sendComplete, getCwd, en
       })
     }
 
-    const cached = cache.get(script, cwd, 3000)
+    const cached = cache.get(key, cwd, 3000)
     if (cached) {
-      appendColumn(parseDynamicOutputByParser(cached.join('\n'), dirPath, 'directory-list'))
+      appendColumn(parseCompletionData(cached, dirPath, 'directory-list'))
       return true
     }
 
     const requestId = nextRequestId()
-    expandMetaRef.current.set(requestId, { script, cwd, parentDepth: colIndex, dirPath })
-    sendCompleteRef.current(requestId, script, cwd)
+    expandMetaRef.current.set(requestId, { key, generator, cwd, parentDepth: colIndex, dirPath })
+    sendCompleteRef.current(requestId, generator, cwd)
     return true
   }, [cache])
 
@@ -464,15 +467,9 @@ export function useCompletion({ getTerminal, sendInput, sendComplete, getCwd, en
     }
 
     if (data === '\t') {
-      // 级联/普通面板开启时，Tab 应用选中项（无选中则透传）
-      if (popupRef.current.open) {
-        const col = popupRef.current.columns[popupRef.current.activeColumn]
-        if (col && col.selectedIndex >= 0) {
-          applySelection()
-          return true
-        }
-      }
-      return false
+      closePopup()
+      bufferRef.current.stale = true
+      return false // Tab remains a remote shell control key.
     }
 
     if (data.length > 0 && data.charCodeAt(0) >= 0x20) {
@@ -507,9 +504,8 @@ export function useCompletion({ getTerminal, sendInput, sendComplete, getCwd, en
     if (expandMeta) {
       expandMetaRef.current.delete(payload.request_id)
       if (payload.error) return
-      const lines = splitOutputLines(payload.output)
-      cache.set(expandMeta.script, expandMeta.cwd, lines)
-      const dirs = parseDynamicOutputByParser(lines.join('\n'), expandMeta.dirPath, 'directory-list')
+      cache.set(expandMeta.key, expandMeta.cwd, payload)
+      const dirs = parseCompletionData(payload, expandMeta.dirPath, 'directory-list')
       if (dirs.length === 0) return
       setPopup((current) => {
         if (!current.open) return current
@@ -528,7 +524,7 @@ export function useCompletion({ getTerminal, sendInput, sendComplete, getCwd, en
 
     requestMetaRef.current.delete(payload.request_id)
     if (!payload.error) {
-      cache.set(meta.script, meta.cwd, splitOutputLines(payload.output))
+      cache.set(meta.key, meta.cwd, payload)
     }
 
     if (payload.request_id !== pendingRequestRef.current) return

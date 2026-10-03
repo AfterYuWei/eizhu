@@ -1,3 +1,4 @@
+import type { CompletionGeneratorRequest, CompletionData } from '@/types/completion'
 // Completion engine: tokenization, spec traversal, static matching and
 // dynamic generator resolution.
 
@@ -25,8 +26,7 @@ export interface CompletionResult {
 
 export type ParserKey = 'git-branch' | 'docker-ps' | 'kubectl-name' | 'file-list' | 'line-list' | 'directory-list'
 
-export interface DynamicGenerator {
-  script: string
+export interface DynamicGenerator extends CompletionGeneratorRequest {
   cacheTtl: number
   parser: ParserKey
   dirsOnly?: boolean
@@ -133,20 +133,7 @@ function getKubectlNamespace(tokens: string[]): string {
   return 'default'
 }
 
-function renderScript(script: string, ctx: CompletionContext, cwd?: string): string {
-  return script
-    .replace(/\{\{namespace\}\}/g, getKubectlNamespace(ctx.tokens))
-    .replace(/\{\{cwd\}\}/g, cwd ?? '')
-}
-
-function buildFileListScript(currentToken: string): string {
-  const lastSlash = currentToken.lastIndexOf('/')
-  const dir = lastSlash >= 0 ? currentToken.slice(0, lastSlash + 1) : '.'
-  const escapedDir = dir.replace(/'/g, "'\\''")
-  return `ls -1 -A -F '${escapedDir}' 2>/dev/null`
-}
-
-export function getDynamicGenerator(ctx: CompletionContext, cwd?: string): DynamicGenerator | null {
+export function getDynamicGenerator(ctx: CompletionContext): DynamicGenerator | null {
   if (ctx.cursorTokenIndex === 0) return null
 
   const state = resolveState(ctx)
@@ -162,7 +149,8 @@ export function getDynamicGenerator(ctx: CompletionContext, cwd?: string): Dynam
   if (arg.fileGenerator) {
     const isCd = isCdPathContext(ctx)
     return {
-      script: buildFileListScript(extractCurrentTokenRawValue(ctx.currentToken)),
+      generatorId: 'paths',
+      params: pathGeneratorParams(ctx.currentToken),
       cacheTtl: arg.fileGenerator.cacheTtl ?? 3000,
       // cd 命令走 directory-list，产出可级联展开的 directory 候选；
       // 其它文件命令保持 file-list（文件+目录混合，type:'arg'）。
@@ -173,7 +161,8 @@ export function getDynamicGenerator(ctx: CompletionContext, cwd?: string): Dynam
 
   if (!arg.generator) return null
   return {
-    script: renderScript(arg.generator.script, ctx, cwd),
+    generatorId: arg.generator.generatorId,
+    params: { ...arg.generator.params, ...(arg.generator.generatorId === 'kubectl-resources' ? { namespace: getKubectlNamespace(ctx.tokens) } : {}) },
     cacheTtl: arg.generator.cacheTtl ?? 10000,
     parser: arg.generator.parser ?? 'git-branch',
   }
@@ -583,5 +572,24 @@ function encodeCompletionText(text: string, quote: '"' | "'" | null): string {
   if (quote === '"') {
     return text.replace(/["\\$`]/g, '\\$&')
   }
-  return text.replace(/([^A-Za-z0-9_./-])/g, '\\$1')
+  return text.replace(/([^\p{L}\p{M}\p{N}_./-])/gu, '\\$1')
+}
+
+
+export function pathGeneratorParams(token: string) {
+  const value = getCurrentCompletionValue(token)
+  const slash = value.lastIndexOf('/')
+  return { directory: slash >= 0 ? value.slice(0, slash + 1) : '.', prefix: slash >= 0 ? value.slice(slash + 1) : value }
+}
+
+export function parseCompletionData(data: CompletionData, currentToken: string, parser: ParserKey, dirsOnly = false): Suggestion[] {
+  if ((parser === 'file-list' || parser === 'directory-list') && data.candidates) {
+    const value = getCurrentCompletionValue(currentToken)
+    const slash = value.lastIndexOf('/')
+    const directory = slash >= 0 ? value.slice(0, slash + 1) : ''
+    const prefix = slash >= 0 ? value.slice(slash + 1) : value
+    return data.candidates.filter((candidate) => candidate.name.startsWith(prefix) && (!dirsOnly || candidate.is_dir))
+      .map((candidate) => ({ name: directory + candidate.name + (candidate.is_dir ? '/' : ''), displayName: candidate.name + (candidate.is_dir ? '/' : ''), type: parser === 'directory-list' ? 'directory' as const : 'arg' as const, isDir: candidate.is_dir, origin: 'dynamic' as const }))
+  }
+  return parseDynamicOutputByParser(data.output, currentToken, parser, dirsOnly)
 }

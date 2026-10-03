@@ -97,6 +97,7 @@ export interface CompleteRequestPayload {
 // 动态补全:服务端返回脚本执行结果
 export interface CompleteResponsePayload {
   request_id: string
+  candidates?: { name: string; is_dir: boolean }[]
   output: string
   error: string
   exit_code: number

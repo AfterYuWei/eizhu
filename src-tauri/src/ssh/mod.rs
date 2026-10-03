@@ -1,3 +1,4 @@
+mod completion;
 mod error;
 mod events;
 mod profile_test;
@@ -13,3 +14,5 @@ pub(crate) use profile_test::{
 pub(crate) use session::{
     ClientMessage, SessionCreateRequest, SessionCreateResponse, SessionInfo, SshService,
 };
+
+pub(crate) use completion::CompletionParams;

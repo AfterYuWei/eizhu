@@ -29,7 +29,6 @@ use crate::{
     server_detail,
 };
 
-const COMPLETE_TIMEOUT: Duration = Duration::from_millis(400);
 const SHELL_DETECT_TIMEOUT: Duration = Duration::from_secs(10);
 const PRE_ATTACH_OUTPUT_LIMIT: usize = 1024 * 1024;
 const OUTPUT_BATCH_BYTES: usize = 32 * 1024;
@@ -114,7 +113,8 @@ enum SessionCommand {
     },
     Complete {
         request_id: String,
-        script: String,
+        generator_id: String,
+        params: super::CompletionParams,
         cwd: Option<String>,
     },
 }
@@ -921,14 +921,15 @@ impl SshService {
                         }
                         let _ = response.send(result);
                     }
-                    Some(SessionCommand::Complete { request_id, script, cwd }) => {
-                        let result = run_completion(&route.handle, script, cwd).await;
+                    Some(SessionCommand::Complete { request_id, generator_id, params, cwd }) => {
+                        let result = super::completion::run(&route.handle, generator_id, params, cwd).await;
                         let payload = match result {
-                            Ok((output, code)) => json!({
+                            Ok(result) => json!({
                                 "request_id":request_id,
-                                "output":output,
+                                "output":result.output,
+                                "candidates":result.candidates,
                                 "error":"",
-                                "exit_code":code,
+                                "exit_code":result.exit_code,
                             }),
                             Err(error) => json!({
                                 "request_id":request_id,
@@ -1159,17 +1160,20 @@ impl SshService {
         &self,
         id: &str,
         request_id: String,
-        script: String,
+        generator_id: String,
+        params: super::CompletionParams,
         cwd: Option<String>,
     ) -> Result<(), CommandError> {
-        if request_id.is_empty() || script.is_empty() {
-            return Ok(());
+        if request_id.is_empty() || request_id.len() > 128 {
+            return Err(CommandError::new("VALIDATION", "补全请求标识非法"));
         }
+        super::completion::validate(&generator_id, &params, cwd.as_deref())?;
         self.send_command(
             id,
             SessionCommand::Complete {
                 request_id,
-                script,
+                generator_id,
+                params,
                 cwd,
             },
         )
@@ -1373,43 +1377,6 @@ fn osc7_setup_command(shell: RemoteShell) -> String {
         }
     };
     format!(r#"{hook};printf "\033]1337;eizhuOsc7Ready\007""#)
-}
-
-async fn run_completion(
-    handle: &client::Handle<ClientHandler>,
-    script: String,
-    cwd: Option<String>,
-) -> Result<(String, i32), SshError> {
-    let command = match cwd.filter(|value| !value.is_empty()) {
-        Some(cwd) => format!("cd {} && {script}", shell_quote(&cwd)),
-        None => script,
-    };
-    timeout(COMPLETE_TIMEOUT, async {
-        let mut channel = handle
-            .channel_open_session()
-            .await
-            .map_err(|error| error.to_string())?;
-        channel
-            .exec(true, command)
-            .await
-            .map_err(|error| error.to_string())?;
-        let mut output = Vec::new();
-        let mut code = 0_i32;
-        while let Some(message) = channel.wait().await {
-            match message {
-                ChannelMsg::Data { data } => output.extend_from_slice(&data),
-                ChannelMsg::ExitStatus { exit_status } => code = exit_status as i32,
-                _ => {}
-            }
-        }
-        Ok::<_, SshError>((String::from_utf8_lossy(&output).into_owned(), code))
-    })
-    .await
-    .map_err(|_| "timeout".to_owned())?
-}
-
-fn shell_quote(value: &str) -> String {
-    format!("'{}'", value.replace('\'', "'\\''"))
 }
 
 #[derive(Default)]
@@ -1625,7 +1592,7 @@ mod tests {
 
     #[test]
     fn shell_quote_escapes_single_quotes() {
-        assert_eq!(shell_quote("a'b"), "'a'\\''b'");
+        assert_eq!(crate::ssh::completion::quote("a'b"), "'a'\\''b'");
     }
 
     #[test]

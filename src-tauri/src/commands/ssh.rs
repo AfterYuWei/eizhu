@@ -225,7 +225,8 @@ pub(crate) async fn session_complete(
     service_workspace: State<'_, crate::app::WorkspaceManager>,
     id: String,
     request_id: String,
-    script: String,
+    generator_id: String,
+    params: crate::ssh::CompletionParams,
     cwd: Option<String>,
     workspace_generation: Option<u64>,
 ) -> Result<(), CommandError> {
@@ -233,7 +234,9 @@ pub(crate) async fn session_complete(
         .current(workspace_generation)?
         .sessions
         .clone();
-    service.complete(&id, request_id, script, cwd).await
+    service
+        .complete(&id, request_id, generator_id, params, cwd)
+        .await
 }
 
 #[tauri::command]

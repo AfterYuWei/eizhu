@@ -1,3 +1,4 @@
+import type { CompletionGeneratorRequest } from '@/types/completion'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Channel } from '@tauri-apps/api/core'
 import { sessionApi } from '@/api/session'
@@ -125,8 +126,8 @@ export function useSessionChannel(options: UseSessionChannelOptions) {
     void sessionApi.resize(sessionId, cols, rows).catch(console.error)
   }, [sessionId])
 
-  const sendComplete = useCallback((requestId: string, script: string, cwd?: string) => {
-    void sessionApi.complete(sessionId, requestId, script, cwd).catch(console.error)
+  const sendComplete = useCallback((requestId: string, generator: CompletionGeneratorRequest, cwd?: string) => {
+    void sessionApi.complete(sessionId, requestId, generator, cwd).catch(console.error)
   }, [sessionId])
 
   return { status, latency, send, sendInput, sendResize, sendComplete }

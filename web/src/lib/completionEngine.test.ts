@@ -65,14 +65,14 @@ describe('completionEngine', () => {
   it('resolves dynamic generators for option values attached with equals', () => {
     expect(getDynamicGenerator(ctx('kubectl --namespace=ku'))).toMatchObject({
       parser: 'kubectl-name',
-      script: 'kubectl get namespaces -o name',
+      generatorId: 'kubectl-resources', params: { resource: 'namespaces' },
     })
   })
 
   it('renders namespace-aware dynamic scripts when namespace uses equals syntax', () => {
     expect(getDynamicGenerator(ctx('kubectl get pods --namespace=kube-system po'))).toMatchObject({
       parser: 'kubectl-name',
-      script: 'kubectl get pods -o name -n kube-system',
+      generatorId: 'kubectl-resources', params: { resource: 'pods', namespace: 'kube-system' },
     })
   })
 
@@ -150,4 +150,15 @@ describe('completionEngine', () => {
       { name: '/real/', displayName: 'real/', type: 'directory', isDir: true, origin: 'dynamic' },
     ])
   })
+})
+
+
+it('结构化文件候选保留后缀、空格、中文及引号并安全编码插入', async () => {
+  const { parseCompletionData, pathGeneratorParams } = await import('./completionEngine')
+  const data = { output: '', candidates: [{ name: "中文 name@*", is_dir: false }, { name: "目录's", is_dir: true }] }
+  expect(pathGeneratorParams('"空 格/中')).toEqual({ directory: '空 格/', prefix: '中' })
+  expect(parseCompletionData(data, '"空 格/中', 'file-list')[0].name).toBe('空 格/中文 name@*')
+  expect(buildCompletionInsertPlan('"空 格/中', '空 格/中文 name@*').insertText).toBe('文 name@*')
+  expect(parseCompletionData(data, '', 'directory-list', true).map((item) => item.name)).toEqual(["目录's/"])
+  expect(buildCompletionInsertPlan('', "目录's/").insertText).toBe("目录\\'s/")
 })

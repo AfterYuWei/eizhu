@@ -22,7 +22,7 @@ describe('sessionApi', () => {
     invokeCommand.mockResolvedValue(undefined)
     await sessionApi.input('s1', 'ls\r')
     await sessionApi.resize('s1', 100, 30)
-    await sessionApi.complete('s1', 'r1', 'git branch', '/tmp')
+    await sessionApi.complete('s1', 'r1', { generatorId: 'git-branches', params: {} }, '/tmp')
     expect(invokeCommand).toHaveBeenNthCalledWith(1, 'session_input', {
       id: 's1',
       data: 'ls\r',
@@ -35,7 +35,7 @@ describe('sessionApi', () => {
     expect(invokeCommand).toHaveBeenNthCalledWith(3, 'session_complete', {
       id: 's1',
       requestId: 'r1',
-      script: 'git branch',
+      generatorId: 'git-branches', params: {},
       cwd: '/tmp',
     })
   })

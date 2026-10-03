@@ -1,14 +1,15 @@
+import type { CompletionData } from '@/types/completion'
 // 动态补全候选缓存:按 script+cwd 分级 TTL 缓存
 // 每个 TerminalPane/useCompletion 实例独立持有,避免跨 tab 泄露
 
 interface CacheEntry {
-  lines: string[] // 脚本 stdout 按行切分后的原始输出
+  data: CompletionData // 脚本 stdout 按行切分后的原始输出
   timestamp: number
 }
 
 export interface CompletionCache {
-  get(script: string, cwd: string | undefined, ttl: number): string[] | null
-  set(script: string, cwd: string | undefined, lines: string[]): void
+  get(script: string, cwd: string | undefined, ttl: number): CompletionData | null
+  set(script: string, cwd: string | undefined, data: CompletionData): void
   clear(): void
 }
 
@@ -17,7 +18,7 @@ function makeKey(script: string, cwd: string | undefined): string {
 }
 
 // 读取缓存。过期返回 null 并清理条目
-function getCached(cache: Map<string, CacheEntry>, script: string, cwd: string | undefined, ttl: number): string[] | null {
+function getCached(cache: Map<string, CacheEntry>, script: string, cwd: string | undefined, ttl: number): CompletionData | null {
   const key = makeKey(script, cwd)
   const entry = cache.get(key)
   if (!entry) return null
@@ -25,13 +26,13 @@ function getCached(cache: Map<string, CacheEntry>, script: string, cwd: string |
     cache.delete(key)
     return null
   }
-  return entry.lines
+  return entry.data
 }
 
 // 写入缓存。lines 为脚本 stdout 按行切分(已 trim,已过滤空行)
-function setCached(cache: Map<string, CacheEntry>, script: string, cwd: string | undefined, lines: string[]) {
+function setCached(cache: Map<string, CacheEntry>, script: string, cwd: string | undefined, data: CompletionData) {
   const key = makeKey(script, cwd)
-  cache.set(key, { lines, timestamp: Date.now() })
+  cache.set(key, { data, timestamp: Date.now() })
 }
 
 // 为每个补全实例创建独立缓存
@@ -39,7 +40,7 @@ export function createCompletionCache(): CompletionCache {
   const cache = new Map<string, CacheEntry>()
   return {
     get: (script, cwd, ttl) => getCached(cache, script, cwd, ttl),
-    set: (script, cwd, lines) => setCached(cache, script, cwd, lines),
+    set: (script, cwd, data) => setCached(cache, script, cwd, data),
     clear: () => cache.clear(),
   }
 }
