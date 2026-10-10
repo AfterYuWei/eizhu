@@ -18,6 +18,7 @@ import { useSessionStore } from '@/store/session'
 import { useSettingsStore } from '@/store/settings'
 import { useVaultStore } from '@/store/vault'
 import { useWindowControls } from '@/hooks/useWindowControls'
+import { WindowControls } from '@/components/WindowControls'
 import { profileApi } from '@/api/profile'
 import { vaultApi } from '@/api/vault'
 import type { Profile } from '@/types/profile'
@@ -345,57 +346,14 @@ export function Layout() {
           </Button>
         </div>
 
-        {/* 窗口控制按钮：仅 Windows/Linux 桌面环境渲染（macOS 用系统交通灯）。
-            Windows 原生风格，关闭悬停变红。控制按钮区在 CSS 中声明 no-drag */}
+        {/* 窗口控制按钮：仅 Windows/Linux 桌面环境渲染（macOS 用系统交通灯）。 */}
         {showControls && (
-          <div className="titlebar-controls">
-            <Button
-              type="button"
-              variant="ghost"
-              className="tb-btn tb-min"
-              title="最小化"
-              aria-label="Minimize"
-              onClick={minimize}
-            >
-              <svg width="10" height="10" viewBox="0 0 10 10">
-                <line x1="0" y1="5" x2="10" y2="5" stroke="currentColor" strokeWidth="1" />
-              </svg>
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              className="tb-btn tb-max"
-              title={maximized ? '还原' : '最大化'}
-              aria-label={maximized ? 'Restore' : 'Maximize'}
-              onClick={toggleMaximize}
-            >
-              {maximized ? (
-                // 还原图标：两个重叠方框
-                <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1">
-                  <rect x="0.5" y="2.5" width="6" height="6" />
-                  <path d="M2.5 2.5 V0.5 H8.5 V6.5 H6.5" />
-                </svg>
-              ) : (
-                // 最大化图标：单方框
-                <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1">
-                  <rect x="0.5" y="0.5" width="9" height="9" />
-                </svg>
-              )}
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              className="tb-btn tb-close"
-              title="关闭"
-              aria-label="Close"
-              onClick={close}
-            >
-              <svg width="10" height="10" viewBox="0 0 10 10">
-                <line x1="0" y1="0" x2="10" y2="10" stroke="currentColor" strokeWidth="1" />
-                <line x1="10" y1="0" x2="0" y2="10" stroke="currentColor" strokeWidth="1" />
-              </svg>
-            </Button>
-          </div>
+          <WindowControls
+            maximized={maximized}
+            onMinimize={minimize}
+            onToggleMaximize={toggleMaximize}
+            onClose={close}
+          />
         )}
       </header>
 

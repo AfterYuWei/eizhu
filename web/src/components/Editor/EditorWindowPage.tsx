@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Toaster } from '@/components/ui/sonner'
 import { useWindowControls } from '@/hooks/useWindowControls'
+import { WindowControls } from '@/components/WindowControls'
 import { useResolvedTheme } from '@/store/settings'
 import { type EditorSessionType, useActiveTab, useEditorStore } from '@/store/editor'
 import { CodeEditor } from './CodeEditor'
@@ -244,21 +245,13 @@ export function EditorWindowPage() {
           <span>eizhu · 文件编辑器</span>
         </div>
         {showControls && (
-          <div className="titlebar-controls">
-            <Button type="button" variant="ghost" className="tb-btn tb-min" title="最小化" aria-label="最小化" onClick={minimize}>
-              <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><line x1="1" y1="5" x2="9" y2="5" stroke="currentColor" strokeWidth="1" /></svg>
-            </Button>
-            <Button type="button" variant="ghost" className="tb-btn tb-max" title={maximized ? '还原' : '最大化'} aria-label={maximized ? '还原' : '最大化'} onClick={toggleMaximize}>
-              {maximized ? (
-                <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><rect x="2" y="0.5" width="7.5" height="7.5" fill="none" stroke="currentColor" strokeWidth="0.8" /><path d="M1 2v7h7" fill="none" stroke="currentColor" strokeWidth="0.8" /></svg>
-              ) : (
-                <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><rect x="0.5" y="0.5" width="9" height="9" fill="none" stroke="currentColor" strokeWidth="1" /></svg>
-              )}
-            </Button>
-            <Button type="button" variant="ghost" className="tb-btn tb-close" title="关闭" aria-label="关闭编辑器窗口" onClick={requestCloseWindow}>
-              <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><line x1="0" y1="0" x2="10" y2="10" stroke="currentColor" strokeWidth="1" /><line x1="10" y1="0" x2="0" y2="10" stroke="currentColor" strokeWidth="1" /></svg>
-            </Button>
-          </div>
+          <WindowControls
+            maximized={maximized}
+            onMinimize={minimize}
+            onToggleMaximize={toggleMaximize}
+            onClose={requestCloseWindow}
+            closeLabel="关闭编辑器窗口"
+          />
         )}
       </header>
 

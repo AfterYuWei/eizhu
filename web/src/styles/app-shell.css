@@ -50,21 +50,27 @@
   padding-left: 78px;
 }
 
-/* ===== 窗口控制按钮（Windows 原生风格） ===== */
-/* 仅桌面环境渲染。三个按钮高度与标题栏等高，宽度对齐 Win10/11 caption button。
+/* ===== 窗口控制按钮（VS Code 风格） ===== */
+/* 仅桌面环境渲染。10px 细线图标居中，46px 宽的直角点击区域与标题栏等高。
    配色用主题变量跟随深浅主题；关闭按钮悬停保留 Windows 原生红色 #E81123。 */
 .titlebar-controls {
   display: flex;
+  flex-shrink: 0;
   align-items: stretch;
   height: 100%;
   margin-left: 4px;
+  user-select: none;
+  -webkit-app-region: no-drag;
 }
 .tb-btn {
   width: 46px;
+  height: 100%;
+  padding: 0;
   display: flex;
   align-items: center;
   justify-content: center;
   border: none;
+  border-radius: 0;
   background: transparent;
   color: var(--fg-2);
   cursor: default;
@@ -75,6 +81,11 @@
 }
 .tb-btn:active {
   background: var(--bg-active);
+}
+.tb-btn:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: -2px;
+  box-shadow: none;
 }
 /* 关闭按钮：悬停红色背景 + 白色图标，与 Windows 原生一致（红色不随主题变化） */
 .tb-close:hover {
