@@ -4,7 +4,7 @@ import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { useSessionStore } from '@/store/session'
 import { useSftpStore } from './storeContext'
-import { type PaneSide } from '@/store/sftp'
+import { LOCAL_SERVER, type PaneSide } from '@/store/sftp'
 import { resolveServerIcon } from '@/lib/serverIcons'
 import { resolveGroupIcon } from '@/lib/groupIcons'
 import { groupApi } from '@/api/group'
@@ -23,6 +23,7 @@ interface ServerPickerProps {
  *  terminal tab's server is highlighted with an accent border. Picking a
  *  server connects it as a new tab in the target pane. */
 export function ServerPicker({ open, pane, onClose }: ServerPickerProps) {
+  const mobile = isMobileRuntime()
   const { tabs, activeTabId } = useSessionStore()
   const servers = useSftpStore((s) => s.servers)
   const connectServer = useSftpStore((s) => s.connectServer)
@@ -71,9 +72,10 @@ export function ServerPicker({ open, pane, onClose }: ServerPickerProps) {
   }
 
   const renderServerCard = (s: SftpServer) => {
-    const isRecommended = `${s.host}:${s.port}` === recommendedId
+    const isLocal = s.id === LOCAL_SERVER.id
+    const isRecommended = !isLocal && `${s.host}:${s.port}` === recommendedId
     const isSelected = s.id === selectedId
-    const Icon = resolveServerIcon(s.icon)
+    const Icon = resolveServerIcon(isLocal ? 'harddrive' : s.icon)
     return (
       <div
         key={s.id}
@@ -81,7 +83,7 @@ export function ServerPicker({ open, pane, onClose }: ServerPickerProps) {
         aria-selected={isSelected}
         tabIndex={0}
         className={`sftp-server-card ${isRecommended ? 'recommended' : ''} ${isSelected ? 'selected' : ''}`}
-        onClick={() => isMobileRuntime() ? handleConnect(s) : setSelectedId(s.id)}
+        onClick={() => mobile ? handleConnect(s) : setSelectedId(s.id)}
         onDoubleClick={() => handleConnect(s)}
         onKeyDown={(e) => {
           if (e.key === 'Enter' || e.key === ' ') {
@@ -99,7 +101,7 @@ export function ServerPicker({ open, pane, onClose }: ServerPickerProps) {
             {isRecommended && <span className="sftp-server-tag">当前会话</span>}
           </span>
           <span className="sftp-server-meta">
-            {s.username}@{s.host}:{s.port}
+            {isLocal ? '本地文件系统' : `${s.username}@${s.host}:${s.port}`}
           </span>
         </span>
         <FolderUp size={14} className="sftp-server-arrow" />
@@ -127,9 +129,14 @@ export function ServerPicker({ open, pane, onClose }: ServerPickerProps) {
           </Button>
         </div>
         <div className="sftp-picker-sub">
-          {isMobileRuntime() ? '点击服务器即可连接。' : '单击选中服务器，双击进行连接。'}当前终端会话的服务器已高亮。
+          {mobile ? '点击服务器即可连接。' : '单击选中服务器，双击进行连接。'}当前终端会话的服务器已高亮。
         </div>
         <div className="sftp-picker-list">
+          {!mobile && (
+            <div className="sftp-picker-group">
+              {renderServerCard(LOCAL_SERVER)}
+            </div>
+          )}
           {grouped.map(({ group, list }) => {
             if (list.length === 0) return null
             const GIcon = resolveGroupIcon(group.icon)
@@ -151,7 +158,7 @@ export function ServerPicker({ open, pane, onClose }: ServerPickerProps) {
               {loose.map(renderServerCard)}
             </div>
           )}
-          {servers.length === 0 && (
+          {mobile && servers.length === 0 && (
             <div className="sftp-picker-empty">暂无可用服务器</div>
           )}
         </div>
