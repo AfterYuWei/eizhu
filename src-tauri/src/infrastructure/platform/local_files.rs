@@ -29,9 +29,24 @@ pub(crate) fn path_to_api(path: &Path) -> String {
 
 #[cfg(windows)]
 pub(crate) fn path_from_api(path: &str) -> PathBuf {
+    windows_path_from_api(path)
+}
+
+#[cfg(any(windows, test))]
+fn windows_path_from_api(path: &str) -> PathBuf {
     let clean = clean_api_path(path);
-    if clean.len() > 3 && clean.as_bytes()[0] == b'/' && clean.as_bytes()[2] == b':' {
-        PathBuf::from(clean.trim_start_matches('/').replace('/', "\\"))
+    if clean.len() >= 3
+        && clean.as_bytes()[0] == b'/'
+        && clean.as_bytes()[1].is_ascii_alphabetic()
+        && clean.as_bytes()[2] == b':'
+    {
+        let mut native = clean[1..].replace('/', "\\");
+        // Cleaning `/C:/` removes its trailing slash. Restore the drive root so it
+        // cannot be interpreted as the drive-relative path `C:`.
+        if clean.len() == 3 {
+            native.push('\\');
+        }
+        PathBuf::from(native)
     } else {
         PathBuf::from(clean.replace('/', "\\"))
     }
@@ -87,6 +102,45 @@ fn clean_api_path(path: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn windows_drive_roots_resolve_to_absolute_native_paths() {
+        for path in ["/C:", "/C:/", "/C:/Users/..", "/C:/Users/yuwei/../.."] {
+            assert_eq!(windows_path_from_api(path), PathBuf::from("C:\\"), "{path}");
+        }
+        for path in ["/d:", "/d:/"] {
+            assert_eq!(windows_path_from_api(path), PathBuf::from("d:\\"), "{path}");
+        }
+    }
+
+    #[test]
+    fn windows_local_navigation_preserves_directory_paths() {
+        for (path, expected) in [
+            ("/C:/Users/yuwei", r"C:\Users\yuwei"),
+            ("/C:/Users", r"C:\Users"),
+            ("/", r"\"),
+        ] {
+            assert_eq!(
+                windows_path_from_api(path),
+                PathBuf::from(expected),
+                "{path}"
+            );
+        }
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_drive_root_can_be_listed_after_navigating_up() {
+        let directory = tempfile::tempdir().unwrap();
+        let root = directory.path().ancestors().last().unwrap();
+        let api_root = path_to_api(root);
+        for path in [api_root.as_str(), api_root.trim_end_matches('/')] {
+            let native = path_from_api(path);
+            assert_eq!(native, root);
+            assert!(native.is_absolute());
+            std::fs::read_dir(native).unwrap();
+        }
+    }
 
     #[test]
     fn api_paths_cannot_escape_their_root() {
