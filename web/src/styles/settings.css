@@ -38,6 +38,9 @@
   background: var(--accent-bg);
   color: var(--accent);
 }
+.settings-nav-item::after {
+  display: none;
+}
 
 /* 右侧内容 */
 .settings-content-shell {
