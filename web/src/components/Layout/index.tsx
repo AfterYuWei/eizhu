@@ -7,6 +7,7 @@ import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { Search, X, FolderUp, Settings, KeyRound, Server, SquareTerminal } from 'lucide-react'
 import { Sidebar } from '@/components/Sidebar'
 import { TerminalView } from '@/components/Terminal'
+import { TerminalSplitMenu } from '@/components/Terminal/SplitControls'
 import { StatusBar } from '@/components/StatusBar'
 import { CommandPalette } from '@/components/CommandPalette'
 import { ThemeToggle } from '@/components/ThemeToggle'
@@ -15,6 +16,7 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { useProfileStore } from '@/store/profile'
 import { useSessionStore } from '@/store/session'
+import { useTerminalLayoutStore } from '@/store/terminalLayout'
 import { useSettingsStore } from '@/store/settings'
 import { useVaultStore } from '@/store/vault'
 import { useWindowControls } from '@/hooks/useWindowControls'
@@ -35,6 +37,9 @@ export function Layout() {
   const { sidebarWidth, setSidebarWidth, theme } = useSettingsStore()
   useSettingsStore((state) => state.systemRevision)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const splitActive = useTerminalLayoutStore((state) => state.tree?.type === 'split')
+  // Keep the user's preference so leaving split mode restores the previous sidebar state.
+  const sidebarHidden = splitActive || sidebarCollapsed
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [tunnelsOpen, setTunnelsOpen] = useState(false)
   const [snippetsOpen, setSnippetsOpen] = useState(false)
@@ -161,7 +166,9 @@ export function Layout() {
       registerDesktopAction('sync-settings', () => { setSettingsInitialTab('sync'); setSettingsOpen(true) }),
       registerDesktopAction('account-settings', () => { setSettingsInitialTab('account'); setSettingsOpen(true) }),
       registerDesktopAction('snippets', () => setSnippetsOpen(true)),
-      registerDesktopAction('sidebar', () => setSidebarCollapsed((v) => !v)),
+      registerDesktopAction('sidebar', () => {
+        if (useTerminalLayoutStore.getState().tree?.type !== 'split') setSidebarCollapsed((v) => !v)
+      }),
     ]
     const handler = (event: KeyboardEvent) => {
       const action = shortcutAction(event)
@@ -191,11 +198,12 @@ export function Layout() {
             type="button"
             variant="ghost"
             className="hdr-icon-btn"
-            title={sidebarCollapsed ? '展开侧边栏 (Ctrl/Cmd+Shift+B)' : '折叠侧边栏 (Ctrl/Cmd+Shift+B)'}
-            aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            title={splitActive ? '分屏模式下侧栏已禁用' : sidebarHidden ? '展开侧边栏 (Ctrl/Cmd+Shift+B)' : '折叠侧边栏 (Ctrl/Cmd+Shift+B)'}
+            aria-label={splitActive ? '分屏模式下侧栏已禁用' : sidebarHidden ? 'Expand sidebar' : 'Collapse sidebar'}
+            disabled={splitActive}
             onClick={() => runDesktopAction('sidebar')}
           >
-            {sidebarCollapsed ? (
+            {sidebarHidden ? (
               <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                 <line x1="3" y1="3" x2="3" y2="13" />
                 <polyline points="7 5 11 8 7 11" />
@@ -331,6 +339,7 @@ export function Layout() {
 
         {/* 右：设置 + 主题切换。容器空白区域可拖拽 */}
         <div className="header-right" data-tauri-drag-region={desktop || undefined}>
+          <TerminalSplitMenu />
           <SyncIndicator />
           <ThemeToggle className="hdr-icon-btn" showLabel buttonLabel="主题" />
           <Button
@@ -362,15 +371,17 @@ export function Layout() {
         {/* Sidebar */}
         <aside
           ref={sidebarRef}
-          className={`eizhu-sidebar ${sidebarCollapsed ? 'collapsed' : ''}`}
+          className={`eizhu-sidebar ${sidebarHidden ? 'collapsed' : ''}`}
           role="navigation"
           aria-label="Server list"
+          aria-hidden={sidebarHidden}
+          inert={sidebarHidden}
         >
-          <Sidebar visible={!sidebarCollapsed} />
+          <Sidebar visible={!sidebarHidden} />
         </aside>
 
         {/* Resize handle */}
-        {!sidebarCollapsed && (
+        {!sidebarHidden && (
           <div
             className={`sidebar-resizer ${resizing ? 'active' : ''}`}
             onMouseDown={handleResizeStart}

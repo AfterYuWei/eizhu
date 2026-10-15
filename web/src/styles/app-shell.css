@@ -104,12 +104,13 @@
   align-items: center;
   gap: 2px;
   justify-content: flex-start;
-  min-width: 0;
+  min-width: max-content;
 }
 .header-center {
-  flex: 0 0 auto;
+  flex: 0 1 440px;
   width: 440px;
   max-width: 40vw;
+  min-width: 120px;
 }
 .header-right {
   flex: 1;
@@ -117,7 +118,7 @@
   align-items: center;
   gap: 2px;
   justify-content: flex-end;
-  min-width: 0;
+  min-width: max-content;
 }
 .header-search {
   position: relative;

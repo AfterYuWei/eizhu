@@ -7,7 +7,7 @@ vi.mock('./TerminalPane', () => ({ TerminalPane: ({ tab }: { tab: { id: string }
   return <textarea aria-label={`终端 ${tab.id}`} defaultValue={buffer.current} />
 } }))
 vi.mock('@/store/settings', () => ({ useSettingsStore: () => ({ terminalTheme: 'default' }), useResolvedTheme: () => 'dark' }))
-vi.mock('./SplitControls', () => ({ SplitToolbar: () => null, SplitResizeHandle: () => null }))
+vi.mock('./SplitControls', () => ({ SplitResizeHandle: () => null }))
 import { TerminalView } from './index'
 import { useSessionStore } from '@/store/session'
 import { useTerminalLayoutStore, resetTerminalLayout } from '@/store/terminalLayout'

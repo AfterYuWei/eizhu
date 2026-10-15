@@ -70,6 +70,7 @@ interface TerminalPaneProps {
 
 export function TerminalPane({ tab, isActive, isVisible = isActive }: TerminalPaneProps) {
   const containerRef = useRef<HTMLDivElement>(null)
+  const pickerInputRef = useRef<HTMLInputElement>(null)
   const {
     updateTabStatus,
     updateTabCwd,
@@ -380,7 +381,7 @@ export function TerminalPane({ tab, isActive, isVisible = isActive }: TerminalPa
   ])
 
   useEffect(() => registerTerminalActions(tab.id, {
-    focus: () => getTerminal()?.focus(),
+    focus: () => { if (tab.profileId) getTerminal()?.focus(); else pickerInputRef.current?.focus() },
     reconnect: reconnectNow,
     search: () => setFindOpen(true),
     safeMultiline: () => !!getTerminal()?.modes.bracketedPasteMode,
@@ -396,7 +397,7 @@ export function TerminalPane({ tab, isActive, isVisible = isActive }: TerminalPa
       } else terminal.paste(content)
       terminal.focus()
     },
-  }), [tab.id, tab.status, getTerminal, reconnectNow])
+  }), [tab.id, tab.profileId, tab.status, getTerminal, reconnectNow])
 
   const currentHostKeyFingerprint = hostKeyPrompt.current
 
@@ -733,7 +734,7 @@ export function TerminalPane({ tab, isActive, isVisible = isActive }: TerminalPa
         '--terminal-ime-inset': `${toolbarImeInset}px`,
       } as CSSProperties}
     >
-      {!tab.profileId && <ConnectionPicker tabId={tab.id} isActive={isActive} />}
+      {!tab.profileId && <ConnectionPicker tabId={tab.id} isActive={isActive} inputRef={pickerInputRef} />}
       {tab.manualConnect && tab.profileId && !tab.sessionId && <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-background p-4 text-sm">
         <p>已恢复布局 · {tab.profileName}</p><Button onClick={() => void reconnectNow()}>连接服务器</Button>
       </div>}

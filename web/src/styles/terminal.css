@@ -37,6 +37,17 @@
   opacity: 0.62;
   pointer-events: none;
 }
+.term-wrap.terminal-layout {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  overflow: visible;
+}
+.term-wrap.terminal-layout::before {
+  display: none;
+}
 /* The xterm mount fills the already-padded content box. Keeping padding off
    this element prevents FitAddon from counting rows for space it cannot use. */
 .term-host {
@@ -45,6 +56,200 @@
   box-sizing: border-box;
   background: var(--term-bg);
 }
+
+/* Split panes keep the terminal canvas free of toolbars and title rows. */
+.term-workspace {
+  flex: 1;
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+.terminal-layout > .term-workspace {
+  overflow: visible;
+}
+.term-pane {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+.term-pane.is-hidden {
+  display: none;
+}
+.term-pane-card {
+  overflow: hidden;
+  isolation: isolate;
+  padding: 10px;
+  background: var(--term-bg);
+  border: 1px solid var(--term-border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--term-shadow);
+}
+.term-pane.is-active > .term-pane-card::before {
+  content: '';
+  position: absolute;
+  z-index: 5;
+  top: -1px;
+  left: 14%;
+  width: 72%;
+  height: 2px;
+  background: var(--seam-active);
+  box-shadow: 0 1px 10px color-mix(in srgb, var(--accent) 18%, transparent);
+  opacity: 0.62;
+  pointer-events: none;
+}
+.term-split-handle {
+  position: absolute;
+  z-index: 20;
+  touch-action: none;
+  outline: none;
+}
+.term-split-handle::after {
+  content: '';
+  position: absolute;
+  background: transparent;
+  border-radius: var(--r-pill);
+}
+.term-split-handle.is-horizontal {
+  cursor: col-resize;
+}
+.term-split-handle.is-horizontal::after {
+  width: 1px;
+  height: 32px;
+  left: calc(50% - 0.5px);
+  top: calc(50% - 16px);
+}
+.term-split-handle.is-vertical {
+  cursor: row-resize;
+}
+.term-split-handle.is-vertical::after {
+  height: 1px;
+  width: 32px;
+  top: calc(50% - 0.5px);
+  left: calc(50% - 16px);
+}
+.term-split-handle:hover::after,
+.term-split-handle:focus-visible::after,
+.term-split-handle.is-dragging::after {
+  background: var(--accent);
+}
+
+/* Connection choices use the same quiet surfaces and icon registry as the sidebar. */
+.connection-picker {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  overflow: hidden;
+  padding: clamp(10px, 5%, 20px);
+  border-radius: var(--r-sm);
+  background: var(--surface-panel);
+  color: var(--fg);
+}
+.connection-picker-content {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 100%;
+  max-width: 360px;
+  max-height: 100%;
+  min-width: 0;
+  min-height: 0;
+  margin: auto;
+}
+.connection-picker-heading {
+  flex-shrink: 0;
+}
+.connection-picker-heading h2 {
+  font: 600 14px / 1.5 var(--sans);
+  color: var(--fg-2);
+}
+.connection-picker-heading p {
+  margin-top: 4px;
+  font: 400 var(--sans-size) / 1.5 var(--sans);
+  color: var(--fg-3);
+}
+.connection-picker-search {
+  position: relative;
+  flex-shrink: 0;
+}
+.connection-picker-search > svg {
+  position: absolute;
+  z-index: 1;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--fg-4);
+  pointer-events: none;
+}
+.connection-picker-search input {
+  height: 32px;
+  padding-left: 32px;
+  font: 400 var(--sans-size) / 1.5 var(--sans);
+}
+.connection-picker-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 3px;
+  margin: -3px;
+}
+.connection-picker-server {
+  justify-content: flex-start;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+  height: auto;
+  padding: 10px;
+  border-radius: var(--r-sm);
+  text-align: left;
+}
+.connection-picker-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--r-sm);
+  background: var(--bg-elevated);
+  color: var(--fg-3);
+}
+.connection-picker-info {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.connection-picker-name,
+.connection-picker-address {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.connection-picker-name {
+  font: 500 var(--sans-size) / 1.4 var(--sans);
+  color: var(--fg-2);
+}
+.connection-picker-address {
+  font: 400 11px / 1.4 var(--mono);
+  color: var(--fg-3);
+}
+.connection-picker-arrow {
+  color: var(--fg-4);
+}
+.connection-picker-empty {
+  padding: 16px 0;
+  font: 400 var(--sans-size) / 1.6 var(--sans);
+  color: var(--fg-3);
+}
+
 .term-empty-state {
   display: flex;
   flex-direction: column;
@@ -89,7 +294,7 @@
 }
 
 /* xterm 各渲染层贴满 .term-host 的内容盒（已含内边距）。圆角裁剪统一交给
-   外层 .term-wrap（overflow: hidden）完成，内层不再设 border-radius/overflow，
+   每个桌面 .term-pane-card / 移动端 .term-wrap 完成，内层不再设 border-radius/overflow，
    避免两层圆角叠加在外层与 Canvas 之间产生缝隙。背景设为透明，让画布未
    覆盖的缝隙透出 .term-host 的主题色（浅色为白），而不是 xterm 默认黑。 */
 .term-wrap .xterm,
