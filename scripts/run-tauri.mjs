@@ -14,8 +14,11 @@ if (!['dev', 'build', 'android', 'ios'].includes(command)) {
 
 const environment = { ...process.env }
 if (command === 'build') {
-  try { environment.EIZHU_ACCOUNT_SERVER = validateAccountServer(environment.EIZHU_ACCOUNT_SERVER) }
-  catch (error) { console.error(error.message); process.exit(1) }
+  try {
+    environment.EIZHU_ACCOUNT_SERVER = validateAccountServer(environment.EIZHU_ACCOUNT_SERVER, {
+      channel: environment.EIZHU_BUILD_CHANNEL,
+    })
+  } catch (error) { console.error(error.message); process.exit(1) }
 }
 
 // 桌面端与移动端版本分开源文件管理：VERSION 供 dev/build（桌面）使用，

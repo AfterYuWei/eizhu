@@ -36,7 +36,11 @@ test 版本号由「提交计数 + 短 SHA」组成（如 `0.4.2-test.486.1a2b3c
 
 ## 账号服务地址与质量门禁
 
-配置仓库 Variables `EIZHU_ACCOUNT_SERVER_TEST` 与 `EIZHU_ACCOUNT_SERVER_STABLE` 为实际 HTTPS 账号服务地址。两个通道严格独立，正式通道缺失时不会回退测试服务。打包入口拒绝占位地址和携带认证信息的地址；本地 `desktop:build` 需要环境变量 `EIZHU_ACCOUNT_SERVER`，普通开发与单元测试不需要。
+配置仓库 Variables `EIZHU_ACCOUNT_SERVER_TEST` 与 `EIZHU_ACCOUNT_SERVER_STABLE` 为实际 HTTPS 账号服务地址。
+
+测试服务尚未确定时，`dev` 通道在变量未配置或为空时暂用 `https://account.eizhu.invalid/`，允许先出测试包；此时账号登录和同步功能暂不可用，配置真实地址后重新构建即可启用。两个通道严格独立，正式通道仍要求真实地址，不会回退测试服务或占位地址。
+
+打包入口继续拒绝其他占位域名和携带认证信息的地址。本地 `desktop:build` 需要环境变量 `EIZHU_ACCOUNT_SERVER`，使用上述临时地址时还需设置 `EIZHU_BUILD_CHANNEL=test`；普通开发与单元测试不需要。
 
 桌面发布构建依赖同一提交的 `quality-core.yml`：前端测试、lint、构建，Rust 检查及桌面烟测全部通过才继续。Quality 产物与安装包产物分开筛选，前端静态文件不会混入 Release。
 

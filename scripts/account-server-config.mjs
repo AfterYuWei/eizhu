@@ -1,14 +1,17 @@
 import { appendFileSync } from 'node:fs'
 import { pathToFileURL } from 'node:url'
 
-/** Release packages must contain a usable address, never credentials. */
-export function validateAccountServer(value) {
+export const TEST_ACCOUNT_SERVER_PLACEHOLDER = 'https://account.eizhu.invalid/'
+
+/** Stable packages require a real address; test packages may use the reserved placeholder. */
+export function validateAccountServer(value, { channel } = {}) {
   if (typeof value !== 'string' || !value.trim()) throw new Error('打包需要配置账号服务地址')
   if (/[\u0000-\u0020]/u.test(value.trim())) throw new Error('账号服务地址不能包含空白或控制字符')
   let url
   try { url = new URL(value.trim()) } catch { throw new Error('账号服务地址不是有效 URL') }
   const host = url.hostname.replace(/\.$/u, '')
-  if (url.protocol !== 'https:' || !host || host.endsWith('.invalid')
+  const testPlaceholder = channel === 'test' && url.href === TEST_ACCOUNT_SERVER_PLACEHOLDER
+  if (url.protocol !== 'https:' || !host || (host.endsWith('.invalid') && !testPlaceholder)
     || host === 'invalid' || ['example.com', 'example.org', 'example.net'].some((name) => host === name || host.endsWith(`.${name}`))
     || url.username || url.password || url.search || url.hash) {
     throw new Error('账号服务地址必须是有效 HTTPS 地址，不能包含占位域名、认证信息、查询或片段')
@@ -18,8 +21,11 @@ export function validateAccountServer(value) {
 
 export function accountServerForChannel(channel, environment) {
   if (!['stable', 'test'].includes(channel)) throw new Error('未知桌面发布通道')
-  return validateAccountServer(environment[channel === 'stable'
-    ? 'EIZHU_ACCOUNT_SERVER_STABLE' : 'EIZHU_ACCOUNT_SERVER_TEST'])
+  const configured = environment[channel === 'stable'
+    ? 'EIZHU_ACCOUNT_SERVER_STABLE' : 'EIZHU_ACCOUNT_SERVER_TEST']
+  const value = channel === 'test' && !configured?.trim()
+    ? TEST_ACCOUNT_SERVER_PLACEHOLDER : configured
+  return validateAccountServer(value, { channel })
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
@@ -27,7 +33,9 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     const address = accountServerForChannel(process.env.EIZHU_BUILD_CHANNEL, process.env)
     if (!process.env.GITHUB_ENV) throw new Error('CI 环境文件未配置')
     appendFileSync(process.env.GITHUB_ENV, `EIZHU_ACCOUNT_SERVER=${address}\n`)
-    console.log('账号服务地址已校验并注入当前发布通道')
+    console.log(address === TEST_ACCOUNT_SERVER_PLACEHOLDER
+      ? '测试通道暂用账号服务占位地址，登录和同步功能暂不可用'
+      : '账号服务地址已校验并注入当前发布通道')
   } catch (error) {
     console.error(error.message)
     process.exitCode = 1
