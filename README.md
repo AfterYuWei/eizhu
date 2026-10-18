@@ -64,6 +64,10 @@ HTTP 或 WebSocket 服务。
 
 macOS 新版 Release 的安装包按处理器区分：Intel 选择 `_x64.dmg`，Apple Silicon 选择 `_aarch64.dmg`。
 
+[![macOS Intel 下载](https://img.shields.io/badge/macOS-Intel-000000?logo=apple&logoColor=white)](https://github.com/AfterYuWei/eizhu/releases)
+
+点击 Intel 徽标进入 Release 页面，选择包含 `_x64.dmg` 的新版；下方固定下载链接保留历史版本。
+
 ### 正式版（Stable）
 
 [![正式版](https://img.shields.io/badge/正式版-v0.4.3-2ea44f)](https://github.com/AfterYuWei/eizhu/releases/tag/v0.4.3)
@@ -102,7 +106,7 @@ macOS 新版 Release 的安装包按处理器区分：Intel 选择 `_x64.dmg`，
 [查看全部发布记录](https://github.com/AfterYuWei/eizhu/releases)
 
 > [!NOTE]
-> macOS 当前只提供 Apple Silicon 版本。iOS 测试包未签名，不能直接安装，需要自行签名后侧载；
+> iOS 测试包未签名，不能直接安装，需要自行签名后侧载；
 > Android/iOS 仍处于真机验证阶段。安装测试版前建议备份现有数据。
 
 ## 本地开发
