@@ -62,6 +62,11 @@ pub(crate) fn get_platform() -> &'static str {
 }
 
 #[tauri::command]
+pub(crate) fn get_updater_target() -> Option<String> {
+    tauri_plugin_updater::target()
+}
+
+#[tauri::command]
 pub(crate) fn read_app_log(kind: String) -> Result<desktop::AppLogSnapshot, String> {
     desktop::read_app_log(kind).map_err(|error| error.to_string())
 }

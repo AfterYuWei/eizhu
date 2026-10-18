@@ -46,12 +46,8 @@ function closeUpdate(update: Update | null | undefined): void {
 }
 
 async function updateTarget(channel: UpdateChannel): Promise<string> {
-  const os = await invoke<string>('get_platform')
-  const platform = os === 'windows'
-    ? 'windows-x86_64'
-    : os === 'macos'
-      ? 'darwin-aarch64'
-      : 'linux-x86_64'
+  const platform = await invoke<string | null>('get_updater_target')
+  if (!platform) throw new Error('当前平台不支持应用内更新')
   return `${channel}-${platform}`
 }
 

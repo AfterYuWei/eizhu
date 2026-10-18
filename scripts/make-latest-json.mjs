@@ -36,8 +36,14 @@ const platforms = {}
 const win = files.find((f) => f.endsWith('-setup.exe'))
 if (win) platforms['windows-x86_64'] = { signature: sigOf(win), url: assetUrl(win) }
 
-const mac = files.find((f) => f.endsWith('.app.tar.gz'))
-if (mac) platforms['darwin-aarch64'] = { signature: sigOf(mac), url: assetUrl(mac) }
+for (const mac of files.filter((file) => file.endsWith('.app.tar.gz'))) {
+  const arch = mac.endsWith('_aarch64.app.tar.gz') ? 'aarch64'
+    : mac.endsWith('_x64.app.tar.gz') ? 'x86_64' : null
+  if (!arch) throw new Error(`macOS 更新归档缺少架构标识: ${mac}`)
+  const platform = `darwin-${arch}`
+  if (platforms[platform]) throw new Error(`同一架构存在多个 macOS 更新归档: ${arch}`)
+  platforms[platform] = { signature: sigOf(mac), url: assetUrl(mac) }
+}
 
 const linux = files.find((f) => f.endsWith('.AppImage'))
 if (linux) platforms['linux-x86_64'] = { signature: sigOf(linux), url: assetUrl(linux) }

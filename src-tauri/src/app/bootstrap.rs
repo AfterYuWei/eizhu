@@ -294,6 +294,7 @@ fn desktop_run() {
             commands::editor_window_ready,
             commands::editor_window_show,
             commands::get_platform,
+            commands::get_updater_target,
             commands::read_app_log,
             commands::append_frontend_log,
             commands::clear_app_log,

@@ -63,6 +63,7 @@ test 版本号由「提交计数 + 短 SHA」组成（如 `0.4.2-test.486.1a2b3c
 |------|------|-----------|
 | Windows (x64) | NSIS 安装程序 `.exe` | ✅ |
 | macOS (Apple Silicon) | DMG 镜像 + `.app.tar.gz` | ✅ |
+| macOS (Intel x64) | DMG 镜像 + `.app.tar.gz` | ✅ |
 | Linux (Debian/Ubuntu) | `.deb` | ❌（手动覆盖安装） |
 | Linux (Fedora/RHEL) | `.rpm` | ❌（手动覆盖安装） |
 | Linux (通用) | `.AppImage` | ✅ |
@@ -71,6 +72,12 @@ test 版本号由「提交计数 + 短 SHA」组成（如 `0.4.2-test.486.1a2b3c
 
 稳定版与测试版的 updater 清单分别为 `latest-stable-*` 和 `latest-test-*`，
 由固定的 `tauri-update-channel` Release 保存最新指针。
+macOS 分别在 Apple Silicon 与 `macos-15-intel` runner 上构建
+`aarch64-apple-darwin` 和 `x86_64-apple-darwin`，两者都执行 bundle 烟测和二进制架构检查。
+DMG 分别以 `_aarch64.dmg` 和 `_x64.dmg` 结尾；签名后的更新归档统一为
+`eizhu_<版本>_<aarch64|x64>.app.tar.gz`，避免合并产物时同名覆盖。
+客户端通过 Rust updater 返回的编译目标选择 `darwin-aarch64` 或 `darwin-x86_64` 清单。
+
 移动端产物（APK / IPA）上传到与桌面相同的版本 Release，资产文件名以
 `eizhu-<VERSION_MOBILE>…` 标识移动端版本；iOS 测试 IPA 通过
 `tauri ios build --no-sign` 产出，正式与测试分支均不读取 App Store Connect 密钥，
@@ -95,4 +102,12 @@ Windows 覆盖安装说明：`tauri.conf.json` 已启用 `bundle.windows.allowDo
 ```bash
 npm run desktop:build
 npm run desktop:smoke
+```
+
+在 macOS 上可显式选择打包架构（账号服务地址要求同上）：
+
+```bash
+rustup target add x86_64-apple-darwin aarch64-apple-darwin
+npm run desktop:build -- --target x86_64-apple-darwin
+npm run desktop:build -- --target aarch64-apple-darwin
 ```

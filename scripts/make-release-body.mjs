@@ -43,7 +43,8 @@ const badge = (label, color, logo, asset, alt) =>
 
 const assets = {
   windows: `eizhu_${version}_x64-setup.exe`,
-  macos: `eizhu_${version}_aarch64.dmg`,
+  macosArm64: `eizhu_${version}_aarch64.dmg`,
+  macosX64: `eizhu_${version}_x64.dmg`,
   appimage: `eizhu_${version}_amd64.AppImage`,
   deb: `eizhu_${version}_amd64.deb`,
   rpm: `eizhu-${version}-1.x86_64.rpm`,
@@ -73,7 +74,8 @@ ${callout}
 
 <p>
   ${badge('Windows-x64', '0078D4', 'windows11', assets.windows, `下载 Windows x64 eizhu ${version}`)}
-  ${badge('macOS-Apple_Silicon', '000000', 'apple', assets.macos, `下载 macOS Apple Silicon eizhu ${version}`)}
+  ${badge('macOS-Apple_Silicon', '000000', 'apple', assets.macosArm64, `下载 macOS Apple Silicon eizhu ${version}`)}
+  ${badge('macOS-Intel', '000000', 'apple', assets.macosX64, `下载 macOS Intel eizhu ${version}`)}
   ${badge('Linux-AppImage', 'FCC624', 'linux', assets.appimage, `下载 Linux AppImage eizhu ${version}`)}
   ${badge('Linux-deb', 'A81D33', 'debian', assets.deb, `下载 Linux deb eizhu ${version}`)}
   ${badge('Linux-rpm', '294172', 'fedora', assets.rpm, `下载 Linux rpm eizhu ${version}`)}
@@ -84,13 +86,14 @@ ${callout}
 | 平台 | 架构 | 推荐安装包 | 安装方式 |
 | --- | --- | --- | --- |
 | Windows | x64 | \`${assets.windows}\` | 双击安装，可直接覆盖旧版本 |
-| macOS | Apple Silicon | \`${assets.macos}\` | 打开 DMG，将 eizhu 拖入“应用程序” |
+| macOS | Apple Silicon | \`${assets.macosArm64}\` | 打开 DMG，将 eizhu 拖入“应用程序” |
+| macOS | Intel x64 | \`${assets.macosX64}\` | 打开 DMG，将 eizhu 拖入“应用程序” |
 | Debian / Ubuntu | x64 | \`${assets.deb}\` | \`sudo apt install ./eizhu_*_amd64.deb\` |
 | Fedora / RHEL | x64 | \`${assets.rpm}\` | \`sudo dnf install ./eizhu-*.x86_64.rpm\` |
 | 其他 Linux | x64 | \`${assets.appimage}\` | 添加执行权限后直接运行 |
 
 > [!NOTE]
-> macOS 当前仅提供 Apple Silicon 版本。Android 与 iOS 由移动端流水线分别上传；Android APK
+> macOS 请按处理器选择 Apple Silicon 或 Intel 安装包。Android 与 iOS 由移动端流水线分别上传；Android APK
 > 可直接下载安装，iOS 的 \`unsigned.ipa\` 需要自行签名后侧载。
 
 ## 升级与数据兼容

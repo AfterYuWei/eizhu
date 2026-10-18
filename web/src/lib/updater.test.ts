@@ -19,13 +19,26 @@ import { checkForUpdates, downloadAndInstallUpdate } from './updater'
 
 beforeEach(() => {
   mocks.check.mockReset()
-  mocks.invoke.mockReset().mockResolvedValue('windows')
+  mocks.invoke.mockReset().mockResolvedValue('windows-x86_64')
   mocks.getVersion.mockReset().mockResolvedValue('0.0.0-test.10.1.shaabcdef')
   mocks.relaunch.mockReset().mockResolvedValue(undefined)
   mocks.check.mockResolvedValue({ available: false })
 })
 
 describe('desktop updater channels', () => {
+  it.each(['darwin-aarch64', 'darwin-x86_64', 'linux-x86_64'])('根据 Rust 编译架构选择 %s 更新包', async (platform) => {
+    mocks.invoke.mockResolvedValue(platform)
+    await checkForUpdates('test')
+    expect(mocks.invoke).toHaveBeenCalledWith('get_updater_target')
+    expect(mocks.check).toHaveBeenCalledWith({ target: `test-${platform}`, allowDowngrades: false })
+  })
+
+  it('不支持的架构不会回退到其他架构的安装包', async () => {
+    mocks.invoke.mockResolvedValue(null)
+    await expect(checkForUpdates('test')).rejects.toThrow('当前平台不支持应用内更新')
+    expect(mocks.check).not.toHaveBeenCalled()
+  })
+
   it('测试构建检查测试通道时使用独立 target 且保持单调更新', async () => {
     await checkForUpdates('test')
 

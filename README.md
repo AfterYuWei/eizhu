@@ -54,13 +54,15 @@ HTTP 或 WebSocket 服务。
 
 ### 桌面与移动端
 
-- 桌面构建覆盖 Windows x64、macOS Apple Silicon 和 Linux x64。
+- 桌面构建覆盖 Windows x64、macOS Apple Silicon / Intel x64 和 Linux x64。
 - Linux 提供 AppImage、deb 和 rpm，Windows 提供安装程序，macOS 提供 dmg。
 - 桌面端支持正式版与测试版更新通道。
 - Android/iOS 共用 Rust 核心和移动端界面；当前仍处于持续真机与商店发布门禁验证阶段，
   详见 [移动端发布说明](docs/MOBILE_RELEASE.md)。
 
 ## 下载
+
+macOS 新版 Release 的安装包按处理器区分：Intel 选择 `_x64.dmg`，Apple Silicon 选择 `_aarch64.dmg`。
 
 ### 正式版（Stable）
 
