@@ -275,7 +275,10 @@ SftpService
 └── Arc<dyn SftpEventSink>
 ```
 
-上传/下载继续使用最多 1 MiB 的 binary IPC chunk 和 128 KiB relay buffer。目录下载和
+上传使用 512 KiB 的 binary IPC chunk（后端最多 1 MiB），relay 使用 1 MiB 检查点；连续传输
+复用文件句柄及 SFTP 有界读写流水线，确认写入后持久化检查点。传输不计算内容摘要；中断恢复
+根据源文件大小、修改时间、暂存文件大小和确认偏移检查，覆盖目标通过大小和修改时间检测变更。
+正常完成和恢复不回读已传内容，重复上传块按需逐字节核对。目录下载和
 remote-to-remote archive 使用有限磁盘 staging，再流式压缩/上传；不会把整棵目录及压缩包同时
 驻留内存。shutdown 会取消并等待 connection/transfer workers，清理临时文件。
 

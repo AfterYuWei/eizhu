@@ -23,6 +23,49 @@ pub(crate) enum FileBackend {
 pub(crate) type BackendReader = Box<dyn tokio::io::AsyncRead + Unpin + Send>;
 pub(crate) type BackendWriter = Box<dyn tokio::io::AsyncWrite + Unpin + Send>;
 
+/// A transfer keeps its handle open so SFTP read-ahead and write pipelining survive
+/// checkpoint boundaries. A checkpoint is acknowledged only after flush/sync.
+pub(super) enum TransferFile {
+    Local(tokio::fs::File),
+    Remote(russh_sftp::client::fs::File),
+}
+
+impl TransferFile {
+    pub async fn read_chunk(&mut self, length: usize) -> Result<Vec<u8>, SftpError> {
+        let mut bytes = vec![0; length];
+        match self {
+            Self::Local(file) => file
+                .read_exact(&mut bytes)
+                .await
+                .map_err(|error| SftpError::transfer(error.to_string()))?,
+            Self::Remote(file) => file.read_exact(&mut bytes).await.map_err(file_error)?,
+        };
+        Ok(bytes)
+    }
+
+    pub async fn write_checkpoint(&mut self, bytes: &[u8]) -> Result<(), SftpError> {
+        match self {
+            Self::Local(file) => {
+                file.write_all(bytes).await.map_err(file_error)?;
+                file.sync_data().await.map_err(file_error)
+            }
+            Self::Remote(file) => {
+                file.write_all(bytes).await.map_err(file_error)?;
+                // russh-sftp flush waits for every WRITE status and performs
+                // fsync@openssh.com when supported; a second sync is redundant.
+                file.flush().await.map_err(file_error)
+            }
+        }
+    }
+
+    pub async fn close(&mut self) -> Result<(), SftpError> {
+        match self {
+            Self::Local(file) => file.shutdown().await.map_err(file_error),
+            Self::Remote(file) => file.shutdown().await.map_err(file_error),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub(crate) struct FileInfo {
     pub name: String,
@@ -348,13 +391,12 @@ impl FileBackend {
         }
     }
 
-    /// Acknowledged, seekable writes never truncate the original destination.
-    pub async fn write_chunk_at(
+    /// Opening a staging writer never truncates the original destination.
+    pub async fn open_transfer_write(
         &self,
         path: &str,
         offset: u64,
-        data: &[u8],
-    ) -> Result<(), SftpError> {
+    ) -> Result<TransferFile, SftpError> {
         match self {
             Self::Local => {
                 let mut file = tokio::fs::OpenOptions::new()
@@ -365,8 +407,7 @@ impl FileBackend {
                 file.seek(std::io::SeekFrom::Start(offset))
                     .await
                     .map_err(file_error)?;
-                file.write_all(data).await.map_err(file_error)?;
-                file.sync_data().await.map_err(file_error)
+                Ok(TransferFile::Local(file))
             }
             Self::Remote { sftp, .. } => {
                 let mut file = sftp
@@ -376,21 +417,15 @@ impl FileBackend {
                 file.seek(std::io::SeekFrom::Start(offset))
                     .await
                     .map_err(file_error)?;
-                file.write_all(data).await.map_err(file_error)?;
-                file.flush().await.map_err(file_error)?;
-                file.sync_all().await.map_err(sftp_error)?;
-                file.close().await.map_err(file_error)
+                Ok(TransferFile::Remote(file))
             }
         }
     }
-    /// Read a bounded range and await remote CLOSE, including when READ fails.
-    pub async fn read_chunk_at(
+    pub async fn open_transfer_read(
         &self,
         path: &str,
         offset: u64,
-        length: usize,
-    ) -> Result<Vec<u8>, SftpError> {
-        let mut bytes = vec![0; length];
+    ) -> Result<TransferFile, SftpError> {
         match self {
             Self::Local => {
                 let mut file = tokio::fs::File::open(local_files::path_from_api(path))
@@ -399,29 +434,14 @@ impl FileBackend {
                 file.seek(std::io::SeekFrom::Start(offset))
                     .await
                     .map_err(file_error)?;
-                file.read_exact(&mut bytes)
-                    .await
-                    .map_err(|e| SftpError::transfer(e.to_string()))?;
-                Ok(bytes)
+                Ok(TransferFile::Local(file))
             }
             Self::Remote { sftp, .. } => {
                 let mut file = sftp.open(path).await.map_err(sftp_error)?;
-                let result = async {
-                    file.seek(std::io::SeekFrom::Start(offset))
-                        .await
-                        .map_err(file_error)?;
-                    file.read_exact(&mut bytes).await.map_err(file_error)?;
-                    Ok::<_, SftpError>(bytes)
-                }
-                .await;
-                let closed = file.close().await.map_err(file_error);
-                match result {
-                    Ok(bytes) => {
-                        closed?;
-                        Ok(bytes)
-                    }
-                    Err(error) => Err(error),
-                }
+                file.seek(std::io::SeekFrom::Start(offset))
+                    .await
+                    .map_err(file_error)?;
+                Ok(TransferFile::Remote(file))
             }
         }
     }
@@ -490,7 +510,6 @@ impl FileBackend {
                     .map_err(sftp_error)?;
                 file.write_all(data).await.map_err(file_error)?;
                 file.flush().await.map_err(file_error)?;
-                file.sync_all().await.map_err(sftp_error)?;
                 file.close().await.map_err(file_error)
             }
         }
@@ -570,6 +589,140 @@ async fn posix_rename(raw: &RawSftpSession, temp: &str, target: &str) -> Result<
         _ => Err("服务器未确认安全替换".into()),
     }
 }
+#[cfg(test)]
+mod transfer_tests {
+    use super::*;
+    use russh_sftp::protocol::{Handle, Status, Version};
+    use std::{collections::HashMap, sync::Mutex};
+
+    #[derive(Default)]
+    struct State {
+        bytes: Vec<u8>,
+        opens: usize,
+        syncs: usize,
+        closes: usize,
+    }
+    struct Server {
+        state: Arc<Mutex<State>>,
+        reject: &'static str,
+    }
+    fn ok(id: u32) -> Status {
+        Status {
+            id,
+            status_code: StatusCode::Ok,
+            error_message: String::new(),
+            language_tag: String::new(),
+        }
+    }
+    impl russh_sftp::server::Handler for Server {
+        type Error = StatusCode;
+        fn unimplemented(&self) -> Self::Error {
+            StatusCode::OpUnsupported
+        }
+        async fn init(
+            &mut self,
+            _: u32,
+            _: HashMap<String, String>,
+        ) -> Result<Version, Self::Error> {
+            let mut version = Version::new();
+            version
+                .extensions
+                .insert("fsync@openssh.com".into(), "1".into());
+            Ok(version)
+        }
+        async fn open(
+            &mut self,
+            id: u32,
+            _: String,
+            _: OpenFlags,
+            _: FileAttributes,
+        ) -> Result<Handle, Self::Error> {
+            self.state.lock().unwrap().opens += 1;
+            Ok(Handle {
+                id,
+                handle: "file".into(),
+            })
+        }
+        async fn write(
+            &mut self,
+            id: u32,
+            _: String,
+            offset: u64,
+            data: Vec<u8>,
+        ) -> Result<Status, Self::Error> {
+            if self.reject == "write" {
+                return Err(StatusCode::Failure);
+            }
+            let mut state = self.state.lock().unwrap();
+            let offset = offset as usize;
+            let length = (offset + data.len()).max(state.bytes.len());
+            state.bytes.resize(length, 0);
+            state.bytes[offset..offset + data.len()].copy_from_slice(&data);
+            Ok(ok(id))
+        }
+        async fn extended(
+            &mut self,
+            id: u32,
+            request: String,
+            _: Vec<u8>,
+        ) -> Result<Packet, Self::Error> {
+            assert_eq!(request, "fsync@openssh.com");
+            self.state.lock().unwrap().syncs += 1;
+            if self.reject == "sync" {
+                return Err(StatusCode::Failure);
+            }
+            Ok(Packet::Status(ok(id)))
+        }
+        async fn close(&mut self, id: u32, _: String) -> Result<Status, Self::Error> {
+            self.state.lock().unwrap().closes += 1;
+            if self.reject == "close" {
+                return Err(StatusCode::Failure);
+            }
+            Ok(ok(id))
+        }
+    }
+
+    #[tokio::test]
+    async fn remote_checkpoints_reuse_one_handle_sync_once_and_wait_for_close_ack() {
+        for reject in ["", "write", "sync", "close"] {
+            let (client, server) = tokio::io::duplex(64 * 1024);
+            let state = Arc::new(Mutex::new(State::default()));
+            let task = tokio::spawn(russh_sftp::server::run(
+                server,
+                Server {
+                    state: state.clone(),
+                    reject,
+                },
+            ));
+            let session = SftpSession::new(client).await.unwrap();
+            let file = session
+                .open_with_flags("stage", OpenFlags::WRITE)
+                .await
+                .unwrap();
+            let mut writer = TransferFile::Remote(file);
+            let first = vec![19; 512 * 1024];
+            let second = vec![23; 512 * 1024 + 17];
+            let result = writer.write_checkpoint(&first).await;
+            if matches!(reject, "write" | "sync") {
+                assert!(result.is_err(), "{reject} must not confirm a checkpoint");
+            } else {
+                result.unwrap();
+                writer.write_checkpoint(&second).await.unwrap();
+                let closed = writer.close().await;
+                assert_eq!(closed.is_err(), reject == "close");
+                let state = state.lock().unwrap();
+                assert_eq!(state.opens, 1);
+                assert_eq!(state.syncs, 2);
+                assert_eq!(state.closes, 1);
+                assert_eq!(state.bytes, [first, second].concat());
+            }
+            drop(writer);
+            session.close().await.unwrap();
+            task.await.unwrap();
+        }
+    }
+}
+
 #[cfg(test)]
 mod atomic_tests {
     use super::*;

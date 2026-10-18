@@ -63,5 +63,6 @@ describe('移动 SFTP 交互规则', () => {
     expect(summary.active.map((item) => item.id)).toEqual(['one', 'two'])
     expect(summary.failed.map((item) => item.id)).toEqual(['three'])
     expect(summary.progress).toBe(0.125)
+    expect(summarizeMobileTransfers([task('finishing', 'transferring', 100)]).progress).toBe(0.99)
   })
 })

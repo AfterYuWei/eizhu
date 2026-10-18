@@ -21,6 +21,7 @@ import { sftpApi } from '@/api/sftp'
 import { normalizeCommandError } from '@/api/tauri'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import type { TransferTask } from '@/types/sftp'
+import { transferProgress } from '@/lib/transferTasks'
 
 function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
@@ -38,7 +39,7 @@ function formatSpeed(bytesPerSec: number): string {
 function statusMeta(task: TransferTask) {
   switch (task.status) {
     case 'transferring':
-      return { icon: <Loader2 size={12} className="sftp-tx-spin" />, label: '传输中', cls: 'transferring' }
+      return { icon: <Loader2 size={12} className="sftp-tx-spin" />, label: task.transferred >= task.size ? '正在完成' : '传输中', cls: 'transferring' }
     case 'paused':
       return { icon: <Pause size={12} />, label: '已暂停', cls: 'paused' }
     case 'recoverable':
@@ -82,7 +83,7 @@ export function TransferQueue() {
 
   const totalProgress =
     transfers.length > 0
-      ? transfers.reduce((sum, t) => sum + (t.size ? t.transferred / t.size : 0), 0) / transfers.length
+      ? transfers.reduce((sum, t) => sum + transferProgress(t) / 100, 0) / transfers.length
       : 0
 
   return (
@@ -141,7 +142,7 @@ export function TransferQueue() {
         <div className="sftp-tx-list">
           {transfers.map((task) => {
             const meta = statusMeta(task)
-            const pct = task.size ? Math.min(100, Math.round((task.transferred / task.size) * 100)) : 0
+            const pct = transferProgress(task)
             return (
               <div key={task.id} className={`sftp-tx-item ${meta.cls}`}>
                 <span className="sftp-tx-dir">
@@ -161,7 +162,7 @@ export function TransferQueue() {
                 </span>
                 <span className={`sftp-tx-status ${meta.cls}`}>
                   {meta.icon}
-                  {task.status === 'transferring' ? formatSpeed(task.speed) : meta.label}
+                  {task.status === 'transferring' && task.transferred < task.size ? formatSpeed(task.speed) : meta.label}
                 </span>
                 {(['queued', 'transferring'].includes(task.status)) && <Button variant="ghost" size="icon-xs" title="暂停" aria-label={`暂停 ${task.file_name}`} disabled={busy.has(task.id)} onClick={() => void run(task.id, () => pauseTransfer(task.id))}><Pause size={12} /></Button>}
                 {(['paused', 'recoverable'].includes(task.status) || (task.status === 'failed' && task.retryable)) && <Button variant="ghost" size="icon-xs" title={task.status === 'failed' ? '重试' : '继续'} aria-label={`继续 ${task.file_name}`} disabled={busy.has(task.id)} onClick={() => void run(task.id, () => resumeTransfer(task.id))}><Play size={12} /></Button>}
@@ -185,7 +186,7 @@ export function TransferQueue() {
                 )}
                 {(task.error_message || errors[task.id]) && <details className="basis-full px-5 py-1 text-xs text-destructive"><summary>错误详情 {task.error_code && `· ${task.error_code}`}</summary>
                   <p role="alert" className="whitespace-pre-wrap break-all">{errors[task.id] || task.error_message}</p>
-                  <p className="text-muted-foreground">恢复前请连接任务所属服务器。源文件或暂存内容不一致时需重新开始；取消将清理本任务暂存。</p>
+                  <p className="text-muted-foreground">恢复前请连接任务所属服务器。文件大小、修改时间或暂存偏移不一致时需重新开始；取消将清理本任务暂存。</p>
                 </details>}
               </div>
             )

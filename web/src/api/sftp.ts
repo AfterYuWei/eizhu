@@ -149,26 +149,16 @@ export const sftpApi = {
   resumeUpload: async (taskId: string, file: File, restart = false, onTasks?: (tasks: TransferTask[]) => void) => {
     const generation = workspaceGeneration()
     const checkpoint = await invokeCommand<{
-      size: number; last_modified?: number; blocks: { length: number; sha256: string }[]
+      size: number; last_modified?: number | null
     }>('sftp_upload_checkpoint', { taskId })
-    const digests: string[] = []
     if (!restart) {
-      if (file.size !== checkpoint.size || (checkpoint.last_modified !== undefined && file.lastModified !== checkpoint.last_modified)) {
+      if (file.size !== checkpoint.size || (checkpoint.last_modified != null && file.lastModified !== checkpoint.last_modified)) {
         throw new Error('所选文件的大小或修改时间已变化，请选择原文件或重新开始')
-      }
-      let offset = 0
-      for (const block of checkpoint.blocks) {
-        assertWorkspace(generation)
-        const hash = await crypto.subtle.digest('SHA-256', await file.slice(offset, offset + block.length).arrayBuffer())
-        const digest = [...new Uint8Array(hash)].map((byte) => byte.toString(16).padStart(2, '0')).join('')
-        if (digest !== block.sha256) throw new Error('所选文件已传部分发生变化，请选择原文件或重新开始')
-        digests.push(digest)
-        offset += block.length
       }
     }
     assertWorkspace(generation)
     const begin = await invokeCommand<SftpUploadBeginResponse>('sftp_resume_upload', {
-      taskId, size: file.size, lastModified: file.lastModified, digests, restart,
+      taskId, size: file.size, lastModified: file.lastModified, restart,
     })
     assertWorkspace(generation)
     onTasks?.(begin.tasks)
@@ -322,28 +312,42 @@ async function sendUpload(file: Blob, begin: SftpUploadBeginResponse, generation
   const uploadId = begin.upload_id
   const reader = file.stream().getReader()
   let sequence = begin.sequence ?? 0
+  const buffer = new Uint8Array(IPC_CHUNK_BYTES)
+  let buffered = 0
+  const sendChunk = async (chunk: Uint8Array) => {
+    assertWorkspace(generation)
+    if (USE_BASE64_IPC) {
+      await invokeCommand('sftp_upload_chunk_base64', { uploadId, data: bytesToBase64(chunk), sequence })
+    } else {
+      await invoke('sftp_upload_chunk', chunk, { headers: {
+        'x-eizhu-upload-id': uploadId,
+        'x-eizhu-chunk-sequence': String(sequence),
+        ...(generation !== undefined ? { 'x-eizhu-workspace-generation': String(generation) } : {}),
+      } })
+    }
+    assertWorkspace(generation)
+    sequence++
+  }
   try {
     while (true) {
       assertWorkspace(generation)
       const { done, value } = await reader.read()
       assertWorkspace(generation)
       if (done) break
-      for (let offset = 0; offset < value.byteLength; offset += IPC_CHUNK_BYTES) {
-        assertWorkspace(generation)
-        const chunk = value.subarray(offset, offset + IPC_CHUNK_BYTES)
-        if (USE_BASE64_IPC) {
-          await invokeCommand('sftp_upload_chunk_base64', { uploadId, data: bytesToBase64(chunk), sequence })
-        } else {
-          await invoke('sftp_upload_chunk', chunk, { headers: {
-            'x-eizhu-upload-id': uploadId,
-            'x-eizhu-chunk-sequence': String(sequence),
-            ...(generation !== undefined ? { 'x-eizhu-workspace-generation': String(generation) } : {}),
-          } })
+      // File.stream() commonly yields 64 KiB. Coalesce those fragments so each
+      // durable Rust checkpoint and IPC round trip carries a full bounded block.
+      for (let offset = 0; offset < value.byteLength;) {
+        const length = Math.min(IPC_CHUNK_BYTES - buffered, value.byteLength - offset)
+        buffer.set(value.subarray(offset, offset + length), buffered)
+        buffered += length
+        offset += length
+        if (buffered === IPC_CHUNK_BYTES) {
+          await sendChunk(buffer)
+          buffered = 0
         }
-        assertWorkspace(generation)
-        sequence++
       }
     }
+    if (buffered > 0) await sendChunk(buffer.subarray(0, buffered))
     return await invokeCommand<SftpUploadResponse>('sftp_upload_finish', { uploadId })
   } catch (cause) {
     if (generation === workspaceGeneration() && begin.tasks[0]) {

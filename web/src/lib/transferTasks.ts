@@ -1,5 +1,11 @@
 import type { TransferTask } from '@/types/sftp'
 
+/** 100% means the staging file has actually been committed. */
+export function transferProgress(task: TransferTask): number {
+  if (task.status === 'completed') return 100
+  return task.size > 0 ? Math.min(99, Math.floor((task.transferred / task.size) * 100)) : 0
+}
+
 /** Rust owns execution generations and confirmed offsets. Ignore delayed events. */
 export function mergeTransferTasks(current: TransferTask[], incoming: TransferTask[]): TransferTask[] {
   const tasks = new Map(current.map((task) => [task.id, task]))

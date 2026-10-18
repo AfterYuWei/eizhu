@@ -40,6 +40,7 @@ import { documentApi, type DocumentDescriptor } from '@/api/document'
 import { groupApi } from '@/api/group'
 import { sftpApi } from '@/api/sftp'
 import { writeClipboardText } from '@/lib/clipboard'
+import { transferProgress } from '@/lib/transferTasks'
 import { parentPath, type PaneSide, type SftpTab } from '@/store/sftp'
 import {
   isEditableMobileSftpEntry,
@@ -719,11 +720,12 @@ function MobileTransferDrawer({ open, onOpenChange }: { open: boolean; onOpenCha
       <div className="msftp-transfer-list">
         {transfers.map((task) => {
           const active = task.status === 'queued' || task.status === 'transferring'
-          const pct = task.size ? Math.min(100, Math.round(task.transferred / task.size * 100)) : 0
+          const pct = transferProgress(task)
+          const finishing = task.status === 'transferring' && task.transferred >= task.size
           return (
             <div key={task.id} className={`msftp-transfer-item is-${task.status}`}>
               <span className="msftp-transfer-dir">{task.direction === 'upload' ? <ArrowUp /> : task.direction === 'download' ? <ArrowDown /> : <Copy />}</span>
-              <span className="msftp-transfer-copy"><strong>{task.file_name}</strong><small>{active ? `${formatSize(task.transferred)} / ${formatSize(task.size)} · ${formatSize(task.speed)}/s` : task.error_message || transferLabel(task)}</small><span><i style={{ width: `${pct}%` }} /></span></span>
+              <span className="msftp-transfer-copy"><strong>{task.file_name}</strong><small>{finishing ? '正在完成' : active ? `${formatSize(task.transferred)} / ${formatSize(task.size)} · ${formatSize(task.speed)}/s` : task.error_message || transferLabel(task)}</small><span><i style={{ width: `${pct}%` }} /></span></span>
               {active && <button type="button" aria-label={`取消 ${task.file_name}`} onClick={() => void cancelTransfer(task.id)}><X /></button>}
             </div>
           )

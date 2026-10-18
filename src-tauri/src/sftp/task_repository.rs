@@ -31,9 +31,8 @@ pub(super) enum TransferDescriptor {
 }
 
 #[derive(Clone, Serialize, Deserialize)]
-pub(super) struct BlockDigest {
+pub(super) struct BlockCheckpoint {
     pub length: u64,
-    pub sha256: String,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -47,7 +46,7 @@ pub(super) struct FileCheckpoint {
     pub modified: String,
     pub original_target: Option<String>,
     #[serde(default, skip_serializing)]
-    pub blocks: Vec<BlockDigest>,
+    pub blocks: Vec<BlockCheckpoint>,
     pub confirmed_offset: u64,
     pub committed: bool,
     #[serde(default)]
@@ -283,7 +282,7 @@ mod tests {
     #[test]
     fn checkpoint_rows_are_incremental_encrypted_and_transactional() {
         let dir = tempfile::tempdir().unwrap();
-        let (db, _, repository) = state(dir.path());
+        let (db, key, repository) = state(dir.path());
         let mut task = TransferTask::new("task-id".into(), "私有文件".into(), "upload", 8);
         task.execution_generation = 1;
         task.confirmed_offset = 4;
@@ -305,10 +304,7 @@ mod tests {
                 size: 8,
                 modified: "1".into(),
                 original_target: None,
-                blocks: vec![BlockDigest {
-                    length: 4,
-                    sha256: "a".repeat(64),
-                }],
+                blocks: vec![BlockCheckpoint { length: 4 }],
                 confirmed_offset: 4,
                 committed: false,
                 committing: false,
@@ -327,7 +323,8 @@ mod tests {
                 r.get(0)
             })
             .unwrap();
-        assert!(!original.contains(&"a".repeat(64)));
+        assert_eq!(key.decrypt(&original).unwrap(), r#"{"length":4}"#);
+        assert!(!original.contains("length"));
         let metadata: String = connection
             .query_row("SELECT payload FROM local_transfer_files", [], |r| r.get(0))
             .unwrap();
@@ -336,10 +333,7 @@ mod tests {
         record.task.execution_generation = 2;
         record.task.confirmed_offset = 8;
         record.files[0].confirmed_offset = 8;
-        record.files[0].blocks.push(BlockDigest {
-            length: 4,
-            sha256: "b".repeat(64),
-        });
+        record.files[0].blocks.push(BlockCheckpoint { length: 4 });
         assert_eq!(
             repository.save_checkpoint(&record, 0).unwrap_err().code,
             "DB_ERROR"
@@ -378,6 +372,19 @@ mod tests {
                     .get(0))
                 .unwrap(),
             0
+        );
+    }
+
+    #[test]
+    fn legacy_block_digests_are_ignored_without_a_schema_migration() {
+        let block: BlockCheckpoint = serde_json::from_value(serde_json::json!({
+            "length": 512, "sha256": "a".repeat(64),
+        }))
+        .unwrap();
+        assert_eq!(block.length, 512);
+        assert_eq!(
+            serde_json::to_value(block).unwrap(),
+            serde_json::json!({ "length": 512 })
         );
     }
 

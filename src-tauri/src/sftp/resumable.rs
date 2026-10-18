@@ -1,9 +1,11 @@
 //! Tracked, resumable transfers. Checkpoints and offsets are owned exclusively by Rust.
 use super::{
-    backend::{base_name, clean_path, format_time, join_path, local_path_to_api, FileBackend},
+    backend::{
+        base_name, clean_path, format_time, join_path, local_path_to_api, FileBackend, TransferFile,
+    },
     state::SftpService,
     task_repository::{
-        ArchiveCheckpoint, BlockDigest, FileCheckpoint, TransferDescriptor, TransferRecord,
+        ArchiveCheckpoint, BlockCheckpoint, FileCheckpoint, TransferDescriptor, TransferRecord,
         TransferRepository,
     },
     transfer::{
@@ -13,7 +15,6 @@ use super::{
     SftpError, SftpEventSink,
 };
 use crate::error::CommandError;
-use sha2::{Digest, Sha256};
 use std::{
     collections::{HashMap, HashSet},
     path::PathBuf,
@@ -52,6 +53,11 @@ struct UploadHandle {
     generation: u64,
     target: Arc<FileBackend>,
     control: Arc<Control>,
+    io: Arc<Mutex<UploadIo>>,
+}
+struct UploadIo {
+    writer: Option<TransferFile>,
+    meter: SpeedMeter,
 }
 struct EmittedProgress {
     at: Instant,
@@ -95,6 +101,12 @@ async fn bounded<T>(
         })?
         .map_err(io_error)
 }
+async fn close_upload(handle: &UploadHandle) -> Result<(), CommandError> {
+    if let Some(mut writer) = handle.io.lock().await.writer.take() {
+        bounded(writer.close()).await?;
+    }
+    Ok(())
+}
 fn stopped(control: &Control) -> Result<(), CommandError> {
     if control.requested.load(Ordering::Acquire) != 0 {
         Err(CommandError::new("TRANSFER_STOPPED", "任务已停止"))
@@ -111,10 +123,9 @@ fn backend<'a>(backends: &'a Backends, profile: &str) -> Result<&'a FileBackend,
         .retryable()
     })
 }
-async fn signature(
+async fn target_metadata(
     backend: &FileBackend,
     path: &str,
-    control: Option<&Control>,
 ) -> Result<Option<String>, CommandError> {
     let Some(symlink) = bounded(backend.entry_kind(path)).await? else {
         return Ok(None);
@@ -132,23 +143,40 @@ async fn signature(
             "目标是目录，请选择其他文件名",
         ));
     }
-    let mut hasher = Sha256::new();
-    let mut offset = 0;
-    while offset < info.size {
-        if let Some(control) = control {
-            stopped(control)?;
-        }
-        let length = (info.size - offset).min(BLOCK_SIZE as u64) as usize;
-        let bytes = bounded(backend.read_chunk_at(path, offset, length)).await?;
-        hasher.update(bytes);
-        offset += length as u64;
-    }
     Ok(Some(format!(
-        "{}:{}:{}",
+        "{}:{}",
         info.size,
-        format_time(info.modified),
-        hex::encode(hasher.finalize())
+        format_time(info.modified)
     )))
+}
+
+fn checkpoint_offset(file: &FileCheckpoint) -> Result<u64, CommandError> {
+    let mut offset = 0_u64;
+    for block in &file.blocks {
+        if block.length == 0 || block.length > BLOCK_SIZE as u64 {
+            return Err(CommandError::new("CHECKPOINT_INVALID", "分块检查点无效"));
+        }
+        offset = offset
+            .checked_add(block.length)
+            .ok_or_else(|| CommandError::new("CHECKPOINT_INVALID", "检查点偏移溢出"))?;
+    }
+    if offset != file.confirmed_offset || offset > file.size {
+        return Err(CommandError::new("CHECKPOINT_INVALID", "检查点偏移不一致"));
+    }
+    Ok(offset)
+}
+
+fn saved_target_metadata(value: &str) -> &str {
+    // Old checkpoints appended a 64-character content digest. Compare only
+    // their size/mtime prefix so interrupted transfers remain resumable.
+    match value.rsplit_once(':') {
+        Some((metadata, suffix))
+            if suffix.len() == 64 && suffix.bytes().all(|byte| byte.is_ascii_hexdigit()) =>
+        {
+            metadata
+        }
+        _ => value,
+    }
 }
 async fn destination(
     target: &FileBackend,
@@ -372,7 +400,7 @@ impl ResumableTransfers {
         if let TransferDescriptor::Upload { .. } = record.descriptor {
             return Err(CommandError::new(
                 "SOURCE_REQUIRED",
-                "请选择原上传文件并校验后继续",
+                "请选择原上传文件后继续",
             ));
         }
         let (backends, sessions) = self.resolve(state, &record).await?;
@@ -572,7 +600,7 @@ impl ResumableTransfers {
                             output: join_path(&root_api, &format!("archive-{index}.tar.gz")),
                             format: "tar.gz".into(),
                             target_profile: Some(target_profile.clone()),
-                            original_target: signature(target, &final_path, Some(control)).await?,
+                            original_target: target_metadata(target, &final_path).await?,
                             target: final_path,
                             generated: false,
                         });
@@ -729,7 +757,8 @@ impl ResumableTransfers {
         }
         let info = bounded(source.stat(source_path)).await?;
         let target = backend(backends, target_profile)?;
-        let original_target = signature(target, target_path, Some(control)).await?;
+        stopped(control)?;
+        let original_target = target_metadata(target, target_path).await?;
         if original_target.is_some() && !target.supports_atomic_replace() {
             return Err(CommandError::new(
                 "ATOMIC_SAVE_UNSUPPORTED",
@@ -791,7 +820,7 @@ impl ResumableTransfers {
                 self.verify(file, backends, Some(control)).await?;
             }
         }
-        let mut meter = SpeedMeter::new(Instant::now());
+        let mut meter = SpeedMeter::starting_at(record.task.transferred, Instant::now());
         loop {
             stopped(control)?;
             let record = entry.lock().await.clone();
@@ -868,6 +897,10 @@ impl ResumableTransfers {
         backends: &Backends,
         control: Option<&Control>,
     ) -> Result<(), CommandError> {
+        if let Some(control) = control {
+            stopped(control)?;
+        }
+        let offset = checkpoint_offset(file)?;
         let source = backend(backends, &file.source_profile)?;
         let target = backend(backends, &file.target_profile)?;
         let info = bounded(source.stat(&file.source)).await?;
@@ -882,42 +915,21 @@ impl ResumableTransfers {
         } else {
             &file.stage
         };
-        let mut offset = 0;
-        for block in &file.blocks {
-            if let Some(control) = control {
-                stopped(control)?;
-            }
-            if block.length == 0 || block.length > BLOCK_SIZE as u64 {
-                return Err(CommandError::new("CHECKPOINT_INVALID", "分块检查点无效"));
-            }
-            let original =
-                bounded(source.read_chunk_at(&file.source, offset, block.length as usize)).await?;
-            let staged = bounded(target.read_chunk_at(path, offset, block.length as usize)).await?;
-            if hex::encode(Sha256::digest(&original)) != block.sha256 {
-                return Err(CommandError::new(
-                    "SOURCE_CHANGED",
-                    "已传部分的源内容变化，请重新开始",
-                ));
-            }
-            if hex::encode(Sha256::digest(&staged)) != block.sha256 {
-                return Err(CommandError::new(
-                    "STAGING_CHANGED",
-                    "暂存文件内容不一致，请重新开始",
-                ));
-            }
-            offset += block.length;
-        }
-        if offset != file.confirmed_offset || offset > file.size {
-            return Err(CommandError::new("CHECKPOINT_INVALID", "检查点偏移不一致"));
-        }
+        let staged = bounded(target.stat(path)).await?;
         if file.committed {
-            if bounded(target.stat(path)).await?.size != file.size {
+            if staged.is_dir || staged.size != file.size {
                 return Err(CommandError::new(
                     "TARGET_CHANGED",
                     "已完成的目标文件变化，请检查后重新开始",
                 ));
             }
         } else {
+            if staged.is_dir || staged.size < offset {
+                return Err(CommandError::new(
+                    "STAGING_CHANGED",
+                    "暂存文件小于已确认偏移，请重新开始",
+                ));
+            }
             bounded(target.truncate(path, offset)).await?;
         }
         Ok(())
@@ -943,7 +955,9 @@ impl ResumableTransfers {
                 ));
             }
             bounded(target.write_private_new(&file.stage, &[])).await?;
-        } else {
+        } else if file.confirmed_offset == 0 {
+            // Non-empty checkpoints were verified once by run(), before any
+            // directory files are modified.
             self.verify(&file, backends, Some(control)).await?;
         }
         let info = bounded(source.stat(&file.source)).await?;
@@ -953,33 +967,58 @@ impl ResumableTransfers {
                 "源文件已变化，请重新开始",
             ));
         }
-        while file.confirmed_offset < file.size {
-            stopped(control)?;
-            let length = BLOCK_SIZE.min((file.size - file.confirmed_offset) as usize);
-            let bytes =
-                bounded(source.read_chunk_at(&file.source, file.confirmed_offset, length)).await?;
-            #[cfg(test)]
-            if let Some(error) = self.write_fault.lock().await.take() {
-                return Err(error);
+        let mut reader =
+            bounded(source.open_transfer_read(&file.source, file.confirmed_offset)).await?;
+        let mut writer =
+            bounded(target.open_transfer_write(&file.stage, file.confirmed_offset)).await?;
+        let result = async {
+            while file.confirmed_offset < file.size {
+                stopped(control)?;
+                let length = BLOCK_SIZE.min((file.size - file.confirmed_offset) as usize);
+                let bytes = bounded(reader.read_chunk(length)).await?;
+                #[cfg(test)]
+                if let Some(error) = self.write_fault.lock().await.take() {
+                    return Err(error);
+                }
+                bounded(writer.write_checkpoint(&bytes)).await?;
+                file.blocks.push(BlockCheckpoint {
+                    length: length as u64,
+                });
+                file.confirmed_offset += length as u64;
+                let mut record = entry.lock().await;
+                let mut next = record.clone();
+                next.files[index] = file.clone();
+                next.task.transferred = next.files.iter().map(|f| f.confirmed_offset).sum();
+                next.task.confirmed_offset = next.task.transferred;
+                next.task.speed = meter.record(next.task.transferred, Instant::now());
+                self.save_checkpoint(&next, index, events)?;
+                *record = next;
             }
-            bounded(target.write_chunk_at(&file.stage, file.confirmed_offset, &bytes[..length]))
-                .await?;
-            file.blocks.push(BlockDigest {
-                length: length as u64,
-                sha256: hex::encode(Sha256::digest(&bytes[..length])),
-            });
-            file.confirmed_offset += length as u64;
-            let mut record = entry.lock().await;
-            let mut next = record.clone();
-            next.files[index] = file.clone();
-            next.task.transferred = next.files.iter().map(|f| f.confirmed_offset).sum();
-            next.task.confirmed_offset = next.task.transferred;
-            next.task.speed = meter.record(next.task.transferred, Instant::now());
-            self.save_checkpoint(&next, index, events)?;
-            *record = next;
+            Ok::<_, CommandError>(())
         }
+        .await;
+        let source_closed = bounded(reader.close()).await;
+        let target_closed = bounded(writer.close()).await;
+        result?;
+        source_closed?;
+        target_closed?;
         stopped(control)?;
-        self.verify(&file, backends, Some(control)).await?;
+        // All checkpoint writes have been acknowledged and synced. Re-reading
+        // both complete files here doubles network traffic after progress ends.
+        // Resume checks source metadata and the confirmed staging offset.
+        let info = bounded(source.stat(&file.source)).await?;
+        if info.size != file.size || format_time(info.modified) != file.modified {
+            return Err(CommandError::new(
+                "SOURCE_CHANGED",
+                "源文件已变化，请重新开始",
+            ));
+        }
+        if bounded(target.stat(&file.stage)).await?.size != file.size {
+            return Err(CommandError::new(
+                "STAGING_CHANGED",
+                "暂存文件大小不一致，请重新开始",
+            ));
+        }
         file.committing = true;
         {
             let mut record = entry.lock().await;
@@ -1003,7 +1042,11 @@ impl ResumableTransfers {
         target: &FileBackend,
         control: Option<&Control>,
     ) -> Result<(), CommandError> {
-        if signature(target, &file.target, control).await? != file.original_target {
+        if let Some(control) = control {
+            stopped(control)?;
+        }
+        let original = file.original_target.as_deref().map(saved_target_metadata);
+        if target_metadata(target, &file.target).await?.as_deref() != original {
             return Err(CommandError::new(
                 "TARGET_CHANGED",
                 "目标文件在传输期间变化，请检查冲突后重新开始",
@@ -1011,6 +1054,9 @@ impl ResumableTransfers {
         }
         if file.original_target.is_some() {
             bounded(target.copy_permissions(&file.target, &file.stage)).await?;
+        }
+        if let Some(control) = control {
+            stopped(control)?;
         }
         bounded(target.commit_staged(&file.stage, &file.target, file.original_target.is_some()))
             .await
@@ -1036,11 +1082,20 @@ impl ResumableTransfers {
         if let Some(worker) = self.workers.lock().await.remove(id) {
             let _ = worker.await;
         }
-        self.uploads
-            .lock()
-            .await
-            .retain(|_, handle| !Arc::ptr_eq(&handle.entry, &entry));
+        let handles = {
+            let mut uploads = self.uploads.lock().await;
+            let handles: Vec<_> = uploads
+                .values()
+                .filter(|handle| Arc::ptr_eq(&handle.entry, &entry))
+                .cloned()
+                .collect();
+            uploads.retain(|_, handle| !Arc::ptr_eq(&handle.entry, &entry));
+            handles
+        };
         let mut record = entry.lock().await;
+        for handle in handles {
+            let _ = close_upload(&handle).await;
+        }
         if let Some(control) = self.controls.lock().await.get(id).cloned() {
             control.permit.lock().await.take();
         }
@@ -1234,7 +1289,7 @@ impl ResumableTransfers {
         else {
             return Ok(None);
         };
-        let original_target = signature(&target, &path, None).await?;
+        let original_target = target_metadata(&target, &path).await?;
         if original_target.is_some() && !target.supports_atomic_replace() {
             return Err(CommandError::new(
                 "ATOMIC_SAVE_UNSUPPORTED",
@@ -1333,6 +1388,10 @@ impl ResumableTransfers {
                 generation: task.execution_generation,
                 target,
                 control,
+                io: Arc::new(Mutex::new(UploadIo {
+                    writer: None,
+                    meter: SpeedMeter::starting_at(task.transferred, Instant::now()),
+                })),
             },
         );
         Ok((token, task))
@@ -1384,11 +1443,24 @@ impl ResumableTransfers {
             stopped(&handle.control)?;
             let file = &record.files[0];
             let index = sequence.unwrap_or(file.blocks.len() as u64);
-            let digest = hex::encode(Sha256::digest(bytes));
             if index < file.blocks.len() as u64 {
                 let block = &file.blocks[index as usize];
-                if block.length == bytes.len() as u64 && block.sha256 == digest {
-                    return Ok(file.confirmed_offset);
+                if block.length == bytes.len() as u64 {
+                    // Only a retransmitted block needs a byte comparison. The
+                    // normal upload/resume path never re-reads confirmed data.
+                    let offset: u64 = file.blocks[..index as usize]
+                        .iter()
+                        .map(|block| block.length)
+                        .sum();
+                    let mut reader =
+                        bounded(handle.target.open_transfer_read(&file.stage, offset)).await?;
+                    let previous = bounded(reader.read_chunk(bytes.len())).await;
+                    let closed = bounded(reader.close()).await;
+                    let previous = previous?;
+                    closed?;
+                    if previous == bytes {
+                        return Ok(file.confirmed_offset);
+                    }
                 }
                 return Err(CommandError::new(
                     "UPLOAD_BLOCK_MISMATCH",
@@ -1408,20 +1480,32 @@ impl ResumableTransfers {
             if let Some(error) = self.write_fault.lock().await.take() {
                 return Err(error);
             }
+            let mut io = handle.io.lock().await;
+            if io.writer.is_none() {
+                io.writer = Some(
+                    bounded(
+                        handle
+                            .target
+                            .open_transfer_write(&file.stage, file.confirmed_offset),
+                    )
+                    .await?,
+                );
+            }
             bounded(
-                handle
-                    .target
-                    .write_chunk_at(&file.stage, file.confirmed_offset, bytes),
+                io.writer
+                    .as_mut()
+                    .expect("upload writer")
+                    .write_checkpoint(bytes),
             )
             .await?;
             let mut next = record.clone();
-            next.files[0].blocks.push(BlockDigest {
+            next.files[0].blocks.push(BlockCheckpoint {
                 length: bytes.len() as u64,
-                sha256: digest,
             });
             next.files[0].confirmed_offset += bytes.len() as u64;
             next.task.transferred = next.files[0].confirmed_offset;
             next.task.confirmed_offset = next.task.transferred;
+            next.task.speed = io.meter.record(next.task.transferred, Instant::now());
             self.save_checkpoint(&next, 0, events)?;
             let offset = next.task.confirmed_offset;
             *record = next;
@@ -1430,6 +1514,7 @@ impl ResumableTransfers {
         .await;
         if let Err(error) = &result {
             if !matches!(error.code, "TRANSFER_STOPPED" | "TRANSFER_STALE") {
+                let _ = close_upload(&handle).await;
                 handle.control.permit.lock().await.take();
                 self.upload_failure(&handle.entry, error, events).await?;
             }
@@ -1463,8 +1548,13 @@ impl ResumableTransfers {
                     "文件尚未完整上传",
                 ));
             }
-            self.verify_upload_stage(&file, &handle.target, Some(&handle.control))
-                .await?;
+            close_upload(&handle).await?;
+            if bounded(handle.target.stat(&file.stage)).await?.size != file.size {
+                return Err(CommandError::new(
+                    "STAGING_CHANGED",
+                    "暂存文件大小不一致，请重新开始",
+                ));
+            }
             let mut next = record.clone();
             next.files[0].committing = true;
             self.save_checkpoint(&next, 0, events)?;
@@ -1485,7 +1575,10 @@ impl ResumableTransfers {
             self.uploads.lock().await.remove(token);
         }
         if let Err(error) = &result {
-            self.upload_failure(&handle.entry, error, events).await?;
+            let _ = close_upload(&handle).await;
+            if !matches!(error.code, "TRANSFER_STOPPED" | "TRANSFER_STALE") {
+                self.upload_failure(&handle.entry, error, events).await?;
+            }
         }
         result
     }
@@ -1495,7 +1588,12 @@ impl ResumableTransfers {
         target: &FileBackend,
         control: Option<&Control>,
     ) -> Result<(), CommandError> {
-        let committed = file.committing && bounded(target.entry_kind(&file.stage)).await?.is_none();
+        if let Some(control) = control {
+            stopped(control)?;
+        }
+        let offset = checkpoint_offset(file)?;
+        let committed = (file.committing || file.committed)
+            && bounded(target.entry_kind(&file.stage)).await?.is_none();
         if committed && file.confirmed_offset != file.size {
             return Err(CommandError::new(
                 "CHECKPOINT_INVALID",
@@ -1503,32 +1601,19 @@ impl ResumableTransfers {
             ));
         }
         let path = if committed { &file.target } else { &file.stage };
-        let mut offset = 0;
-        for block in &file.blocks {
-            if let Some(control) = control {
-                stopped(control)?;
-            }
-            if block.length == 0 || block.length > BLOCK_SIZE as u64 {
-                return Err(CommandError::new("CHECKPOINT_INVALID", "上传检查点无效"));
-            }
-            let data = bounded(target.read_chunk_at(path, offset, block.length as usize)).await?;
-            if hex::encode(Sha256::digest(data)) != block.sha256 {
-                return Err(CommandError::new(
-                    "STAGING_CHANGED",
-                    "暂存文件已损坏，请重新开始",
-                ));
-            }
-            offset += block.length;
-        }
-        if offset != file.confirmed_offset || offset > file.size {
-            return Err(CommandError::new("CHECKPOINT_INVALID", "上传偏移无效"));
-        }
+        let staged = bounded(target.stat(path)).await?;
         if committed {
-            if bounded(target.stat(path)).await?.size != file.size {
+            if staged.is_dir || staged.size != file.size {
                 return Err(CommandError::new("STAGING_CHANGED", "提交后的文件大小变化"));
             }
             Ok(())
         } else {
+            if staged.is_dir || staged.size < offset {
+                return Err(CommandError::new(
+                    "STAGING_CHANGED",
+                    "暂存文件小于已确认偏移，请重新开始",
+                ));
+            }
             bounded(target.truncate(&file.stage, offset)).await
         }
     }
@@ -1544,7 +1629,9 @@ impl ResumableTransfers {
             return Err(CommandError::new("VALIDATION", "任务不是浏览器上传"));
         };
         Ok(
-            serde_json::json!({"size":size,"last_modified":last_modified,"blocks":record.files[0].blocks,"task":record.task}),
+            // Preserve the old response shape without asking old clients to
+            // hash the selected file's prefix.
+            serde_json::json!({"size":size,"last_modified":last_modified,"blocks":[],"task":record.task}),
         )
     }
     #[allow(clippy::too_many_arguments)]
@@ -1554,7 +1641,6 @@ impl ResumableTransfers {
         id: &str,
         size: u64,
         last_modified: Option<u64>,
-        digests: Vec<String>,
         restart: bool,
     ) -> Result<(String, TransferTask, u64, u64), CommandError> {
         let operation = self.operations.lock().await;
@@ -1576,15 +1662,7 @@ impl ResumableTransfers {
             return Err(CommandError::new("VALIDATION", "任务不是上传"));
         };
         let profile = target_profile.clone();
-        if !restart
-            && (size != *expected
-                || (modified.is_some() && modified != &last_modified)
-                || digests.len() != record.files[0].blocks.len()
-                || digests
-                    .iter()
-                    .zip(&record.files[0].blocks)
-                    .any(|(digest, block)| digest != &block.sha256))
-        {
+        if !restart && (size != *expected || (modified.is_some() && modified != &last_modified)) {
             return Err(CommandError::new(
                 "SOURCE_CHANGED",
                 "所选文件与检查点不一致，请重新开始",
@@ -1612,7 +1690,7 @@ impl ResumableTransfers {
                 let mut next=owned.lock().await.clone();
                 if restart {
                     let backends=Backends::from([(profile.clone(),target.clone()),("local".into(),Arc::new(FileBackend::Local))]);manager.cleanup(&mut next,&backends).await?;stopped(&control)?;
-                    let original=signature(&target,&next.files[0].target,Some(&control)).await?;
+                    let original=target_metadata(&target,&next.files[0].target).await?;
                     if original.is_some() && !target.supports_atomic_replace() {return Err(CommandError::new("ATOMIC_SAVE_UNSUPPORTED","服务器不支持安全替换，请选择其他文件名"))}
                     next.files[0].original_target=original;next.files[0].blocks.clear();next.files[0].confirmed_offset=0;next.files[0].size=size;next.files[0].committing=false;next.files[0].committed=false;next.files[0].modified=last_modified.map(|v|v.to_string()).unwrap_or_default();next.task.size=size;next.task.transferred=0;next.task.confirmed_offset=0;
                     if let TransferDescriptor::Upload {size:old,last_modified:mtime,..}=&mut next.descriptor {*old=size;*mtime=last_modified;}
@@ -1819,18 +1897,11 @@ mod tests {
         assert_eq!(f.service.transfers.semaphore.available_permits(), 5);
     }
     #[tokio::test]
-    async fn changed_source_prefix_is_rejected_even_with_identical_size_and_timestamp() {
+    async fn changed_source_size_stops_resume_and_requires_restart() {
         let mut f = fixture().await;
         let (id, source, target, mut content) = pause_file(&mut f).await;
-        let timestamp = std::fs::metadata(&source).unwrap().modified().unwrap();
-        content[0] = 99;
+        content.push(99);
         tokio::fs::write(&source, &content).await.unwrap();
-        std::fs::File::options()
-            .write(true)
-            .open(&source)
-            .unwrap()
-            .set_times(std::fs::FileTimes::new().set_modified(timestamp))
-            .unwrap();
         f.service
             .transfers
             .resume(&f.service, &id, false)
@@ -1848,7 +1919,7 @@ mod tests {
         assert_eq!(tokio::fs::read(target).await.unwrap(), content);
     }
     #[tokio::test]
-    async fn staging_corruption_stops_resume_and_cancellation_cleans_owned_files() {
+    async fn truncated_staging_stops_resume_and_cancellation_cleans_owned_files() {
         let mut f = fixture().await;
         let (id, _, target, _) = pause_file(&mut f).await;
         let record = f
@@ -1861,7 +1932,7 @@ mod tests {
             .await
             .clone();
         FileBackend::Local
-            .write_chunk_at(&record.files[0].stage, 0, b"bad")
+            .truncate(&record.files[0].stage, record.files[0].confirmed_offset - 1)
             .await
             .unwrap();
         f.service
@@ -1884,7 +1955,7 @@ mod tests {
         assert_eq!(f.service.transfers.semaphore.available_permits(), 5);
     }
     #[tokio::test]
-    async fn browser_upload_validates_prefix_deduplicates_blocks_and_releases_permits() {
+    async fn browser_upload_checks_metadata_deduplicates_blocks_and_releases_permits() {
         let f = fixture().await;
         let dir = f.dir.path().join("upload");
         tokio::fs::create_dir(&dir).await.unwrap();
@@ -1913,6 +1984,7 @@ mod tests {
                 .unwrap(),
             4
         );
+        let old_handle = f.service.transfers.uploads.lock().await[&token].clone();
         assert_eq!(
             f.service
                 .transfers
@@ -1926,6 +1998,7 @@ mod tests {
             .pause(&task.id, f.service.events.as_ref())
             .await
             .unwrap();
+        assert!(old_handle.io.lock().await.writer.is_none());
         assert_eq!(f.service.transfers.semaphore.available_permits(), 5);
         assert!(f
             .service
@@ -1936,14 +2009,7 @@ mod tests {
         assert_eq!(
             f.service
                 .transfers
-                .resume_upload(
-                    &f.service,
-                    &task.id,
-                    8,
-                    Some(42),
-                    vec!["wrong".into()],
-                    false
-                )
+                .resume_upload(&f.service, &task.id, 8, Some(43), false)
                 .await
                 .unwrap_err()
                 .code,
@@ -1952,14 +2018,7 @@ mod tests {
         let (token, next, offset, sequence) = f
             .service
             .transfers
-            .resume_upload(
-                &f.service,
-                &task.id,
-                8,
-                Some(42),
-                vec![hex::encode(Sha256::digest(b"abcd"))],
-                false,
-            )
+            .resume_upload(&f.service, &task.id, 8, Some(42), false)
             .await
             .unwrap();
         assert_eq!((offset, sequence), (4, 1));
@@ -1976,6 +2035,226 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(tokio::fs::read(target).await.unwrap(), b"abcdefgh");
+        assert_eq!(f.service.transfers.semaphore.available_permits(), 5);
+    }
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn legacy_overwrite_checkpoint_resumes_without_reading_stage_or_old_target() {
+        use std::os::unix::fs::PermissionsExt;
+        let mut f = fixture().await;
+        let target = f.dir.path().join("data.bin");
+        tokio::fs::write(&target, b"original").await.unwrap();
+        tokio::fs::set_permissions(&target, std::fs::Permissions::from_mode(0o200))
+            .await
+            .unwrap();
+        let (token, task) = f
+            .service
+            .transfers
+            .begin_upload(
+                &f.service,
+                &f.session,
+                "data.bin".into(),
+                f.dir.path().display().to_string(),
+                "overwrite",
+                8,
+                Some(42),
+            )
+            .await
+            .unwrap()
+            .unwrap();
+        f.service
+            .transfers
+            .upload_chunk(&token, b"abcd", Some(0), f.service.events.as_ref())
+            .await
+            .unwrap();
+        f.service
+            .transfers
+            .pause(&task.id, f.service.events.as_ref())
+            .await
+            .unwrap();
+        let entry = f.service.transfers.entry(&task.id).await.unwrap();
+        {
+            let mut record = entry.lock().await;
+            let metadata = record.files[0].original_target.as_ref().unwrap();
+            record.files[0].original_target = Some(format!("{metadata}:{}", "a".repeat(64)));
+            tokio::fs::set_permissions(
+                &record.files[0].stage,
+                std::fs::Permissions::from_mode(0o200),
+            )
+            .await
+            .unwrap();
+            f.service.transfers.repository.save(&record).unwrap();
+        }
+        f.service.transfers =
+            ResumableTransfers::new(TransferRepository::new(f.db.clone(), f.key.clone()).unwrap())
+                .unwrap();
+        let checkpoint = f
+            .service
+            .transfers
+            .upload_checkpoint(&task.id)
+            .await
+            .unwrap();
+        assert_eq!(checkpoint["blocks"], serde_json::json!([]));
+        let (token, _, offset, sequence) = f
+            .service
+            .transfers
+            .resume_upload(&f.service, &task.id, 8, Some(42), false)
+            .await
+            .unwrap();
+        assert_eq!((offset, sequence), (4, 1));
+        f.service
+            .transfers
+            .upload_chunk(&token, b"efgh", Some(sequence), f.service.events.as_ref())
+            .await
+            .unwrap();
+        let done = f
+            .service
+            .transfers
+            .finish_upload(&token, f.service.events.as_ref())
+            .await
+            .unwrap();
+        assert_eq!(done.status, "completed");
+        tokio::fs::set_permissions(&target, std::fs::Permissions::from_mode(0o600))
+            .await
+            .unwrap();
+        assert_eq!(tokio::fs::read(&target).await.unwrap(), b"abcdefgh");
+        assert_eq!(f.service.transfers.semaphore.available_permits(), 5);
+    }
+
+    #[tokio::test]
+    async fn duplicate_upload_block_with_different_bytes_is_rejected_without_a_digest() {
+        let f = fixture().await;
+        let (token, task) = f
+            .service
+            .transfers
+            .begin_upload(
+                &f.service,
+                &f.session,
+                "new.bin".into(),
+                f.dir.path().display().to_string(),
+                "ask",
+                4,
+                None,
+            )
+            .await
+            .unwrap()
+            .unwrap();
+        f.service
+            .transfers
+            .upload_chunk(&token, b"done", Some(0), f.service.events.as_ref())
+            .await
+            .unwrap();
+        let error = f
+            .service
+            .transfers
+            .upload_chunk(&token, b"nope", Some(0), f.service.events.as_ref())
+            .await
+            .unwrap_err();
+        assert_eq!(error.code, "UPLOAD_BLOCK_MISMATCH");
+        let entry = f.service.transfers.entry(&task.id).await.unwrap();
+        let record = entry.lock().await;
+        assert_eq!(record.task.confirmed_offset, 4);
+        assert_eq!(record.files[0].blocks.len(), 1);
+        assert!(!f.dir.path().join("new.bin").exists());
+        assert_eq!(f.service.transfers.semaphore.available_permits(), 5);
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn upload_finish_commits_acknowledged_data_without_reading_it_back() {
+        use std::os::unix::fs::PermissionsExt;
+        let f = fixture().await;
+        let bytes = vec![37; BLOCK_SIZE + 17];
+        let (token, task) = f
+            .service
+            .transfers
+            .begin_upload(
+                &f.service,
+                &f.session,
+                "large.bin".into(),
+                f.dir.path().display().to_string(),
+                "ask",
+                bytes.len() as u64,
+                None,
+            )
+            .await
+            .unwrap()
+            .unwrap();
+        for (sequence, chunk) in bytes.chunks(BLOCK_SIZE).enumerate() {
+            f.service
+                .transfers
+                .upload_chunk(
+                    &token,
+                    chunk,
+                    Some(sequence as u64),
+                    f.service.events.as_ref(),
+                )
+                .await
+                .unwrap();
+        }
+        let handle = f.service.transfers.uploads.lock().await[&token].clone();
+        assert!(handle.io.lock().await.writer.is_some());
+        let entry = f.service.transfers.entry(&task.id).await.unwrap();
+        let stage = entry.lock().await.files[0].stage.clone();
+        // A write-only destination must not require a full download to finish.
+        tokio::fs::set_permissions(&stage, std::fs::Permissions::from_mode(0o200))
+            .await
+            .unwrap();
+        let done = f
+            .service
+            .transfers
+            .finish_upload(&token, f.service.events.as_ref())
+            .await
+            .unwrap();
+        assert_eq!(done.status, "completed");
+        assert_eq!(done.confirmed_offset, bytes.len() as u64);
+        assert!(handle.io.lock().await.writer.is_none());
+        assert_eq!(f.service.transfers.semaphore.available_permits(), 5);
+        let target = f.dir.path().join("large.bin");
+        tokio::fs::set_permissions(&target, std::fs::Permissions::from_mode(0o600))
+            .await
+            .unwrap();
+        assert_eq!(tokio::fs::read(&target).await.unwrap(), bytes);
+        assert!(!PathBuf::from(stage).exists());
+    }
+
+    #[tokio::test]
+    async fn upload_finish_rejects_wrong_staging_size_and_preserves_destination() {
+        let f = fixture().await;
+        let target = f.dir.path().join("data.bin");
+        tokio::fs::write(&target, b"original").await.unwrap();
+        let (token, task) = f
+            .service
+            .transfers
+            .begin_upload(
+                &f.service,
+                &f.session,
+                "data.bin".into(),
+                f.dir.path().display().to_string(),
+                "overwrite",
+                4,
+                None,
+            )
+            .await
+            .unwrap()
+            .unwrap();
+        f.service
+            .transfers
+            .upload_chunk(&token, b"done", Some(0), f.service.events.as_ref())
+            .await
+            .unwrap();
+        let entry = f.service.transfers.entry(&task.id).await.unwrap();
+        let stage = entry.lock().await.files[0].stage.clone();
+        FileBackend::Local.truncate(&stage, 2).await.unwrap();
+        let error = f
+            .service
+            .transfers
+            .finish_upload(&token, f.service.events.as_ref())
+            .await
+            .unwrap_err();
+        assert_eq!(error.code, "STAGING_CHANGED");
+        assert_eq!(entry.lock().await.task.status, "failed");
+        assert_eq!(tokio::fs::read(&target).await.unwrap(), b"original");
         assert_eq!(f.service.transfers.semaphore.available_permits(), 5);
     }
     #[tokio::test]
@@ -2018,14 +2297,7 @@ mod tests {
         let (token, task, offset, _) = f
             .service
             .transfers
-            .resume_upload(
-                &f.service,
-                &task.id,
-                4,
-                Some(12),
-                vec![hex::encode(Sha256::digest(b"done"))],
-                false,
-            )
+            .resume_upload(&f.service, &task.id, 4, Some(12), false)
             .await
             .unwrap();
         assert!(token.is_empty());

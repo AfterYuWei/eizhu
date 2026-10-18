@@ -1,11 +1,17 @@
 import { describe, it, expect } from 'vitest'
-import { mergeTransferTasks } from './transferTasks'
+import { mergeTransferTasks, transferProgress } from './transferTasks'
 import type { TransferTask } from '@/types/sftp'
 const task = (changes: Partial<TransferTask> = {}): TransferTask => ({
   id: 'one', file_name: '中文 空格.txt', direction: 'transfer', size: 8, transferred: 4,
   speed: 0, started_at: 1, status: 'paused', execution_generation: 2, ...changes,
 })
 describe('任务检查点合并', () => {
+  it('只有提交完成才显示 100%，包括空文件', () => {
+    expect(transferProgress(task({ status: 'transferring', size: 1000, transferred: 999 }))).toBe(99)
+    expect(transferProgress(task({ status: 'transferring', transferred: 8 }))).toBe(99)
+    expect(transferProgress(task({ status: 'completed', transferred: 8 }))).toBe(100)
+    expect(transferProgress(task({ status: 'completed', size: 0, transferred: 0 }))).toBe(100)
+  })
   it('丢弃旧执行代次、结束后的迟到进度和回退偏移', () => {
     const current = task()
     expect(mergeTransferTasks([current], [task({ status: 'transferring', execution_generation: 1 })])).toEqual([current])

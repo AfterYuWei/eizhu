@@ -508,7 +508,7 @@ pub(crate) async fn sftp_resume_upload(
     task_id: String,
     size: u64,
     last_modified: Option<u64>,
-    digests: Vec<String>,
+    digests: Option<Vec<String>>,
     restart: bool,
     workspace_generation: Option<u64>,
 ) -> Result<serde_json::Value, CommandError> {
@@ -516,5 +516,7 @@ pub(crate) async fn sftp_resume_upload(
         .current(workspace_generation)?
         .sftp
         .clone();
-    sftp::sftp_resume_upload(&service, task_id, size, last_modified, digests, restart).await
+    // Accept the legacy IPC field without using content digests.
+    let _ = digests;
+    sftp::sftp_resume_upload(&service, task_id, size, last_modified, restart).await
 }

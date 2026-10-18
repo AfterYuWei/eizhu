@@ -102,15 +102,70 @@ describe('sftpApi', () => {
     expect(pulls.every(([, args]) => args.maxBytes === 512 * 1024)).toBe(true)
     expect(invokeMock).toHaveBeenCalledWith('sftp_download_close', { taskId: 'tx-3' })
   })
+
+  it('合并浏览器小块，等待写入确认后才发下一块或提交', async () => {
+    const bytes = Uint8Array.from({ length: 1024 * 1024 + 7 }, (_, index) => index % 251)
+    const file = new File([bytes], 'large.bin')
+    Object.defineProperty(file, 'stream', { value: () => new ReadableStream({
+      start(controller) {
+        for (let offset = 0; offset < bytes.length; offset += 64 * 1024) {
+          controller.enqueue(bytes.subarray(offset, offset + 64 * 1024))
+        }
+        controller.close()
+      },
+    }) })
+    let acknowledge!: () => void
+    const ack = new Promise<void>((resolve) => { acknowledge = resolve })
+    const sent: Uint8Array[] = []
+    invokeMock.mockImplementation(async (command: string, chunk: Uint8Array) => {
+      if (command === 'sftp_upload_begin') return { upload_id: 'ul', tasks: [{ id: 'tx' }] }
+      if (command === 'sftp_upload_chunk') {
+        sent.push(chunk.slice())
+        if (sent.length === 1) await ack
+      }
+      return { tasks: [{ id: 'tx', status: 'completed' }] }
+    })
+    const upload = sftpApi.upload('s', [file], '/')
+    await vi.waitFor(() => expect(sent).toHaveLength(1))
+    expect(invokeMock.mock.calls.some(([name]) => name === 'sftp_upload_finish')).toBe(false)
+    acknowledge()
+    await upload
+    expect(sent.map((chunk) => chunk.length)).toEqual([512 * 1024, 512 * 1024, 7])
+    const actual = new Uint8Array(bytes.length)
+    let offset = 0
+    for (const chunk of sent) { actual.set(chunk, offset); offset += chunk.length }
+    expect(actual.findIndex((byte, index) => byte !== bytes[index])).toBe(-1)
+    expect(invokeMock.mock.calls.filter(([name]) => name === 'sftp_upload_chunk')
+      .map(([, , options]) => options.headers['x-eizhu-chunk-sequence'])).toEqual(['0', '1', '2'])
+    expect(invokeMock.mock.calls.at(-1)![0]).toBe('sftp_upload_finish')
+  })
 })
 
 
 describe('上传恢复与空间保护', () => {
+  it('恢复只检查元数据，不读取原文件计算旧检查点摘要', async () => {
+    const file = new File(['done'], 'a', { lastModified: 10 })
+    const slice = vi.fn(() => { throw new Error('不应回读已传内容') })
+    Object.defineProperty(file, 'slice', { value: slice })
+    invokeMock.mockImplementation(async (command) => command === 'sftp_upload_checkpoint'
+      ? { size: 4, last_modified: 10, blocks: [{ length: 4, sha256: 'legacy-digest' }] }
+      : { upload_id: '', tasks: [{ id: 'tx', status: 'completed' }], received: 4, sequence: 1 })
+    await expect(sftpApi.resumeUpload('tx', file)).resolves.toEqual({ tasks: [{ id: 'tx', status: 'completed' }] })
+    expect(slice).not.toHaveBeenCalled()
+    expect(invokeMock.mock.calls.find(([name]) => name === 'sftp_resume_upload')![1]).not.toHaveProperty('digests')
+  })
+
   it('源文件身份不符时不发起恢复、不自行提交偏移', async () => {
     Object.defineProperty(window, '__TAURI_INTERNALS__', { value: {}, configurable: true })
     invokeMock.mockResolvedValue({ size: 3, last_modified: 10, blocks: [] })
     await expect(sftpApi.resumeUpload('tx', new File(['abc'], 'a', { lastModified: 20 }))).rejects.toThrow('修改时间')
     expect(invokeMock.mock.calls.map(([command]) => command)).toEqual(['sftp_upload_checkpoint'])
+  })
+  it.each([undefined, null])('兼容未记录修改时间的旧检查点：%s', async (lastModified) => {
+    invokeMock.mockImplementation(async (command) => command === 'sftp_upload_checkpoint'
+      ? { size: 4, last_modified: lastModified, blocks: [] }
+      : { upload_id: '', tasks: [{ id: 'tx', status: 'completed' }], received: 4, sequence: 1 })
+    await expect(sftpApi.resumeUpload('tx', new File(['done'], 'a'))).resolves.toEqual({ tasks: [{ id: 'tx', status: 'completed' }] })
   })
   it('提交已完成时不重放输入或发送原始文件', async () => {
     invokeMock.mockImplementation(async (command) => command === 'sftp_upload_checkpoint'
@@ -118,7 +173,7 @@ describe('上传恢复与空间保护', () => {
       : { upload_id: '', tasks: [{ id: 'tx', status: 'completed' }], received: 0, sequence: 0 })
     expect(await sftpApi.resumeUpload('tx', new File([], 'a', { lastModified: 10 }))).toEqual({ tasks: [{ id: 'tx', status: 'completed' }] })
     const args = invokeMock.mock.calls.find(([name]) => name === 'sftp_resume_upload')![1]
-    expect(args.digests).toEqual([])
+    expect(args).not.toHaveProperty('digests')
     expect(args).not.toHaveProperty('offset')
   })
   it('空间切换后不发送剩余原始数据，也不操作新空间的任务', async () => {

@@ -1,5 +1,6 @@
 import { parentPath, pathWithin } from '@/store/sftp'
 import type { SftpEntry, TransferTask } from '@/types/sftp'
+import { transferProgress } from './transferTasks'
 
 export const MOBILE_SFTP_LONG_PRESS_MS = 450
 export const MOBILE_SFTP_LONG_PRESS_SLOP = 10
@@ -14,7 +15,7 @@ export function summarizeMobileTransfers(transfers: TransferTask[]) {
   const active = transfers.filter((task) => task.status === 'queued' || task.status === 'transferring')
   const failed = transfers.filter((task) => task.status === 'failed')
   const progress = active.length
-    ? active.reduce((sum, task) => sum + (task.size ? task.transferred / task.size : 0), 0) / active.length
+    ? active.reduce((sum, task) => sum + transferProgress(task) / 100, 0) / active.length
     : 1
   return { active, failed, progress }
 }

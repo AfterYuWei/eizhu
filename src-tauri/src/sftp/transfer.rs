@@ -74,10 +74,10 @@ pub(super) struct SpeedMeter {
 }
 
 impl SpeedMeter {
-    pub(super) fn new(now: Instant) -> Self {
+    pub(super) fn starting_at(total_bytes: u64, now: Instant) -> Self {
         Self {
             sampled_at: now,
-            sampled_bytes: 0,
+            sampled_bytes: total_bytes,
             speed: 0,
         }
     }
@@ -324,12 +324,11 @@ pub(crate) async fn sftp_resume_upload(
     task_id: String,
     size: u64,
     last_modified: Option<u64>,
-    digests: Vec<String>,
     restart: bool,
 ) -> Result<serde_json::Value, CommandError> {
     let (upload_id, task, received, sequence) = state
         .transfers
-        .resume_upload(state, &task_id, size, last_modified, digests, restart)
+        .resume_upload(state, &task_id, size, last_modified, restart)
         .await?;
     Ok(
         serde_json::json!({"upload_id":upload_id,"tasks":[task],"received":received,"sequence":sequence}),
@@ -999,7 +998,7 @@ mod tests {
     #[test]
     fn transfer_speed_uses_recent_bytes_across_file_boundaries() {
         let start = Instant::now();
-        let mut meter = SpeedMeter::new(start);
+        let mut meter = SpeedMeter::starting_at(0, start);
         assert_eq!(
             meter.record(10_000_000, start + Duration::from_secs(1)),
             10_000_000
@@ -1011,6 +1010,16 @@ mod tests {
         assert_eq!(
             meter.record(10_500_000, start + Duration::from_secs(2)),
             500_000
+        );
+    }
+
+    #[test]
+    fn resumed_transfer_speed_excludes_previously_confirmed_bytes() {
+        let start = Instant::now();
+        let mut meter = SpeedMeter::starting_at(8_000_000, start);
+        assert_eq!(
+            meter.record(9_000_000, start + Duration::from_secs(1)),
+            1_000_000
         );
     }
 
