@@ -27,7 +27,7 @@ pub(crate) type BackendWriter = Box<dyn tokio::io::AsyncWrite + Unpin + Send>;
 /// checkpoint boundaries. A checkpoint is acknowledged only after flush/sync.
 pub(super) enum TransferFile {
     Local(tokio::fs::File),
-    Remote(russh_sftp::client::fs::File),
+    Remote(Box<russh_sftp::client::fs::File>),
 }
 
 impl TransferFile {
@@ -417,7 +417,7 @@ impl FileBackend {
                 file.seek(std::io::SeekFrom::Start(offset))
                     .await
                     .map_err(file_error)?;
-                Ok(TransferFile::Remote(file))
+                Ok(TransferFile::Remote(Box::new(file)))
             }
         }
     }
@@ -441,7 +441,7 @@ impl FileBackend {
                 file.seek(std::io::SeekFrom::Start(offset))
                     .await
                     .map_err(file_error)?;
-                Ok(TransferFile::Remote(file))
+                Ok(TransferFile::Remote(Box::new(file)))
             }
         }
     }
@@ -699,7 +699,7 @@ mod transfer_tests {
                 .open_with_flags("stage", OpenFlags::WRITE)
                 .await
                 .unwrap();
-            let mut writer = TransferFile::Remote(file);
+            let mut writer = TransferFile::Remote(Box::new(file));
             let first = vec![19; 512 * 1024];
             let second = vec![23; 512 * 1024 + 17];
             let result = writer.write_checkpoint(&first).await;
