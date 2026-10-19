@@ -202,7 +202,7 @@ jobs:
             echo "macOS app executable is missing or not executable: $APP_EXECUTABLE" >&2
             exit 1
           fi
-          lipo -verify_arch "${{ matrix.macho_arch }}" "$APP_EXECUTABLE"
+          lipo "$APP_EXECUTABLE" -verify_arch "${{ matrix.macho_arch }}"
           rm -f "$MARKER"
           set +e
           OUTPUT="$(EIZHU_SMOKE_MARKER_PATH="$MARKER" "$APP_EXECUTABLE" --smoke-test 2>&1)"
