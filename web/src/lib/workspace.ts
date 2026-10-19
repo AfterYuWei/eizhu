@@ -7,6 +7,8 @@ import { useEditorStore } from '@/store/editor'
 import { useServerDetailStore } from '@/store/serverDetail'
 import { useSyncStore } from '@/store/sync'
 import { useHistoryStore } from '@/store/history'
+import { useSidebarDetailStore } from '@/store/sidebarDetail'
+import { useDesktopShellStore } from '@/store/desktopShell'
 export interface WorkspaceStatus { id: string; generation: number; userId: number }
 import { workspaceGeneration, setWorkspaceGeneration } from './workspaceScope'
 export { workspaceGeneration } from './workspaceScope'
@@ -21,6 +23,8 @@ export function applyWorkspace(workspace: WorkspaceStatus) {
   useServerDetailStore.setState(useServerDetailStore.getInitialState(), true)
   useSyncStore.setState(useSyncStore.getInitialState(), true)
   useHistoryStore.setState(useHistoryStore.getInitialState(), true)
+  useSidebarDetailStore.setState(useSidebarDetailStore.getInitialState(), true)
+  useDesktopShellStore.setState({ collapsedGroups: {} })
   void useProfileStore.getState().refreshAll().then(() => { if (workspaceGeneration() === workspace.generation) return restoreTerminalLayout() }).catch(() => {})
   void useVaultStore.getState().fetchList()
   void useSyncStore.getState().refresh()

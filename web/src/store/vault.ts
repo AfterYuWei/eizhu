@@ -16,6 +16,7 @@ interface VaultStore {
   error: string | null
   filterType: VaultFilterType
   searchQuery: string
+  focusedItemId: string | null
 
   // Actions
   fetchList: () => Promise<void>
@@ -34,6 +35,7 @@ export const useVaultStore = create<VaultStore>((set, get) => ({
   error: null,
   filterType: 'all',
   searchQuery: '',
+  focusedItemId: null,
 
   fetchList: async () => {
     set({ loading: true, error: null })
@@ -56,15 +58,16 @@ export const useVaultStore = create<VaultStore>((set, get) => ({
     error: null,
     filterType: 'all',
     searchQuery: '',
+    focusedItemId: null,
   }),
 
   setFilterType: (t) => {
-    set({ filterType: t })
+    set({ filterType: t, focusedItemId: null })
     get().fetchList()
   },
 
   setSearchQuery: (q) => {
-    set({ searchQuery: q })
+    set({ searchQuery: q, focusedItemId: null })
     get().fetchList()
   },
 

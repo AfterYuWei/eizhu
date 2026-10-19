@@ -404,6 +404,7 @@
 @import "./styles/settings.css";
 @import "./styles/vault.css";
 @import "./styles/mobile.css";
+@import "./styles/desktop-shell.css";
 /* 账号中心 */
 .account-panel { display: flex; flex-direction: column; gap: 14px; }
 .account-hero { margin-bottom: 0; }

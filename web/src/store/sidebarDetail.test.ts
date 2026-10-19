@@ -1,12 +1,10 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 
-import { GLOBAL_PAGE_KEY, useSidebarDetailStore } from './sidebarDetail'
+import { useSidebarDetailStore } from './sidebarDetail'
 
 beforeEach(() => {
   useSidebarDetailStore.setState({
-    pageByTab: { [GLOBAL_PAGE_KEY]: 0 },
     detailCache: {},
-    lastTerminalTabId: null,
   })
 })
 

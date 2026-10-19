@@ -1,174 +1,94 @@
+import { lazy, Suspense, useEffect, useRef, useState } from 'react'
+import { FolderUp, KeyRound, PanelLeft, PanelLeftClose, PanelRight, Plus, Search, SquareTerminal } from 'lucide-react'
 import { TunnelDialog, TunnelPrompts } from '@/components/Terminal/TunnelDialog'
 import type { SettingsTab } from '@/components/SettingsDialog'
 import { workspaceGeneration } from '@/lib/workspaceScope'
 import { registerDesktopAction, runDesktopAction, shortcutAction } from '@/lib/desktopActions'
-import { SyncIndicator } from '@/components/SyncIndicator'
-import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
-import { Search, X, FolderUp, Settings, KeyRound, Server, SquareTerminal } from 'lucide-react'
 import { Sidebar } from '@/components/Sidebar'
 import { TerminalView } from '@/components/Terminal'
 import { TerminalSplitMenu } from '@/components/Terminal/SplitControls'
-import { StatusBar } from '@/components/StatusBar'
 import { CommandPalette } from '@/components/CommandPalette'
-import { ThemeToggle } from '@/components/ThemeToggle'
 import { Toaster } from '@/components/ui/sonner'
-import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
+import { ProfileForm } from '@/components/ProfileForm'
 import { useProfileStore } from '@/store/profile'
 import { useSessionStore } from '@/store/session'
+import { useSidebarDetailStore } from '@/store/sidebarDetail'
 import { useTerminalLayoutStore } from '@/store/terminalLayout'
-import { useSettingsStore } from '@/store/settings'
-import { useVaultStore } from '@/store/vault'
+import { useSettingsStore, useResolvedTheme } from '@/store/settings'
+import { useDesktopShellStore } from '@/store/desktopShell'
+import { useSplitSidebar } from '@/hooks/useSplitSidebar'
 import { useWindowControls } from '@/hooks/useWindowControls'
 import { WindowControls } from '@/components/WindowControls'
-import { profileApi } from '@/api/profile'
-import { vaultApi } from '@/api/vault'
-import type { Profile } from '@/types/profile'
-import type { VaultItem } from '@/types/vault'
+import { ShellIconButton, ShellResizeHandle } from './ShellControls'
+import { AccountMenu } from './AccountMenu'
+import { OpenItems } from './OpenItems'
+import { ConnectionHome } from './ConnectionHome'
+import { ServerInspector } from './ServerInspector'
+import { WorkspaceActions } from './WorkspaceActions'
 
-const SettingsDialog = lazy(() =>
-  import('@/components/SettingsDialog').then((module) => ({ default: module.SettingsDialog })),
-)
-
+const SettingsDialog = lazy(() => import('@/components/SettingsDialog').then((m) => ({ default: m.SettingsDialog })))
 const SnippetDialog = lazy(() => import('@/components/Snippets/SnippetDialog').then((m) => ({ default: m.SnippetDialog })))
 
 export function Layout() {
-  const { tabs, openVaultTab, openTab, setActiveTab } = useSessionStore()
-  const { sidebarWidth, setSidebarWidth, theme } = useSettingsStore()
-  useSettingsStore((state) => state.systemRevision)
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
-  const splitActive = useTerminalLayoutStore((state) => state.tree?.type === 'split')
-  // Keep the user's preference so leaving split mode restores the previous sidebar state.
-  const sidebarHidden = splitActive || sidebarCollapsed
+  const { tabs, activeTabId, openVaultTab } = useSessionStore()
+  const { sidebarWidth, setSidebarWidth } = useSettingsStore()
+  const theme = useResolvedTheme()
+  const splitActive = useTerminalLayoutStore((s) => s.tree?.type === 'split')
+  const { collapsed: sidebarHidden, toggle: toggleSidebar } = useSplitSidebar(splitActive)
+  const { serverRatio, serversCollapsed, openedCollapsed, toggleServers, toggleOpened, setServerRatio, inspectorWidth } = useDesktopShellStore()
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [tunnelsOpen, setTunnelsOpen] = useState(false)
   const [snippetsOpen, setSnippetsOpen] = useState(false)
-  const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTab>('appearance')
+  const [profileFormOpen, setProfileFormOpen] = useState(false)
+  const [settingsTab, setSettingsTab] = useState<SettingsTab>('appearance')
   const [settingsOpen, setSettingsOpen] = useState(false)
-  const [resizing, setResizing] = useState(false)
-  const [globalSearch, setGlobalSearch] = useState('')
-  const [searchOpen, setSearchOpen] = useState(false)
-  const [searching, setSearching] = useState(false)
-  const [profileResults, setProfileResults] = useState<Profile[]>([])
-  const [vaultResults, setVaultResults] = useState<VaultItem[]>([])
-  const sidebarRef = useRef<HTMLElement>(null)
-  const searchRef = useRef<HTMLDivElement>(null)
-
-  // Sidebar drag resize
-  const handleResizeStart = useCallback((e: React.MouseEvent) => {
-    e.preventDefault()
-    setResizing(true)
-    const startX = e.clientX
-    const startWidth = sidebarWidth
-
-    const onMouseMove = (e: MouseEvent) => {
-      const delta = e.clientX - startX
-      const newWidth = Math.min(480, Math.max(160, startWidth + delta))
-      setSidebarWidth(newWidth)
-    }
-
-    const onMouseUp = () => {
-      setResizing(false)
-      document.removeEventListener('mousemove', onMouseMove)
-      document.removeEventListener('mouseup', onMouseUp)
-    }
-
-    document.addEventListener('mousemove', onMouseMove)
-    document.addEventListener('mouseup', onMouseUp)
-  }, [sidebarWidth, setSidebarWidth])
-
-  const {
-    fetchProfiles,
-    fetchGroups,
-  } = useProfileStore()
-  const {
-    setSearchQuery: setVaultSearchQuery,
-  } = useVaultStore()
-
-  useEffect(() => {
-    const query = globalSearch.trim()
-    if (!query) {
-      setProfileResults([])
-      setVaultResults([])
-      setSearching(false)
-      return
-    }
-
-    let active = true
-    setSearching(true)
-    void Promise.all([
-      profileApi.list({ search: query }),
-      vaultApi.list({ q: query }),
-    ])
-      .then(([profiles, vaultItems]) => {
-        if (!active) return
-        setProfileResults(profiles ?? [])
-        setVaultResults(vaultItems ?? [])
-      })
-      .catch(() => {
-        if (!active) return
-        setProfileResults([])
-        setVaultResults([])
-      })
-      .finally(() => {
-        if (active) setSearching(false)
-      })
-
-    return () => {
-      active = false
-    }
-  }, [globalSearch])
-
-  useEffect(() => {
-    const closeOnOutsideClick = (event: MouseEvent) => {
-      if (!searchRef.current?.contains(event.target as Node)) setSearchOpen(false)
-    }
-    document.addEventListener('mousedown', closeOnOutsideClick)
-    return () => document.removeEventListener('mousedown', closeOnOutsideClick)
-  }, [])
-
-  const clearGlobalSearch = () => {
-    setGlobalSearch('')
-    setSearchOpen(false)
-  }
-
-  const handleProfileResult = (profile: Profile) => {
-    clearGlobalSearch()
-    const existing = tabs.find((tab) => tab.kind === 'terminal' && tab.profileId === profile.id)
-    if (existing) {
-      setActiveTab(existing.id)
-      return
-    }
-    void openTab(profile.id, profile.name, profile.host, profile.port, profile.username)
-  }
-
-  const handleVaultResult = (item: VaultItem) => {
-    setVaultSearchQuery(item.name)
-    openVaultTab()
-    clearGlobalSearch()
-  }
-
-  const hasSearchResults = profileResults.length > 0 || vaultResults.length > 0
-
-  // 桌面环境窗口控制：仅 Electron 下提供真实操作，浏览器下为 no-op
-  // macOS 用系统原生交通灯（showControls=false），Windows/Linux 自绘右侧按钮
+  const [inspectorOpen, setInspectorOpen] = useState(false)
+  const [workspaceWidth, setWorkspaceWidth] = useState(window.innerWidth)
+  const [listsHeight, setListsHeight] = useState(400)
+  const workspace = useRef<HTMLDivElement>(null)
+  const lists = useRef<HTMLDivElement>(null)
+  const knownTabs = useRef(new Set<string>())
   const { desktop, mac, showControls, maximized, minimize, toggleMaximize, close } = useWindowControls()
+  // 96px 原生按钮预留 + 两个 32px 图标 + 4px 间距 + 16px 右侧留白。
+  const minSidebarWidth = mac ? 180 : 160
+  const visibleSidebarWidth = Math.max(minSidebarWidth, Math.min(480, sidebarWidth))
+  const { fetchProfiles, fetchGroups } = useProfileStore()
+  const activeTab = tabs.find((tab) => tab.id === activeTabId)
+  const terminal = activeTab?.kind === 'terminal' && Boolean(activeTab.profileId)
+  const pageName = activeTab?.kind === 'vault' ? '密钥管理' : activeTab?.kind === 'sftp' ? 'SFTP 文件' : activeTab?.profileName
+  const status = !terminal ? '' : activeTab.status === 'connected'
+    ? activeTab.latency != null ? `${activeTab.latency}ms` : '已连接'
+    : activeTab.status === 'connecting' ? '连接中…'
+    : activeTab.status === 'reconnecting' ? `重连中${activeTab.reconnectAttempt ? ` (${activeTab.reconnectAttempt})` : ''}` : '已断开'
 
+  const openSettings = (tab: SettingsTab) => { setSettingsTab(tab); setSettingsOpen(true) }
+
+  useEffect(() => { void fetchProfiles(); void fetchGroups() }, [fetchProfiles, fetchGroups])
   useEffect(() => {
-    fetchProfiles()
-    fetchGroups()
-  }, [fetchProfiles, fetchGroups])
-
+    const measure = () => {
+      if (workspace.current) setWorkspaceWidth(workspace.current.clientWidth)
+      if (lists.current) setListsHeight(lists.current.clientHeight)
+    }
+    measure()
+    const observer = new ResizeObserver(measure)
+    if (workspace.current) observer.observe(workspace.current)
+    if (lists.current) observer.observe(lists.current)
+    return () => observer.disconnect()
+  }, [])
+  useEffect(() => {
+    const live = new Set(tabs.map((tab) => tab.id))
+    knownTabs.current.forEach((id) => { if (!live.has(id)) useSidebarDetailStore.getState().clearTab(id) })
+    knownTabs.current = live
+  }, [tabs])
   useEffect(() => {
     const unregister = [
       registerDesktopAction('tunnels', () => setTunnelsOpen(true)),
       registerDesktopAction('palette', () => setPaletteOpen((v) => !v)),
-      registerDesktopAction('sync-settings', () => { setSettingsInitialTab('sync'); setSettingsOpen(true) }),
-      registerDesktopAction('account-settings', () => { setSettingsInitialTab('account'); setSettingsOpen(true) }),
+      registerDesktopAction('sync-settings', () => { setSettingsTab('sync'); setSettingsOpen(true) }),
+      registerDesktopAction('account-settings', () => { setSettingsTab('account'); setSettingsOpen(true) }),
       registerDesktopAction('snippets', () => setSnippetsOpen(true)),
-      registerDesktopAction('sidebar', () => {
-        if (useTerminalLayoutStore.getState().tree?.type !== 'split') setSidebarCollapsed((v) => !v)
-      }),
+      registerDesktopAction('sidebar', toggleSidebar),
     ]
     const handler = (event: KeyboardEvent) => {
       const action = shortcutAction(event)
@@ -179,264 +99,59 @@ export function Layout() {
     }
     document.addEventListener('keydown', handler, true)
     return () => { unregister.forEach((fn) => fn()); document.removeEventListener('keydown', handler, true) }
-  }, [])
+  }, [toggleSidebar])
 
-  return (
-    <div className="eizhu-app" role="application" aria-label="eizhu">
-      {/* Header — 自定义标题栏：主题色底、可拖拽窗口、搜索框居中、右侧窗口控制按钮。
-          桌面环境(decorations:false)下作为窗口标题栏；浏览器下仅作普通顶栏。
-          Tauri 拖拽：header 与各容器加 data-tauri-drag-region（仅对该元素自身的
-          mousedown 生效），按钮/输入框等子元素不受影响。 */}
-      <header
-        className={`eizhu-header titlebar ${desktop ? 'is-desktop' : ''} ${mac ? 'is-mac' : ''}`}
-        data-tauri-drag-region={desktop || undefined}
-      >
-        {/* 左：折叠侧边栏 + SFTP。
-            容器空白区域可拖拽窗口；具体按钮无 drag 属性保持可点击。 */}
-        <div className="header-left" data-tauri-drag-region={desktop || undefined}>
-          <Button
-            type="button"
-            variant="ghost"
-            className="hdr-icon-btn"
-            title={splitActive ? '分屏模式下侧栏已禁用' : sidebarHidden ? '展开侧边栏 (Ctrl/Cmd+Shift+B)' : '折叠侧边栏 (Ctrl/Cmd+Shift+B)'}
-            aria-label={splitActive ? '分屏模式下侧栏已禁用' : sidebarHidden ? 'Expand sidebar' : 'Collapse sidebar'}
-            disabled={splitActive}
-            onClick={() => runDesktopAction('sidebar')}
-          >
-            {sidebarHidden ? (
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="3" y1="3" x2="3" y2="13" />
-                <polyline points="7 5 11 8 7 11" />
-              </svg>
-            ) : (
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="2" y="3" width="12" height="10" rx="1.5" />
-                <line x1="6" y1="3" x2="6" y2="13" />
-              </svg>
-            )}
-            <span className="hdr-icon-btn-label">侧栏</span>
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            className="hdr-icon-btn"
-            title="SFTP 文件管理"
-            aria-label="打开 SFTP 文件管理"
-            onClick={() => runDesktopAction('sftp')}
-          >
-            <FolderUp size={14} />
-            <span className="hdr-icon-btn-label">SFTP</span>
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            className="hdr-icon-btn"
-            title="Vaults"
-            aria-label="打开 Vault"
-            onClick={() => openVaultTab()}
-          >
-            <KeyRound size={14} />
-            <span className="hdr-icon-btn-label">Vaults</span>
-          </Button>
-          <Button variant="ghost" className="hdr-icon-btn" title="命令片段 (Ctrl/Cmd+Shift+S)" onClick={() => runDesktopAction('snippets')}>
-            <SquareTerminal size={14} /><span className="hdr-icon-btn-label">片段</span>
-          </Button>
+  const topControls = <div className="shell-top-controls" data-tauri-drag-region={desktop || undefined}>
+    <ShellIconButton label={`${sidebarHidden ? '展开' : '折叠'}侧栏 (Ctrl/Cmd+Shift+B)`} aria-expanded={!sidebarHidden} onClick={() => runDesktopAction('sidebar')}>
+      {sidebarHidden ? <PanelLeft size={16} /> : <PanelLeftClose size={16} />}
+    </ShellIconButton>
+    <ShellIconButton label="搜索服务器、密钥或命令 (Ctrl/Cmd+Shift+K)" onClick={() => setPaletteOpen(true)}><Search size={16} /></ShellIconButton>
+  </div>
+
+  return <div className={`eizhu-app desktop-shell ${mac ? 'is-mac' : ''} ${sidebarHidden ? 'sidebar-is-hidden' : ''}`} role="application" aria-label="eizhu">
+    <aside className={`eizhu-sidebar shell-sidebar ${sidebarHidden ? 'collapsed' : ''}`} style={sidebarHidden ? undefined : { width: visibleSidebarWidth }} aria-label="主导航" aria-hidden={sidebarHidden} inert={sidebarHidden}>
+      <div className="shell-sidebar-top" data-tauri-drag-region={desktop || undefined}>{!sidebarHidden && topControls}</div>
+      <nav className="shell-primary-nav" aria-label="功能导航">
+        <Button variant="ghost" className={!tabs.length || activeTab?.kind === 'terminal' && !activeTab.profileId ? 'is-active' : ''} onClick={() => runDesktopAction('new')}><Plus size={16} /><span>新建连接</span><kbd>{mac ? '⇧⌘T' : 'Ctrl+Shift+T'}</kbd></Button>
+        <Button variant="ghost" className={activeTab?.kind === 'sftp' ? 'is-active' : ''} onClick={() => runDesktopAction('sftp')}><FolderUp size={16} /><span>SFTP 文件</span></Button>
+        <Button variant="ghost" className={activeTab?.kind === 'vault' ? 'is-active' : ''} onClick={() => openVaultTab()}><KeyRound size={16} /><span>密钥管理</span></Button>
+        <Button variant="ghost" onClick={() => runDesktopAction('snippets')}><SquareTerminal size={16} /><span>命令片段</span></Button>
+      </nav>
+      <div className="shell-lists" ref={lists}>
+        <section className="shell-servers" aria-label="服务器分组" style={{ flex: serversCollapsed ? '0 0 auto' : `${openedCollapsed ? 1 : serverRatio} 1 0` }}>
+          <Sidebar visible={!sidebarHidden} collapsed={serversCollapsed} onToggle={toggleServers} onAddServer={() => setProfileFormOpen(true)} />
+        </section>
+        {!serversCollapsed && !openedCollapsed && <ShellResizeHandle label="调整服务器和已打开区域比例" orientation="horizontal" value={serverRatio} min={0.2} max={0.8} step={0.05} pixelsPerUnit={listsHeight} onChange={setServerRatio} />}
+        <div className="shell-open-section" style={{ flex: openedCollapsed ? '0 0 auto' : `${serversCollapsed ? 1 : 1 - serverRatio} 1 0` }}><OpenItems collapsed={openedCollapsed} onToggle={toggleOpened} /></div>
+      </div>
+      <div className="shell-sidebar-footer"><AccountMenu onSettings={openSettings} /></div>
+    </aside>
+    {!sidebarHidden && <ShellResizeHandle label="调整侧栏宽度" className="shell-sidebar-resizer" value={visibleSidebarWidth} min={minSidebarWidth} max={480} onChange={setSidebarWidth} />}
+    <main className="shell-workspace">
+      <header className="shell-workspace-header" data-tauri-drag-region={desktop || undefined}>
+        {sidebarHidden && topControls}
+        <div className="shell-page-heading" data-tauri-drag-region={desktop || undefined}>
+          {pageName && <span className="shell-page-name" title={pageName}>{pageName}</span>}
+          {terminal && <span className="shell-page-status" role="status" title={activeTab?.errorMessage || status}><span className={`shell-connection-dot is-${activeTab?.status}`} />{status}</span>}
         </div>
-
-        {/* 中：全局搜索服务器与 Vault 密钥。容器空白区域可拖拽，搜索框本身正常交互 */}
-        <div className="header-center" data-tauri-drag-region={desktop || undefined}>
-          <div ref={searchRef} className="header-search">
-            <Search size={14} className="header-search-icon" />
-            <Input
-              type="text"
-              className="header-search-input"
-              placeholder="搜索服务器或密钥…"
-              autoComplete="off"
-              spellCheck={false}
-              value={globalSearch}
-              onFocus={() => setSearchOpen(true)}
-              onChange={(e) => {
-                setGlobalSearch(e.target.value)
-                setSearchOpen(true)
-              }}
-              onKeyDown={(event) => {
-                if (event.key === 'Escape') setSearchOpen(false)
-              }}
-            />
-            {globalSearch && (
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-xs"
-                className="header-search-clear"
-                title="清除搜索"
-                aria-label="清除搜索"
-                onClick={clearGlobalSearch}
-              >
-                <X size={13} />
-              </Button>
-            )}
-            {searchOpen && globalSearch.trim() && (
-              <div className="header-search-results" role="listbox" aria-label="全局搜索结果">
-                {searching ? (
-                  <div className="header-search-empty">搜索中…</div>
-                ) : hasSearchResults ? (
-                  <>
-                    {profileResults.length > 0 && (
-                      <div className="header-search-group">
-                        <div className="header-search-group-title">服务器</div>
-                        {profileResults.map((profile) => (
-                          <Button
-                            key={profile.id}
-                            type="button"
-                            variant="ghost"
-                            className="header-search-result"
-                            role="option"
-                            onClick={() => handleProfileResult(profile)}
-                          >
-                            <Server size={14} />
-                            <span>
-                              <strong>{profile.name}</strong>
-                              <small>{profile.username}@{profile.host}:{profile.port}</small>
-                            </span>
-                          </Button>
-                        ))}
-                      </div>
-                    )}
-                    {vaultResults.length > 0 && (
-                      <div className="header-search-group">
-                        <div className="header-search-group-title">密钥</div>
-                        {vaultResults.map((item) => (
-                          <Button
-                            key={item.id}
-                            type="button"
-                            variant="ghost"
-                            className="header-search-result"
-                            role="option"
-                            onClick={() => handleVaultResult(item)}
-                          >
-                            <KeyRound size={14} />
-                            <span>
-                              <strong>{item.name}</strong>
-                              <small>
-                                {item.type === 'private_key'
-                                  ? '私钥'
-                                  : `密码 · ${item.username || '需补充用户名'}`}
-                              </small>
-                            </span>
-                          </Button>
-                        ))}
-                      </div>
-                    )}
-                  </>
-                ) : (
-                  <div className="header-search-empty">未找到匹配的服务器或密钥</div>
-                )}
-              </div>
-            )}
-          </div>
+        <div className="shell-workspace-actions" data-tauri-drag-region={desktop || undefined}>
+          <TerminalSplitMenu iconOnly />
+          {terminal && <ShellIconButton label="服务器详情" aria-pressed={inspectorOpen} onClick={() => setInspectorOpen((v) => !v)}><PanelRight size={16} /></ShellIconButton>}
+          {activeTab && <WorkspaceActions terminal={terminal} />}
         </div>
-
-        {/* 右：设置 + 主题切换。容器空白区域可拖拽 */}
-        <div className="header-right" data-tauri-drag-region={desktop || undefined}>
-          <TerminalSplitMenu />
-          <SyncIndicator />
-          <ThemeToggle className="hdr-icon-btn" showLabel buttonLabel="主题" />
-          <Button
-            type="button"
-            variant="ghost"
-            className="hdr-icon-btn"
-            data-tip="设置"
-            aria-label="设置"
-            onClick={() => setSettingsOpen(true)}
-          >
-            <Settings size={13} />
-            <span className="hdr-icon-btn-label">设置</span>
-          </Button>
-        </div>
-
-        {/* 窗口控制按钮：仅 Windows/Linux 桌面环境渲染（macOS 用系统交通灯）。 */}
-        {showControls && (
-          <WindowControls
-            maximized={maximized}
-            onMinimize={minimize}
-            onToggleMaximize={toggleMaximize}
-            onClose={close}
-          />
-        )}
+        {showControls && <div className="shell-window-controls-space" aria-hidden="true" />}
       </header>
-
-      {/* Body — sidebar + content */}
-      <div className="eizhu-body">
-        {/* Sidebar */}
-        <aside
-          ref={sidebarRef}
-          className={`eizhu-sidebar ${sidebarHidden ? 'collapsed' : ''}`}
-          role="navigation"
-          aria-label="Server list"
-          aria-hidden={sidebarHidden}
-          inert={sidebarHidden}
-        >
-          <Sidebar visible={!sidebarHidden} />
-        </aside>
-
-        {/* Resize handle */}
-        {!sidebarHidden && (
-          <div
-            className={`sidebar-resizer ${resizing ? 'active' : ''}`}
-            onMouseDown={handleResizeStart}
-          />
-        )}
-
-        {/* Content */}
-        <div className="cnt-wrap">
-          {tabs.length === 0 ? <EmptyState /> : <TerminalView />}
-        </div>
+      <div className="shell-workspace-body" ref={workspace}>
+        <div className="cnt-wrap shell-workspace-content">{tabs.length ? <TerminalView /> : <ConnectionHome onAddServer={() => setProfileFormOpen(true)} />}</div>
+        <ServerInspector open={inspectorOpen} overlay={workspaceWidth < inspectorWidth + 480} onClose={() => setInspectorOpen(false)} />
       </div>
-
-      {/* Status bar — full width */}
-      <StatusBar />
-
-      <TunnelDialog open={tunnelsOpen} onOpenChange={setTunnelsOpen} />
-      <TunnelPrompts />
-      {/* Command Palette */}
-      <CommandPalette
-        open={paletteOpen}
-        onClose={() => setPaletteOpen(false)}
-      />
-
-      {snippetsOpen && <Suspense fallback={null}><SnippetDialog key={workspaceGeneration()} open onOpenChange={setSnippetsOpen} /></Suspense>}
-
-      {/* 设置面板 */}
-      {settingsOpen && (
-        <Suspense fallback={null}>
-          <SettingsDialog key={settingsInitialTab} initialTab={settingsInitialTab} open onOpenChange={setSettingsOpen} />
-        </Suspense>
-      )}
-
-      {/* Toast — 右下角通知弹窗 */}
-      <Toaster
-        theme={theme === 'system'
-          ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
-          : theme}
-      />
-    </div>
-  )
-}
-
-function EmptyState() {
-  return (
-    <div className="term-empty-state" style={{ margin: '0 8px' }}>
-      <div className="term-empty-icon">
-        <svg width="20" height="20" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round">
-          <polyline points="3 5 6.5 8 3 11" />
-          <line x1="8" y1="11" x2="13" y2="11" />
-        </svg>
-      </div>
-      <div className="term-empty-title">暂无活跃会话</div>
-      <div className="term-empty-desc">
-        从左侧选择一个服务器连接，或按 Ctrl/Cmd+Shift+K 打开命令面板
-      </div>
-    </div>
-  )
+    </main>
+    {showControls && <WindowControls className="shell-window-controls" maximized={maximized} onMinimize={minimize} onToggleMaximize={toggleMaximize} onClose={close} />}
+    <TunnelDialog open={tunnelsOpen} onOpenChange={setTunnelsOpen} /><TunnelPrompts />
+    <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
+    <ProfileForm open={profileFormOpen} onOpenChange={setProfileFormOpen} />
+    {snippetsOpen && <Suspense fallback={null}><SnippetDialog key={workspaceGeneration()} open onOpenChange={setSnippetsOpen} /></Suspense>}
+    {settingsOpen && <Suspense fallback={null}><SettingsDialog key={settingsTab} initialTab={settingsTab} open onOpenChange={setSettingsOpen} /></Suspense>}
+    <Toaster theme={theme} />
+  </div>
 }

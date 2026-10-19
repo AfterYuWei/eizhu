@@ -12,7 +12,7 @@
         "dragDropEnabled": true,
         "titleBarStyle": "Overlay",
         "hiddenTitle": true,
-        "trafficLightPosition": { "x": 12, "y": 19 }
+        "trafficLightPosition": { "x": 24, "y": 34 }
       }
     ]
   },

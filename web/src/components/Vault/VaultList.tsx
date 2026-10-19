@@ -1,4 +1,5 @@
 import { KeyRound, AlertCircle, Plus } from 'lucide-react'
+import { useEffect, useRef } from 'react'
 import { useVaultStore } from '@/store/vault'
 import { VaultItemRow } from './VaultItemRow'
 import { Button } from '@/components/ui/button'
@@ -11,7 +12,14 @@ interface VaultListProps {
 }
 
 export function VaultList({ onEdit, onDelete, onCreate }: VaultListProps) {
-  const { items, loading, error, fetchList } = useVaultStore()
+  const { items, loading, error, fetchList, focusedItemId } = useVaultStore()
+  const grid = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!focusedItemId || loading) return
+    const target = [...(grid.current?.querySelectorAll<HTMLElement>('[data-vault-item]') ?? [])].find((element) => element.dataset.vaultItem === focusedItemId)
+    target?.scrollIntoView?.({ block: 'center' })
+    target?.focus({ preventScroll: true })
+  }, [focusedItemId, loading, items])
 
   // 加载态
   if (loading) {
@@ -53,9 +61,11 @@ export function VaultList({ onEdit, onDelete, onCreate }: VaultListProps) {
 
   // 正常态
   return (
-    <div className="vault-grid">
+    <div className="vault-grid" ref={grid}>
       {items.map((item) => (
-        <VaultItemRow key={item.id} item={item} onEdit={onEdit} onDelete={onDelete} />
+        <div key={item.id} data-vault-item={item.id} tabIndex={-1} className={focusedItemId === item.id ? 'shell-vault-focus' : undefined}>
+          <VaultItemRow item={item} onEdit={onEdit} onDelete={onDelete} />
+        </div>
       ))}
     </div>
   )

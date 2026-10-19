@@ -11,9 +11,10 @@ import {
 import { focusActiveTerminal, runDesktopAction, type DesktopActionId } from '@/lib/desktopActions'
 import { cn } from '@/lib/utils'
 import { getPlatformCapabilities } from '@/lib/platform'
+import { ShellIconButton } from '@/components/Layout/ShellControls'
 
 /** Layout actions belong to the application header, outside the terminal canvas. */
-export function TerminalSplitMenu() {
+export function TerminalSplitMenu({ iconOnly = false }: { iconOnly?: boolean }) {
   const { tree, maximizedId } = useTerminalLayoutStore()
   const { tabs, activeTabId } = useSessionStore()
   const activeTab = tabs.find((tab) => tab.id === activeTabId)
@@ -27,7 +28,9 @@ export function TerminalSplitMenu() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button
+        {iconOnly ? <ShellIconButton label={split ? `终端分屏，当前 ${count} 个窗格` : '终端分屏'} aria-pressed={split}>
+          <Columns2 size={16} />
+        </ShellIconButton> : <Button
           type="button"
           variant="ghost"
           className={cn('hdr-icon-btn', split && 'active')}
@@ -37,7 +40,7 @@ export function TerminalSplitMenu() {
           <Columns2 size={14} />
           <span className="hdr-icon-btn-label">分屏{split && ` ${count}`}</span>
           <ChevronDown className="size-3" />
-        </Button>
+        </Button>}
       </DropdownMenuTrigger>
       <DropdownMenuContent
         align="end"

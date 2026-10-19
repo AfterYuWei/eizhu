@@ -1,4 +1,5 @@
 import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 
 interface WindowControlsProps {
   maximized: boolean
@@ -6,6 +7,7 @@ interface WindowControlsProps {
   onToggleMaximize: () => void
   onClose: () => void
   closeLabel?: string
+  className?: string
 }
 
 /** Windows/Linux 自绘标题栏按钮；图标尺寸独立于共享 Button 的默认尺寸。 */
@@ -15,11 +17,12 @@ export function WindowControls({
   onToggleMaximize,
   onClose,
   closeLabel = '关闭',
+  className,
 }: WindowControlsProps) {
   const maximizeLabel = maximized ? '还原' : '最大化'
 
   return (
-    <div className="titlebar-controls">
+    <div className={cn('titlebar-controls', className)}>
       <Button
         type="button"
         variant="ghost"

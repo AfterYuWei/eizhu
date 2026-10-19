@@ -3,24 +3,32 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
+const { windowControls, settings } = vi.hoisted(() => ({
+  windowControls: { desktop: false, mac: false, showControls: false, maximized: false, minimize: vi.fn(), toggleMaximize: vi.fn(), close: vi.fn() },
+  settings: { sidebarWidth: 240, setSidebarWidth: vi.fn(), theme: 'light', systemRevision: 0 },
+}))
+
 vi.mock('@/components/Sidebar', () => ({ Sidebar: ({ visible }: { visible: boolean }) => <div data-sidebar-visible={String(visible)} /> }))
 vi.mock('@/components/Terminal', () => ({ TerminalView: () => <main>终端工作区</main> }))
 vi.mock('@/components/Terminal/SplitControls', () => ({ TerminalSplitMenu: () => null }))
 vi.mock('@/components/Terminal/TunnelDialog', () => ({ TunnelDialog: () => null, TunnelPrompts: () => null }))
-vi.mock('@/components/StatusBar', () => ({ StatusBar: () => null }))
+vi.mock('@/components/ProfileForm', () => ({ ProfileForm: () => null }))
+vi.mock('./ServerInspector', () => ({ ServerInspector: ({ open }: { open: boolean }) => <div data-inspector-open={String(open)} /> }))
 vi.mock('@/components/CommandPalette', () => ({ CommandPalette: () => null }))
 vi.mock('@/components/ThemeToggle', () => ({ ThemeToggle: () => null }))
 vi.mock('@/components/SyncIndicator', () => ({ SyncIndicator: () => null }))
 vi.mock('@/components/ui/sonner', () => ({ Toaster: () => null }))
-vi.mock('@/hooks/useWindowControls', () => ({ useWindowControls: () => ({ desktop: false, mac: false, showControls: false }) }))
+vi.mock('@/hooks/useWindowControls', () => ({ useWindowControls: () => windowControls }))
 vi.mock('@/store/settings', () => ({
+  useResolvedTheme: () => 'light',
   useSettingsStore: (selector?: (state: object) => unknown) => {
-    const state = { sidebarWidth: 240, setSidebarWidth: vi.fn(), theme: 'light', systemRevision: 0 }
-    return selector ? selector(state) : state
+    return selector ? selector(settings) : settings
   },
 }))
 
 import { Layout } from './index'
+import { TooltipProvider } from '@/components/ui/tooltip'
+import { useDesktopShellStore } from '@/store/desktopShell'
 import { executeDesktopAction } from '@/lib/desktopActions'
 import { useSessionStore } from '@/store/session'
 import { useProfileStore } from '@/store/profile'
@@ -31,6 +39,11 @@ let root: Root
 
 beforeEach(() => {
   ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+  vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} })
+  Object.assign(windowControls, { desktop: false, mac: false, showControls: false, maximized: false })
+  settings.sidebarWidth = 240
+  vi.clearAllMocks()
+  useDesktopShellStore.setState({ serverRatio: 0.6, serversCollapsed: false, openedCollapsed: false })
   resetTerminalLayout()
   useSessionStore.setState(useSessionStore.getInitialState(), true)
   useProfileStore.setState({ fetchProfiles: async () => {}, fetchGroups: async () => {} })
@@ -43,58 +56,111 @@ beforeEach(() => {
 afterEach(async () => {
   await act(async () => root.unmount())
   host.remove()
+  vi.unstubAllGlobals()
   resetTerminalLayout()
   useSessionStore.setState(useSessionStore.getInitialState(), true)
   useProfileStore.setState(useProfileStore.getInitialState(), true)
 })
 
 function sidebar() { return host.querySelector<HTMLElement>('.eizhu-sidebar')! }
-function toggle() { return host.querySelector<HTMLButtonElement>('.header-left button')! }
+function toggle() { return host.querySelector<HTMLButtonElement>('.shell-top-controls button')! }
+async function render() { await act(async () => root.render(<TooltipProvider><Layout /></TooltipProvider>)) }
 
-it.each([false, true])('分屏强制收起并锁定侧栏，退出后恢复原来的折叠状态 %s', async (collapsed) => {
-  await act(async () => root.render(<Layout />))
+it.each([false, true])('分屏自动收起，退出时恢复进入前状态 %s', async (collapsed) => {
+  await render()
   if (collapsed) await act(async () => executeDesktopAction('sidebar'))
   expect(sidebar().classList.contains('collapsed')).toBe(collapsed)
-
   await act(async () => useTerminalLayoutStore.getState().split('horizontal'))
   expect(sidebar().classList.contains('collapsed')).toBe(true)
   expect(sidebar().hasAttribute('inert')).toBe(true)
-  expect(host.querySelector('[data-sidebar-visible="false"]')).not.toBeNull()
-  expect(toggle().disabled).toBe(true)
-  expect(toggle().title).toBe('分屏模式下侧栏已禁用')
-  expect(host.querySelector('.sidebar-resizer')).toBeNull()
-
-  await act(async () => {
-    await executeDesktopAction('sidebar')
-    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'B', ctrlKey: true, shiftKey: true, bubbles: true }))
-    toggle().click()
-  })
-  expect(sidebar().classList.contains('collapsed')).toBe(true)
-  await act(async () => useTerminalLayoutStore.getState().maximize())
-  expect(toggle().disabled).toBe(true)
-
-  await act(async () => useTerminalLayoutStore.getState().merge())
   expect(toggle().disabled).toBe(false)
+  await act(async () => useTerminalLayoutStore.getState().merge())
   expect(sidebar().classList.contains('collapsed')).toBe(collapsed)
-  expect(sidebar().hasAttribute('inert')).toBe(collapsed)
-  await act(async () => executeDesktopAction('sidebar'))
-  expect(sidebar().classList.contains('collapsed')).toBe(!collapsed)
 })
 
-it('关闭到只剩一个窗格后自动解除侧栏锁定', async () => {
-  await act(async () => root.render(<Layout />))
+it('分屏期间可通过按钮和快捷键展开，手动选择在退出后保留', async () => {
+  await render()
   await act(async () => useTerminalLayoutStore.getState().split('vertical'))
-  expect(toggle().disabled).toBe(true)
-  await act(async () => useSessionStore.getState().closeTab(useSessionStore.getState().activeTabId!))
-  expect(toggle().disabled).toBe(false)
+  await act(async () => toggle().click())
   expect(sidebar().classList.contains('collapsed')).toBe(false)
   expect(sidebar().hasAttribute('inert')).toBe(false)
+  await act(async () => useTerminalLayoutStore.getState().maximize())
+  expect(sidebar().classList.contains('collapsed')).toBe(false)
+  await act(async () => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'B', ctrlKey: true, shiftKey: true, bubbles: true })))
+  expect(sidebar().classList.contains('collapsed')).toBe(true)
+  await act(async () => useTerminalLayoutStore.getState().merge())
+  expect(sidebar().classList.contains('collapsed')).toBe(true)
 })
 
-it('已有分屏布局首次渲染时侧栏就处于收起和禁用状态', async () => {
+it('关闭到一个窗格时恢复侧栏且不锁定按钮', async () => {
+  await render()
+  await act(async () => useTerminalLayoutStore.getState().split('vertical'))
+  await act(async () => useSessionStore.getState().closeTab(useSessionStore.getState().activeTabId!))
+  expect(sidebar().classList.contains('collapsed')).toBe(false)
+  expect(toggle().disabled).toBe(false)
+})
+
+it('恢复已有分屏布局时收起侧栏，仍能手动展开', async () => {
   useTerminalLayoutStore.getState().split('horizontal')
-  await act(async () => root.render(<Layout />))
-  expect(toggle().disabled).toBe(true)
+  await render()
   expect(sidebar().classList.contains('collapsed')).toBe(true)
-  expect(sidebar().hasAttribute('inert')).toBe(true)
+  await act(async () => toggle().click())
+  expect(sidebar().classList.contains('collapsed')).toBe(false)
+})
+
+it('侧栏保留图标加文字，工作区操作仅图标，详情默认关闭', async () => {
+  await render()
+  const nav = host.querySelector('nav[aria-label="功能导航"]')!
+  expect([...nav.querySelectorAll('button')].map((b) => b.querySelector('span')?.textContent)).toEqual(['新建连接', 'SFTP 文件', '密钥管理', '命令片段'])
+  const inspector = host.querySelector<HTMLButtonElement>('[aria-label="服务器详情"]')!
+  expect(inspector.textContent).toBe('')
+  expect(host.querySelector('[data-inspector-open="false"]')).not.toBeNull()
+  await act(async () => inspector.click())
+  expect(host.querySelector('[data-inspector-open="true"]')).not.toBeNull()
+  expect(host.querySelector('.statusbar')).toBeNull()
+})
+
+it('关闭最后一个页面后显示连接首页', async () => {
+  await render()
+  await act(async () => useSessionStore.getState().closeTab('a'))
+  expect(host.textContent).toContain('连接你的服务器')
+  expect(host.querySelector('.shell-home input')).toBeNull()
+  expect(host.querySelector('.shell-home-shortcuts')).not.toBeNull()
+})
+
+it('macOS 为原生红绿灯保留最小宽度，折叠后工具图标移动到工作区', async () => {
+  Object.assign(windowControls, { desktop: true, mac: true })
+  settings.sidebarWidth = 160
+  await render()
+  expect(sidebar().style.width).toBe('180px')
+  expect(host.querySelector('[aria-label="调整侧栏宽度"]')?.getAttribute('aria-valuemin')).toBe('180')
+  expect(host.querySelector('.titlebar-controls')).toBeNull()
+  expect(host.querySelector('.shell-sidebar-top .shell-top-controls')).not.toBeNull()
+  await act(async () => toggle().click())
+  expect(host.querySelector('.shell-sidebar-top .shell-top-controls')).toBeNull()
+  expect(host.querySelector('.shell-workspace-header .shell-top-controls')).not.toBeNull()
+  expect(host.querySelector('.desktop-shell.is-mac.sidebar-is-hidden')).not.toBeNull()
+})
+
+it('Windows 窗口控制位于窗口层而非圆角工作区，按钮独立响应', async () => {
+  Object.assign(windowControls, { desktop: true, showControls: true })
+  await render()
+  const controls = host.querySelector<HTMLElement>('.shell-window-controls')!
+  expect(controls.parentElement).toBe(host.querySelector('.desktop-shell'))
+  expect(controls.closest('.shell-workspace')).toBeNull()
+  expect(host.querySelector('.shell-window-controls-space')).not.toBeNull()
+  const buttons = [...controls.querySelectorAll('button')]
+  expect(buttons.map((button) => button.getAttribute('aria-label'))).toEqual(['最小化', '最大化', '关闭'])
+  for (const button of buttons) {
+    expect(button.hasAttribute('data-tauri-drag-region')).toBe(false)
+    await act(async () => button.click())
+  }
+  expect(windowControls.minimize).toHaveBeenCalledOnce()
+  expect(windowControls.toggleMaximize).toHaveBeenCalledOnce()
+  expect(windowControls.close).toHaveBeenCalledOnce()
+  windowControls.maximized = true
+  await render()
+  expect(controls.querySelector('[aria-label="还原"]')).not.toBeNull()
+  await act(async () => toggle().click())
+  expect(host.querySelector('.shell-window-controls')).toBe(controls)
 })

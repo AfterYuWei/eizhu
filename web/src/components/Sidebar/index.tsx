@@ -1,11 +1,13 @@
 import { ItemSyncBadge } from '@/components/SyncIndicator'
-import { lazy, Suspense, useState, useMemo, useEffect, useRef } from 'react'
-import { Plus, Edit, Trash2, Server, FolderPlus, FolderEdit } from 'lucide-react'
+import { useState, useMemo, useEffect, useRef, type ReactNode } from 'react'
+import { Plus, Edit, Trash2, Server, FolderPlus, FolderEdit, ChevronDown } from 'lucide-react'
 import { ProfileForm } from '@/components/ProfileForm'
 import { GroupForm } from '@/components/Sidebar/GroupForm'
 import { useProfileStore } from '@/store/profile'
 import { useSessionStore } from '@/store/session'
-import { useSidebarDetailStore, GLOBAL_PAGE_KEY } from '@/store/sidebarDetail'
+import { useDesktopShellStore } from '@/store/desktopShell'
+import { ShellIconButton } from '@/components/Layout/ShellControls'
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { toast } from 'sonner'
 import { resolveServerIcon } from '@/lib/serverIcons'
 import { resolveGroupIcon } from '@/lib/groupIcons'
@@ -14,6 +16,7 @@ import { dropPayloadAttr } from '@/lib/dragRegistry'
 import { isMobileRuntime } from '@/lib/platform'
 import { SftpContextMenu } from '@/components/Sftp/SftpContextMenu'
 import { Button } from '@/components/ui/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -21,13 +24,10 @@ import {
 import type { Profile } from '@/types/profile'
 import type { Group } from '@/types/group'
 
-const ServerDetail = lazy(() =>
-  import('@/components/ServerDetail').then((module) => ({ default: module.ServerDetail })),
-)
-
 const UNGROUPED_ID = '__ungrouped__'
 
-export function Sidebar({ visible = true }: { visible?: boolean }) {
+export function Sidebar({ collapsed = false, onToggle, onAddServer }: { visible?: boolean; collapsed?: boolean; onToggle?: () => void; onAddServer?: () => void }) {
+  const { collapsedGroups, toggleGroup } = useDesktopShellStore()
   const mobile = isMobileRuntime()
   const {
     profiles: rawProfiles,
@@ -104,59 +104,7 @@ export function Sidebar({ visible = true }: { visible?: boolean }) {
   // Click-to-select on the server list (single click selects, double connects).
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null)
 
-  // Per-tab page selector + per-tab detail cache (shared across the app).
-  const { getPage, setPage, lastTerminalTabId, setLastTerminalTab, clearTab } =
-    useSidebarDetailStore()
-
-  // Effective terminal tab for the sidebar: the active terminal tab, or — when
-  // an SFTP tab is active — the last terminal tab (sidebar stays unchanged).
   const activeTab = tabs.find((t) => t.id === activeTabId)
-  const effectiveTabId = activeTab?.kind === 'terminal'
-    ? activeTabId
-    : lastTerminalTabId
-
-  // Current page for the effective tab (independent per tab).
-  const currentPage = mobile ? 0 : (effectiveTabId ? getPage(effectiveTabId) : getPage(GLOBAL_PAGE_KEY))
-
-  // Track the last terminal tab so SFTP tabs freeze the sidebar.
-  useEffect(() => {
-    if (activeTab?.kind === 'terminal' && activeTabId) {
-      setLastTerminalTab(activeTabId)
-    }
-  }, [activeTab, activeTabId, setLastTerminalTab])
-
-  // Auto-switch to the detail (page 2) when a terminal tab transitions to
-  // "connected". Each tab's page is stored independently so other tabs are
-  // unaffected.
-  const prevStatusRef = useRef<Record<string, string>>({})
-  useEffect(() => {
-    const prev = prevStatusRef.current
-    tabs.forEach((tab) => {
-      if (tab.kind !== 'terminal') return
-      if (tab.status === 'connected' && prev[tab.id] !== 'connected') {
-        setPage(tab.id, 1)
-      }
-      prev[tab.id] = tab.status
-    })
-    // prune stale ids
-    const currentIds = new Set(tabs.map((t) => t.id))
-    Object.keys(prev).forEach((id) => {
-      if (!currentIds.has(id)) delete prev[id]
-    })
-  }, [tabs, setPage])
-
-  // Clean up per-tab cache for closed terminal tabs (release memory).
-  const knownTabIdsRef = useRef<Set<string>>(new Set(tabs.map((t) => t.id)))
-  useEffect(() => {
-    const currentIds = new Set(tabs.map((t) => t.id))
-    knownTabIdsRef.current.forEach((id) => {
-      if (!currentIds.has(id)) clearTab(id)
-    })
-    knownTabIdsRef.current = currentIds
-  }, [tabs, clearTab])
-
-  // Terminal tabs only — SFTP tabs never get a detail pane.
-  const terminalTabs = useMemo(() => tabs.filter((t) => t.kind === 'terminal'), [tabs])
 
   const activeProfileId = useMemo(() => {
     const tab = tabs.find((t) => t.id === activeTabId)
@@ -211,6 +159,7 @@ export function Sidebar({ visible = true }: { visible?: boolean }) {
   // New servers always default to no group (ungrouped). Grouping is done
   // afterwards via drag-and-drop or manual selection in the form.
   const handleAddServer = () => {
+    if (onAddServer) { onAddServer(); setBlankMenu(null); return }
     setEditingProfile(null)
     setShowProfileForm(true)
     setBlankMenu(null)
@@ -290,7 +239,7 @@ export function Sidebar({ visible = true }: { visible?: boolean }) {
   const renderServerRow = (profile: Profile) => {
     const isSelected = profile.id === selectedProfileId
     const isActive = profile.id === activeProfileId
-    const tab = tabs.find((t) => t.profileId === profile.id)
+    const tab = tabs.find((t) => t.kind === 'terminal' && t.profileId === profile.id && t.status === 'connected') ?? tabs.find((t) => t.kind === 'terminal' && t.profileId === profile.id)
     const status = tab?.status ?? 'disconnected'
     const Icon = resolveServerIcon(profile.icon)
     const meta =
@@ -299,20 +248,24 @@ export function Sidebar({ visible = true }: { visible?: boolean }) {
         : `${profile.username}@${profile.host}`
 
   return (
+    <Tooltip key={profile.id}>
+    <TooltipTrigger asChild>
     <div
       key={profile.id}
       className={`srv ${status === 'disconnected' ? 'offline' : ''} ${isSelected || isActive ? 'active' : ''}`}
       role="button"
       tabIndex={0}
-      onPointerDown={(e) => serverDrag.start(e, { profileId: profile.id, name: profile.name })}
+      title={`${profile.name} · ${meta}`}
+      onPointerDown={(e) => { if (!(e.target as HTMLElement).closest('button')) serverDrag.start(e, { profileId: profile.id, name: profile.name }) }}
       onClick={(e) => {
         e.stopPropagation()
         if (mobile) handleConnect(profile)
         else setSelectedProfileId(profile.id)
       }}
-        onDoubleClick={mobile ? undefined : () => handleConnect(profile)}
+        onDoubleClick={mobile ? undefined : (e) => { if (!(e.target as HTMLElement).closest('button')) handleConnect(profile) }}
         onContextMenu={(e) => handleProfileContextMenu(e, profile)}
         onKeyDown={(e) => {
+          if ((e.target as HTMLElement).closest('button')) return
           if (e.key === 'Enter') {
             e.preventDefault()
             handleConnect(profile)
@@ -328,7 +281,7 @@ export function Sidebar({ visible = true }: { visible?: boolean }) {
         </div>
         <div className="srv-info">
           <span className="srv-nm">{profile.name}<ItemSyncBadge type="profile" id={profile.id} /></span>
-          <span className="srv-meta">{meta}</span>
+          <span className={`shell-connection-dot is-${status}`} aria-label={status === 'connected' ? '已连接' : status === 'connecting' || status === 'reconnecting' ? '连接中' : '未连接'} />
         </div>
         <Button
           type="button"
@@ -345,39 +298,52 @@ export function Sidebar({ visible = true }: { visible?: boolean }) {
           <Edit size={12} />
         </Button>
       </div>
+    </TooltipTrigger>
+    <TooltipContent side="right" sideOffset={8}>{profile.name} · {meta}</TooltipContent>
+    </Tooltip>
     )
   }
 
-  return (
-    <div className="flex flex-col h-full">
-      {currentPage === 0 ? (
-        <>
-          {/* Page 1 — global server list (shared across all tabs) */}
-          <div className="sidebar-title">
-            <span className="sidebar-title-left">
-              <span className="sidebar-title-text">服务器管理</span>
-              <span className="grp-cnt">{profiles.length}</span>
-            </span>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-xs"
-              className="grp-add-btn"
-              title="新增服务器"
-              aria-label="新增服务器"
-              onClick={(e) => {
-                e.stopPropagation()
-                handleAddServer()
-              }}
-            >
-              <Plus size={13} />
-            </Button>
-          </div>
+  const renderGroup = (group: Group, ancestors: string[] = []): ReactNode => {
+    if (ancestors.includes(group.id)) return null
+    const list = serversByGroup[group.id] ?? []
+    const children = groups.filter((g) => g.parent_id === group.id)
+    const Icon = resolveGroupIcon(group.icon)
+    const folded = Boolean(collapsedGroups[group.id])
+    return <div className={`srv-group ${dragOverGroupId === group.id ? 'grp-drop-target' : ''}`} key={group.id}
+      data-drag-payload={dropPayloadAttr({ kind: 'group', groupId: group.id })}>
+      <div className="grp-label" role="button" tabIndex={0} aria-expanded={!folded}
+        onClick={() => toggleGroup(group.id)}
+        onKeyDown={(event) => {
+          if ((event.target as HTMLElement).closest('button')) return
+          if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); toggleGroup(group.id) }
+        }} onContextMenu={(event) => handleGroupContextMenu(event, group)}>
+        <span className="grp-label-left"><ChevronDown size={12} className={folded ? 'is-collapsed' : ''} /><Icon size={13} className="grp-label-icon" />
+          <span className="grp-label-text">{group.name}<ItemSyncBadge type="group" id={group.id} /></span><span className="grp-cnt">{list.length}</span>
+        </span>
+      </div>
+      {!folded && <>{list.map(renderServerRow)}{children.length > 0 && <div className="shell-child-groups">{children.map((child) => renderGroup(child, [...ancestors, group.id]))}</div>}</>}
+    </div>
+  }
 
-          <div className="sidebar-body" onContextMenu={handleBlankContextMenu} onClick={() => setSelectedProfileId(null)}>
+  return (
+    <div className="shell-server-list">
+      <div className="shell-section-heading">
+        <Button variant="ghost" className="shell-section-toggle" aria-expanded={!collapsed} onClick={onToggle}>
+          <ChevronDown className={collapsed ? 'is-collapsed' : ''} size={12} /><span>服务器分组</span><span className="shell-count">{profiles.length}</span>
+        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild><ShellIconButton label="新增服务器或分组"><Plus size={15} /></ShellIconButton></DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onSelect={handleAddServer}><Server />新增服务器</DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => handleAddGroup('')}><FolderPlus />新建分组</DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+          <div className="sidebar-body" hidden={collapsed} inert={collapsed} onContextMenu={handleBlankContextMenu} onClick={() => setSelectedProfileId(null)}>
             {loading ? (
               <div className="sidebar-empty">
-                <span>Loading…</span>
+                <span>加载中…</span>
               </div>
             ) : profiles.length === 0 && groups.length === 0 ? (
               <div className="sidebar-empty">
@@ -390,32 +356,7 @@ export function Sidebar({ visible = true }: { visible?: boolean }) {
             ) : (
               <>
                 {/* Groups (folders) — render first, higher priority than loose servers */}
-                {groups.map((grp) => {
-                  const list = serversByGroup[grp.id] ?? []
-                  if (list.length === 0 && searchQuery) return null
-                  const isDropTarget = dragOverGroupId === grp.id
-                  const GroupIcon = resolveGroupIcon(grp.icon)
-
-                  return (
-                    <div
-                      className={`srv-group ${isDropTarget ? 'grp-drop-target' : ''}`}
-                      key={grp.id}
-                      data-drag-payload={dropPayloadAttr({ kind: 'group', groupId: grp.id })}
-                    >
-                      <div
-                        className="grp-label"
-                        onContextMenu={(e) => handleGroupContextMenu(e, grp)}
-                      >
-                        <span className="grp-label-left">
-                          <GroupIcon size={12} className="grp-label-icon" />
-                          <span className="grp-label-text">{grp.name}<ItemSyncBadge type="group" id={grp.id} /></span>
-                          <span className="grp-cnt">{list.length}</span>
-                        </span>
-                      </div>
-                      {list.map(renderServerRow)}
-                    </div>
-                  )
-                })}
+                {groups.filter((g) => !g.parent_id || !groups.some((parent) => parent.id === g.parent_id)).map((group) => renderGroup(group))}
 
                 {/* Loose servers (no group) — render last, like files outside folders */}
                 {looseServers.length > 0 && (
@@ -437,41 +378,6 @@ export function Sidebar({ visible = true }: { visible?: boolean }) {
               </>
             )}
           </div>
-        </>
-      ) : (
-        /* Page 2 — per-tab detail panes. All terminal-tab panes stay mounted
-           (toggled via display:none) so switching tabs never remounts DOM or
-           re-requests data. SFTP tabs never receive a pane; when an SFTP tab
-           is active the sidebar freezes on the last terminal tab's pane. */
-        <div className="sdetail-stack">
-          {terminalTabs.length === 0 ? (
-            <div className="sidebar-empty">
-              <span>暂无服务器会话</span>
-            </div>
-          ) : (
-            terminalTabs.map((tab) => (
-              <div
-                key={tab.id}
-                className="sdetail-slot"
-                style={{ display: tab.id === effectiveTabId ? 'flex' : 'none' }}
-              >
-                <Suspense fallback={null}>
-                  <ServerDetail
-                  tabId={tab.id}
-                  profileId={tab.profileId}
-                  profileName={tab.profileName}
-                  host={tab.host || '未知'}
-                  port={tab.port || 22}
-                  username={tab.username || 'root'}
-                    active={visible && tab.id === effectiveTabId}
-                  />
-                </Suspense>
-              </div>
-            ))
-          )}
-        </div>
-      )}
-
       {/* Profile context menu */}
       {profileMenu && (
         <SftpContextMenu
@@ -515,32 +421,6 @@ export function Sidebar({ visible = true }: { visible?: boolean }) {
           ]}
         />
       )}
-
-      {/* Segmented page indicator — page 1 = global list, page 2 = per-tab detail.
-          Each segment is a tall transparent hit area wrapping a thin line so
-          the visible stroke stays delicate while the click target is generous. */}
-      {!mobile && <div className="sidebar-pager">
-        <Button
-          type="button"
-          variant="ghost"
-          className={`pager-hit ${currentPage === 0 ? 'active' : ''}`}
-          aria-label="第 1 页"
-          aria-current={currentPage === 0}
-          onClick={() => setPage(effectiveTabId || GLOBAL_PAGE_KEY, 0)}
-        >
-          <span className="pager-line" />
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          className={`pager-hit ${currentPage === 1 ? 'active' : ''}`}
-          aria-label="第 2 页"
-          aria-current={currentPage === 1}
-          onClick={() => setPage(effectiveTabId || GLOBAL_PAGE_KEY, 1)}
-        >
-          <span className="pager-line" />
-        </Button>
-      </div>}
 
       {/* Profile form dialog */}
       <ProfileForm
