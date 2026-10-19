@@ -63,7 +63,23 @@ jobs:
         run: cargo clippy --all-targets --all-features --locked -- -D warnings
       - name: Rust tests
         working-directory: src-tauri
-        run: cargo test --all-features --locked
+        run: |
+          test_log="$RUNNER_TEMP/eizhu-rust-tests.log"
+          set +e
+          cargo test --all-features --locked 2>&1 | tee "$test_log"
+          test_status=${PIPESTATUS[0]}
+          set -e
+          if [ "$test_status" -ne 0 ]; then
+            failure_details="$(sed -n '/^failures:/,$p' "$test_log" | tail -n 160)"
+            if [ -z "$failure_details" ]; then
+              failure_details="$(tail -n 100 "$test_log")"
+            fi
+            failure_details="${failure_details//'%'/'%25'}"
+            failure_details="${failure_details//$'\r'/'%0D'}"
+            failure_details="${failure_details//$'\n'/'%0A'}"
+            printf '::error title=Rust tests failed::%s\n' "$failure_details"
+          fi
+          exit "$test_status"
 
   # 完整桌面进程烟测独立于 Rust 静态门禁，xvfb 提供 X display。
   desktop-smoke:
