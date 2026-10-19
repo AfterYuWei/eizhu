@@ -3,11 +3,11 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 
-export function ShellIconButton({ label, className, ...props }: ComponentProps<typeof Button> & { label: string }) {
+export function ShellIconButton({ label, className, showTooltip = true, ...props }: ComponentProps<typeof Button> & { label: string; showTooltip?: boolean }) {
+  const button = <Button type="button" variant="ghost" size="icon-sm" {...props} className={cn('shell-icon-button', className)} aria-label={label} />
+  if (!showTooltip) return button
   return <Tooltip>
-    <TooltipTrigger asChild>
-      <Button type="button" variant="ghost" size="icon-sm" {...props} className={cn('shell-icon-button', className)} aria-label={label} />
-    </TooltipTrigger>
+    <TooltipTrigger asChild>{button}</TooltipTrigger>
     <TooltipContent sideOffset={6}>{label}</TooltipContent>
   </Tooltip>
 }

@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
 import { isMobileRuntime } from '@/lib/platform'
+import { DEFAULT_DESKTOP_SIDEBAR_WIDTH } from '@/lib/desktopSidebar'
 
 type Theme = 'light' | 'dark' | 'system'
 export type UpdateChannel = 'stable' | 'test'
@@ -112,7 +113,7 @@ export const useSettingsStore = create<SettingsStore>()(
       mobileTerminalFontSize: DEFAULT_MOBILE_TERMINAL_FONT_SIZE,
       fontFamily: "'JetBrains Mono'",
       fontFamilyCN: "'Noto Sans SC'",
-      sidebarWidth: isMobileRuntime() ? 240 : 300,
+      sidebarWidth: isMobileRuntime() ? 240 : DEFAULT_DESKTOP_SIDEBAR_WIDTH,
       appFontSize: isMobileRuntime() ? 12 : 14,
       appFontFamily: DEFAULT_APP_FONT_FAMILY,
       terminalTheme: 'default',

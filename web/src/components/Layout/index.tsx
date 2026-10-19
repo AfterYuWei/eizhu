@@ -1,9 +1,10 @@
-import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
 import { FolderUp, KeyRound, PanelLeft, PanelLeftClose, PanelRight, Plus, Search, SquareTerminal } from 'lucide-react'
 import { TunnelDialog, TunnelPrompts } from '@/components/Terminal/TunnelDialog'
 import type { SettingsTab } from '@/components/SettingsDialog'
 import { workspaceGeneration } from '@/lib/workspaceScope'
 import { registerDesktopAction, runDesktopAction, shortcutAction } from '@/lib/desktopActions'
+import { DEFAULT_DESKTOP_SIDEBAR_WIDTH, MIN_DESKTOP_SIDEBAR_WIDTH, MAX_DESKTOP_SIDEBAR_WIDTH, DESKTOP_SIDEBAR_INSET } from '@/lib/desktopSidebar'
 import { Sidebar } from '@/components/Sidebar'
 import { TerminalView } from '@/components/Terminal'
 import { TerminalSplitMenu } from '@/components/Terminal/SplitControls'
@@ -18,9 +19,11 @@ import { useTerminalLayoutStore } from '@/store/terminalLayout'
 import { useSettingsStore, useResolvedTheme } from '@/store/settings'
 import { useDesktopShellStore } from '@/store/desktopShell'
 import { useSplitSidebar } from '@/hooks/useSplitSidebar'
+import { useSidebarPreview } from '@/hooks/useSidebarPreview'
 import { useWindowControls } from '@/hooks/useWindowControls'
 import { WindowControls } from '@/components/WindowControls'
 import { ShellIconButton, ShellResizeHandle } from './ShellControls'
+import { SidebarResizeHandle } from './SidebarResizeHandle'
 import { AccountMenu } from './AccountMenu'
 import { OpenItems } from './OpenItems'
 import { ConnectionHome } from './ConnectionHome'
@@ -35,7 +38,22 @@ export function Layout() {
   const { sidebarWidth, setSidebarWidth } = useSettingsStore()
   const theme = useResolvedTheme()
   const splitActive = useTerminalLayoutStore((s) => s.tree?.type === 'split')
-  const { collapsed: sidebarHidden, toggle: toggleSidebar } = useSplitSidebar(splitActive)
+  const { collapsed: sidebarHidden, toggle: toggleSidebarVisibility, collapse: collapseSidebar, expand: expandSidebar } = useSplitSidebar(splitActive)
+  const [sidebarButtonMotion, setSidebarButtonMotion] = useState(false)
+  const resizeSidebar = useCallback((width: number) => {
+    setSidebarButtonMotion(false)
+    setSidebarWidth(width)
+  }, [setSidebarWidth])
+  const expandSidebarToDefault = useCallback(() => {
+    setSidebarButtonMotion(false)
+    setSidebarWidth(DEFAULT_DESKTOP_SIDEBAR_WIDTH)
+    expandSidebar()
+  }, [setSidebarWidth, expandSidebar])
+  const toggleSidebar = useCallback(() => {
+    setSidebarButtonMotion(true)
+    if (sidebarHidden) setSidebarWidth(DEFAULT_DESKTOP_SIDEBAR_WIDTH)
+    toggleSidebarVisibility()
+  }, [sidebarHidden, setSidebarWidth, toggleSidebarVisibility])
   const { serverRatio, serversCollapsed, openedCollapsed, toggleServers, toggleOpened, setServerRatio, inspectorWidth } = useDesktopShellStore()
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [tunnelsOpen, setTunnelsOpen] = useState(false)
@@ -52,10 +70,14 @@ export function Layout() {
   const wasSettingsOpen = useRef(false)
   const lists = useRef<HTMLDivElement>(null)
   const knownTabs = useRef(new Set<string>())
+  const focusAfterResizeCollapse = useRef(false)
+  const sidebar = useRef<HTMLElement>(null)
+  const sidebarSpace = useRef<HTMLDivElement>(null)
+  const suppressSidebarHover = useRef(false)
+  const preview = useSidebarPreview(sidebarHidden, settingsOpen, sidebar)
+  const sidebarInteractive = !sidebarHidden || preview.interactive
   const { desktop, mac, showControls, maximized, minimize, toggleMaximize, close } = useWindowControls()
-  // 96px 原生按钮预留 + 两个 32px 图标 + 4px 间距 + 16px 右侧留白。
-  const minSidebarWidth = mac ? 180 : 160
-  const visibleSidebarWidth = Math.max(minSidebarWidth, Math.min(480, sidebarWidth))
+  const visibleSidebarWidth = Math.max(MIN_DESKTOP_SIDEBAR_WIDTH, Math.min(MAX_DESKTOP_SIDEBAR_WIDTH, sidebarWidth))
   const { fetchProfiles, fetchGroups } = useProfileStore()
   const activeTab = tabs.find((tab) => tab.id === activeTabId)
   const terminal = activeTab?.kind === 'terminal' && Boolean(activeTab.profileId)
@@ -71,6 +93,14 @@ export function Layout() {
     setSettingsTab(tab)
     setSettingsOpen(true)
   }, [])
+
+  useEffect(() => {
+    if (!sidebarHidden) suppressSidebarHover.current = false
+    if (sidebarHidden && focusAfterResizeCollapse.current) {
+      focusAfterResizeCollapse.current = false
+      sessionView.current?.querySelector<HTMLButtonElement>('.shell-fixed-top-controls button')?.focus()
+    }
+  }, [sidebarHidden])
 
   useEffect(() => {
     if (!settingsOpen && wasSettingsOpen.current) {
@@ -121,15 +151,19 @@ export function Layout() {
   }, [toggleSidebar, openSettings, settingsOpen])
 
   const topControls = <div className="shell-top-controls" data-tauri-drag-region={desktop || undefined}>
-    <ShellIconButton label={`${sidebarHidden ? '展开' : '折叠'}侧栏 (Ctrl/Cmd+Shift+B)`} aria-expanded={!sidebarHidden} onClick={() => runDesktopAction('sidebar')}>
+    <ShellIconButton label={`${sidebarHidden ? '展开' : '折叠'}侧栏 (Ctrl/Cmd+Shift+B)`} showTooltip={!sidebarHidden} aria-expanded={sidebarInteractive} aria-controls="desktop-main-sidebar" data-sidebar-preview-trigger={sidebarHidden || undefined}
+      onPointerEnter={(event) => { if (!suppressSidebarHover.current) preview.enter(event) }}
+      onPointerLeave={(event) => { suppressSidebarHover.current = false; preview.leave(event) }}
+      onClick={() => { suppressSidebarHover.current = !sidebarHidden; runDesktopAction('sidebar') }}>
       {sidebarHidden ? <PanelLeft size={16} /> : <PanelLeftClose size={16} />}
     </ShellIconButton>
     <ShellIconButton label="搜索服务器、密钥或命令 (Ctrl/Cmd+Shift+K)" onClick={() => setPaletteOpen(true)}><Search size={16} /></ShellIconButton>
   </div>
 
-  return <div className={`eizhu-app desktop-shell ${mac ? 'is-mac' : ''} ${sidebarHidden ? 'sidebar-is-hidden' : ''}`} role="application" aria-label="eizhu">
+  return <div className={`eizhu-app desktop-shell ${mac ? 'is-mac' : ''} ${sidebarHidden ? 'sidebar-is-hidden' : ''}`} style={{ '--shell-sidebar-default-width': `${DEFAULT_DESKTOP_SIDEBAR_WIDTH}px`, '--shell-sidebar-inset': `${DESKTOP_SIDEBAR_INSET}px` } as CSSProperties} role="application" aria-label="eizhu">
     <div className="shell-session-view" ref={sessionView} inert={settingsOpen} aria-hidden={settingsOpen || undefined}>
-      <aside className={`eizhu-sidebar shell-sidebar ${sidebarHidden ? 'collapsed' : ''}`} style={sidebarHidden ? undefined : { width: visibleSidebarWidth }} aria-label="主导航" aria-hidden={sidebarHidden} inert={sidebarHidden}>
+      <div ref={sidebarSpace} className={`shell-sidebar-space ${sidebarHidden ? 'is-collapsed' : ''} ${sidebarButtonMotion ? 'is-button-motion' : ''}`} style={{ width: sidebarHidden ? 0 : visibleSidebarWidth }}>
+      <aside ref={sidebar} id="desktop-main-sidebar" className={`eizhu-sidebar shell-sidebar ${sidebarHidden && !preview.present ? 'collapsed' : ''} ${preview.present ? 'is-preview' : ''} ${preview.open ? 'is-preview-open' : ''} ${preview.instantCollapse ? 'is-preview-resting' : ''}`} style={{ width: preview.present ? DEFAULT_DESKTOP_SIDEBAR_WIDTH : visibleSidebarWidth }} aria-label="主导航" aria-hidden={!sidebarInteractive} inert={!sidebarInteractive} onPointerEnter={preview.enter} onPointerLeave={preview.leave}>
         <div className="shell-sidebar-top" data-tauri-drag-region={desktop || undefined}>{!sidebarHidden && topControls}</div>
         <nav className="shell-primary-nav" aria-label="功能导航">
           <Button variant="ghost" className={!tabs.length || activeTab?.kind === 'terminal' && !activeTab.profileId ? 'is-active' : ''} onClick={() => runDesktopAction('new')}><Plus size={16} /><span>新建连接</span><kbd>{mac ? '⇧⌘T' : 'Ctrl+Shift+T'}</kbd></Button>
@@ -139,17 +173,23 @@ export function Layout() {
         </nav>
         <div className="shell-lists" ref={lists}>
           <section className="shell-servers" aria-label="服务器分组" style={{ flex: serversCollapsed ? '0 0 auto' : `${openedCollapsed ? 1 : serverRatio} 1 0` }}>
-            <Sidebar visible={!sidebarHidden && !settingsOpen} collapsed={serversCollapsed} onToggle={toggleServers} onAddServer={() => setProfileFormOpen(true)} />
+            <Sidebar visible={sidebarInteractive && !settingsOpen} collapsed={serversCollapsed} onToggle={toggleServers} onAddServer={() => setProfileFormOpen(true)} />
           </section>
           {!serversCollapsed && !openedCollapsed && <ShellResizeHandle label="调整服务器和已打开区域比例" orientation="horizontal" value={serverRatio} min={0.2} max={0.8} step={0.05} pixelsPerUnit={listsHeight} onChange={setServerRatio} />}
           <div className="shell-open-section" style={{ flex: openedCollapsed ? '0 0 auto' : `${serversCollapsed ? 1 : 1 - serverRatio} 1 0` }}><OpenItems collapsed={openedCollapsed} onToggle={toggleOpened} /></div>
         </div>
         <div className="shell-sidebar-footer"><AccountMenu onSettings={openSettings} /></div>
       </aside>
-      {!sidebarHidden && <ShellResizeHandle label="调整侧栏宽度" className="shell-sidebar-resizer" value={visibleSidebarWidth} min={minSidebarWidth} max={480} onChange={setSidebarWidth} />}
+      </div>
+      <SidebarResizeHandle width={visibleSidebarWidth} collapsed={sidebarHidden} disabled={settingsOpen} measureWidth={() => sidebarSpace.current?.getBoundingClientRect().width || visibleSidebarWidth} onResize={resizeSidebar} onExpand={expandSidebarToDefault} onCollapse={() => {
+        setSidebarButtonMotion(false)
+        focusAfterResizeCollapse.current = true
+        collapseSidebar()
+      }} />
+      {sidebarHidden && <div className="shell-fixed-top-controls">{topControls}</div>}
       <main className="shell-workspace">
         <header className="shell-workspace-header" data-tauri-drag-region={desktop || undefined}>
-          {sidebarHidden && topControls}
+          {sidebarHidden && <div className="shell-top-controls-slot" aria-hidden="true" />}
           <div className="shell-page-heading" data-tauri-drag-region={desktop || undefined}>
             {pageName && <span className="shell-page-name" title={pageName}>{pageName}</span>}
             {terminal && <span className="shell-page-status" role="status" title={activeTab?.errorMessage || status}><span className={`shell-connection-dot is-${activeTab?.status}`} />{status}</span>}

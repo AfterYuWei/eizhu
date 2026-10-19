@@ -334,7 +334,7 @@ export function Sidebar({ collapsed = false, onToggle, onAddServer }: { visible?
         </Button>
         <DropdownMenu>
           <DropdownMenuTrigger asChild><ShellIconButton label="新增服务器或分组"><Plus size={15} /></ShellIconButton></DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
+          <DropdownMenuContent data-sidebar-popover align="end">
             <DropdownMenuItem onSelect={handleAddServer}><Server />新增服务器</DropdownMenuItem>
             <DropdownMenuItem onSelect={() => handleAddGroup('')}><FolderPlus />新建分组</DropdownMenuItem>
           </DropdownMenuContent>
@@ -381,6 +381,7 @@ export function Sidebar({ collapsed = false, onToggle, onAddServer }: { visible?
       {/* Profile context menu */}
       {profileMenu && (
         <SftpContextMenu
+          sidebarPopover
           x={profileMenu.x}
           y={profileMenu.y}
           onClose={() => setProfileMenu(null)}
@@ -397,6 +398,7 @@ export function Sidebar({ collapsed = false, onToggle, onAddServer }: { visible?
       {/* Group context menu */}
       {groupMenu && (
         <SftpContextMenu
+          sidebarPopover
           x={groupMenu.x}
           y={groupMenu.y}
           onClose={() => setGroupMenu(null)}
@@ -412,6 +414,7 @@ export function Sidebar({ collapsed = false, onToggle, onAddServer }: { visible?
       {/* Blank-area context menu */}
       {blankMenu && (
         <SftpContextMenu
+          sidebarPopover
           x={blankMenu.x}
           y={blankMenu.y}
           onClose={() => setBlankMenu(null)}

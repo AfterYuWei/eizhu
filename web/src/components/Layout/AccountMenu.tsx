@@ -3,6 +3,7 @@ import { useAccountStore } from '@/store/account'
 import { useSettingsStore } from '@/store/settings'
 import { useSyncStore } from '@/store/sync'
 import { SYNC_STATUS_LABELS } from '@/types/sync'
+import { DEFAULT_DESKTOP_SIDEBAR_WIDTH, DESKTOP_SIDEBAR_INSET } from '@/lib/desktopSidebar'
 import { useRef } from 'react'
 import { AccountIdentity } from './AccountIdentity'
 import type { SettingsTab } from '@/components/SettingsDialog'
@@ -27,13 +28,13 @@ export function AccountMenu({ onSettings }: { onSettings: (tab: SettingsTab) => 
         <AccountIdentity />
       </Button>
     </DropdownMenuTrigger>
-    <DropdownMenuContent side="top" align="start" sideOffset={8} className="shell-account-menu w-64" onCloseAutoFocus={(event) => {
+    <DropdownMenuContent data-sidebar-popover side="top" align="start" sideOffset={8} className="shell-account-menu" style={{ width: DEFAULT_DESKTOP_SIDEBAR_WIDTH - 2 * DESKTOP_SIDEBAR_INSET }} onCloseAutoFocus={(event) => {
       if (openingSettings.current) { event.preventDefault(); openingSettings.current = false }
     }}>
       <DropdownMenuItem onSelect={() => openSettings('appearance')}><Settings />设置</DropdownMenuItem>
       <DropdownMenuSub>
         <DropdownMenuSubTrigger><Palette />主题</DropdownMenuSubTrigger>
-        <DropdownMenuSubContent>
+        <DropdownMenuSubContent data-sidebar-popover className="shell-account-submenu">
           <DropdownMenuRadioGroup value={theme} onValueChange={(value) => setTheme(value as typeof theme)}>
             <DropdownMenuRadioItem value="light"><Sun size={15} />浅色</DropdownMenuRadioItem>
             <DropdownMenuRadioItem value="dark"><Moon size={15} />深色</DropdownMenuRadioItem>

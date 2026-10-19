@@ -22,10 +22,11 @@ interface SftpContextMenuProps {
   y: number
   items: MenuItem[]
   onClose: () => void
+  sidebarPopover?: boolean
 }
 
 /** Controlled shadcn context menu anchored at the captured pointer position. */
-export function SftpContextMenu({ x, y, items, onClose }: SftpContextMenuProps) {
+export function SftpContextMenu({ x, y, items, onClose, sidebarPopover = false }: SftpContextMenuProps) {
   const triggerRef = useRef<HTMLSpanElement>(null)
   const [open, setOpen] = useState(false)
 
@@ -57,7 +58,7 @@ export function SftpContextMenu({ x, y, items, onClose }: SftpContextMenuProps) 
           onContextMenu={(event) => event.stopPropagation()}
         />
       </ContextMenuTrigger>
-      <ContextMenuContent className="min-w-[168px]" collisionPadding={8}>
+      <ContextMenuContent data-sidebar-popover={sidebarPopover || undefined} className="min-w-[168px]" collisionPadding={8}>
         {items.map((item) =>
           item.divider ? (
             <ContextMenuSeparator key={item.id} />
