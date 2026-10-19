@@ -78,6 +78,8 @@ pub(super) struct ResumableTransfers {
     emitted: Arc<std::sync::Mutex<HashMap<String, EmittedProgress>>>,
     #[cfg(test)]
     write_fault: Arc<Mutex<Option<CommandError>>>,
+    #[cfg(test)]
+    pause_after_checkpoint: Arc<Mutex<Option<(usize, u64)>>>,
 }
 fn io_error(error: SftpError) -> CommandError {
     let message = error.to_string();
@@ -216,6 +218,8 @@ impl ResumableTransfers {
             emitted: Arc::new(std::sync::Mutex::new(HashMap::new())),
             #[cfg(test)]
             write_fault: Arc::new(Mutex::new(None)),
+            #[cfg(test)]
+            pause_after_checkpoint: Arc::new(Mutex::new(None)),
         })
     }
     async fn entry(&self, id: &str) -> Result<Entry, CommandError> {
@@ -993,6 +997,19 @@ impl ResumableTransfers {
                 next.task.speed = meter.record(next.task.transferred, Instant::now());
                 self.save_checkpoint(&next, index, events)?;
                 *record = next;
+                #[cfg(test)]
+                if self
+                    .pause_after_checkpoint
+                    .lock()
+                    .await
+                    .take_if(|(file_index, offset)| {
+                        *file_index == index && *offset == file.confirmed_offset
+                    })
+                    .is_some()
+                {
+                    control.requested.store(1, Ordering::Release);
+                    control.stop.cancel();
+                }
             }
             Ok::<_, CommandError>(())
         }
@@ -2379,6 +2396,9 @@ mod tests {
         tokio::fs::write(source.join("1-large"), &bytes)
             .await
             .unwrap();
+        // UI progress is throttled, so fast transfers can finish before the
+        // next event. Pause at a persisted checkpoint instead of racing events.
+        *f.service.transfers.pause_after_checkpoint.lock().await = Some((1, BLOCK_SIZE as u64));
         let id = copy(
             &f,
             source.to_str().unwrap(),
@@ -2386,24 +2406,11 @@ mod tests {
             "preserve",
         )
         .await;
-        first_block(&mut f, &id).await;
-        f.service
-            .transfers
-            .pause(&id, f.service.events.as_ref())
-            .await
-            .unwrap();
-        let record = f
-            .service
-            .transfers
-            .entry(&id)
-            .await
-            .unwrap()
-            .lock()
-            .await
-            .clone();
+        let record = finished(&f, &id).await;
+        assert_eq!(record.task.status, "paused");
         assert!(record.files[0].committed);
         assert!(!record.files[1].committed);
-        assert!(record.files[1].confirmed_offset > 0);
+        assert_eq!(record.files[1].confirmed_offset, BLOCK_SIZE as u64);
         let first = destination.join("directory/0-small");
         let modified = std::fs::metadata(&first).unwrap().modified().unwrap();
         f.service.transfers =

@@ -74,9 +74,9 @@ jobs:
             if [ -z "$failure_details" ]; then
               failure_details="$(tail -n 100 "$test_log")"
             fi
-            failure_details="${failure_details//'%'/'%25'}"
-            failure_details="${failure_details//$'\r'/'%0D'}"
-            failure_details="${failure_details//$'\n'/'%0A'}"
+            failure_details="${failure_details//%/%25}"
+            failure_details="${failure_details//$'\r'/%0D}"
+            failure_details="${failure_details//$'\n'/%0A}"
             printf '::error title=Rust tests failed::%s\n' "$failure_details"
           fi
           exit "$test_status"
