@@ -516,5 +516,5 @@ Cards are rectangles at 12–16px radius; marketing buttons and category tabs ar
 
 ### 原生窗口按钮校验
 
-- macOS `trafficLightPosition` 的 `y` 是 Tao 标题栏容器的附加高度，并非按钮中心坐标；当前配置 `{x: 24, y: 34}` 将本机原生按钮中心对齐到 32px。修改依赖或布局尺寸后需复核。
-- 在 macOS 执行 `swift scripts/verify-macos-window-chrome.swift`，使用不可见 AppKit 窗口检查原生按钮与 CSS 中心线、预留区域。该检查不替代 Tauri 实机窗口拖动、全屏及 Windows 缩放验收。
+- macOS 使用 `infrastructure/platform/desktop/macos_chrome.rs` 测量真实 WKWebView 坐标并定位原生按钮，避免将 Tao 的 `trafficLightPosition.y` 误作按钮中心。按钮中心与 WebView 顶部 32pt 处的工具图标共线，点击区扩大到 16×16pt，保留原生绘制和行为；缩放、恢复与聚焦后重新定位，全屏由系统管理。
+- 在 macOS 执行 `swift scripts/verify-macos-window-chrome.swift`，使用不可见 AppKit 窗口检查正常与紧凑两套原生尺寸、三种窗口尺寸及重复布局后的中心线、点击区与预留区域。该检查不替代 Tauri 编译及实机窗口拖动、全屏验收。

@@ -6,6 +6,8 @@ mod editor_transition;
 mod editor_window;
 mod error;
 mod logs;
+#[cfg(target_os = "macos")]
+mod macos_chrome;
 mod main_window;
 mod paths;
 mod settings_migration;

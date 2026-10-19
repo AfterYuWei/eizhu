@@ -50,6 +50,9 @@ fn initial_window_geometry(
 }
 
 pub(crate) fn configure_main_window(window: &WebviewWindow) -> tauri::Result<()> {
+    #[cfg(target_os = "macos")]
+    super::macos_chrome::install(window);
+
     let monitor = window
         .current_monitor()
         .ok()
