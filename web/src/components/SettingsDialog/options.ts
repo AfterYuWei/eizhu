@@ -1,4 +1,4 @@
-/** 设置选项常量 — 桌面 SettingsDialog 与移动端设置二级页共用。 */
+/** 设置选项常量 — 桌面设置整页与移动端设置二级页共用。 */
 
 export const themeOptions = [
   { value: 'light', label: '浅色' },

@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 import { StrictMode, act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, beforeEach, expect, it } from 'vitest'
-import { SettingsDialog } from './index'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { SettingsPage } from './index'
 
 let host: HTMLDivElement
 let root: Root
@@ -29,9 +29,12 @@ it.each(['appearance', 'account'] as const)('账号设置从 %s 入口打开后�
   await act(async () => root.render(
     <StrictMode>
       <main>工作区</main>
-      <SettingsDialog open onOpenChange={() => undefined} initialTab={initialTab} />
+      <SettingsPage onBack={() => undefined} initialTab={initialTab} />
     </StrictMode>,
   ))
+  expect(document.querySelector('[role="dialog"]')).toBeNull()
+  expect(host.querySelector('.settings-page-profile')?.textContent).toContain('本地用户')
+  expect(document.activeElement?.getAttribute('role')).toBe('tab')
 
   for (let attempt = 0; attempt < 2; attempt++) {
     await act(async () => selectTab('账号'))
@@ -43,4 +46,15 @@ it.each(['appearance', 'account'] as const)('账号设置从 %s 入口打开后�
     await act(async () => selectTab('外观'))
     expect(document.querySelector('[role="tabpanel"][data-state="active"]')?.textContent).toContain('外观设置')
   }
+})
+
+it('整页设置通过返回应用或 Esc 退出', async () => {
+  const onBack = vi.fn()
+  await act(async () => root.render(<SettingsPage onBack={onBack} />))
+  const back = host.querySelector<HTMLButtonElement>('.settings-page-back')!
+  expect(back.textContent).toContain('返回应用')
+  await act(async () => back.click())
+  expect(onBack).toHaveBeenCalledTimes(1)
+  await act(async () => back.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })))
+  expect(onBack).toHaveBeenCalledTimes(2)
 })

@@ -128,6 +128,26 @@ it('关闭最后一个页面后显示连接首页', async () => {
   expect(host.querySelector('.shell-home-shortcuts')).not.toBeNull()
 })
 
+it('设置整页覆盖时保留终端节点、阻止后台快捷键，返回后恢复焦点', async () => {
+  await import('@/components/SettingsDialog')
+  await render()
+  const terminal = host.querySelector('.shell-workspace-content > main')!
+  const account = host.querySelector<HTMLButtonElement>('.shell-account')!
+  account.focus()
+  await act(async () => executeDesktopAction('account-settings'))
+  expect(host.querySelector('.settings-page')).not.toBeNull()
+  expect(host.querySelector('.shell-session-view')?.hasAttribute('inert')).toBe(true)
+  expect(host.querySelector('[role="dialog"]')).toBeNull()
+  expect(host.querySelector('.settings-page-heading')?.textContent).toBe('账号')
+  await act(async () => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'W', ctrlKey: true, shiftKey: true, bubbles: true, cancelable: true })))
+  expect(useSessionStore.getState().tabs).toHaveLength(1)
+  await act(async () => host.querySelector<HTMLButtonElement>('.settings-page-back')!.click())
+  expect(host.querySelector('.settings-page')).toBeNull()
+  expect(host.querySelector('.shell-workspace-content > main')).toBe(terminal)
+  expect(host.querySelector('.shell-session-view')?.hasAttribute('inert')).toBe(false)
+  expect(document.activeElement).toBe(account)
+})
+
 it('macOS 为原生红绿灯保留最小宽度，折叠后工具图标移动到工作区', async () => {
   Object.assign(windowControls, { desktop: true, mac: true })
   settings.sidebarWidth = 160

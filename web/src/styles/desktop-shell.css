@@ -32,6 +32,7 @@
   --shell-selected: #303030;
 }
 .desktop-shell [hidden] { display: none !important; }
+.shell-session-view { display: contents; }
 .desktop-shell .shell-sidebar {
   display: flex;
   flex-direction: column;
@@ -54,7 +55,8 @@
 .shell-icon-button:hover { background: var(--shell-hover, var(--bg-hover)); color: var(--fg); }
 .shell-icon-button[aria-pressed="true"] { background: var(--shell-selected, var(--bg-active)); color: var(--fg); }
 .shell-primary-nav { display: flex; flex-direction: column; gap: 2px; padding: 0 12px 24px; }
-.shell-primary-nav > button { width: 100%; min-height: 36px; height: auto; justify-content: flex-start; gap: 9px; padding: 7px 9px; font-size: inherit; font-weight: 400; color: var(--fg-2); }
+.shell-primary-nav > button { width: 100%; min-height: var(--desktop-menu-row-height, 36px); height: auto; justify-content: flex-start; gap: 8px; padding: 7px 9px; font: 400 var(--sans-size) / 1.5 var(--sans); color: var(--fg-2); }
+.shell-primary-nav > button > svg { width: 16px; height: 16px; }
 .shell-primary-nav > button:hover { background: var(--shell-hover); }
 .shell-primary-nav > button.is-active { background: var(--shell-selected); }
 .shell-primary-nav > button > span { overflow: hidden; text-overflow: ellipsis; }
@@ -176,4 +178,25 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .desktop-shell *, .shell-palette { animation: none !important; transition: none !important; }
+}
+
+/* Radix menus render in body portals. Scope these tokens to the desktop main
+   window so editor windows and the mobile shell retain their own sizing. */
+body:has(.desktop-shell) {
+  --desktop-menu-row-height: 36px;
+  --desktop-menu-icon-size: 16px;
+}
+body:has(.desktop-shell) :is([role="menu"], [data-slot="select-content"]) {
+  font: 400 var(--sans-size) / 1.5 var(--sans);
+}
+body:has(.desktop-shell) :is([role="menu"] :is([role="menuitem"], [role="menuitemcheckbox"], [role="menuitemradio"]), [data-slot="select-item"]) {
+  min-height: var(--desktop-menu-row-height);
+  padding-block: 7px;
+  gap: 8px;
+  font: inherit;
+}
+body:has(.desktop-shell) [role="menu"] :is([role="menuitem"], [role="menuitemcheckbox"], [role="menuitemradio"]) > svg {
+  width: var(--desktop-menu-icon-size);
+  height: var(--desktop-menu-icon-size);
+  flex-shrink: 0;
 }
