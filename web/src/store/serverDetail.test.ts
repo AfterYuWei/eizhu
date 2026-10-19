@@ -23,10 +23,15 @@ it('关闭标签及切换空间不会被迟到连接结果重新创建，迟到�
   const old = store.getState().connect('p'); setWorkspaceGeneration(2); store.setState(store.getInitialState(), true); resolve({ session_id: 'old' }); await old
   expect(store.getState().details).toEqual({}); expect(api.closeSession).toHaveBeenCalledWith('old')
 })
-it('样本限额与账号重置清空，不保存到持久化', async () => {
+it('实时指标持续更新，账号重置后清空且迟到结果不会重建详情', async () => {
   await store.getState().connect('p')
-  for (let index = 1; index <= 130; index++) store.getState().updateMetrics('p', { ...store.getState().details.p.metrics, timestamp: index * 3000, cpu: 20 })
-  expect(store.getState().details.p.samples).toHaveLength(120)
+  const metrics = { ...store.getState().details.p.metrics, cpu: 20, mem_percent: 30, net_rx: 1024 }
+  store.getState().updateMetrics('p', metrics)
+  expect(store.getState().details.p.metrics).toEqual(metrics)
+  const latest = { ...metrics, cpu: 40, mem_percent: 50, net_rx: 2048 }
+  store.getState().updateMetrics('p', latest)
+  expect(store.getState().details.p.metrics).toEqual(latest)
   setWorkspaceGeneration(2); store.setState(store.getInitialState(), true)
+  store.getState().updateMetrics('p', metrics)
   expect(store.getState().details).toEqual({})
 })

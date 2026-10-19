@@ -61,7 +61,7 @@ async function bootstrap() {
   )
   if (!isEditorWindow) installMobileLifecycle()
 
-  // 首帧渲染完成后显示并最大化窗口（等价 Electron ready-to-show + maximize）。
+  // 首帧渲染完成后显示已按当前屏幕工作区调整尺寸的窗口。
   // 主窗口已在初始化阶段注册关闭协调器，现在可安全显示。
   if (isDesktopRuntime() && !isEditorWindow) {
     setTimeout(() => void invoke('frontend_ready'), 0)

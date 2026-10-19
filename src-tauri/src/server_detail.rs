@@ -95,7 +95,6 @@ pub(crate) struct ServerMetrics {
     net_rx: i64,
     net_tx: i64,
     net_detail: Vec<NetIfStat>,
-    timestamp: i64,
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -327,10 +326,7 @@ fn parse_metrics(output: &str) -> ServerMetrics {
     let after_cpu = parse_cpu(values.get("CPU2").copied().unwrap_or_default());
     let before_net = parse_net(values.get("NET1").copied().unwrap_or_default());
     let after_net = parse_net(values.get("NET2").copied().unwrap_or_default());
-    let mut metrics = ServerMetrics {
-        timestamp: chrono::Utc::now().timestamp_millis(),
-        ..Default::default()
-    };
+    let mut metrics = ServerMetrics::default();
     if let (Some(before), Some(after)) = (before_cpu.get("T"), after_cpu.get("T")) {
         metrics.cpu = percentage(*before, *after);
     }

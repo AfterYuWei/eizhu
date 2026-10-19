@@ -21,7 +21,7 @@ beforeEach(async () => {
 afterEach(async () => { await act(async () => root.unmount()); vi.useRealTimers(); vi.restoreAllMocks() })
 function Test({ active }: { active: boolean }) { useServerMetrics('p', active); return null }
 it('只有可见详情三秒采样，折叠及进入后台立即停止，返回后继续', async () => {
-  api.getMetrics.mockImplementation(async () => ({ ...store.getState().details.p.metrics, timestamp: Date.now() }))
+  api.getMetrics.mockImplementation(async () => ({ ...store.getState().details.p.metrics, cpu: 25 }))
   await act(async () => root.render(<Test active={false} />)); expect(api.getMetrics).not.toHaveBeenCalled()
   await act(async () => root.render(<Test active />)); expect(api.getMetrics).toHaveBeenCalledTimes(1)
   await act(async () => { vi.advanceTimersByTime(3000) }); expect(api.getMetrics).toHaveBeenCalledTimes(2)
@@ -35,11 +35,12 @@ it('只有可见详情三秒采样，折叠及进入后台立即停止，返回�
 it('隐藏后重新显示不重叠采样，丢弃隐藏期及旧空间结果', async () => {
   let resolve!: (response: ReturnType<typeof store.getState>['details'][string]['metrics']) => void
   api.getMetrics.mockImplementation(() => new Promise((done) => { resolve = done }))
-  const metrics = { ...store.getState().details.p.metrics, timestamp: 3000, cpu: 80 }
+  const initial = store.getState().details.p.metrics
+  const metrics = { ...initial, cpu: 80 }
   await act(async () => root.render(<Test active />))
   await act(async () => root.render(<Test active={false} />)); await act(async () => root.render(<Test active />))
   expect(api.getMetrics).toHaveBeenCalledTimes(1)
-  await act(async () => resolve(metrics)); expect(store.getState().details.p.samples).toEqual([])
+  await act(async () => resolve(metrics)); expect(store.getState().details.p.metrics).toEqual(initial)
   await act(async () => { vi.advanceTimersByTime(3000) }); expect(api.getMetrics).toHaveBeenCalledTimes(2)
   await act(async () => { setWorkspaceGeneration(2); store.setState(store.getInitialState(), true) })
   await act(async () => resolve(metrics)); expect(store.getState().details).toEqual({})

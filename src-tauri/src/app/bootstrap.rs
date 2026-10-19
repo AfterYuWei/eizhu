@@ -457,6 +457,11 @@ fn desktop_run() {
             commands::account_set_sync_enabled
         ])
         .setup(move |app| {
+            if let Some(window) = app.get_webview_window("main") {
+                if let Err(error) = desktop::configure_main_window(&window) {
+                    super::log_runtime_error("initial_window_geometry_failed", &error.to_string());
+                }
+            }
             app.manage(commands::EditorWindowCoordinator::default());
             let data_dir = desktop::user_data_dir()
                 .map_err(|error| std::io::Error::other(error.to_string()))?;

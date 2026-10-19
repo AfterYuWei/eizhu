@@ -1,4 +1,3 @@
-import { appendMetricSample, type MetricSample } from '@/lib/metricSamples'
 import { workspaceGeneration } from '@/lib/workspaceScope'
 import { create } from 'zustand'
 import { serverDetailApi } from '@/api/serverDetail'
@@ -30,7 +29,6 @@ interface ServerDetailState {
   info: ServerInfo
   files: FileTreeNode[]
   metrics: ServerMetrics
-  samples: MetricSample[]
   requestId: number
   wsConnected: boolean
   homeDir: string
@@ -100,7 +98,6 @@ const emptyMetrics = (): ServerMetrics => ({
   net_rx: 0,
   net_tx: 0,
   net_detail: [],
-  timestamp: 0,
 })
 
 const defaultState = (): ServerDetailState => ({
@@ -110,7 +107,6 @@ const defaultState = (): ServerDetailState => ({
   info: emptyInfo(),
   files: [],
   metrics: emptyMetrics(),
-  samples: [],
   requestId: 0,
   wsConnected: false,
   homeDir: '/',
@@ -437,12 +433,10 @@ export const useServerDetailStore = create<ServerDetailStore>((set, get) => ({
     set((s) => {
       const detail = s.details[profileId]
       if (!detail) return s
-      const samples = appendMetricSample(detail.samples, metrics)
-      if (samples === detail.samples) return s
       return {
         details: {
           ...s.details,
-          [profileId]: { ...detail, metrics, samples },
+          [profileId]: { ...detail, metrics },
         },
       }
     })
