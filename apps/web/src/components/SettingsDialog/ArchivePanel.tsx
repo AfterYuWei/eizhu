@@ -31,7 +31,7 @@ export function ArchivePanel() {
   const lastOperation = useRef<{ work: () => Promise<unknown>; message: string } | null>(null)
   const refresh = useCallback(async () => {
     try { const [s, st, vs, safety] = await Promise.all([archiveApi.settings(), archiveApi.status(), archiveApi.versions(), archiveApi.safetyVersions()]); setSettings(s); setStatus(st); setVersions(vs); setSafety(safety) }
-    catch (e) { setErrorCode(normalizeCommandError(e).error.code); toast.error(e instanceof Error ? e.message : String(e)) }
+    catch (e) { const code=normalizeCommandError(e).error.code;setErrorCode(code); if(code!=='STAGE_NOT_READY')toast.error(e instanceof Error ? e.message : String(e)) }
   }, [])
   useEffect(() => {
     void refresh()
@@ -46,6 +46,7 @@ export function ArchivePanel() {
     catch (e) { setErrorCode(normalizeCommandError(e).error.code); toast.error(e instanceof Error ? e.message : String(e)) }
     finally { setBusy(false) }
   }
+  if (errorCode === 'STAGE_NOT_READY') return <p className="settings-field-desc">完整版本、自动备份与云端目标将在阶段 5 开放；当前可使用文件备份、本地导入和安全快照。</p>
   if (!settings || !status) return errorCode ? <ErrorRecovery code={errorCode} onRetry={() => void refresh()} /> : <p>加载备份配置…</p>
   return <div className="settings-section">
     <div className="settings-section-title">完整版本与云备份</div>

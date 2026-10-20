@@ -10,8 +10,8 @@ export async function copySensitiveText(
   onCountdown: ClipboardCountdown,
   clearAfterSeconds = 30,
 ): Promise<void> {
-  await writeClipboardText(text)
   let remaining = Math.max(1, Math.floor(clearAfterSeconds))
+  await bridge().clipboard.writeSensitive({text,clearAfterSeconds:remaining})
   onCountdown(remaining, false)
   const timer = globalThis.setInterval(() => {
     remaining -= 1
@@ -26,7 +26,9 @@ export async function copySensitiveText(
 
 async function clearIfUnchanged(expected: string): Promise<boolean> {
   try {
-    if (await readClipboardText() !== expected) return false
+    const content=await readClipboardText()
+    if (content === '') return true
+    if (content !== expected) return false
     await writeClipboardText('')
     return true
   } catch {

@@ -65,6 +65,12 @@ import type {
 
 /** Reserved domain contracts. Each operation is enabled with its runtime schema in its delivery stage. */
 export interface DomainOperations {
+  'audit.list': {
+    input: { limit: number }
+    output: Array<{ id: string; action: string; entity_id: string; created_at: string }>
+  }
+  'audit.clear': { input: void; output: void }
+  'backup.prepareRestore': { input: { filePath: string; password?: string }; output: RestorePreview }
   'account.login': { input: { email: string; password: string }; output: AccountStatus }
   'account.logout': { input: void; output: void }
   'account.me': { input: void; output: AccountUser }
@@ -145,6 +151,9 @@ export interface DomainOperations {
   'profile.testExisting': { input: { id: string; request: ProfileUpdateRequest }; output: ProfileTestResult }
   'profile.testNew': { input: { request: ProfileCreateRequest }; output: ProfileTestResult }
   'profile.update': { input: { id: string; request: ProfileUpdateRequest }; output: Profile }
+  'serverDetail.create': { input: {profileId:string}; output: {session_id:string;status:string;home_dir?:string} }
+  'serverDetail.close': {input:{sessionId:string};output:void}
+  'serverDetail.listFiles': {input:{sessionId:string;path:string;showHidden:boolean};output:SftpListResponse}
   'serverDetail.getInfo': { input: { sessionId: string }; output: ServerInfo }
   'serverDetail.getMetrics': { input: { sessionId: string }; output: ServerMetrics }
   'session.attach': { input: { id: string }; output: SessionMessage[] }

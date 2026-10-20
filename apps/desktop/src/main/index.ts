@@ -5,6 +5,7 @@ import {
   dialog,
   ipcMain,
   Menu,
+  MessageChannelMain,
   net,
   protocol,
   safeStorage,
@@ -21,6 +22,10 @@ import {
   foundation,
   requestSchema,
   isFoundationOperation,
+  local,
+  ssh,
+  isSshOperation,
+  isLocalOperation,
   sameContext,
   fail,
   failureOf,
@@ -31,6 +36,8 @@ import { loadDeviceKey } from '@eizhu/core/runtime/device-key'
 import { RuntimeHost } from './runtime-host.ts'
 import { Windows } from './windows.ts'
 import { assetPath, isTrustedPage } from './security.ts'
+import { DocumentGrants, saveAtomically } from './documents.ts'
+import { SensitiveClipboard } from './sensitive-clipboard.ts'
 declare const __EIZHU_VERSION__: string
 declare const __EIZHU_CHANNEL__: string
 
@@ -70,7 +77,17 @@ let deviceKey: Buffer | undefined
 let shuttingDown = false
 let healthy = false
 let restarting: Promise<RuntimeContext> | undefined
+const documents = new DocumentGrants()
+const sensitiveClipboard = new SensitiveClipboard(clipboard)
 const startedAt = performance.now()
+function attachRuntimeEvents(host: RuntimeHost): void {
+  host.onEvent = (name, payload) => {
+    if (runtime !== host || !healthy) return
+    const window = windows.main
+    if (window && !window.isDestroyed())
+      window.webContents.send('eizhu:event', { context: host.context, name, payload })
+  }
+}
 function runtimeFailed(): void {
   healthy = false
   windows?.broadcast('eizhu-runtime-state', { status: 'failed', message: '业务进程已退出，未保存内容仍保留' })
@@ -79,8 +96,15 @@ async function restartRuntime(): Promise<RuntimeContext> {
   restarting ??= (async () => {
     windows.cancelConfirmations()
     healthy = false
+    documents.revoke()
     await runtime.close()
-    const candidate = new RuntimeHost(dataRoot, __dirname, runtime.context.generation + 1, runtimeFailed)
+    const candidate = new RuntimeHost(
+      dataRoot,
+      __dirname,
+      runtime.context.generation + 1,
+      runtimeFailed,
+      deviceKey!,
+    )
     let nextSettings: Bootstrap['settings']
     try {
       await candidate.start()
@@ -90,6 +114,7 @@ async function restartRuntime(): Promise<RuntimeContext> {
       throw cause
     }
     runtime = candidate
+    attachRuntimeEvents(runtime)
     settings = nextSettings
     healthy = true
     for (const window of [windows.main, windows.editor]) {
@@ -123,7 +148,7 @@ function capabilities(): PlatformCapabilities {
     appUpdates: false,
     dragOut: false,
     nativeFilePaths: true,
-    documentPicker: false,
+    documentPicker: true,
     secureKeyStore: keyMode === 'system',
     maxConcurrentTransfers: 5,
   }
@@ -156,6 +181,7 @@ async function quit(): Promise<void> {
     await restarting?.catch(() => undefined)
     healthy = false
     await runtime?.close()
+    await sensitiveClipboard.close()
     deviceKey?.fill(0)
     for (const window of BrowserWindow.getAllWindows()) window.destroy()
     app.quit()
@@ -177,6 +203,122 @@ async function load(window: BrowserWindow): Promise<void> {
   else await window.loadURL('eizhu://app/index.html' + suffix)
 }
 async function execute(window: BrowserWindow, operation: string, input: unknown): Promise<unknown> {
+  if (isSshOperation(operation)) {
+    if (window !== windows.main) fail('FORBIDDEN', '仅主窗口可操作 SSH 会话')
+    if (!healthy) fail('RUNTIME_UNAVAILABLE', '业务进程不可用')
+    const host = runtime
+    const value = ssh[operation].input.parse(input)
+    if (operation === 'session.subscribe') {
+      const { id, subscriptionId: requested } = ssh[operation].input.parse(value)
+      await host.call('session.attach', { id })
+      if (runtime !== host || !healthy) fail('WORKSPACE_CHANGED', '运行实例已变化')
+      const subscriptionId = requested ?? crypto.randomUUID(),
+        { port1, port2 } = new MessageChannelMain()
+      host.bindTerminal(id, subscriptionId, port1)
+      window.webContents.postMessage('eizhu:terminal-port', { context: host.context, id, subscriptionId }, [
+        port2,
+      ])
+      return subscriptionId
+    }
+    const result = await host.call(operation, value)
+    if (runtime !== host || !healthy) fail('WORKSPACE_CHANGED', '运行实例已变化')
+    return ssh[operation].output.parse(result)
+  }
+  if (isLocalOperation(operation)) {
+    if (window !== windows.main) fail('FORBIDDEN', '仅主窗口可操作本地业务与文件')
+    if (!healthy) fail('RUNTIME_UNAVAILABLE', '业务进程不可用，请恢复后重试')
+    const value = local[operation].input.parse(input)
+    const ownerContext = { ...runtime.context }
+    const ensureOwner = () => {
+      if (!healthy || !sameContext(ownerContext, runtime.context))
+        fail('WORKSPACE_CHANGED', '运行实例已变化，请重试')
+    }
+    let result: unknown
+    switch (operation) {
+      case 'backup.pickFile': {
+        const picked = await dialog.showOpenDialog(window, {
+          properties: ['openFile'],
+          filters: [{ name: 'eizhu 备份', extensions: ['eizhubackup', 'xcbackup'] }],
+        })
+        ensureOwner()
+        if (picked.canceled || !picked.filePaths[0]) return null
+        const file = await documents.add(window.id, runtime.context, picked.filePaths[0], 'backup')
+        return { name: file.name, reference: file.reference }
+      }
+      case 'document.pick': {
+        const d = local[operation].input.parse(value),
+          picked = await dialog.showOpenDialog(window, {
+            properties: d.multiple ? ['openFile', 'multiSelections'] : ['openFile'],
+          })
+        ensureOwner()
+        if (picked.canceled) return []
+        const files = []
+        try {
+          for (const path of picked.filePaths)
+            files.push(await documents.add(window.id, runtime.context, path, 'text'))
+        } catch (cause) {
+          for (const file of files) documents.release(window.id, runtime.context, file.reference)
+          throw cause
+        }
+        return files
+      }
+      case 'document.release': {
+        const d = local[operation].input.parse(value),
+          grant = documents.release(window.id, runtime.context, d.reference)
+        await runtime.call('backup.releaseSource', { path: grant.path })
+        return
+      }
+      case 'document.readText': {
+        const d = local[operation].input.parse(value),
+          grant = documents.get(window.id, runtime.context, d.reference, 'text')
+        result = await runtime.call('document.readGrantedText', {
+          path: grant.path,
+          identity: grant.identity,
+          maxBytes: d.maxBytes,
+        })
+        break
+      }
+      case 'document.exportText': {
+        const d = local[operation].input.parse(value),
+          picked = await dialog.showSaveDialog(window, { defaultPath: basename(d.suggestedName) })
+        ensureOwner()
+        if (picked.canceled || !picked.filePath) return null
+        await saveAtomically(picked.filePath, d.content)
+        return picked.filePath
+      }
+      case 'backup.export': {
+        const d = local[operation].input.parse(value),
+          picked = await dialog.showSaveDialog(window, {
+            defaultPath: `eizhu-${new Date().toISOString().slice(0, 10)}.eizhubackup`,
+            filters: [{ name: 'eizhu 备份', extensions: ['eizhubackup'] }],
+          })
+        ensureOwner()
+        if (picked.canceled || !picked.filePath) return null
+        const encoded = await runtime.call<{ bytes: Uint8Array }>('backup.exportBytes', d)
+        try {
+          await saveAtomically(picked.filePath, encoded.bytes)
+        } finally {
+          encoded.bytes.fill(0)
+        }
+        return picked.filePath
+      }
+      case 'backup.preview':
+      case 'backup.prepareRestore':
+      case 'backup.import': {
+        const d = local[operation].input.parse(value),
+          grant = documents.get(window.id, runtime.context, d.filePath, 'backup')
+        result = await runtime.call('backup.granted', {
+          operation,
+          input: { ...d, filePath: grant.path },
+          identity: grant.identity,
+        })
+        break
+      }
+      default:
+        result = await runtime.call(operation, value)
+    }
+    return local[operation].output.parse(result)
+  }
   if (!isFoundationOperation(operation)) return fail('STAGE_NOT_READY', '该业务能力将在后续实施阶段开放')
   const value = foundation[operation].input.parse(input)
   switch (operation) {
@@ -252,14 +394,21 @@ async function execute(window: BrowserWindow, operation: string, input: unknown)
     case 'clipboard.write':
       await clipboard.writeText(foundation['clipboard.write'].input.parse(value).text)
       return
+    case 'clipboard.writeSensitive': {
+      const data = foundation[operation].input.parse(value)
+      await sensitiveClipboard.write(data.text, data.clearAfterSeconds)
+      return
+    }
     case 'system.openExternal':
       await shell.openExternal(foundation['system.openExternal'].input.parse(value).url)
       return
     case 'system.saveText': {
       const data = foundation['system.saveText'].input.parse(value)
+      const ownerContext = { ...runtime.context }
       const result = await dialog.showSaveDialog(window, { defaultPath: basename(data.suggestedName) })
+      if (!sameContext(ownerContext, runtime.context)) fail('WORKSPACE_CHANGED', '运行实例已变化，请重试')
       if (result.canceled || !result.filePath) return null
-      await writeFile(result.filePath, data.content, { mode: 0o600 })
+      await saveAtomically(result.filePath, data.content)
       return result.filePath
     }
     case 'diagnostics.read': {
@@ -354,7 +503,7 @@ async function start(): Promise<void> {
   })
   keyMode = key.mode
   deviceKey = key.key
-  runtime = new RuntimeHost(dataRoot, __dirname, 1, runtimeFailed)
+  runtime = new RuntimeHost(dataRoot, __dirname, 1, runtimeFailed, deviceKey)
   await runtime.start()
   healthy = true
   settings = await runtime.call('settings.read')
@@ -400,6 +549,7 @@ async function start(): Promise<void> {
     contents.session.setPermissionRequestHandler((_contents, _permission, callback) => callback(false))
     contents.session.setPermissionCheckHandler(() => false)
   })
+  attachRuntimeEvents(runtime)
   ipcMain.handle('eizhu:bootstrap', (event) => bootstrap(authenticate(event)))
   ipcMain.handle('eizhu:request', async (event, raw) => {
     let context: RuntimeContext | undefined

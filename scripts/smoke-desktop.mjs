@@ -14,7 +14,7 @@ const args = [...(executableArg ? [] : ['.']), '--smoke-test', `--smoke-root=${c
 await new Promise((accept, reject) => {
   const child = spawn(executable, args, {
     stdio: 'inherit',
-    env: { ...process.env, ELECTRON_ENABLE_LOGGING: '1' },
+    env: { ...process.env, ELECTRON_ENABLE_LOGGING: '1', EIZHU_SMOKE_FIXTURES: resolve('tests/fixtures/desktop-baseline') },
   })
   const timer = setTimeout(() => {
     child.kill()
@@ -43,6 +43,8 @@ assert.equal(report.recovery.persistedSettings, true)
 assert.equal(report.monaco.typescript, true)
 assert.equal(report.monaco.json, true)
 assert.equal(report.editor, true)
+assert.equal(report.stage2.passed, true)
+assert.equal(report.stage3.passed, true)
 if (executableArg) assert.equal(report.packaged, true)
 const evidenceRoot = `artifacts/smoke/${process.platform}-${process.arch}`
 await mkdir(evidenceRoot, { recursive: true })

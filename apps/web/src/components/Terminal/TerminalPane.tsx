@@ -60,6 +60,7 @@ export function TerminalPane({ tab, isActive, isVisible = isActive }: TerminalPa
     const [localLogs, setLocalLogs] = useState<ConnectionLogEntry[]>([]);
     const [backendLogs, setBackendLogs] = useState<ConnectionLogEntry[]>([]);
     const [hostKeyPrompt, setHostKeyPrompt] = useState<{
+        requestId?: string;
         current?: string;
         known?: string;
     }>({});
@@ -228,7 +229,7 @@ export function TerminalPane({ tab, isActive, isVisible = isActive }: TerminalPa
         if (!tab.sessionId || !currentHostKeyFingerprint)
             return;
         try {
-            await sessionApi.decideHostKey(tab.sessionId, currentHostKeyFingerprint, decision);
+            await sessionApi.decideHostKey(hostKeyPrompt.requestId ?? tab.sessionId, currentHostKeyFingerprint, decision);
             clearTabHostKeyPrompt(tab.id);
             setHostKeyPrompt({});
             if (decision === 'reject') {
@@ -243,13 +244,13 @@ export function TerminalPane({ tab, isActive, isVisible = isActive }: TerminalPa
             setConnectionError(apiErr?.error?.message || '无法继续连接到服务器');
             setDialogStatus('error');
         }
-    }, [clearTabHostKeyPrompt, currentHostKeyFingerprint, handleCancel, tab.id, tab.sessionId]);
+    }, [clearTabHostKeyPrompt, currentHostKeyFingerprint, handleCancel, hostKeyPrompt.requestId, tab.id, tab.sessionId]);
     const handleSessionMessage = useCallback((msg: SessionMessage) => {
         switch (msg.type) {
             case 'output':
                 if (msg.data) {
-                    write(msg.data);
                     handleOutputDataRef.current(msg.data);
+                    return write(msg.data);
                 }
                 break;
             case 'connection_state': {
@@ -262,6 +263,7 @@ export function TerminalPane({ tab, isActive, isVisible = isActive }: TerminalPa
                     setConnectionError(payload.error);
                 if (payload?.waiting_for_host_key || payload?.stage === 'hostkey_confirm') {
                     setHostKeyPrompt({
+                        requestId: payload.host_key_request_id,
                         current: payload.host_key_fingerprint,
                         known: payload.known_host_key_fingerprint,
                     });

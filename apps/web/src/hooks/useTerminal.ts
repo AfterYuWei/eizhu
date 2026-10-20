@@ -372,7 +372,7 @@ export function useTerminal(options: UseTerminalOptions) {
         terminal.options.theme = getTerminalTheme(terminalTheme);
     }, [terminalTheme]);
     const write = useCallback((data: string) => {
-        terminalRef.current?.write(data);
+        return new Promise<void>((resolve) => { const terminal=terminalRef.current; if(terminal)terminal.write(data,resolve);else resolve() });
     }, []);
     const writeln = useCallback((data: string) => {
         terminalRef.current?.writeln(data);

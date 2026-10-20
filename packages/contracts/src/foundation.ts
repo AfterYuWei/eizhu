@@ -49,7 +49,7 @@ export const foundation = {
   'app.ready': { input: empty, output: ready },
   'runtime.health': {
     input: empty,
-    output: z.strictObject({ context: contextSchema, schema: z.literal(1), workers: z.literal(2) }),
+    output: z.strictObject({ context: contextSchema, schema: z.literal(2), workers: z.literal(2) }),
   },
   'runtime.restart': { input: empty, output: contextSchema },
   'workspace.status': { input: empty, output: workspaceSchema },
@@ -82,6 +82,7 @@ export const foundation = {
   },
   'clipboard.read': { input: empty, output: text },
   'clipboard.write': { input: z.strictObject({ text }), output: ready },
+  'clipboard.writeSensitive': { input: z.strictObject({text,clearAfterSeconds:z.int().min(1).max(300)}), output:ready },
   'system.openExternal': {
     input: z.strictObject({
       url: z

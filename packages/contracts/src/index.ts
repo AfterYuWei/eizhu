@@ -9,6 +9,8 @@ export * from './foundation.ts'
 export * from './errors.ts'
 export * from './logging.ts'
 export * from './events.ts'
+export * from './local.ts'
+export * from './ssh.ts'
 export { reservedOperations } from './domains.ts'
 export type { DomainOperations }
 
@@ -60,7 +62,7 @@ export interface DesktopEvents {
 export type DesktopApi = Omit<DomainClient, 'session'> &
   FoundationClient & {
     session: Omit<DomainClient['session'], 'subscribe'> & {
-      subscribe: (input: { id: string }, callback: (message: SessionMessage) => void) => Promise<string>
+      subscribe: (input: { id: string }, callback: (message: SessionMessage) => void | Promise<void>) => Promise<string>
     }
     events: {
       on<K extends keyof DesktopEvents>(name: K, callback: (payload: DesktopEvents[K]) => void): () => void

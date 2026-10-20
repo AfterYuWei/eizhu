@@ -29,8 +29,8 @@ export async function releaseBackupSource(src: BackupSource): Promise<void> {
 }
 
 /** Node.js 直接导出数据库并通过系统保存对话框落盘。 */
-export async function exportBackup(mode: CredentialMode, password?: string): Promise<void> {
-  await bridge().backup.export({ mode, password })
+export async function exportBackup(mode: CredentialMode, password?: string): Promise<string | null> {
+  return bridge().backup.export({ mode, password })
 }
 
 export function previewBackup(src: BackupSource, password?: string) {

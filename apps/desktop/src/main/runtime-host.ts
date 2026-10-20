@@ -1,8 +1,8 @@
 import { utilityProcess } from 'electron'
-import type { UtilityProcess } from 'electron'
+import type { UtilityProcess, MessagePortMain } from 'electron'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
-import { DesktopError, sameContext } from '@eizhu/contracts'
+import { DesktopError, sameContext, eventSchemas, isDesktopEvent } from '@eizhu/contracts'
 import type { RuntimeContext, Failure } from '@eizhu/contracts'
 import { stopProcess } from './process-shutdown.ts'
 
@@ -11,14 +11,17 @@ export class RuntimeHost {
   private child?: UtilityProcess
   private pending = new Map<string, Pending>()
   private stopping?: Promise<void>
+  onEvent?: (name: 'eizhu-session-message', payload: unknown) => void
   readonly context: RuntimeContext
   private root: string
   private directory: string
   private failed: () => void
-  constructor(root: string, directory: string, generation: number, failed: () => void) {
+  private key: Buffer
+  constructor(root: string, directory: string, generation: number, failed: () => void, key: Buffer) {
     this.root = root
     this.directory = directory
     this.failed = failed
+    this.key = key
     this.context = { runtimeId: randomUUID(), workspaceId: 'offline', generation }
   }
   async start(): Promise<void> {
@@ -37,6 +40,15 @@ export class RuntimeHost {
         child.kill()
       }, 30_000)
       child.on('message', (message) => {
+        if (
+          message.type === 'event' &&
+          sameContext(message.context, this.context) &&
+          isDesktopEvent(message.name) &&
+          message.name === 'eizhu-session-message'
+        ) {
+          const parsed = eventSchemas['eizhu-session-message'].safeParse(message.payload)
+          if (parsed.success) this.onEvent?.(message.name, parsed.data)
+        }
         if (message.type === 'ready') {
           clearTimeout(timer)
           resolve()
@@ -61,7 +73,13 @@ export class RuntimeHost {
         this.rejectPending()
         if (!this.stopping) this.failed()
       })
-      child.postMessage({ type: 'init', context: this.context, root: this.root, workers: this.directory })
+      child.postMessage({
+        type: 'init',
+        context: this.context,
+        root: this.root,
+        workers: this.directory,
+        key: this.key,
+      })
     })
   }
   call<T>(operation: string, input?: unknown): Promise<T> {
@@ -82,6 +100,13 @@ export class RuntimeHost {
       this.pending.set(id, { resolve: (value) => resolve(value as T), reject, timer })
       this.child!.postMessage({ id, context: this.context, operation, input })
     })
+  }
+  bindTerminal(id: string, subscriptionId: string, port: MessagePortMain): void {
+    if (!this.child || this.stopping) {
+      port.close()
+      return
+    }
+    this.child.postMessage({ type: 'terminal.bind', context: this.context, id, subscriptionId }, [port])
   }
   get processId(): number | undefined {
     return this.child?.pid

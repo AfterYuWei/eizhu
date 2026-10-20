@@ -1,5 +1,5 @@
 const { read, write } = vi.hoisted(() => ({ read: vi.fn(), write: vi.fn() }))
-vi.mock('@/lib/bridge', () => ({ bridge: () => ({ clipboard: { read, write } }) }))
+vi.mock('@/lib/bridge', () => ({ bridge: () => ({ clipboard: { read, write, writeSensitive:write } }) }))
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { copySensitiveText } from './clipboard'
 

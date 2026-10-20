@@ -1,5 +1,5 @@
 import type { CompletionGeneratorRequest } from '@/types/completion'
-import { useCallback,useEffect,useRef,useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { sessionApi } from '@/api/session'
 import type { SessionMessage } from '@/types/sessionMessage'
 
@@ -7,7 +7,7 @@ type ChannelStatus = 'connecting' | 'connected' | 'disconnected'
 
 interface UseSessionChannelOptions {
   sessionId: string
-  onMessage?: (msg: SessionMessage) => void
+  onMessage?: (msg: SessionMessage) => void | Promise<void>
   onOpen?: (event?: Event) => void
   onClose?: () => void
   onError?: (error: Event) => void
@@ -30,13 +30,13 @@ export function useSessionChannel(options: UseSessionChannelOptions) {
     let disposed = false
     let subscriptionId: string | undefined
 
-    const dispatch = (message: SessionMessage) => {
+    const dispatch = async (message: SessionMessage) => {
       if (message.type === 'pong' && pingTimeRef.current > 0) {
         setLatency(Date.now() - pingTimeRef.current)
         pingTimeRef.current = 0
         return
       }
-      callbacksRef.current.onMessage?.(message)
+      await callbacksRef.current.onMessage?.(message)
       if (message.type === 'exit' || message.type === 'disconnect' || message.type === 'error') {
         setStatus('disconnected')
       }
@@ -44,28 +44,13 @@ export function useSessionChannel(options: UseSessionChannelOptions) {
 
     const attach = async () => {
       try {
-        // After the backend flips a session to `attached`, new output is sent
-        // as live events and is no longer included in the attach response.
-        // Queue those events until the initial replay has been dispatched so
-        // metadata can never overtake terminal output such as the login banner.
-        let attaching = true
-        const pendingEvents: SessionMessage[] = []
-        const onEvent = (message: SessionMessage) => {
-          if (attaching) {
-            pendingEvents.push(message)
-          } else {
-            dispatch(message)
-          }
-        }
-        subscriptionId = await sessionApi.subscribe(sessionId, onEvent)
+        subscriptionId = await sessionApi.subscribe(sessionId, dispatch)
         if (disposed) {
           void sessionApi.unsubscribe(sessionId, subscriptionId).catch(() => undefined)
           return
         }
         setStatus('connected')
         callbacksRef.current.onOpen?.()
-        attaching = false
-        pendingEvents.forEach(dispatch)
       } catch (error) {
         if (disposed) return
         setStatus('disconnected')
@@ -116,17 +101,26 @@ export function useSessionChannel(options: UseSessionChannelOptions) {
     [sessionId],
   )
 
-  const sendInput = useCallback((data: string) => {
-    void sessionApi.input(sessionId, data).catch(console.error)
-  }, [sessionId])
+  const sendInput = useCallback(
+    (data: string) => {
+      void sessionApi.input(sessionId, data).catch(console.error)
+    },
+    [sessionId],
+  )
 
-  const sendResize = useCallback((cols: number, rows: number) => {
-    void sessionApi.resize(sessionId, cols, rows).catch(console.error)
-  }, [sessionId])
+  const sendResize = useCallback(
+    (cols: number, rows: number) => {
+      void sessionApi.resize(sessionId, cols, rows).catch(console.error)
+    },
+    [sessionId],
+  )
 
-  const sendComplete = useCallback((requestId: string, generator: CompletionGeneratorRequest, cwd?: string) => {
-    void sessionApi.complete(sessionId, requestId, generator, cwd).catch(console.error)
-  }, [sessionId])
+  const sendComplete = useCallback(
+    (requestId: string, generator: CompletionGeneratorRequest, cwd?: string) => {
+      void sessionApi.complete(sessionId, requestId, generator, cwd).catch(console.error)
+    },
+    [sessionId],
+  )
 
   return { status, latency, send, sendInput, sendResize, sendComplete }
 }

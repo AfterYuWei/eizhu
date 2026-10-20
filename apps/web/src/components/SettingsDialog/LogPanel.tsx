@@ -6,13 +6,14 @@ import { Tabs,TabsList,TabsTrigger } from '@/components/ui/tabs'
 import { toast } from 'sonner'
 import { writeClipboardText } from '@/lib/clipboard'
 
-type LogKind = 'frontend' | 'backend'
+type LogKind = 'frontend' | 'backend' | 'audit'
 
 interface LogSnapshot {
   kind: LogKind
   path: string
   content: string
 }
+const actionLabels: Record<string,string> = { profile_create:'创建服务器',profile_update:'更新服务器',profile_delete:'删除服务器',group_create:'创建分组',group_update:'更新分组',group_delete:'删除分组',vault_create:'创建凭据',vault_update:'更新凭据',vault_delete:'删除凭据',vault_reveal:'查看凭据',snippet_create:'创建片段',snippet_update:'更新片段',snippet_delete:'删除片段',backup_import:'导入或恢复备份',audit_clear:'清空审计',local_state_write:'保存本地设置' }
 
 export function LogPanel() {
   const [kind, setKind] = useState<LogKind>('frontend')
@@ -22,7 +23,10 @@ export function LogPanel() {
   const refresh = useCallback(async (quiet = false) => {
     if (!quiet) setLoading(true)
     try {
-      setSnapshot(await bridge().diagnostics.read({ kind }))
+      if (kind === 'audit') {
+        const rows = await bridge().audit.list({ limit: 500 })
+        setSnapshot({ kind, path: '当前本地空间 · 最近 500 条审计记录', content: rows.map(row => `${row.created_at}  ${actionLabels[row.action] ?? '本地操作'}  ${row.entity_id}`).join('\n') })
+      } else setSnapshot(await bridge().diagnostics.read({ kind }))
     } catch (error) {
       if (!quiet) toast.error('读取日志失败', { description: String(error) })
     } finally {
@@ -38,7 +42,8 @@ export function LogPanel() {
 
   const clear = async () => {
     try {
-      await bridge().diagnostics.clear({ kind })
+      if (kind === 'audit') await bridge().audit.clear()
+      else await bridge().diagnostics.clear({ kind })
       await refresh()
       toast.success('日志已清空')
     } catch (error) {
@@ -67,6 +72,7 @@ export function LogPanel() {
           <TabsTrigger value="backend">
             后端日志
           </TabsTrigger>
+          <TabsTrigger value="audit">本地审计</TabsTrigger>
           </TabsList>
         </Tabs>
         <div className="log-actions">
@@ -84,7 +90,7 @@ export function LogPanel() {
 
       <div className="log-path" title={snapshot?.path}>{snapshot?.path ?? '正在读取…'}</div>
       <pre className="log-viewer">{snapshot?.content || '暂无日志'}</pre>
-      <div className="settings-field-desc">每 2 秒自动刷新，仅显示文件末尾最多 2 MiB；请求日志会移除 URL 查询参数。</div>
+      <div className="settings-field-desc">每 2 秒自动刷新；日志最多显示末尾 256 KiB，审计仅包含操作、记录标识和时间。</div>
     </div>
   )
 }

@@ -163,11 +163,12 @@ export function ProfileForm({ open, onOpenChange, profile, presetGroupId }: Prof
         setUploadingKey(true);
         setError('');
         try {
+            if (file.size > 1024 * 1024) throw new Error('私钥文件不能超过 1 MiB');
             const text = await file.text();
             setForm((prev) => ({ ...prev, private_key: text }));
         }
-        catch {
-            setError('私钥文件读取失败');
+        catch (error) {
+            setError(error instanceof Error ? error.message : '私钥文件读取失败');
         }
         finally {
             setUploadingKey(false);

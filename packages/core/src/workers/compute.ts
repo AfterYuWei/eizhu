@@ -3,6 +3,12 @@ import { createCipheriv, createDecipheriv, randomBytes, timingSafeEqual } from '
 import argon2 from 'argon2'
 import { fail } from '@eizhu/contracts'
 import { answerWorker } from './client.ts'
+import { decodeBackup, encodeBackup, readBounded } from '../local/backup.ts'
+import type { FileIdentity } from '../local/backup.ts'
+import { generateKeyPair, prepareCredential, unlockPrivateKey } from '../local/keys.ts'
+import { payloadSchema } from '../local/model.ts'
+import type { LocalInput } from '@eizhu/contracts'
+import type { StoredVault } from '../local/model.ts'
 
 /** The smoke vector proves native KDF + crypto load inside the packaged utility/worker process tree. */
 async function smoke(): Promise<{ kdf: boolean; crypto: boolean }> {
@@ -48,8 +54,38 @@ async function smoke(): Promise<{ kdf: boolean; crypto: boolean }> {
 }
 parentPort!.on('message', async (message) => {
   parentPort!.postMessage(
-    await answerWorker(message, (operation) => {
+    await answerWorker(message, async (operation, input) => {
+      if (operation === 'ssh.decryptKey')
+        return unlockPrivateKey(input as { private_key: string; passphrase?: string })
       if (operation === 'smoke') return smoke()
+      if (operation === 'vault.generateKeyPair')
+        return generateKeyPair(input as LocalInput<'vault.generateKeyPair'>)
+      if (operation === 'credential.prepare') {
+        const d = input as { credential: StoredVault['credential']; type: StoredVault['type'] }
+        return prepareCredential(d.credential, d.type)
+      }
+      if (operation === 'backup.decode') {
+        const d = input as { path: string; password?: string; identity?: FileIdentity }
+        const bytes = await readBounded(d.path, undefined, d.identity)
+        try {
+          return await decodeBackup(bytes, d.password)
+        } finally {
+          bytes.fill(0)
+        }
+      }
+      if (operation === 'backup.encode') {
+        const d = input as { payload: unknown; mode: 'none' | 'plain' | 'encrypted'; password?: string }
+        return encodeBackup(payloadSchema.parse(d.payload), d.mode, d.password)
+      }
+      if (operation === 'document.readText') {
+        const d = input as { path: string; maxBytes: number; identity?: FileIdentity }
+        const bytes = await readBounded(d.path, d.maxBytes, d.identity)
+        try {
+          return new TextDecoder('utf-8', { fatal: true }).decode(bytes)
+        } finally {
+          bytes.fill(0)
+        }
+      }
       if (operation === 'close') return
       return fail('UNKNOWN_OPERATION', '未开放的计算任务')
     }),

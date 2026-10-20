@@ -1,0 +1,194 @@
+{
+  "date": "2026-10-20",
+  "branch": "codex/electron-stage-2",
+  "baseRevision": "8d9b7475ce9f5a7b1d2e6697f12949b0ffd5dc0d",
+  "uncommittedChanges": true,
+  "version": "0.4.4",
+  "platform": "darwin",
+  "arch": "x64",
+  "signed": false,
+  "published": false,
+  "sources": [
+    {
+      "path": "apps/desktop/electron.vite.config.ts",
+      "sha256": "118ec27a1d37126e3e3f8e91cab60e48ed96cc961cb795ef29b00e228f09ae40"
+    },
+    {
+      "path": "apps/desktop/src/main/documents.test.ts",
+      "sha256": "e01e93c4c9e5f77a52cfd490c0f76ecee39f1c60d3c08421fc29c347651e2fec"
+    },
+    {
+      "path": "apps/desktop/src/main/documents.ts",
+      "sha256": "c2d2782b43604aa56c0f543863732c120da950520c9f2b4b3f4cc03e19f47540"
+    },
+    {
+      "path": "apps/desktop/src/main/index.ts",
+      "sha256": "03416cd80b36dc57054c22669a0765ec62b8a9080c66aa9aabee9f84d9627832"
+    },
+    {
+      "path": "apps/desktop/src/main/runtime-host.ts",
+      "sha256": "59d3835dd19d228645634c2ba9fb47d414b092f3a306e20e63d456f386cbea66"
+    },
+    {
+      "path": "apps/desktop/src/main/sensitive-clipboard.test.ts",
+      "sha256": "60789af942206d078008f264c049ea01faa78d391875a1c48220f3eeb8cc6cec"
+    },
+    {
+      "path": "apps/desktop/src/main/sensitive-clipboard.ts",
+      "sha256": "be467425a4f457d81180254a2866deb61a289f5c1010b26fa0465b361a97558b"
+    },
+    {
+      "path": "apps/desktop/src/main/smoke.ts",
+      "sha256": "470029f35eca718ff62ec98a3d5e188d8a1b77a29167fc616b67da6b70efc7c4"
+    },
+    {
+      "path": "apps/desktop/src/preload/index.ts",
+      "sha256": "2cb0ccaf2d4e6a08ed970ba2eaa81ce0f8f3e0c8caf8d96c114cc55653ebdc77"
+    },
+    {
+      "path": "apps/desktop/src/runtime/index.ts",
+      "sha256": "1e78198d0e95b3dcdbd86eae22da659ae6fd2762d860451d4755f9c63c397891"
+    },
+    {
+      "path": "apps/web/src/api/backup.ts",
+      "sha256": "47e5b761660fb28fbbb9c28bdc31794de4652f83e801ec48a245a02fdef8db36"
+    },
+    {
+      "path": "apps/web/src/components/ProfileForm/index.tsx",
+      "sha256": "9ae769758b130ac2be325a854fc9a5a29aab347e2b8ebf5ba1c227a49bc8b228"
+    },
+    {
+      "path": "apps/web/src/components/SettingsDialog/ArchivePanel.tsx",
+      "sha256": "f31fdf0d1005ca84a840b5e8a021a84704903d8da8ffb8c281d068f5671e38eb"
+    },
+    {
+      "path": "apps/web/src/components/SettingsDialog/BackupPanel.tsx",
+      "sha256": "376dd892a5ddee22607994815e716bdd8ae0f635305afe8e35862889c1998c0c"
+    },
+    {
+      "path": "apps/web/src/components/SettingsDialog/LocalRestorePanel.test.tsx",
+      "sha256": "c335daff5b2525bc731e8a657d596dff67dc4662c694e6ca14f7e50bbe0df1dd"
+    },
+    {
+      "path": "apps/web/src/components/SettingsDialog/LocalRestorePanel.tsx",
+      "sha256": "e57eb58ca133afe0ec5b4e1bbe02399a5fc77f30172edb35696ff113cbcb5de3"
+    },
+    {
+      "path": "apps/web/src/components/SettingsDialog/LogPanel.tsx",
+      "sha256": "31572ef30d40ea4aece9357a563b75cebc615803c8236346ad10825fde67a024"
+    },
+    {
+      "path": "apps/web/src/lib/clipboard.test.ts",
+      "sha256": "f10a0a66d9446768c61fdb4251084cb33bc9af6f0c3a9478c4b0b81d01bd6f62"
+    },
+    {
+      "path": "apps/web/src/lib/clipboard.ts",
+      "sha256": "a4ea9fe9d98abc75a3dc5fa75709b98c8b9e9db37e31fcdbdc1170fc2e986172"
+    },
+    {
+      "path": "packages/contracts/src/domains.ts",
+      "sha256": "96d3d169a9bde5f46d8b28967e97a7fb4da7b5afb35a6202639e94f3cc078898"
+    },
+    {
+      "path": "packages/contracts/src/foundation.ts",
+      "sha256": "ea04bfa39b67d5cbc7d88fd26304bacc4c657cf7178a6d34c4871d99db3c4ce8"
+    },
+    {
+      "path": "packages/contracts/src/index.ts",
+      "sha256": "16f64561919c79f96151040e92d76cbec746c357553627404556e954a930f6ae"
+    },
+    {
+      "path": "packages/contracts/src/local.ts",
+      "sha256": "19a9a1d2c7e6fbb5cc50cc4229ad5acc7a846c2e3b7d6347c240c056a9f9f997"
+    },
+    {
+      "path": "packages/contracts/src/models/group.ts",
+      "sha256": "3228fd78a9378bddccd58d2b58a51acb37282d1ba9528042e9100421f8289342"
+    },
+    {
+      "path": "packages/contracts/src/models/profile.ts",
+      "sha256": "f56c41018dc79263183526892e54a636b332122160c1eb81a9beaffcdd7da73b"
+    },
+    {
+      "path": "packages/contracts/src/testing/local.test.ts",
+      "sha256": "f8acabc0aa78674b9b1d453da071939f69ba2bf59a6ed811d9369a0ece050841"
+    },
+    {
+      "path": "packages/core/src/database/local-store.ts",
+      "sha256": "6ae8e43d348f000fd2ea7bd7e04c35e2893291459691aba91ece0993af0dbbdb"
+    },
+    {
+      "path": "packages/core/src/database/stage2-smoke.ts",
+      "sha256": "51678df3502344fe880a3e1e5e75b74e120445a0c5bbd5e60015976b90a4d1c5"
+    },
+    {
+      "path": "packages/core/src/database/store.ts",
+      "sha256": "c3c40b4bb7f0e1f3e538b87d135ed670fa5fb0e72c11ba69bacf7188acfdb6be"
+    },
+    {
+      "path": "packages/core/src/database/worker.ts",
+      "sha256": "ea04019c41bb3251e952f76954c92f5438a0fee41a4ab3ae5333f15769b430b7"
+    },
+    {
+      "path": "packages/core/src/local/backup.ts",
+      "sha256": "059b77f0dd4f0e5ce7521aa3eef3a63375495ce2ecedfc85bfdc1babb1495e9c"
+    },
+    {
+      "path": "packages/core/src/local/crypto.ts",
+      "sha256": "44a64e9cae43974968eded662a1024d3328d2adbc095a1c34457893eb4e078c1"
+    },
+    {
+      "path": "packages/core/src/local/keys.ts",
+      "sha256": "25250a2af1b914e86a21f98a8a238f64d839cf64961e97e6554a056891a26476"
+    },
+    {
+      "path": "packages/core/src/local/model.ts",
+      "sha256": "306fb1355d1f611ad8690d6ff398485bc471dec923bba41854715bdd6dedbeaf"
+    },
+    {
+      "path": "packages/core/src/runtime/service.ts",
+      "sha256": "b4c4b479ddeb251373daa25e55219ce59d367221272f6ca5d2510621a43e2f58"
+    },
+    {
+      "path": "packages/core/src/workers/compute.ts",
+      "sha256": "17c62962fcfbfca011cf2e7396e75c03b0b2060fcdfcd44047fe01b2634e47a2"
+    },
+    {
+      "path": "scripts/smoke-desktop.mjs",
+      "sha256": "e9bbe407e91ac72341c41ccbbc939ebfecc8c19ec0d3ea766ecf1347f8978e8f"
+    }
+  ],
+  "changedSourcesSha256": "094d8897396d62454a0f155eb36f7f2dbbf0342132054e892132f8ac7ddc1828",
+  "artifacts": [
+    {
+      "path": "artifacts/desktop/stage-2/eizhu-0.4.4-mac-x64.dmg",
+      "bytes": 157953536,
+      "sha256": "3deb06328db7e1b58bdac7c4bad021450ddcda0a03a1bb0769ab01127c7c444e"
+    },
+    {
+      "path": "artifacts/desktop/stage-2/eizhu-0.4.4-mac-x64.zip",
+      "bytes": 157296692,
+      "sha256": "6eadf51dcea91286fa20c732b94f7d219f3103540d328eb8fc944f645f6d12ec"
+    }
+  ],
+  "verification": {
+    "typecheck": true,
+    "lint": true,
+    "foundationTests": 25,
+    "frontendTests": 201,
+    "baselineTests": 10,
+    "frozenBaseline": true,
+    "architecture": true,
+    "buildSmoke": true,
+    "packageSmokeRunsPassed": 2,
+    "priorPackageSmokeTimeouts": 2,
+    "smokeFix": "仅对合成烟测窗口关闭后台帧节流；有界等待实际绘制并校验明暗截图像素"
+  },
+  "pending": [
+    "macOS arm64 阶段 2",
+    "Windows x64 阶段 2",
+    "Linux x64 阶段 2",
+    "原生文件对话框/权限/剪贴板及恢复界面人工操作",
+    "系统密钥库、签名/公证、真实更新与性能"
+  ]
+}

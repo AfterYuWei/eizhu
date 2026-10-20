@@ -1,14 +1,15 @@
 import { z } from 'zod'
+import { sshGlobalEventSchema, tunnelStatusSchema } from './ssh.ts'
 import { editorOpenSchema, workspaceSchema, foundation } from './foundation.ts'
 import type { DesktopEvents } from './index.ts'
 /** Reserved event types cannot be emitted until their business stage supplies a payload schema. */
 export const eventSchemas = {
   'eizhu-workspace-changed': workspaceSchema,
   'eizhu-sync-message': z.never(),
-  'eizhu-session-message': z.never(),
+  'eizhu-session-message': sshGlobalEventSchema,
   'eizhu-sftp-message': z.never(),
   'eizhu-transfer-message': z.never(),
-  'eizhu-tunnel-status': z.never(),
+  'eizhu-tunnel-status': z.strictObject({workspaceGeneration:z.int(),status:tunnelStatusSchema}),
   'eizhu-editor-open-file': editorOpenSchema,
   'eizhu-editor-transition': z.strictObject({ requestId: z.uuid() }),
   'eizhu-app-close-request': z.strictObject({ requestId: z.uuid() }),

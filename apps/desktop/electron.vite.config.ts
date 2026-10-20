@@ -26,6 +26,8 @@ export default defineConfig({
           runtime: resolve(desktop, 'src/runtime/index.ts'),
           database: resolve(root, 'packages/core/src/database/worker.ts'),
           compute: resolve(root, 'packages/core/src/workers/compute.ts'),
+          stage2: resolve(root, 'packages/core/src/database/stage2-smoke.ts'),
+          stage3: resolve(root, 'packages/core/src/database/stage3-smoke.ts'),
         },
         output: { format: 'cjs', entryFileNames: '[name].cjs', chunkFileNames: 'chunks/[name]-[hash].cjs' },
       },

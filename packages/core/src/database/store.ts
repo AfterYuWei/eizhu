@@ -2,12 +2,14 @@ import Database from 'better-sqlite3'
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { fail } from '@eizhu/contracts'
+import { LocalStore } from './local-store.ts'
 
-/** Foundation schema only. Business tables and domain-owned repositories arrive in stage 2. */
+/** Global UI metadata and the separately encrypted offline business store. Only used by database Workers. */
 export class FoundationStore {
+  readonly local: LocalStore
   private global: Database.Database
-  private workspace: Database.Database
-  constructor(root: string) {
+  private workspace!: Database.Database
+  constructor(root: string, key: Uint8Array) {
     mkdirSync(join(root, 'workspaces', 'offline'), { recursive: true, mode: 0o700 })
     this.global = this.open(
       join(root, 'global.sqlite'),
@@ -26,7 +28,9 @@ export class FoundationStore {
         INSERT INTO revisions VALUES (1, 0);
       `,
       )
+      this.local = new LocalStore(this.workspace, key)
     } catch (cause) {
+      this.workspace?.close()
       this.global.close()
       throw cause
     }
@@ -43,7 +47,8 @@ export class FoundationStore {
           db.exec(schema)
           db.pragma('user_version = 1')
         })()
-      else if (version !== 1) fail('SCHEMA_UNSUPPORTED', '数据版本高于当前应用支持范围，原数据已保留')
+      else if (version !== 1 && !(path.endsWith('workspace.sqlite') && version === 2))
+        fail('SCHEMA_UNSUPPORTED', '数据版本高于当前应用支持范围，原数据已保留')
       return db
     } catch (cause) {
       db.close()
@@ -67,6 +72,7 @@ export class FoundationStore {
     })()
   }
   close(): void {
+    this.local.close()
     this.workspace.close()
     this.global.close()
   }

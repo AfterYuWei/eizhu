@@ -1,2 +1,6 @@
 # 固定兼容证据按原始字节交换，Windows checkout 也不得转换换行。
 tests/fixtures/desktop-baseline/** -text
+
+# 原始烟测日志保留工具输出及交付清单中的字节摘要，不按源码规则修剪空白。
+docs/desktop-rebuild/evidence/stage-2/*.log -text -whitespace
+docs/desktop-rebuild/evidence/stage-3/*.log -text -whitespace

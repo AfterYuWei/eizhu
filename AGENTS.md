@@ -1,8 +1,8 @@
 # eizhu 桌面仓库规范
 
 eizhu 使用 Electron + React + TypeScript/Node.js，只维护 Windows x64、macOS arm64/x64、Linux x64。
-UI 与文档使用中文。当前处于全新桌面工程的阶段 1；业务能力按阶段 2–5 逐项实现，阶段 6 完成发布验收。
-用户已确认阶段 0 基线并授权阶段 1。每阶段提交可审查结果、测试证据和差异清单，经用户确认后进入下一阶段。
+UI 与文档使用中文。当前执行阶段 3 SSH 与终端；其余业务能力按阶段 4–5 逐项实现，阶段 6 完成发布验收。
+用户已确认阶段 0、阶段 1、阶段 2，并授权阶段 3。每阶段提交可审查结果、测试证据和差异清单，经用户确认后进入下一阶段。
 不将未实现、仅有类型定义或未在目标平台执行的能力标为通过。状态见 `docs/desktop-rebuild/`。
 
 ## 开发入口
@@ -32,18 +32,18 @@ npm run desktop:smoke:package -- <安装包路径>
 - `apps/desktop/src/main`：窗口/关闭协调、系统权限与原生能力、设备密钥保护、业务进程监督、应用资源协议。
 - `apps/desktop/src/runtime`：一个 utilityProcess 装配入口。
 - `packages/core`：不导入 Electron。领域用例、仓储、连接与任务管理归所属业务；不要求所有领域使用相同目录模板。
-- `packages/core/src/database`：数据库 Worker 唯一拥有 SQLite 连接。当前 schema v1 只建立全局设置/账号元数据和离线空间基础元数据。
+- `packages/core/src/database`：数据库 Worker 唯一拥有 SQLite 连接。全局 schema v1；离线业务 schema v2 包含加密实体、本地设置、审计、加密 outbox、恢复预览及安全快照。
 - `packages/core/src/workers`：有界队列与独立计算线程。禁止在终端事件循环执行 KDF、密钥生成或全量备份处理。
 - `packages/contracts`：唯一 DTO、编译期接口、启用方法的运行时 schema、错误、事件和空间上下文定义。
 
 先为业务方法补齐输入/输出/事件 schema，再在 main 与 runtime 启用；预留的领域类型不是业务实现。
-阶段 1 的预留业务请求必须返回 `STAGE_NOT_READY`，禁止用空数组或假成功冒充已实现的数据库、同步或 SSH 能力。
+阶段 4–5 尚未开放的业务请求必须返回 `STAGE_NOT_READY`，禁止用空数组或假成功冒充已实现的同步、SFTP 或云备份能力。
 
 ## IPC、所有权与事务
 
 主进程验证窗口身份、顶层 frame、可信 origin、权限和资源归属；不要相信渲染端声明的账号或路径。
 请求/响应/事件绑定 requestId、runtimeId、workspaceId、generation。业务进程独立检查上下文；旧空间和旧进程响应必须失效。
-控制面异步 RPC；终端在阶段 3 接入授权后的二进制 MessagePort、消费确认及有界重放。文件保持流式、有限分块与背压。
+控制面异步 RPC；终端使用授权后的二进制 MessagePort、消费确认及有界重放。文件保持流式、有限分块与背压。
 不提供业务用本地 HTTP/WebSocket 网关。
 
 持久写入只进入数据库 Worker。后续业务变更、审计与加密 outbox 在同一同步 SQLite 事务提交，不跨消息持有事务。

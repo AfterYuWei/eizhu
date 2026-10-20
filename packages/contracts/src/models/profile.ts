@@ -24,7 +24,7 @@ export interface Profile {
   host: string
   port: number
   username: string
-  auth_type: 'password' | 'key' | 'agent' | 'vault'
+  auth_type: 'none' | 'password' | 'key' | 'agent' | 'vault'
   icon?: string
   vault_id?: string
   proxy: ProfileProxy
@@ -39,6 +39,7 @@ export interface Profile {
 }
 
 export interface ProfileCreateRequest {
+  sort_order?: number
   name: string
   host: string
   port?: number
@@ -57,6 +58,7 @@ export interface ProfileCreateRequest {
 }
 
 export interface ProfileUpdateRequest {
+  sort_order?: number
   name?: string
   host?: string
   port?: number

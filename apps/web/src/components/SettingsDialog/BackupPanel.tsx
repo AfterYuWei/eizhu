@@ -1,4 +1,5 @@
 import { ArchivePanel } from './ArchivePanel'
+import { LocalRestorePanel } from './LocalRestorePanel'
 import { useState } from 'react'
 import { DatabaseBackup,Download,Upload,AlertTriangle,FileJson,Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -64,8 +65,9 @@ export function BackupPanel() {
   const runExport = async () => {
     setExporting(true)
     try {
-      await exportBackup(mode, mode === 'encrypted' ? exportPwd : undefined)
-      toast.success('备份文件已开始下载')
+      const saved = await exportBackup(mode, mode === 'encrypted' ? exportPwd : undefined)
+      if (!saved) return
+      toast.success('备份文件已保存')
       setExportPwd('')
       setExportPwd2('')
     } catch (err) {
@@ -352,6 +354,7 @@ export function BackupPanel() {
           </>
         )}
       </div>
+      <LocalRestorePanel source={file} password={importPwd} onRestored={resetImport} />
     </div>
   )
 }

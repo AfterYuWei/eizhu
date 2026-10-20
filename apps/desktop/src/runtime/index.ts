@@ -1,12 +1,12 @@
 import { z } from 'zod'
 import { join } from 'node:path'
 import { RuntimeService } from '@eizhu/core/runtime/service'
-import { contextSchema, requestSchema, failureOf } from '@eizhu/contracts'
+import { contextSchema, requestSchema, failureOf, sameContext } from '@eizhu/contracts'
 
 const port = process.parentPort!
 let service: RuntimeService | undefined
 let closing = false
-port.on('message', async ({ data }) => {
+port.on('message', async ({ data, ports }) => {
   try {
     if (data.type === 'init') {
       if (service || closing) throw new Error('Already initialized')
@@ -16,12 +16,22 @@ port.on('message', async ({ data }) => {
           context: contextSchema,
           root: z.string(),
           workers: z.string(),
+          key: z.instanceof(Uint8Array),
         })
         .parse(data)
-      service = new RuntimeService(input.context, input.root, {
-        database: join(input.workers, 'database.cjs'),
-        compute: join(input.workers, 'compute.cjs'),
-      })
+      service = new RuntimeService(
+        input.context,
+        input.root,
+        {
+          database: join(input.workers, 'database.cjs'),
+          compute: join(input.workers, 'compute.cjs'),
+          verification: join(input.workers, 'stage2.cjs'),
+          verification3: join(input.workers, 'stage3.cjs'),
+        },
+        input.key,
+        (name, payload) => port.postMessage({ type: 'event', context: input.context, name, payload }),
+      )
+      input.key.fill(0)
       await service.execute({
         id: crypto.randomUUID(),
         context: input.context,
@@ -29,6 +39,17 @@ port.on('message', async ({ data }) => {
         input: undefined,
       })
       port.postMessage({ type: 'ready', context: input.context })
+      return
+    }
+    if (data.type === 'terminal.bind') {
+      const channel = ports[0]
+      try {
+        if (!service || closing || !sameContext(contextSchema.parse(data.context), service.context))
+          throw new Error('Stale context')
+        await service.bindTerminal(z.uuid().parse(data.id), z.uuid().parse(data.subscriptionId), channel)
+      } catch {
+        channel?.close()
+      }
       return
     }
     if (data.type === 'shutdown') {

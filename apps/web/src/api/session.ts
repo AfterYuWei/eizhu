@@ -10,7 +10,7 @@ export const sessionApi = {
 
   attach: (id: string) => bridge().session.attach({ id }),
 
-  subscribe: (id: string, onEvent: (message: SessionMessage) => void) =>
+  subscribe: (id: string, onEvent: (message: SessionMessage) => void | Promise<void>) =>
     bridge().session.subscribe({ id }, onEvent),
 
   unsubscribe: (id: string, subscriptionId: string) => bridge().session.unsubscribe({ id, subscriptionId }),

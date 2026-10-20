@@ -1,3 +1,4 @@
+import { verifyStage3 } from './stage3-smoke.ts'
 import { app, BrowserWindow as TestWindow, screen } from 'electron'
 import type { BrowserWindow } from 'electron'
 import { join } from 'node:path'
@@ -17,6 +18,33 @@ async function shown(window: BrowserWindow): Promise<void> {
     })
   })
 }
+async function prepareCapture(window: BrowserWindow, theme: 'light' | 'dark'): Promise<void> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    await Promise.race([
+      window.webContents.executeJavaScript(`(async()=>{
+        await document.fonts.ready;
+        let style=document.getElementById('eizhu-smoke-capture');
+        if(!style){style=document.createElement('style');style.id='eizhu-smoke-capture';style.textContent='*,*::before,*::after{transition:none!important;animation:none!important}';document.head.append(style)}
+        document.documentElement.classList.remove('light','dark');
+        document.documentElement.classList.add(${JSON.stringify(theme)});
+        getComputedStyle(document.body).backgroundColor;
+        await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+      })()`),
+      new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error('Smoke capture frame timed out')), 10000)
+      }),
+    ])
+  } finally {
+    if (timer) clearTimeout(timer)
+  }
+}
+function sidebarBrightness(capture: Electron.NativeImage): number {
+  const { width, height } = capture.getSize(),
+    data = capture.toBitmap()
+  const offset = (Math.floor(height * 0.55) * width + Math.floor(width * 0.05)) * 4
+  return (data[offset] + data[offset + 1] + data[offset + 2]) / 3
+}
 /** Runs only with --smoke-test and an explicit isolated temporary data root. Never loads user data. */
 export async function runSmoke(options: {
   windows: Windows
@@ -28,14 +56,19 @@ export async function runSmoke(options: {
 }): Promise<void> {
   const { windows, root } = options,
     window = windows.main
+  const step = (name: string) => console.log('EIZHU_SMOKE_STEP', name)
+  step('waiting-renderer')
   await shown(window)
+  step('renderer-ready')
   const firstWindowMs = performance.now() - options.startedAt
   const health = await options.runtime().call('runtime.health')
   const crypto = await options.runtime().call('runtime.smoke')
   const renderer = await window.webContents.executeJavaScript(`(async () => ({
     node: typeof process, require: typeof require, bridge: typeof window.eizhu.app.bootstrap,
     health: await window.eizhu.runtime.health(), text: document.body.innerText.includes('新建连接'),
-    reserved: await window.eizhu.group.list().then(() => 'unexpected-success', e => e.code),
+    reserved: await window.eizhu.account.status().then(() => 'unexpected-success', e => e.code),
+    local: await window.eizhu.group.list(),
+    arbitraryPath: await window.eizhu.backup.preview({ filePath: '/etc/passwd' }).then(() => 'unexpected-success', e => e.code),
     inputValidation: await window.eizhu.settings.write({ key: 'credential', value: 'synthetic' }).then(() => 'unexpected-success', e => e.code)
   }))()`)
   assert.equal(renderer.node, 'undefined')
@@ -43,13 +76,53 @@ export async function runSmoke(options: {
   assert.equal(renderer.text, true)
   assert.equal(renderer.reserved, 'STAGE_NOT_READY')
   assert.equal(renderer.inputValidation, 'BAD_REQUEST')
+  assert.deepEqual(renderer.local, [])
+  assert.equal(renderer.arbitraryPath, 'FORBIDDEN')
+  step('foundation-bridge-passed')
+  const localBridge = await window.webContents.executeJavaScript(`(async () => {
+    const api=window.eizhu;
+    const group=await api.group.create({request:{name:'阶段 2 合成分组'}});
+    const key=await api.vault.generateKeyPair({request:{algo:'ed25519',passphrase:'合成私钥密语'}});
+    const vault=await api.vault.create({request:{name:'阶段 2 合成密钥',type:'private_key',private_key:key.private_key,public_key:key.public_key,passphrase:'合成私钥密语'}});
+    const profile=await api.profile.create({request:{name:'阶段 2 合成服务器',host:'stage2.example.invalid',username:'deploy',auth_type:'vault',vault_id:vault.id,group_id:group.id}});
+    const revealed=await api.vault.reveal({id:vault.id});
+    const protectedDelete=await api.vault.delete({id:vault.id}).then(()=>false,e=>e.code==='IN_USE');
+    const audit=await api.audit.list({limit:100});
+    const result={crud:Boolean(profile.id),computeWorker:key.private_key.includes('OPENSSH PRIVATE KEY'),revealed:revealed.public_key===key.public_key,protectedDelete,redacted:!JSON.stringify(await api.vault.list({vaultType:null,q:null})).includes('PRIVATE KEY'),audit:audit.some(row=>row.action==='vault_reveal'),profileId:profile.id,vaultId:vault.id,groupId:group.id};
+    return result;
+  })()`)
+  for (const key of ['crud', 'computeWorker', 'revealed', 'protectedDelete', 'redacted', 'audit'])
+    assert.equal(localBridge[key], true)
+  step('local-bridge-passed')
+  const stage2 = await options
+    .runtime()
+    .call<{ passed: boolean }>('runtime.verifyStage2', { fixtures: process.env.EIZHU_SMOKE_FIXTURES })
+  assert.equal(stage2.passed, true)
+  step('stage2-native-passed')
+  const stage3=await verifyStage3(window,options.runtime())
+  const stage3Storage=await options.runtime().call<{passed:boolean}>('runtime.verifyStage3Storage')
+  assert.equal(stage3Storage.passed,true)
+  step('stage3-native-passed')
+  // An occluded smoke window can suspend animation frames. Keep only this test window drawing.
+  // This setting is limited to this synthetic smoke window; normal application throttling is unchanged.
+  window.webContents.backgroundThrottling = false
   window.setContentSize(1280, 720)
-  await window.webContents.executeJavaScript(
-    `(async () => { await document.fonts.ready; document.documentElement.classList.remove('dark'); document.documentElement.classList.add('light'); await new Promise(requestAnimationFrame) })()`,
+  await prepareCapture(window, 'light')
+  step('light-capture-ready')
+  const light = await window.webContents.capturePage(undefined, { stayAwake: true })
+  await writeFile(join(root, 'home-light.png'), light.toPNG())
+  step('light-captured')
+  await prepareCapture(window, 'dark')
+  const dark = await window.webContents.capturePage(undefined, { stayAwake: true })
+  await writeFile(join(root, 'home-dark.png'), dark.toPNG())
+  const screenshotContrast = { light: sidebarBrightness(light), dark: sidebarBrightness(dark) }
+  assert.ok(
+    screenshotContrast.light > 160 &&
+      screenshotContrast.dark < 130 &&
+      screenshotContrast.light - screenshotContrast.dark > 80,
+    'Captured themes must contain distinct painted light/dark surfaces',
   )
-  await writeFile(join(root, 'home-light.png'), (await window.webContents.capturePage()).toPNG())
-  await window.webContents.executeJavaScript(`document.documentElement.classList.replace('light', 'dark')`)
-  await writeFile(join(root, 'home-dark.png'), (await window.webContents.capturePage()).toPNG())
+  step('dark-captured')
 
   const editor = windows.create('editor')
   const available = screen.getDisplayMatching(editor.getBounds()).workAreaSize
@@ -76,6 +149,7 @@ export async function runSmoke(options: {
   }
   await options.load(editor)
   await shown(editor)
+  step('editor-ready')
   assert.equal(await windows.confirmTransition(), true)
   assert.equal(await windows.confirmApplicationClose(), true)
   const persistedValue = JSON.stringify({ state: { theme: 'light' }, version: 1 })
@@ -101,6 +175,7 @@ export async function runSmoke(options: {
   })()`)
   assert.equal(failed, 'RUNTIME_UNAVAILABLE')
   const restored = await window.webContents.executeJavaScript('window.eizhu.runtime.restart()')
+  step('runtime-restarted')
   assert.notEqual(restored.runtimeId, before.runtimeId)
   assert.equal(restored.generation, before.generation + 1)
   assert.equal(
@@ -110,6 +185,14 @@ export async function runSmoke(options: {
   assert.equal(await windows.confirmTransition(), true)
   const persisted = await options.runtime().call<Record<string, string>>('settings.read')
   assert.equal(persisted['eizhu-settings'], persistedValue)
+  const persistedProfile = await window.webContents.executeJavaScript(
+    'window.eizhu.profile.get(' + JSON.stringify({ id: localBridge.profileId }) + ')',
+  )
+  assert.equal(persistedProfile.host, 'stage2.example.invalid')
+  await window.webContents.executeJavaScript(
+    `(async()=>{const api=window.eizhu;await api.profile.delete(${JSON.stringify({ id: localBridge.profileId })});await api.vault.delete(${JSON.stringify({ id: localBridge.vaultId })});await api.group.delete(${JSON.stringify({ id: localBridge.groupId })})})()`,
+  )
+  step('local-persistence-passed')
   const offlineEditor = new TestWindow({
     show: false,
     webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false, webSecurity: true },
@@ -130,6 +213,7 @@ export async function runSmoke(options: {
   } finally {
     offlineEditor.destroy()
   }
+  step('monaco-passed')
   const report = {
     platform: process.platform,
     arch: process.arch,
@@ -140,6 +224,10 @@ export async function runSmoke(options: {
     health,
     crypto,
     renderer,
+    stage2,
+    stage3,
+    stage3Storage,
+    localBridge,
     editor: true,
     editorGeometry,
     recovery: {
@@ -153,6 +241,7 @@ export async function runSmoke(options: {
     firstWindowMs,
     processMetrics: app.getAppMetrics().map(({ type, memory, cpu }) => ({ type, memory, cpu })),
     screenshots: ['home-light.png', 'home-dark.png', 'editor-empty.png'],
+    screenshotContrast,
   }
   await writeFile(join(root, 'smoke.json'), JSON.stringify(report, null, 2))
   console.log('EIZHU_SMOKE_OK', JSON.stringify(report))
