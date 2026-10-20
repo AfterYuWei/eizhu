@@ -6,7 +6,7 @@
 当前交付为**阶段 1：桌面工程基础**，包含受限 preload、独立业务进程、数据库/计算 Worker、新设置存储和本地编辑器资源。
 服务器、凭据、SSH/SFTP、账号、同步和备份业务尚待阶段 2–5 实现；当前预留操作明确返回未开放错误。
 完整功能范围、兼容样本与验收状态见 [桌面实施记录](docs/desktop-rebuild/README.md)。
-阶段 1 尚未通过四目标门禁；最新源码、先前测试包的证据范围及剩余验证见 [阶段 1 报告](docs/desktop-rebuild/STAGE_1_REPORT.md)。
+阶段 1 四目标最终安装包烟测已通过，桌面外壳等待用户确认；源码、测试包及待验范围见 [阶段 1 报告](docs/desktop-rebuild/STAGE_1_REPORT.md)。
 
 ```bash
 # Node 24 LTS

@@ -1,9 +1,9 @@
 {
-  "recordedAt": "2026-10-20T07:40:43.747770+00:00",
-  "status": "stage-1-gate-pending",
+  "recordedAt": "2026-10-20T08:00:54.111952+00:00",
+  "status": "stage-1-automation-passed-shell-review-pending",
   "sourceSnapshot": {
     "algorithm": "sha256(sorted(path + NUL + file-sha256 + LF))",
-    "sha256": "d5ac452647968c3f1cdfef8d62b7d28214a772653ffce2d4074a5d31fb20cc10",
+    "sha256": "d8220a2e67ccbc044ab9d46bc0656753b7de49b011f239f05c809a93fb71cda0",
     "files": 645,
     "includes": [
       "apps (excluding out/node_modules)",
@@ -18,11 +18,8 @@
       ".prettierrc.json",
       ".gitattributes"
     ],
-    "followupChanges": [
-      "Electron 官方分发安装及 Linux 工具链修正已在 ddaa417 远端复验；macOS x64 最终包通过",
-      "Linux CI 使用 Clang15，Windows 烟测按工作区约束计算，Monaco 语言注册有界等待，等待新一轮远端复验"
-    ],
-    "implementationBaseCommit": "2f3f1b58b8877b7a76ea3e2dbd513e158f51cac8"
+    "implementationBaseCommit": "2f3f1b58b8877b7a76ea3e2dbd513e158f51cac8",
+    "gitCommit": "ba34ba3ba1e589a1fec6941fbdd96ad7d2c05ebf"
   },
   "artifacts": [
     {
@@ -30,21 +27,27 @@
       "bytes": 157925276,
       "modifiedAt": "2026-10-20T07:38:17.025067+00:00",
       "sha256": "eec7f1fe34f3c01693b693678dbc853369fc59ef21e2297eef85c4e9fb9417f5",
-      "matchesCurrentRuntimeSource": true
+      "matchesCurrentRuntimeSource": false,
+      "sourceCommit": "55df5f489877063af8df76d7da5634c418663602",
+      "differenceFromCurrentSource": "仅编译内置烟测断言更新；产品窗口和业务实现未改变；本地包保留作先前烟测证据，最终目标以CI产物为准。"
     },
     {
       "path": "artifacts/desktop/eizhu-0.4.4-mac-x64.zip",
       "bytes": 157268386,
       "modifiedAt": "2026-10-20T07:38:27.625749+00:00",
       "sha256": "e373f92fddc5238b06634b3721cd98022317763210d3a5a6253c0152841ada66",
-      "matchesCurrentRuntimeSource": true
+      "matchesCurrentRuntimeSource": false,
+      "sourceCommit": "55df5f489877063af8df76d7da5634c418663602",
+      "differenceFromCurrentSource": "仅编译内置烟测断言更新；产品窗口和业务实现未改变；本地包保留作先前烟测证据，最终目标以CI产物为准。"
     },
     {
       "path": "artifacts/desktop/mac/eizhu.app/Contents/Resources/app.asar",
       "bytes": 38450189,
       "modifiedAt": "2026-10-20T07:38:09.688738+00:00",
       "sha256": "802024d61bf3a56f69246a9db91e0f123ad9b631dcdc5c4cba8d3826f3248cf8",
-      "matchesCurrentRuntimeSource": true
+      "matchesCurrentRuntimeSource": false,
+      "sourceCommit": "55df5f489877063af8df76d7da5634c418663602",
+      "differenceFromCurrentSource": "仅编译内置烟测断言更新；产品窗口和业务实现未改变；本地包保留作先前烟测证据，最终目标以CI产物为准。"
     }
   ],
   "tests": {
@@ -83,24 +86,6 @@
       "evidence": "lifecycle-check.txt",
       "historicalTestsRepeated": false
     },
-    "finalNativeSmoke": {
-      "passed": true,
-      "delegatedTo": "GPT-6 Luna (independent context)",
-      "platform": "darwin-x64",
-      "packaged": true,
-      "exitCode": 0,
-      "editorContentSize": [
-        1280,
-        800
-      ],
-      "screenshotsArchived": 3,
-      "report": "mac-x64-package-smoke.json",
-      "logs": "artifacts/logs/stage-1-smoke-fix-smoke.log",
-      "warnings": [
-        "Electron native_image undefined icon argument",
-        "macOS Chromium task_policy_set invalid argument"
-      ]
-    },
     "build": {
       "passed": true,
       "log": "artifacts/logs/stage-1-build.log"
@@ -126,7 +111,7 @@
       "passed": true,
       "evidence": "native-setup-check.txt",
       "coldElectronInstallVerified": true,
-      "linuxClangCompileVerified": false
+      "linuxClangCompileVerified": true
     },
     "smokeFixes": {
       "passed": true,
@@ -141,13 +126,86 @@
         "macOS x64 desktop:package",
         "最终 DMG smoke"
       ]
+    },
+    "geometry": {
+      "passed": true,
+      "newUnitTests": 0,
+      "evidence": "geometry-check.txt",
+      "checks": [
+        "主进程 TypeScript",
+        "smoke.ts ESLint",
+        "workflow YAML及范围条件静态检查"
+      ],
+      "historicalTestsRepeated": false
+    },
+    "ciFinalNativeSmoke": {
+      "passed": true,
+      "targets": 4,
+      "delegatedTo": "GPT-6 Luna (independent context)",
+      "evidence": "ci-final-ba34ba3.json",
+      "runtimeSourceCommit": "ba34ba3ba1e589a1fec6941fbdd96ad7d2c05ebf",
+      "reports": [
+        "ci-smoke-darwin-x64.json",
+        "ci-smoke-darwin-arm64.json",
+        "ci-smoke-win32-x64.json",
+        "ci-smoke-linux-x64.json"
+      ],
+      "foundationThisRun": "skipped",
+      "baselineThisRun": "skipped",
+      "reusedRun": 39388131148
+    },
+    "localFinalNativeSmoke": {
+      "passed": true,
+      "delegatedTo": "GPT-6 Luna (independent context)",
+      "platform": "darwin-x64",
+      "packaged": true,
+      "exitCode": 0,
+      "editorContentSize": [
+        1280,
+        800
+      ],
+      "screenshotsArchived": 3,
+      "report": "mac-x64-package-smoke.json",
+      "logs": "artifacts/logs/stage-1-smoke-fix-smoke.log",
+      "warnings": [
+        "Electron native_image undefined icon argument",
+        "macOS Chromium task_policy_set invalid argument"
+      ]
+    },
+    "cumulativeUnitRegression": {
+      "foundation": 21,
+      "frontendHistorical": 196,
+      "frontendNewReadiness": 3,
+      "baseline": 10,
+      "total": 230,
+      "note": "累计各专项的通过记录，不是#54重跑230项；#53四目标实际完成foundation/baseline，旧前端196项日志未归档。"
     }
   },
   "platforms": {
-    "darwin-x64": "local-final-dmg-and-ci-run-52-passed",
-    "darwin-arm64": "ci-package-passed-monaco-smoke-failed-fix-pending",
-    "win32-x64": "ci-package-passed-window-size-smoke-failed-fix-pending",
-    "linux-x64": "ci-clang14-compile-failed-clang15-pending"
+    "darwin-x64": {
+      "automation": "passed",
+      "runner": "macos-15-intel",
+      "report": "ci-smoke-darwin-x64.json",
+      "manualAcceptance": "pending"
+    },
+    "darwin-arm64": {
+      "automation": "passed",
+      "runner": "macos-15",
+      "report": "ci-smoke-darwin-arm64.json",
+      "manualAcceptance": "pending"
+    },
+    "win32-x64": {
+      "automation": "passed",
+      "runner": "windows-2022",
+      "report": "ci-smoke-win32-x64.json",
+      "manualAcceptance": "pending"
+    },
+    "linux-x64": {
+      "automation": "passed",
+      "runner": "ubuntu-22.04",
+      "report": "ci-smoke-linux-x64.json",
+      "manualAcceptance": "pending"
+    }
   },
   "screenshots": {
     "current": [
@@ -189,113 +247,82 @@
     "resolution": "正常 require_escalated 审批重新通过；最新 build/package/DMG smoke 均已执行成功"
   },
   "ci": {
-    "runId": 39386722963,
-    "runNumber": 52,
-    "url": "https://github.com/AfterYuWei/eizhu/actions/runs/39386722963",
-    "commit": "ddaa4176501bf5a99b6d5113322955d44efd1f44",
-    "branch": "codex/electron-stage-1",
+    "runId": 39389027861,
+    "runNumber": 54,
+    "url": "https://github.com/AfterYuWei/eizhu/actions/runs/39389027861",
+    "commit": "ba34ba3ba1e589a1fec6941fbdd96ad7d2c05ebf",
     "status": "completed",
-    "conclusion": "failure",
-    "recordedAt": "2026-10-20T07:35:01Z",
-    "detailLogs": "read-through-authenticated-GitHub-job-raw-log-pages",
-    "artifactsProduced": [
-      "eizhu-test-darwin-arm64",
-      "eizhu-test-darwin-x64",
-      "eizhu-test-win32-x64"
-    ],
-    "source": "GitHub Actions public run/jobs/artifacts API; GPT-6 Luna independent monitor",
-    "jobs": [
-      {
-        "target": "linux-x64",
-        "id": 118508210207,
-        "conclusion": "failure",
-        "failedStep": "npm ci",
-        "cause": "native:rebuild failed compiling cpu-features against Electron 44.9.0 headers with Clang 14; std::source_location was unavailable",
-        "notRun": [
-          "check",
-          "foundation",
-          "baseline",
-          "build",
-          "package",
-          "installer-smoke",
-          "AppImage-smoke"
-        ],
-        "artifactProduced": false
-      },
-      {
-        "target": "win32-x64",
-        "id": 118508210478,
-        "conclusion": "failure",
-        "passed": [
-          "npm ci",
-          "check",
-          "foundation",
-          "baseline",
-          "build",
-          "package"
-        ],
-        "failedStep": "Smoke final installer contents (macOS / Windows)",
-        "cause": "installed app smoke expected window bounds [1280, 800], observed [1024, 728]",
-        "artifactProduced": true
-      },
-      {
-        "target": "darwin-arm64",
-        "id": 118508210513,
-        "conclusion": "failure",
-        "passed": [
-          "npm ci",
-          "check",
-          "foundation",
-          "baseline",
-          "build",
-          "package"
-        ],
-        "failedStep": "Smoke final installer contents (macOS / Windows)",
-        "cause": "installed app smoke reported TypeScript not registered, then Smoke exit 1",
-        "artifactProduced": true
-      },
-      {
-        "target": "darwin-x64",
-        "id": 118508210538,
-        "conclusion": "success",
-        "passed": [
-          "npm ci",
-          "check",
-          "foundation",
-          "baseline",
-          "build",
-          "package",
-          "installer-smoke"
-        ],
-        "artifactProduced": true
-      }
-    ],
-    "installerSmoke": {
-      "attempted": [
-        "win32-x64",
-        "darwin-arm64",
-        "darwin-x64"
-      ],
-      "passed": [
-        "darwin-x64"
-      ],
-      "failed": [
-        "win32-x64",
-        "darwin-arm64"
-      ],
-      "skipped": [
-        "linux-x64"
-      ],
-      "appImageX11Smoke": "skipped on all jobs; Linux stopped at npm ci"
-    },
-    "rerunTriggered": false,
-    "evidenceDirectory": "artifacts/ci/retry-ddaa417/",
-    "followup": "three-target-fixes-locally-verified-ready-for-push"
+    "conclusion": "success",
+    "validation": "package-only",
+    "evidence": "ci-final-ba34ba3.json",
+    "reusedRegressionEvidence": "ci-third-55df5f4.json",
+    "releasePublished": false
   },
   "ciHistory": [
     {
       "runId": 39384397849,
       "evidence": "ci-run-39384397849.json"
+    },
+    {
+      "runId": 39386722963,
+      "evidence": "ci-retry-ddaa417.json"
+    },
+    {
+      "runId": 39388131148,
+      "evidence": "ci-third-55df5f4.json"
     }
-  ]
+  ],
+  "ciArtifacts": [
+    {
+      "id": 12248753004,
+      "name": "eizhu-test-darwin-x64",
+      "sizeBytes": 315111134,
+      "sha256": "1349ff465954698fb1cc26d02f1a123e111caa641ee2cbc0935ddec3885440b8",
+      "url": "https://github.com/AfterYuWei/eizhu/actions/runs/39389027861/artifacts/12248753004",
+      "sizeNote": "Uploaded artifact ZIP size and digest; the DMG itself was not downloaded.",
+      "target": "darwin-x64",
+      "sourceCommit": "ba34ba3ba1e589a1fec6941fbdd96ad7d2c05ebf",
+      "digestScope": "GitHub artifact ZIP; not an individual installer"
+    },
+    {
+      "id": 12249150911,
+      "name": "eizhu-test-darwin-arm64",
+      "sizeBytes": 307500984,
+      "sha256": "83d322d3f49f7d094541e5fe76996523d421821ce45b4b9df6710e25a7697006",
+      "url": "https://github.com/AfterYuWei/eizhu/actions/runs/39389027861/artifacts/12249150911",
+      "sizeNote": "Uploaded artifact ZIP size and digest; the DMG itself was not downloaded.",
+      "target": "darwin-arm64",
+      "sourceCommit": "ba34ba3ba1e589a1fec6941fbdd96ad7d2c05ebf",
+      "digestScope": "GitHub artifact ZIP; not an individual installer"
+    },
+    {
+      "id": 12248504150,
+      "name": "eizhu-test-win32-x64",
+      "sizeBytes": 133065683,
+      "sha256": "4143247f9badbeec3a2a60211cd6354b6f0ba3a78fdd2a96e29878154d46840c",
+      "url": "https://github.com/AfterYuWei/eizhu/actions/runs/39389027861/artifacts/12248504150",
+      "sizeNote": "Uploaded artifact ZIP size and digest; the EXE itself was not downloaded.",
+      "target": "win32-x64",
+      "sourceCommit": "ba34ba3ba1e589a1fec6941fbdd96ad7d2c05ebf",
+      "digestScope": "GitHub artifact ZIP; not an individual installer"
+    },
+    {
+      "id": 12248064787,
+      "name": "eizhu-test-linux-x64",
+      "sizeBytes": 376772451,
+      "sha256": "fe500c471dc38fe16decb797869c3f2403b00bce0c9a86e59a99ac4086f13efa",
+      "url": "https://github.com/AfterYuWei/eizhu/actions/runs/39389027861/artifacts/12248064787",
+      "sizeNote": "Uploaded artifact ZIP size and digest; the AppImage itself was not downloaded.",
+      "target": "linux-x64",
+      "sourceCommit": "ba34ba3ba1e589a1fec6941fbdd96ad7d2c05ebf",
+      "digestScope": "GitHub artifact ZIP; not an individual installer"
+    }
+  ],
+  "remainingGate": {
+    "stage": 1,
+    "userShellConfirmation": "pending",
+    "stage2Authorized": false,
+    "fullPlatformManualMatrix": "not completed",
+    "signingNotarizationRealUpdatePerformance": "stage6 pending"
+  }
 }

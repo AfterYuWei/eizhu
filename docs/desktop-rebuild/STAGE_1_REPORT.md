@@ -2,7 +2,9 @@
 
 记录日期：2026-10-20。阶段 0 已获用户确认；本轮只实施阶段 1。
 
-**当前状态：基础工程已落地，阶段门禁尚未通过。** 第三轮 CI 的 Windows x64、macOS x64、Linux x64 最终包烟测均已通过；macOS arm64 仅窗口尺寸断言失败，已修正并通过定向检查，等待最终安装包复验。原生交互及桌面外壳仍待确认，暂不进入阶段 2。
+**当前状态：阶段 1 工程与四目标自动验收已通过，等待用户确认桌面外壳。** [GitHub Actions #54](https://github.com/AfterYuWei/eizhu/actions/runs/39389027861) 的四个目标全部成功；签名、公证、真实升级及各平台人工操作尚未验收。未进入阶段 2。
+
+本轮可审查源码为 `ba34ba3`（分支 `codex/electron-stage-1`）；后续提交只补交付证据，不改变运行代码。前端组件、窗口默认参数及业务边界保持不变，本轮修复集中在 Electron 安装、Linux 原生工具链、Windows 固定样本字节及跨平台烟测时序/尺寸断言。
 
 ## 交付范围与差异
 
@@ -18,7 +20,7 @@
 | 密钥基础 | 系统密钥库优先；首次初始化受限文件兜底；已有密钥损坏、无法解锁或丢失时报错 | 文件兜底有单测和先前 macOS 烟测；各平台真实系统密钥库仍待验 |
 | 前端 | 桌面 React 组件、样式及交互保留；领域 DTO 归入 contracts；设置先水化再启动 UI | 领域接口预留，未实现操作返回 `STAGE_NOT_READY`，不以空数据或假成功冒充完成 |
 | 编辑器资源 | Monaco、字体、图标与 worker 本地打包；保留原有编辑器组件 | 最新本机及远端 macOS x64 包真实执行 TS/JSON worker；远端文件、安全保存、真实脏标签保护属阶段 4 |
-| 打包 | Windows NSIS；macOS 分架构 DMG/ZIP；Linux AppImage/deb/rpm；四目标原生 CI | CI 已配置不等于执行通过；测试包不发布 Release |
+| 打包 | Windows NSIS；macOS 分架构 DMG/ZIP；Linux AppImage/deb/rpm；四目标原生 CI | 四目标最终包已实际运行；deb/rpm 安装、其他系统版本及签名单列待验，未发布 Release |
 | 更新 | 保留 stable/test 及 updater 依赖，未实现更新检查明确报阶段未就绪 | 独立更新源、下载与候选固定、签名及真实升级属阶段 6 |
 
 启用的基础方法覆盖 bootstrap、平台/工作区快照、全局设置、窗口控制、关闭确认、系统对话框、剪贴板、有限本地日志及运行服务健康/恢复。领域方法必须先补齐运行时 schema 和资源归属规则，再开放实现；目前的领域 TypeScript 接口不构成功能完成声明。
@@ -64,18 +66,18 @@
 
 | 检查 | 结果 | 证据范围 |
 |---|---|---|
-| 基础设施回归 | 本会话此前 15 项通过 | 上下文/schema、错误脱敏、密钥保护、资源关闭、Worker 上限/崩溃/取消/不可克隆输入；原始日志未归档 |
+| 基础设施回归 | #53 四目标通过，macOS x64 日志确认 21/21 | 上下文/schema、错误脱敏、密钥保护、资源关闭、Worker 上限/崩溃/取消/不可克隆输入；原始日志未归档 |
 | 前端回归 | 本会话此前 50 文件、196 项通过 | 保留桌面组件/状态与新增桥接回归；不是原基线 251 项原封不动重跑 |
-| 固定兼容回归 | 本会话此前 10 项通过 | 两类旧备份、三种模式、负例、加密/同步向量及不可变清单；不代表生产导入器已实现 |
+| 固定兼容回归 | #53 四目标通过，macOS x64 日志确认 10/10 | 两类旧备份、三种模式、负例、加密/同步向量及不可变清单；不代表生产导入器已实现 |
 | 独立补验 | Luna 通过 | 当前 `npm run check`、受影响主进程/契约代码 lint、架构检查及 5 份相关 Actions YAML 语法解析 |
-| 新增生命周期回归 | Luna 专项 6 项通过 | 等待真实退出、强杀后等待、超时/强杀失败、通道抛错及已退出进程；同时补查主进程/共享代码类型与受影响文件 lint，见专项证据 |
+| 新增生命周期回归 | Luna 专项 6 项通过，已包含于基础 21 项 | 等待真实退出、强杀后等待、超时/强杀失败、通道抛错及已退出进程；同时补查主进程/共享代码类型与受影响文件 lint，见专项证据 |
 | 固定样本 checkout 保护 | Luna 四类样本比对通过 | 新增 `.gitattributes` 禁止固定目录换行转换；强制 autocrlf 后的 JSON/两类备份/JPEG 与原文件字节一致，第二轮 Windows CI 已通过固定样本检查 |
 | Electron 原生模块 | 最新 macOS x64 包通过 | SQLite、argon2、ssh2 模块与两个 Worker 在真实 Electron 进程树运行；不是仅在开发 Node 下加载 |
 | 最终 DMG 内容启动 | 最新 macOS x64 包通过 | Luna 从最终 DMG 取出应用后启动；Node/require 不可用，错误码、服务崩溃/恢复、设置持久化及本地 Monaco worker 均通过，等待应用真实退出并返回 0 |
 | 新增语言服务等待回归 | Luna 3 项通过 | 暂时未注册后成功、其他错误立即失败、15 秒超时；见 [专项记录](evidence/stage-1/smoke-fixes-check.txt) |
 | 最新源码 build/package | macOS x64 通过 | 原生依赖按 Electron ABI 重建，生成未签名 DMG/ZIP；自动审批曾因用量限制未执行，后经同一正常审批入口恢复并完成 |
 
-历史测试共 221 项通过，新增生命周期专项 6 项与语言服务等待专项 3 项通过；子代理没有重复运行历史测试，且无法从当前临时目录独立取回旧日志，因此报告区分会话执行记录与新补验证据。[生命周期专项证据](evidence/stage-1/lifecycle-check.txt)保存本次结果；[机器可读状态](evidence/stage-1/review-status.json)记录边界；[最新最终包烟测](evidence/stage-1/mac-x64-package-smoke.json)与[先前包记录](evidence/stage-1/mac-x64-previous-package-smoke.json)分开保留，均已去掉本机临时目录地址。
+累计 230 项通过：基础 21、前端原有 196 与新增等待 3、固定兼容 10。新增生命周期 6 项已包含在基础 21 中；子代理没有重复运行历史测试，且无法从当前临时目录独立取回旧日志，因此报告区分会话执行记录与新补验证据。[生命周期专项证据](evidence/stage-1/lifecycle-check.txt)保存本次结果；[机器可读状态](evidence/stage-1/review-status.json)记录边界；[最新最终包烟测](evidence/stage-1/mac-x64-package-smoke.json)与[先前包记录](evidence/stage-1/mac-x64-previous-package-smoke.json)分开保留，均已去掉本机临时目录地址。
 
 最新烟测退出码为 0。日志仍记录 Electron 的空 icon 参数警告与 macOS Chromium `task_policy_set ... invalid argument` 行，未导致本次断言或退出失败；不将这些日志包装成零警告结果。
 
@@ -85,10 +87,12 @@
 
 | 目标 | 已有产物/执行 | 当前门禁 |
 |---|---|---|
-| macOS x64 | 本机最新 DMG 与第二轮 CI 最终 DMG 烟测通过 | 第三轮 CI 已通过；原生按钮、全屏、系统密钥库及人工 UI 确认待验 |
-| macOS arm64 | 第三轮 CI 已打包，smoke 在几何断言失败 | 尺寸及语言注册修正均待 arm64 完整烟测 |
-| Windows x64 | 第三轮 CI 固定样本、NSIS 打包及安装后 smoke 全部通过 | 原生交互及其他系统版本待验；缩放、路径、ACL/密钥库未实测 |
-| Linux x64 | 第三轮 CI Clang15 编译、AppImage/deb/rpm 打包及 AppImage X11 smoke 全部通过 | deb/rpm 安装及其他发行版待验；各发行版安装、X11/Wayland、权限/密钥库未实测 |
+| macOS x64 | macos-15-intel；DMG/ZIP 已生成，从最终 DMG 取出的应用 smoke 通过 | 原生按钮、全屏、系统密钥库、macOS 13 及人工 UI 确认待验 |
+| macOS arm64 | macos-15；DMG/ZIP 已生成，最终 DMG smoke 与真实 TS/JSON worker 通过 | 签名、公证、其他系统版本及原生人工操作待验 |
+| Windows x64 | windows-2022；NSIS 安装与最终应用启动 smoke 通过 | Windows 10/11、缩放、路径、ACL/系统密钥库及原生操作待验 |
+| Linux x64 | Ubuntu 22.04；AppImage/deb/rpm 已生成，最终 AppImage 内容在 Xvfb/X11 下 smoke 通过 | deb/rpm 安装、Ubuntu 24.04/Debian/Fedora、Wayland、FUSE 集成及系统密钥库待验 |
+
+四份测试包、烟测截图及报告在 [#54 artifacts](https://github.com/AfterYuWei/eizhu/actions/runs/39389027861#artifacts) 下载；[最终矩阵](evidence/stage-1/ci-final-ba34ba3.json)记录每个 job 的实际成功/跳过步骤和归档摘要。原始成功日志中的四份 smoke payload 已分别保存为 [macOS arm64](evidence/stage-1/ci-smoke-darwin-arm64.json)、[macOS x64](evidence/stage-1/ci-smoke-darwin-x64.json)、[Windows x64](evidence/stage-1/ci-smoke-win32-x64.json)、[Linux x64](evidence/stage-1/ci-smoke-linux-x64.json)，临时数据路径已移除。CI 归档未全部下载到本机，也没有为此重新运行 smoke。
 
 首轮 [GitHub Actions #51](https://github.com/AfterYuWei/eizhu/actions/runs/39384397849) 对应上述提交，[机器矩阵](evidence/stage-1/ci-run-39384397849.json)保留实际通过与跳过的步骤。用户登录后已通过 GitHub 的原始日志页面读取底层错误；[首轮原因摘要](evidence/stage-1/ci-first-run-causes.txt)保存定位与核对结果。
 
@@ -99,11 +103,11 @@
 - Windows 首个固定样本检查发现 README 为 870 字节，预期 861。固定原文件恰有 9 个 LF，转成 CRLF 后正好多 9 字节；已加入 `-text` 属性，四类样本 autocrlf 字节检查通过，第二轮 Windows CI 固定样本检查已通过。
 - Luna 已通过三个安装脚本的语法/lint、工作流解析、本机原生重建、重打包和最终 DMG 烟测，见[专项记录](evidence/stage-1/native-setup-check.txt)。未重新运行未受影响的本机 227 项回归；CI 在新安装环境中复验失败目标。
 
-最新产物版本为 0.4.4，Electron 44.9.0、内置 Node 24.22.0、ABI 149。产物大小、SHA-256 和时间见机器可读状态。产物位于根目录 `artifacts/desktop/`，未签名，不作为正式发布。
+最新产物版本为 0.4.4，Electron 44.9.0、内置 Node 24.22.0、ABI 149。本机 DMG/ZIP 的大小、SHA-256、时间及来源提交见机器可读状态，位于 `artifacts/desktop/`。远端矩阵的 digest/size 指 GitHub artifact ZIP 归档，不冒充单个安装包的摘要。均为未签名测试包，未发布 Release。
 
 报告中的首窗口耗时指 main 模块开始执行至窗口显示，未覆盖完整进程冷启动；具体单次值见 JSON。内存快照包含额外 Monaco 测试窗口，不能当作空闲内存或混合负载性能结论。20 连接/4 活跃终端/5 路传输、P95 与 8 小时稳定性尚未执行。
 
-依赖已精确锁定用于验证，但四目标原生组合尚未全部验收。此前依赖审计记录为 8 项中危、2 项低危，无高危/严重项；主要涉及构建依赖链及 Monaco 相关依赖，不通过强制降级掩盖。签名、公证、证书和真实更新均未验证。
+依赖组合已精确锁定，并通过本轮四目标原生打包及最终包烟测；这不替代各支持系统版本的完整验收。此前依赖审计记录为 8 项中危、2 项低危，无高危/严重项；主要涉及构建依赖链及 Monaco 相关依赖，不通过强制降级掩盖。签名、公证、证书和真实更新均未验证。
 
 第二轮 [GitHub Actions #52](https://github.com/AfterYuWei/eizhu/actions/runs/39386722963)，提交 `ddaa4176501bf5a99b6d5113322955d44efd1f44`，[矩阵及原因](evidence/stage-1/ci-retry-ddaa417.json)：macOS x64 的最终 DMG 烟测已通过；其余任务待以下修正复验。
 
@@ -112,22 +116,22 @@
 - macOS arm64 已完成打包，Monaco 烟测在异步语言注册完成前读取 TS worker，报 `TypeScript not registered!`。烟测只对 TS/JSON 已知的未注册状态进行最长 15 秒的等待，其他模块/worker/CSP 错误立即失败；仍须实际返回类型诊断及 JSON markers 才通过。
 - 新增语言服务等待的三项定向测试通过，不重新执行未受影响的本机历史回归；实际 Windows/arm64 烟测与 Linux 编译继续由远端验证。
 
-第三轮 [GitHub Actions #53](https://github.com/AfterYuWei/eizhu/actions/runs/39388131148)，提交 `55df5f4`：Windows x64、macOS x64、Linux x64 已全部通过各自最终包烟测。arm64 的 macOS 在 1024×688 工作区仍保留 1280×800 请求内容尺寸，原断言期望系统一定缩到 1024×656，因此在执行语言服务检查前失败。断言现逐轴只接受原请求尺寸或工作区减原生 frame 的受限尺寸，拒绝其他值，产品默认不变；[定向检查](evidence/stage-1/geometry-check.txt)通过。
+第三轮 [GitHub Actions #53](https://github.com/AfterYuWei/eizhu/actions/runs/39388131148)，提交 `55df5f4`：Windows x64、macOS x64、Linux x64 已全部通过各自最终包烟测。arm64 的 macOS 在小于请求尺寸的工作区仍保留 1280×800 请求内容尺寸，原断言期望系统一定缩到 1024×656，因此在执行语言服务检查前失败。断言现逐轴只接受原请求尺寸或工作区减原生 frame 的受限尺寸，拒绝其他值，产品默认不变；[定向检查](evidence/stage-1/geometry-check.txt)通过。
 
-下一轮只更改烟测工具、CI 验证范围和文档，业务、存储、加密、固定样本与产品窗口代码未变，提交用 `[package-only]` 标记。继续四目标安装/类型/构建/打包/最终包烟测，复用 #53 各目标已通过的基础与固定样本测试；跳过项不计为本轮通过。工作流默认 push 及 full 调用仍执行完整检查。
+第四轮 [GitHub Actions #54](https://github.com/AfterYuWei/eizhu/actions/runs/39389027861)，提交 `ba34ba3`，四目标均成功。此轮只更改烟测工具、CI 验证范围和文档，业务、存储、加密、固定样本与产品窗口代码未变，提交用 `[package-only]` 标记。继续四目标安装/类型/构建/打包/最终包烟测，复用 #53 各目标已通过的基础与固定样本测试；跳过项不计为本轮通过。工作流默认 push 及 full 调用仍执行完整检查。
 
 ## 文档与下一步门禁
 
 已按当前工程重写 AGENTS、README、开发、架构、安全、备份、同步、SFTP、运行及发布说明；DESIGN 保留桌面设计事实，删除旧容器规则。阶段 2–5 的目标能力在文档中明确标记，不包装为当前实现。
 
-进入阶段 2 前仍须完成：
+阶段门禁当前状态：
 
-1. macOS x64 最新构建、最终包烟测、JSON 和截图已完成；等待原生桌面外壳确认。
-2. 前两轮详细日志已读取并修正；继续完成最后一轮四目标最终产物烟测。未受影响的本机回归不重跑。
-3. 提交桌面外壳图片与操作差异，确认未验的原生交互；签名等阶段 6 项目继续单列。
-4. 用户确认本阶段结果与差异后，才实施阶段 2 的本地领域和生产备份导入导出。
+1. **已完成**：全新工作区工程、退出旧构建链、四目标最终包实际启动、原生模块/Worker、本地 Monaco、进程恢复及证据归档。
+2. **已完成**：旧样本字节与固定协议证据保护；基础/兼容回归有 #53 实际通过记录，#54 复用未受影响结果，未重复单测。
+3. **待确认**：下表桌面外壳图片、原生窗口操作、焦点与快捷键；各支持系统版本的完整人工矩阵和签名等阶段 6 项目继续单列。
+4. **等待用户阶段确认**：确认范围、差异和剩余待验项后，才进入阶段 2 的本地领域及生产备份导入导出。
 
-自动审批器曾因用量限制未执行最终调用；后续同一正常审批入口恢复，最新本机构建、打包和 Luna 安装包烟测均已成功执行，没有绕过审批。远端详细日志现已通过正常登录会话获取；剩余工作为上述修正的四目标产物复验及桌面外壳确认。
+自动审批器曾因用量限制未执行最终调用；后续同一正常审批入口恢复，最新本机构建、打包和 Luna 安装包烟测均已成功执行，没有绕过审批。远端详细日志已通过正常登录会话获取，四目标产物复验已成功；当前没有 CI 或审批阻塞，仍待桌面外壳确认。
 
 ## 提交用户确认的桌面外壳检查
 
