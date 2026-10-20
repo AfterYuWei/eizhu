@@ -1,6 +1,6 @@
 [package]
 name = "eizhu"
-version = "0.4.5"
+version = "0.4.4"
 description = "eizhu 桌面 SSH 终端与 SFTP 管理器（Tauri 2 + Rust）"
 authors = ["yuweinfo"]
 license = "MIT"
@@ -25,6 +25,7 @@ custom-protocol = ["tauri/custom-protocol"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
+tempfile = "3"
 tauri = { version = "2", features = [] }
 tauri-plugin-deep-link = "2"
 tauri-plugin-opener = "2"
@@ -38,7 +39,7 @@ base64 = "0.22"
 chrono = { version = "0.4", features = ["clock"] }
 hex = "0.4"
 rand_core = { version = "0.6", features = ["getrandom"] }
-rusqlite = { version = "0.37", features = ["bundled"] }
+rusqlite = { version = "0.37", features = ["bundled", "functions", "hooks"] }
 sha2 = "0.10"
 hmac = "0.12"
 percent-encoding = "2"
@@ -74,14 +75,15 @@ tauri-plugin-updater = "2"
 # 更新完成后重启
 tauri-plugin-process = "2"
 
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6.4"
+objc2-foundation = { version = "0.3.2", default-features = false, features = ["std", "NSGeometry"] }
+
 [target.'cfg(any(target_os = "android", target_os = "ios"))'.dependencies]
 tauri-plugin-session-keepalive = { path = "plugins/session-keepalive" }
 tauri-plugin-document-gateway = { path = "plugins/document-gateway" }
 tauri-plugin-master-key-store = { path = "plugins/master-key-store" }
 tauri-plugin-system-insets = { path = "plugins/system-insets" }
-
-[dev-dependencies]
-tempfile = "3"
 
 [profile.release]
 strip = true

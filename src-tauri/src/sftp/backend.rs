@@ -1,8 +1,11 @@
 use std::{sync::Arc, time::SystemTime};
 
 use chrono::{DateTime, Utc};
-use russh_sftp::{client::SftpSession, protocol::OpenFlags};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use russh_sftp::{
+    client::{RawSftpSession, SftpSession},
+    protocol::{FileAttributes, OpenFlags, Packet, StatusCode},
+};
+use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
 
 use crate::{infrastructure::platform::local_files, ssh::transport::ConnectedRoute};
 
@@ -12,12 +15,56 @@ pub(crate) enum FileBackend {
     Local,
     Remote {
         sftp: Arc<SftpSession>,
+        atomic: Option<Arc<RawSftpSession>>,
         _route: ConnectedRoute,
     },
 }
 
 pub(crate) type BackendReader = Box<dyn tokio::io::AsyncRead + Unpin + Send>;
 pub(crate) type BackendWriter = Box<dyn tokio::io::AsyncWrite + Unpin + Send>;
+
+/// A transfer keeps its handle open so SFTP read-ahead and write pipelining survive
+/// checkpoint boundaries. A checkpoint is acknowledged only after flush/sync.
+pub(super) enum TransferFile {
+    Local(tokio::fs::File),
+    Remote(Box<russh_sftp::client::fs::File>),
+}
+
+impl TransferFile {
+    pub async fn read_chunk(&mut self, length: usize) -> Result<Vec<u8>, SftpError> {
+        let mut bytes = vec![0; length];
+        match self {
+            Self::Local(file) => file
+                .read_exact(&mut bytes)
+                .await
+                .map_err(|error| SftpError::transfer(error.to_string()))?,
+            Self::Remote(file) => file.read_exact(&mut bytes).await.map_err(file_error)?,
+        };
+        Ok(bytes)
+    }
+
+    pub async fn write_checkpoint(&mut self, bytes: &[u8]) -> Result<(), SftpError> {
+        match self {
+            Self::Local(file) => {
+                file.write_all(bytes).await.map_err(file_error)?;
+                file.sync_data().await.map_err(file_error)
+            }
+            Self::Remote(file) => {
+                file.write_all(bytes).await.map_err(file_error)?;
+                // russh-sftp flush waits for every WRITE status and performs
+                // fsync@openssh.com when supported; a second sync is redundant.
+                file.flush().await.map_err(file_error)
+            }
+        }
+    }
+
+    pub async fn close(&mut self) -> Result<(), SftpError> {
+        match self {
+            Self::Local(file) => file.shutdown().await.map_err(file_error),
+            Self::Remote(file) => file.shutdown().await.map_err(file_error),
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 pub(crate) struct FileInfo {
@@ -31,8 +78,125 @@ pub(crate) struct FileInfo {
 
 impl FileBackend {
     pub async fn close(&self) {
-        if let Self::Remote { sftp, .. } = self {
+        if let Self::Remote { sftp, atomic, .. } = self {
             let _ = sftp.close().await;
+            if let Some(raw) = atomic {
+                let _ = raw.close_session();
+            }
+        }
+    }
+
+    pub async fn probe_atomic(route: &ConnectedRoute) -> Option<Arc<RawSftpSession>> {
+        let stream = route.open_subsystem("sftp").await.ok()?;
+        let raw = RawSftpSession::new(stream);
+        raw.set_timeout(5);
+        let version = raw.init().await.ok()?;
+        if version
+            .extensions
+            .get("posix-rename@openssh.com")
+            .is_some_and(|v| v == "1")
+        {
+            Some(Arc::new(raw))
+        } else {
+            let _ = raw.close_session();
+            None
+        }
+    }
+    pub fn supports_atomic_replace(&self) -> bool {
+        matches!(
+            self,
+            Self::Local
+                | Self::Remote {
+                    atomic: Some(_),
+                    ..
+                }
+        )
+    }
+    /// Unlike stat().ok(), this preserves permission and network errors.
+    pub async fn entry_kind(&self, path: &str) -> Result<Option<bool>, SftpError> {
+        match self {
+            Self::Local => {
+                match tokio::fs::symlink_metadata(local_files::path_from_api(path)).await {
+                    Ok(meta) => Ok(Some(meta.file_type().is_symlink())),
+                    Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+                    Err(e) => Err(file_error(e)),
+                }
+            }
+            Self::Remote { sftp, .. } => match sftp.symlink_metadata(path).await {
+                Ok(meta) => Ok(Some(meta.is_symlink())),
+                Err(russh_sftp::client::error::Error::Status(status))
+                    if status.status_code == StatusCode::NoSuchFile =>
+                {
+                    Ok(None)
+                }
+                Err(e) => Err(sftp_error(e)),
+            },
+        }
+    }
+    pub async fn copy_permissions(&self, source: &str, temp: &str) -> Result<(), SftpError> {
+        match self {
+            Self::Local => {
+                let meta = tokio::fs::metadata(local_files::path_from_api(source))
+                    .await
+                    .map_err(file_error)?;
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::MetadataExt;
+                    let temp_path = local_files::path_from_api(temp);
+                    let temp_meta = tokio::fs::metadata(&temp_path).await.map_err(file_error)?;
+                    if meta.uid() != temp_meta.uid() || meta.gid() != temp_meta.gid() {
+                        let (uid, gid) = (meta.uid(), meta.gid());
+                        tokio::task::spawn_blocking(move || {
+                            std::os::unix::fs::chown(temp_path, Some(uid), Some(gid))
+                        })
+                        .await
+                        .map_err(|e| SftpError::from(e.to_string()))?
+                        .map_err(file_error)?;
+                    }
+                }
+                tokio::fs::set_permissions(local_files::path_from_api(temp), meta.permissions())
+                    .await
+                    .map_err(file_error)
+            }
+            Self::Remote { sftp, .. } => {
+                let meta = sftp.metadata(source).await.map_err(sftp_error)?;
+                sftp.set_metadata(
+                    temp,
+                    FileAttributes {
+                        permissions: meta.permissions,
+                        uid: meta.uid,
+                        gid: meta.gid,
+                        ..Default::default()
+                    },
+                )
+                .await
+                .map_err(sftp_error)
+            }
+        }
+    }
+    pub async fn commit_staged(
+        &self,
+        temp: &str,
+        target: &str,
+        replace: bool,
+    ) -> Result<(), SftpError> {
+        match self {
+            Self::Local if !replace => {
+                tokio::fs::hard_link(
+                    local_files::path_from_api(temp),
+                    local_files::path_from_api(target),
+                )
+                .await
+                .map_err(file_error)?;
+                let _ = tokio::fs::remove_file(local_files::path_from_api(temp)).await;
+                Ok(())
+            }
+            Self::Local => self.rename(temp, target).await,
+            Self::Remote {
+                atomic: Some(raw), ..
+            } if replace => posix_rename(raw, temp, target).await,
+            Self::Remote { .. } if !replace => self.rename(temp, target).await,
+            _ => Err("服务器不支持安全替换，请另存为新文件".into()),
         }
     }
 
@@ -204,15 +368,102 @@ impl FileBackend {
     }
 
     pub async fn open_read(&self, path: &str) -> Result<BackendReader, SftpError> {
+        self.open_read_at(path, 0).await
+    }
+    pub async fn open_read_at(&self, path: &str, offset: u64) -> Result<BackendReader, SftpError> {
         match self {
-            Self::Local => tokio::fs::File::open(local_files::path_from_api(path))
+            Self::Local => {
+                let mut file = tokio::fs::File::open(local_files::path_from_api(path))
+                    .await
+                    .map_err(file_error)?;
+                file.seek(std::io::SeekFrom::Start(offset))
+                    .await
+                    .map_err(file_error)?;
+                Ok(Box::new(file))
+            }
+            Self::Remote { sftp, .. } => {
+                let mut file = sftp.open(path).await.map_err(sftp_error)?;
+                file.seek(std::io::SeekFrom::Start(offset))
+                    .await
+                    .map_err(file_error)?;
+                Ok(Box::new(file))
+            }
+        }
+    }
+
+    /// Opening a staging writer never truncates the original destination.
+    pub async fn open_transfer_write(
+        &self,
+        path: &str,
+        offset: u64,
+    ) -> Result<TransferFile, SftpError> {
+        match self {
+            Self::Local => {
+                let mut file = tokio::fs::OpenOptions::new()
+                    .write(true)
+                    .open(local_files::path_from_api(path))
+                    .await
+                    .map_err(file_error)?;
+                file.seek(std::io::SeekFrom::Start(offset))
+                    .await
+                    .map_err(file_error)?;
+                Ok(TransferFile::Local(file))
+            }
+            Self::Remote { sftp, .. } => {
+                let mut file = sftp
+                    .open_with_flags(path, OpenFlags::WRITE)
+                    .await
+                    .map_err(sftp_error)?;
+                file.seek(std::io::SeekFrom::Start(offset))
+                    .await
+                    .map_err(file_error)?;
+                Ok(TransferFile::Remote(Box::new(file)))
+            }
+        }
+    }
+    pub async fn open_transfer_read(
+        &self,
+        path: &str,
+        offset: u64,
+    ) -> Result<TransferFile, SftpError> {
+        match self {
+            Self::Local => {
+                let mut file = tokio::fs::File::open(local_files::path_from_api(path))
+                    .await
+                    .map_err(file_error)?;
+                file.seek(std::io::SeekFrom::Start(offset))
+                    .await
+                    .map_err(file_error)?;
+                Ok(TransferFile::Local(file))
+            }
+            Self::Remote { sftp, .. } => {
+                let mut file = sftp.open(path).await.map_err(sftp_error)?;
+                file.seek(std::io::SeekFrom::Start(offset))
+                    .await
+                    .map_err(file_error)?;
+                Ok(TransferFile::Remote(Box::new(file)))
+            }
+        }
+    }
+    pub async fn truncate(&self, path: &str, size: u64) -> Result<(), SftpError> {
+        match self {
+            Self::Local => tokio::fs::OpenOptions::new()
+                .write(true)
+                .open(local_files::path_from_api(path))
                 .await
-                .map(|file| Box::new(file) as BackendReader)
+                .map_err(file_error)?
+                .set_len(size)
+                .await
                 .map_err(file_error),
             Self::Remote { sftp, .. } => sftp
-                .open(path)
+                .set_metadata(
+                    path,
+                    FileAttributes {
+                        size: Some(size),
+                        ..Default::default()
+                    },
+                )
                 .await
-                .map(|file| Box::new(file) as BackendReader)
                 .map_err(sftp_error),
         }
     }
@@ -231,36 +482,34 @@ impl FileBackend {
         }
     }
 
-    /// Create a new file for writing without replacing an entry that appeared
-    /// after conflict preflight.
-    pub async fn open_write_new(&self, path: &str) -> Result<BackendWriter, SftpError> {
+    pub async fn write_private_new(&self, path: &str, data: &[u8]) -> Result<(), SftpError> {
         match self {
-            Self::Local => tokio::fs::OpenOptions::new()
-                .write(true)
-                .create_new(true)
-                .open(local_files::path_from_api(path))
-                .await
-                .map(|file| Box::new(file) as BackendWriter)
-                .map_err(file_error),
-            Self::Remote { sftp, .. } => sftp
-                .open_with_flags(
-                    path,
-                    OpenFlags::CREATE | OpenFlags::EXCLUDE | OpenFlags::WRITE,
-                )
-                .await
-                .map(|file| Box::new(file) as BackendWriter)
-                .map_err(sftp_error),
-        }
-    }
-
-    pub async fn write(&self, path: &str, data: &[u8]) -> Result<(), SftpError> {
-        match self {
-            Self::Local => tokio::fs::write(local_files::path_from_api(path), data)
-                .await
-                .map_err(file_error),
-            Self::Remote { sftp, .. } => {
-                let mut file = sftp.create(path).await.map_err(sftp_error)?;
+            Self::Local => {
+                let mut options = tokio::fs::OpenOptions::new();
+                options.write(true).create_new(true);
+                #[cfg(unix)]
+                options.mode(0o600);
+                let mut file = options
+                    .open(local_files::path_from_api(path))
+                    .await
+                    .map_err(file_error)?;
                 file.write_all(data).await.map_err(file_error)?;
+                file.sync_all().await.map_err(file_error)
+            }
+            Self::Remote { sftp, .. } => {
+                let mut file = sftp
+                    .open_with_flags_and_attributes(
+                        path,
+                        OpenFlags::CREATE | OpenFlags::EXCLUDE | OpenFlags::WRITE,
+                        FileAttributes {
+                            permissions: Some(0o600),
+                            ..Default::default()
+                        },
+                    )
+                    .await
+                    .map_err(sftp_error)?;
+                file.write_all(data).await.map_err(file_error)?;
+                file.flush().await.map_err(file_error)?;
                 file.close().await.map_err(file_error)
             }
         }
@@ -323,4 +572,207 @@ fn file_error(error: std::io::Error) -> SftpError {
 
 fn sftp_error(error: russh_sftp::client::error::Error) -> SftpError {
     SftpError::Backend(error.to_string())
+}
+
+async fn posix_rename(raw: &RawSftpSession, temp: &str, target: &str) -> Result<(), SftpError> {
+    let mut data = Vec::new();
+    for path in [temp, target] {
+        data.extend_from_slice(&(path.len() as u32).to_be_bytes());
+        data.extend_from_slice(path.as_bytes());
+    }
+    match raw
+        .extended("posix-rename@openssh.com", data)
+        .await
+        .map_err(sftp_error)?
+    {
+        Packet::Status(status) if status.status_code == StatusCode::Ok => Ok(()),
+        _ => Err("服务器未确认安全替换".into()),
+    }
+}
+#[cfg(test)]
+mod transfer_tests {
+    use super::*;
+    use russh_sftp::protocol::{Handle, Status, Version};
+    use std::{collections::HashMap, sync::Mutex};
+
+    #[derive(Default)]
+    struct State {
+        bytes: Vec<u8>,
+        opens: usize,
+        syncs: usize,
+        closes: usize,
+    }
+    struct Server {
+        state: Arc<Mutex<State>>,
+        reject: &'static str,
+    }
+    fn ok(id: u32) -> Status {
+        Status {
+            id,
+            status_code: StatusCode::Ok,
+            error_message: String::new(),
+            language_tag: String::new(),
+        }
+    }
+    impl russh_sftp::server::Handler for Server {
+        type Error = StatusCode;
+        fn unimplemented(&self) -> Self::Error {
+            StatusCode::OpUnsupported
+        }
+        async fn init(
+            &mut self,
+            _: u32,
+            _: HashMap<String, String>,
+        ) -> Result<Version, Self::Error> {
+            let mut version = Version::new();
+            version
+                .extensions
+                .insert("fsync@openssh.com".into(), "1".into());
+            Ok(version)
+        }
+        async fn open(
+            &mut self,
+            id: u32,
+            _: String,
+            _: OpenFlags,
+            _: FileAttributes,
+        ) -> Result<Handle, Self::Error> {
+            self.state.lock().unwrap().opens += 1;
+            Ok(Handle {
+                id,
+                handle: "file".into(),
+            })
+        }
+        async fn write(
+            &mut self,
+            id: u32,
+            _: String,
+            offset: u64,
+            data: Vec<u8>,
+        ) -> Result<Status, Self::Error> {
+            if self.reject == "write" {
+                return Err(StatusCode::Failure);
+            }
+            let mut state = self.state.lock().unwrap();
+            let offset = offset as usize;
+            let length = (offset + data.len()).max(state.bytes.len());
+            state.bytes.resize(length, 0);
+            state.bytes[offset..offset + data.len()].copy_from_slice(&data);
+            Ok(ok(id))
+        }
+        async fn extended(
+            &mut self,
+            id: u32,
+            request: String,
+            _: Vec<u8>,
+        ) -> Result<Packet, Self::Error> {
+            assert_eq!(request, "fsync@openssh.com");
+            self.state.lock().unwrap().syncs += 1;
+            if self.reject == "sync" {
+                return Err(StatusCode::Failure);
+            }
+            Ok(Packet::Status(ok(id)))
+        }
+        async fn close(&mut self, id: u32, _: String) -> Result<Status, Self::Error> {
+            self.state.lock().unwrap().closes += 1;
+            if self.reject == "close" {
+                return Err(StatusCode::Failure);
+            }
+            Ok(ok(id))
+        }
+    }
+
+    #[tokio::test]
+    async fn remote_checkpoints_reuse_one_handle_sync_once_and_wait_for_close_ack() {
+        for reject in ["", "write", "sync", "close"] {
+            let (client, server) = tokio::io::duplex(64 * 1024);
+            let state = Arc::new(Mutex::new(State::default()));
+            let task = tokio::spawn(russh_sftp::server::run(
+                server,
+                Server {
+                    state: state.clone(),
+                    reject,
+                },
+            ));
+            let session = SftpSession::new(client).await.unwrap();
+            let file = session
+                .open_with_flags("stage", OpenFlags::WRITE)
+                .await
+                .unwrap();
+            let mut writer = TransferFile::Remote(Box::new(file));
+            let first = vec![19; 512 * 1024];
+            let second = vec![23; 512 * 1024 + 17];
+            let result = writer.write_checkpoint(&first).await;
+            if matches!(reject, "write" | "sync") {
+                assert!(result.is_err(), "{reject} must not confirm a checkpoint");
+            } else {
+                result.unwrap();
+                writer.write_checkpoint(&second).await.unwrap();
+                let closed = writer.close().await;
+                assert_eq!(closed.is_err(), reject == "close");
+                let state = state.lock().unwrap();
+                assert_eq!(state.opens, 1);
+                assert_eq!(state.syncs, 2);
+                assert_eq!(state.closes, 1);
+                assert_eq!(state.bytes, [first, second].concat());
+            }
+            drop(writer);
+            session.close().await.unwrap();
+            task.await.unwrap();
+        }
+    }
+}
+
+#[cfg(test)]
+mod atomic_tests {
+    use super::*;
+    struct Server {
+        reject: bool,
+    }
+    impl russh_sftp::server::Handler for Server {
+        type Error = StatusCode;
+        fn unimplemented(&self) -> Self::Error {
+            StatusCode::OpUnsupported
+        }
+        async fn extended(
+            &mut self,
+            id: u32,
+            request: String,
+            mut data: Vec<u8>,
+        ) -> Result<Packet, Self::Error> {
+            assert_eq!(request, "posix-rename@openssh.com");
+            for expected in ["/配置/.临时", "/配置/正式文件"] {
+                let len = u32::from_be_bytes(data[..4].try_into().unwrap()) as usize;
+                assert_eq!(std::str::from_utf8(&data[4..4 + len]).unwrap(), expected);
+                data.drain(..4 + len);
+            }
+            assert!(data.is_empty());
+            if self.reject {
+                return Err(StatusCode::PermissionDenied);
+            }
+            Ok(Packet::Status(russh_sftp::protocol::Status {
+                id,
+                status_code: StatusCode::Ok,
+                error_message: String::new(),
+                language_tag: String::new(),
+            }))
+        }
+    }
+    #[tokio::test]
+    async fn posix_rename_uses_structured_utf8_paths_and_requires_acknowledgement() {
+        for reject in [false, true] {
+            let (client, server) = tokio::io::duplex(4096);
+            let task = tokio::spawn(russh_sftp::server::run(server, Server { reject }));
+            let raw = RawSftpSession::new(client);
+            raw.init().await.unwrap();
+            assert_eq!(
+                posix_rename(&raw, "/配置/.临时", "/配置/正式文件")
+                    .await
+                    .is_err(),
+                reject
+            );
+            raw.close_session().unwrap();
+            task.await.unwrap();
+        }
+    }
 }

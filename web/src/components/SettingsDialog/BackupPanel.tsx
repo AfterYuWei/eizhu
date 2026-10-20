@@ -1,3 +1,4 @@
+import { ArchivePanel } from './ArchivePanel'
 import { useState } from 'react'
 import { DatabaseBackup, Download, Upload, AlertTriangle, FileJson, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -198,6 +199,7 @@ export function BackupPanel() {
         <span>数据备份</span>
       </div>
 
+      <ArchivePanel />
       {/* ── 导出 ── */}
       <div className="settings-field" style={{ alignItems: 'flex-start' }}>
         <div className="settings-field-info">

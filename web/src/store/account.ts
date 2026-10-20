@@ -1,3 +1,5 @@
+import { confirmAccountEditorChange } from '@/lib/accountEditorGuard'
+import { refreshWorkspace } from '@/lib/workspace'
 import { create } from 'zustand'
 import { accountApi } from '@/api/account'
 import type { AccountStatus } from '@/types/account'
@@ -27,18 +29,24 @@ export const useAccountStore = create<AccountStore>((set) => ({
     }
   },
   login: async (email, password) => {
+    if (!await confirmAccountEditorChange()) return
     set({ loading: true, error: null })
     try {
-      set({ status: await accountApi.login(email, password), loading: false })
+      const status = await accountApi.login(email, password)
+      await refreshWorkspace()
+      set({ status, loading: false })
     } catch (cause) {
       set({ error: errorMessage(cause), loading: false })
       throw cause
     }
   },
   register: async (email, password) => {
+    if (!await confirmAccountEditorChange()) return
     set({ loading: true, error: null })
     try {
-      set({ status: await accountApi.register(email, password), loading: false })
+      const status = await accountApi.register(email, password)
+      await refreshWorkspace()
+      set({ status, loading: false })
     } catch (cause) {
       set({ error: errorMessage(cause), loading: false })
       throw cause
@@ -58,13 +66,16 @@ export const useAccountStore = create<AccountStore>((set) => ({
     }
   },
   logout: async () => {
+    if (!await confirmAccountEditorChange()) return
     set({ loading: true, error: null })
     try {
       await accountApi.logout()
+      await refreshWorkspace()
       set({ status: { loggedIn: false, syncEnabled: false }, loading: false })
     } catch (cause) {
       // Rust 即使远端吊销失败也会清除本地会话，界面同步进入退出状态。
-      set({ status: { loggedIn: false, syncEnabled: false }, error: errorMessage(cause), loading: false })
+      await refreshWorkspace().catch(() => {})
+      set({ status: await accountApi.status().catch(() => ({ loggedIn: false, syncEnabled: false })), error: errorMessage(cause), loading: false })
     }
   },
   setSyncEnabled: async (enabled) => {

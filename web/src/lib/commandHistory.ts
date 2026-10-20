@@ -1,125 +1,48 @@
-// 历史命令本地采集：监听终端回车，把执行过的命令连同当时的 cwd 一起存入
-// localStorage。补全面板按 cwd 匹配历史命令并统计频次（如 ×4）。
-// 纯前端实现，零后端改动；数据仅保存在本机浏览器。
+import type { Terminal } from '@xterm/xterm'
+import type { HistoryEntry } from '@/api/localState'
+import { useHistoryStore } from '@/store/history'
+import { extractInputFromLine, type BufferState } from './completionBuffer'
 
-const STORAGE_KEY = 'eizhu-cmd-history'
-const MAX_ENTRIES = 500
+const LEGACY_KEY = 'eizhu-cmd-history'
 
-export interface HistoryEntry {
-  /** 完整命令行，如 "cd /Projects/lanya/" */
-  command: string
-  /** 执行该命令时的工作目录（OSC7 追踪得到），用于路径相关匹配 */
-  cwd?: string
-  /** 累计执行次数 */
-  count: number
-  /** 最近一次执行时间戳（ms），用于排序 */
-  lastAt: number
+/** 仅接受正常缓冲区中能核对回显的单行输入；记录不表示执行成功。 */
+export function reliableHistoryCommand(buffer: BufferState, terminal: Terminal | null): string | null {
+  if (!terminal || terminal.buffer.active.type !== 'normal' || buffer.stale || /^\s/.test(buffer.text)
+      || !buffer.text.trim() || Array.from(buffer.text).some((c) => c.charCodeAt(0) < 32 || c.charCodeAt(0) === 127)) return null
+  const active = terminal.buffer.active
+  const row = active.baseY + active.cursorY
+  let start = row
+  while (start > 0 && active.getLine(start)?.isWrapped) start--
+  let line = ''
+  while (start <= row) line += active.getLine(start++)?.translateToString(true) ?? ''
+  const echoed = extractInputFromLine(line)
+  if (echoed.promptEnd <= 0 || echoed.text !== buffer.text.trimEnd()) return null
+  return buffer.text.trimEnd()
 }
 
-interface HistoryStore {
-  entries: HistoryEntry[]
+export function recordCommand(profileId: string, tabId: string, command: string, cwd?: string): Promise<void> {
+  return useHistoryStore.getState().record(profileId, tabId, command, cwd)
 }
 
-function loadStore(): HistoryStore {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    if (!raw) return { entries: [] }
-    const parsed = JSON.parse(raw) as HistoryStore
-    if (!parsed || !Array.isArray(parsed.entries)) return { entries: [] }
-    return { entries: parsed.entries.filter((e) => e && typeof e.command === 'string') }
-  } catch {
-    return { entries: [] }
-  }
-}
-
-function saveStore(store: HistoryStore): void {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(store))
-  } catch {
-    // localStorage 满/被禁用时静默失败，不影响终端使用
-  }
-}
-
-/**
- * 记录一条被执行的命令。
- * @param command 完整命令行（已 trim）
- * @param cwd 执行时的工作目录
- */
-export function recordCommand(command: string, cwd?: string): void {
-  const cmd = command.trim()
-  if (!cmd) return
-
-  const store = loadStore()
-  const existing = store.entries.find((e) => e.command === cmd && e.cwd === cwd)
-  if (existing) {
-    existing.count += 1
-    existing.lastAt = Date.now()
-  } else {
-    store.entries.push({ command: cmd, cwd, count: 1, lastAt: Date.now() })
-  }
-
-  // 超出上限时按 lastAt 淘汰最旧的条目
-  if (store.entries.length > MAX_ENTRIES) {
-    store.entries.sort((a, b) => b.lastAt - a.lastAt)
-    store.entries.length = MAX_ENTRIES
-  }
-  saveStore(store)
-}
-
-export interface HistorySuggestion {
-  command: string
-  count: number
-}
-
-/**
- * 查询与给定路径前缀相关的历史命令，按 频次+最近时间 排序。
- * 匹配规则（宽松）：
- *  - 命令文本包含 pathPrefix（路径片段），或
- *  - 命令执行时的 cwd 等于/位于 pathPrefix 之下
- * @param pathPrefix 路径前缀，如 "/Projects/" 或 "Projects"
- * @param currentCwd 当前终端 cwd，用于辅助匹配
- * @param limit 返回条数上限
- */
-export function queryHistory(pathPrefix: string, _currentCwd?: string, limit = 6): HistorySuggestion[] {
-  const store = loadStore()
-  const prefix = pathPrefix.trim()
+export function queryHistory(profileId: string, pathPrefix: string, _currentCwd?: string, limit = 6) {
+  const prefix = pathPrefix.trim().replace(/^~\//, '/').replace(/\/+$/, '')
   if (!prefix) return []
-
-  const normPrefix = prefix.replace(/^~\//, '/').replace(/\/+$/, '')
-  const matches: HistoryEntry[] = []
-
-  for (const e of store.entries) {
-    const cmdText = e.command
-    const cmdHasPrefix = normPrefix.length > 0 && cmdText.includes(normPrefix)
-    const cwdNorm = (e.cwd ?? '').replace(/\/+$/, '')
-    const cwdRelated =
-      cwdNorm.length > 0 &&
-      normPrefix.length > 0 &&
-      (cwdNorm === normPrefix || cwdNorm.startsWith(normPrefix + '/') || normPrefix.startsWith(cwdNorm + '/'))
-    if (cmdHasPrefix || cwdRelated) {
-      matches.push(e)
-    }
-  }
-
-  // 频次优先，同频次按最近时间
-  matches.sort((a, b) => (b.count - a.count) || (b.lastAt - a.lastAt))
-
+  const matches = (useHistoryStore.getState().entries[profileId] ?? []).filter((entry) => {
+    const cwd = entry.cwd.replace(/\/+$/, '')
+    return entry.command.includes(prefix) || (cwd && (cwd === prefix || cwd.startsWith(prefix + '/') || prefix.startsWith(cwd + '/')))
+  }).sort((a, b) => b.count - a.count || b.lastAt - a.lastAt)
   const seen = new Set<string>()
-  const result: HistorySuggestion[] = []
-  for (const e of matches) {
-    if (seen.has(e.command)) continue
-    seen.add(e.command)
-    result.push({ command: e.command, count: e.count })
-    if (result.length >= limit) break
-  }
-  return result
+  return matches.filter((entry) => { if (seen.has(entry.command)) return false; seen.add(entry.command); return true })
+    .slice(0, limit).map(({ command, count }) => ({ command, count }))
 }
 
-/** 清空历史（供设置页"清除数据"使用，当前未接线） */
-export function clearHistory(): void {
+/** 旧数据没有账号/服务器身份，只有显式选择归属后才能导入。 */
+export function readLegacyHistory(): HistoryEntry[] {
   try {
-    localStorage.removeItem(STORAGE_KEY)
-  } catch {
-    /* ignore */
-  }
+    const entries: unknown = JSON.parse(localStorage.getItem(LEGACY_KEY) ?? '{}').entries
+    if (!Array.isArray(entries)) return []
+    return entries.filter((e) => e && typeof e.command === 'string' && Number.isFinite(e.lastAt)).slice(0, 5000)
+      .map((e) => ({ id: '', command: e.command, cwd: typeof e.cwd === 'string' ? e.cwd : '', count: Math.max(1, e.count || 1), lastAt: e.lastAt }))
+  } catch { return [] }
 }
+export function removeLegacyHistory() { localStorage.removeItem(LEGACY_KEY) }

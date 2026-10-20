@@ -3,12 +3,16 @@ import Tauri
 import WebKit
 
 struct StoreArgs: Decodable {
+    let namespace: String?
     let value: String
 }
 
+struct LoadArgs: Decodable { let namespace: String? }
+
 final class MasterKeyStorePlugin: Plugin {
-    @objc func load(_ invoke: Invoke) {
-        var query = baseQuery()
+    @objc func load(_ invoke: Invoke) throws {
+        let namespace = try invoke.parseArgs(LoadArgs.self).namespace ?? "default"
+        var query = baseQuery(namespace)
         query[kSecReturnData as String] = true
         query[kSecMatchLimit as String] = kSecMatchLimitOne
         var result: CFTypeRef?
@@ -27,9 +31,11 @@ final class MasterKeyStorePlugin: Plugin {
     }
 
     @objc func store(_ invoke: Invoke) throws {
-        let value = try invoke.parseArgs(StoreArgs.self).value
+        let args = try invoke.parseArgs(StoreArgs.self)
+        let value = args.value
+        let namespace = args.namespace ?? "default"
         let data = Data(value.utf8)
-        var query = baseQuery()
+        var query = baseQuery(namespace)
         query[kSecReturnData as String] = true
         query[kSecMatchLimit as String] = kSecMatchLimitOne
         var result: CFTypeRef?
@@ -46,7 +52,7 @@ final class MasterKeyStorePlugin: Plugin {
             invoke.reject("检查 iOS Keychain 主密钥失败（\(existingStatus)）")
             return
         }
-        var insert = baseQuery()
+        var insert = baseQuery(namespace)
         insert[kSecValueData as String] = data
         insert[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
         let status = SecItemAdd(insert as CFDictionary, nil)
@@ -54,24 +60,24 @@ final class MasterKeyStorePlugin: Plugin {
             invoke.reject("写入 iOS Keychain 主密钥失败（\(status)）")
             return
         }
-        var verifyQuery = baseQuery()
+        var verifyQuery = baseQuery(namespace)
         verifyQuery[kSecReturnData as String] = true
         verifyQuery[kSecMatchLimit as String] = kSecMatchLimitOne
         var verified: CFTypeRef?
         let verifyStatus = SecItemCopyMatching(verifyQuery as CFDictionary, &verified)
         guard verifyStatus == errSecSuccess, verified as? Data == data else {
-            SecItemDelete(baseQuery() as CFDictionary)
+            SecItemDelete(baseQuery(namespace) as CFDictionary)
             invoke.reject("iOS Keychain 主密钥写入校验失败（\(verifyStatus)）")
             return
         }
         invoke.resolve()
     }
 
-    private func baseQuery() -> [String: Any] {
+    private func baseQuery(_ namespace: String) -> [String: Any] {
         [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: "com.yuweinfo.eizhu.master-key",
-            kSecAttrAccount as String: "default",
+            kSecAttrAccount as String: namespace,
         ]
     }
 }

@@ -752,6 +752,7 @@ body.ptr-dragging * {
 }
 .sftp-tx-item {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 10px;
   padding: 6px 4px;

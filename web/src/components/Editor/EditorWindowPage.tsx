@@ -1,3 +1,6 @@
+import { EditorMergeDialog } from './EditorMergeDialog'
+import { EditorSaveAsDialog } from './EditorSaveAsDialog'
+import { isEditorDirty as isDirty, saveBeforeEditorClose, type EditorCloseRequest } from '@/lib/editorCloseGuard'
 import { useCallback, useEffect, useState } from 'react'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { listen } from '@tauri-apps/api/event'
@@ -12,6 +15,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Toaster } from '@/components/ui/sonner'
 import { useWindowControls } from '@/hooks/useWindowControls'
+import { WindowControls } from '@/components/WindowControls'
 import { useResolvedTheme } from '@/store/settings'
 import { type EditorSessionType, useActiveTab, useEditorStore } from '@/store/editor'
 import { CodeEditor } from './CodeEditor'
@@ -25,16 +29,9 @@ interface EditorOpenRequest {
   path: string
 }
 
-type PendingClose =
-  | { kind: 'application' }
-  | { kind: 'window' }
-  | { kind: 'tab'; tabId: string }
+type PendingClose = EditorCloseRequest
 
 const SKELETON_WIDTHS = [52, 74, 43, 81, 61, 36, 69, 48, 86, 57, 72, 39, 64, 78, 45, 83, 55, 68]
-
-function isDirty(tab: { content: string; originalContent: string }): boolean {
-  return tab.content !== tab.originalContent
-}
 
 /** Standalone desktop editor webview with its own multi-file tab strip. */
 export function EditorWindowPage() {
@@ -49,6 +46,8 @@ export function EditorWindowPage() {
   const saveFile = useEditorStore((state) => state.saveFile)
   const reloadFile = useEditorStore((state) => state.reloadFile)
   const [pendingClose, setPendingClose] = useState<PendingClose | null>(null)
+  const [saveAsId, setSaveAsId] = useState<string | null>(null)
+  const [reloadId, setReloadId] = useState<string | null>(null)
   const [closingBusy, setClosingBusy] = useState(false)
   const theme = useResolvedTheme()
   const { desktop, mac, showControls, maximized, minimize, toggleMaximize } = useWindowControls()
@@ -75,6 +74,7 @@ export function EditorWindowPage() {
   useEffect(() => {
     let disposed = false
     let unlistenOpen: (() => void) | undefined
+    let unlistenTransition: (() => void) | undefined
     let unlistenAppClose: (() => void) | undefined
 
     void Promise.all([
@@ -82,12 +82,18 @@ export function EditorWindowPage() {
         void openFile(payload.sessionId, payload.sessionType, payload.path)
       }),
       listen('eizhu-app-close-request', handleAppCloseRequest),
-    ]).then(([stopOpen, stopAppClose]) => {
+      listen<{ requestId: string }>('eizhu-editor-transition', ({ payload }) => {
+        if (useEditorStore.getState().tabs.some(isDirty)) setPendingClose({ kind: 'workspace', requestId: payload.requestId })
+        else void invoke('resolve_editor_transition', { requestId: payload.requestId, accepted: true }).catch((e) => toast.error(String(e)))
+      }),
+    ]).then(([stopOpen, stopAppClose, stopTransition]) => {
       if (disposed) {
         stopOpen()
         stopAppClose()
+        stopTransition()
         return
       }
+      unlistenTransition = stopTransition
       unlistenOpen = stopOpen
       unlistenAppClose = stopAppClose
       return getCurrentWindow().label === 'editor' ? invoke('editor_window_ready') : undefined
@@ -100,6 +106,7 @@ export function EditorWindowPage() {
       disposed = true
       unlistenOpen?.()
       unlistenAppClose?.()
+      unlistenTransition?.()
     }
   }, [handleAppCloseRequest, openFile])
 
@@ -111,7 +118,7 @@ export function EditorWindowPage() {
       const hasDirtyTabs = useEditorStore.getState().tabs.some(isDirty)
       if (hasDirtyTabs) {
         event.preventDefault()
-        setPendingClose({ kind: 'window' })
+        setPendingClose((current) => current ?? { kind: 'window' })
       }
     }).then((stopListening) => {
       if (disposed) stopListening()
@@ -167,6 +174,10 @@ export function EditorWindowPage() {
   const discardPendingClose = () => {
     const request = pendingClose
     if (!request) return
+    if (request.kind === 'workspace') {
+      void invoke('resolve_editor_transition', { requestId: request.requestId, accepted: true }).catch((e) => toast.error(String(e)))
+      return
+    }
     if (request.kind === 'application') {
       void resolveAppClose(true)
       return
@@ -185,25 +196,13 @@ export function EditorWindowPage() {
     if (!request || closingBusy) return
     setClosingBusy(true)
     try {
-      const ids = request.kind === 'tab'
-        ? [request.tabId]
-        : useEditorStore.getState().tabs.filter(isDirty).map((tab) => tab.id)
-
-      for (const tabId of ids) {
-        if (!await saveFile(tabId)) return
-      }
-
-      const currentTabs = useEditorStore.getState().tabs
-      if (request.kind === 'tab') {
-        const tab = currentTabs.find((item) => item.id === request.tabId)
-        if (tab && isDirty(tab)) return
-      } else if (currentTabs.some(isDirty)) {
-        return
-      }
+      if (!await saveBeforeEditorClose(request, () => useEditorStore.getState().tabs, saveFile)) return
 
       if (request.kind === 'tab') {
         setPendingClose(null)
         await closeFileTab(request.tabId)
+      } else if (request.kind === 'workspace') {
+        await invoke('resolve_editor_transition', { requestId: request.requestId, accepted: true })
       } else if (request.kind === 'application') {
         await resolveAppClose(true)
       } else {
@@ -219,7 +218,10 @@ export function EditorWindowPage() {
   const cancelPendingClose = () => {
     const request = pendingClose
     if (!request) return
-    if (request.kind === 'application') {
+    if (request.kind === 'workspace') {
+      void invoke('resolve_editor_transition', { requestId: request.requestId, accepted: false }).catch((e) => toast.error(String(e)))
+      setPendingClose(null)
+    } else if (request.kind === 'application') {
       void resolveAppClose(false)
     } else {
       setPendingClose(null)
@@ -243,21 +245,13 @@ export function EditorWindowPage() {
           <span>eizhu · 文件编辑器</span>
         </div>
         {showControls && (
-          <div className="titlebar-controls">
-            <Button type="button" variant="ghost" className="tb-btn tb-min" title="最小化" aria-label="最小化" onClick={minimize}>
-              <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><line x1="1" y1="5" x2="9" y2="5" stroke="currentColor" strokeWidth="1" /></svg>
-            </Button>
-            <Button type="button" variant="ghost" className="tb-btn tb-max" title={maximized ? '还原' : '最大化'} aria-label={maximized ? '还原' : '最大化'} onClick={toggleMaximize}>
-              {maximized ? (
-                <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><rect x="2" y="0.5" width="7.5" height="7.5" fill="none" stroke="currentColor" strokeWidth="0.8" /><path d="M1 2v7h7" fill="none" stroke="currentColor" strokeWidth="0.8" /></svg>
-              ) : (
-                <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><rect x="0.5" y="0.5" width="9" height="9" fill="none" stroke="currentColor" strokeWidth="1" /></svg>
-              )}
-            </Button>
-            <Button type="button" variant="ghost" className="tb-btn tb-close" title="关闭" aria-label="关闭编辑器窗口" onClick={requestCloseWindow}>
-              <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><line x1="0" y1="0" x2="10" y2="10" stroke="currentColor" strokeWidth="1" /><line x1="10" y1="0" x2="0" y2="10" stroke="currentColor" strokeWidth="1" /></svg>
-            </Button>
-          </div>
+          <WindowControls
+            maximized={maximized}
+            onMinimize={minimize}
+            onToggleMaximize={toggleMaximize}
+            onClose={requestCloseWindow}
+            closeLabel="关闭编辑器窗口"
+          />
         )}
       </header>
 
@@ -274,7 +268,9 @@ export function EditorWindowPage() {
               conflict={activeTab.conflict}
               hasSession={!!activeTab.sessionId}
               onSave={() => void saveFile(activeTab.id)}
-              onReload={() => void reloadFile(activeTab.id)}
+              onCompare={() => void useEditorStore.getState().compareFile(activeTab.id)}
+              onSaveAs={() => setSaveAsId(activeTab.id)}
+              onReload={() => { if (isDirty(activeTab)) setReloadId(activeTab.id); else void reloadFile(activeTab.id) }}
               onClose={requestCloseWindow}
             />
             <div className="editor-body">
@@ -320,12 +316,12 @@ export function EditorWindowPage() {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              {pendingClose?.kind === 'application'
+              {pendingClose?.kind === 'workspace' ? '切换账号前保存修改？' : pendingClose?.kind === 'application'
                 ? '关闭应用前保存修改？'
                 : pendingClose?.kind === 'tab' ? '关闭前保存文件？' : '关闭前保存修改？'}
             </AlertDialogTitle>
             <AlertDialogDescription>
-              {pendingClose?.kind === 'application'
+              {pendingClose?.kind === 'workspace' ? '切换账号或退出登录将关闭旧空间的编辑器。请选择保存所有修改、放弃修改，或继续编辑并取消切换。' : pendingClose?.kind === 'application'
                 ? '关闭主窗口会同时关闭编辑器。保存所有修改、放弃修改，或继续编辑。'
                 : pendingClose?.kind === 'tab'
                   ? '当前文件有未保存的修改。保存后关闭、放弃修改，或继续编辑。'
@@ -345,12 +341,18 @@ export function EditorWindowPage() {
               放弃修改
             </AlertDialogAction>
             <Button type="button" disabled={closingBusy} onClick={() => void saveAndClose()}>
-              {closingBusy ? '保存中…' : '保存并关闭'}
+              {closingBusy ? '保存中…' : pendingClose?.kind === 'workspace' ? '保存并切换' : '保存并关闭'}
             </Button>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
+      {activeTab?.mergePreview && <EditorMergeDialog key={`${activeTab.id}:${activeTab.readEpoch}`} tab={activeTab} />}
+      {saveAsId && tabs.find((t) => t.id === saveAsId) && <EditorSaveAsDialog tab={tabs.find((t) => t.id === saveAsId)!} onClose={() => setSaveAsId(null)} />}
+      <AlertDialog open={!!reloadId} onOpenChange={(open) => { if (!open) setReloadId(null) }}><AlertDialogContent>
+        <AlertDialogHeader><AlertDialogTitle>重新加载并放弃本地修改？</AlertDialogTitle><AlertDialogDescription>本地修改尚未保存，可先比较远端或另存为新文件。</AlertDialogDescription></AlertDialogHeader>
+        <AlertDialogFooter><AlertDialogCancel>继续编辑</AlertDialogCancel><AlertDialogAction onClick={() => { if (reloadId) void reloadFile(reloadId); setReloadId(null) }}>放弃修改并重新加载</AlertDialogAction></AlertDialogFooter>
+      </AlertDialogContent></AlertDialog>
       <Toaster theme={theme} />
     </div>
   )

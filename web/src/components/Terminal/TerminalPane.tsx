@@ -1,8 +1,13 @@
+import { Button } from '@/components/ui/button'
+import { registerTerminalActions } from '@/lib/terminalActions'
+import { TerminalFind } from './TerminalFind'
+import { ConnectionPicker } from './ConnectionPicker'
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { useTerminal } from '@/hooks/useTerminal'
 import { useSessionChannel } from '@/hooks/useSessionChannel'
 import { useSessionStore } from '@/store/session'
 import { useProfileStore } from '@/store/profile'
+import { useHistoryStore } from '@/store/history'
 import {
   DEFAULT_DESKTOP_TERMINAL_FONT_SIZE,
   DEFAULT_MOBILE_TERMINAL_FONT_SIZE,
@@ -46,6 +51,7 @@ interface TerminalPaneProps {
     id: string
     profileId: string
     profileName: string
+    manualConnect?: boolean
     sessionId: string | null
     status: 'connecting' | 'connected' | 'disconnected' | 'error' | 'reconnecting'
     host?: string
@@ -59,10 +65,12 @@ interface TerminalPaneProps {
     knownHostKeyFingerprint?: string
   }
   isActive: boolean
+  isVisible?: boolean
 }
 
-export function TerminalPane({ tab, isActive }: TerminalPaneProps) {
+export function TerminalPane({ tab, isActive, isVisible = isActive }: TerminalPaneProps) {
   const containerRef = useRef<HTMLDivElement>(null)
+  const pickerInputRef = useRef<HTMLInputElement>(null)
   const {
     updateTabStatus,
     updateTabCwd,
@@ -98,6 +106,7 @@ export function TerminalPane({ tab, isActive }: TerminalPaneProps) {
 
   const [showDialog, setShowDialog] = useState(false)
   const [connectionError, setConnectionError] = useState('')
+  const [findOpen, setFindOpen] = useState(false)
   const [dialogStatus, setDialogStatus] = useState<'connecting' | 'connected' | 'error' | 'reconnecting' | 'hostkey'>(
     'connecting',
   )
@@ -194,6 +203,7 @@ export function TerminalPane({ tab, isActive }: TerminalPaneProps) {
     fontFamilyCN,
     terminalTheme: effectiveTerminalTheme,
     onData: (data) => {
+      if (useSessionStore.getState().activeTabId !== tab.id || !tab.sessionId) return
       if (tab.sessionId && tab.status === 'connected' && channelStatusRef.current === 'connected') {
         const consumed = handleDataRef.current(data)
         if (!consumed) sendInputRef.current(data)
@@ -370,6 +380,25 @@ export function TerminalPane({ tab, isActive }: TerminalPaneProps) {
     updateTabStatus,
   ])
 
+  useEffect(() => registerTerminalActions(tab.id, {
+    focus: () => { if (tab.profileId) getTerminal()?.focus(); else pickerInputRef.current?.focus() },
+    reconnect: reconnectNow,
+    search: () => setFindOpen(true),
+    safeMultiline: () => !!getTerminal()?.modes.bracketedPasteMode,
+    insert: (content, execute = false) => {
+      if (tab.status !== 'connected') throw new Error('终端尚未连接')
+      const terminal = getTerminal()
+      if (!terminal) throw new Error('终端尚未就绪')
+      if (/[\r\n]/.test(content) && !terminal.modes.bracketedPasteMode) throw new Error('远端尚未启用安全的多行粘贴，请使用复制入口')
+      if (execute) {
+        const text = content.replace(/\r?\n/g, '\r')
+        const payload = terminal.modes.bracketedPasteMode ? `\x1b[200~${text}\x1b[201~\r` : `${text}\r`
+        terminal.input(payload, true)
+      } else terminal.paste(content)
+      terminal.focus()
+    },
+  }), [tab.id, tab.profileId, tab.status, getTerminal, reconnectNow])
+
   const currentHostKeyFingerprint = hostKeyPrompt.current
 
   const handleCancel = useCallback(() => {
@@ -477,6 +506,12 @@ export function TerminalPane({ tab, isActive }: TerminalPaneProps) {
           break
         }
 
+        case 'auth_request_closed': {
+          const payload = msg.payload as { request_id?: string }
+          setAuthRequest((current) => current?.request_id === payload?.request_id ? undefined : current)
+          break
+        }
+
         case 'auth_request': {
           const payload = msg.payload as AuthenticationRequestPayload
           if (payload?.request_id) {
@@ -580,7 +615,14 @@ export function TerminalPane({ tab, isActive }: TerminalPaneProps) {
     sendComplete,
     getCwd,
     enabled: terminalPopupMenu,
+    profileId: tab.profileId,
+    tabId: tab.id,
+    connectionKey: `${tab.sessionId ?? ''}:${tab.status}`,
   })
+
+  useEffect(() => {
+    if (tab.profileId) void useHistoryStore.getState().load(tab.profileId).catch(() => {})
+  }, [tab.profileId])
 
   useEffect(() => {
     channelStatusRef.current = channelStatus
@@ -648,7 +690,7 @@ export function TerminalPane({ tab, isActive }: TerminalPaneProps) {
   // hold stale dimensions. Container resizes (sidebar collapse, window
   // drag, panel split) are debounced; fit() reports the size via onResize.
   useEffect(() => {
-    if (!isActive) return
+    if (!isVisible) return
 
     fit()
     let observerTimer: ReturnType<typeof setTimeout> | null = null
@@ -665,7 +707,9 @@ export function TerminalPane({ tab, isActive }: TerminalPaneProps) {
       observer.disconnect()
       if (observerTimer) clearTimeout(observerTimer)
     }
-  }, [fit, isActive])
+  }, [fit, isVisible])
+
+  useEffect(() => { if (isActive && tab.profileId && tab.sessionId) getTerminal()?.focus() }, [isActive, getTerminal, tab.profileId, tab.sessionId])
 
   useEffect(() => {
     return () => {
@@ -690,6 +734,11 @@ export function TerminalPane({ tab, isActive }: TerminalPaneProps) {
         '--terminal-ime-inset': `${toolbarImeInset}px`,
       } as CSSProperties}
     >
+      {!tab.profileId && <ConnectionPicker tabId={tab.id} isActive={isActive} inputRef={pickerInputRef} />}
+      {tab.manualConnect && tab.profileId && !tab.sessionId && <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-background p-4 text-sm">
+        <p>已恢复布局 · {tab.profileName}</p><Button onClick={() => void reconnectNow()}>连接服务器</Button>
+      </div>}
+      {findOpen && <TerminalFind getTerminal={getTerminal} onClose={() => { setFindOpen(false); getTerminal()?.focus() }} />}
       <div ref={containerRef} className="term-host relative min-h-0 flex-1">
         {isMobile && <TerminalSelectionHandles getTerminal={getTerminal} hostRef={containerRef} />}
       </div>

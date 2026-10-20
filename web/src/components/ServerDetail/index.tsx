@@ -129,9 +129,7 @@ export function ServerDetail({
 
   const handleScroll = () => {
     const el = bodyRef.current
-    if (el) {
-      // saveDetail is not available from the store directly; skip for now
-    }
+    if (el && active) saveDetail(tabId, { scrollTop: el.scrollTop })
   }
 
   const metrics = serverDetail.metrics

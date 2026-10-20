@@ -5,6 +5,7 @@ use rusqlite::Connection;
 use crate::infrastructure::database::StorageError;
 
 pub(super) fn migrate(connection: &Connection) -> Result<(), StorageError> {
+    connection.query_row("SELECT eizhu_capture_enabled(0)", [], |_| Ok(()))?;
     connection.execute_batch(
         "PRAGMA journal_mode = WAL;\
              CREATE TABLE IF NOT EXISTS groups (\
@@ -139,6 +140,20 @@ pub(super) fn migrate(connection: &Connection) -> Result<(), StorageError> {
         "UPDATE vault SET updated_at=created_at WHERE updated_at IS NULL",
         [],
     )?;
+    connection.execute_batch("CREATE TABLE IF NOT EXISTS local_preferences(key TEXT PRIMARY KEY, payload TEXT NOT NULL); CREATE TABLE IF NOT EXISTS local_history(profile_id TEXT PRIMARY KEY, payload TEXT NOT NULL);")?;
+    connection.execute_batch("CREATE TABLE IF NOT EXISTS local_transfers(id TEXT PRIMARY KEY,generation INTEGER NOT NULL,payload TEXT NOT NULL);")?;
+    connection.execute_batch("CREATE TABLE IF NOT EXISTS local_transfer_files(task_id TEXT NOT NULL REFERENCES local_transfers(id) ON DELETE CASCADE,file_index INTEGER NOT NULL,payload TEXT NOT NULL,PRIMARY KEY(task_id,file_index)); CREATE TABLE IF NOT EXISTS local_transfer_blocks(task_id TEXT NOT NULL,file_index INTEGER NOT NULL,block_index INTEGER NOT NULL,payload TEXT NOT NULL,PRIMARY KEY(task_id,file_index,block_index),FOREIGN KEY(task_id,file_index) REFERENCES local_transfer_files(task_id,file_index) ON DELETE CASCADE);")?;
+    connection.execute_batch(
+        "CREATE TABLE IF NOT EXISTS local_tunnels(id TEXT PRIMARY KEY,payload TEXT NOT NULL);",
+    )?;
+    super::sync_migration::migrate(connection)?;
+    add_column_if_missing(
+        connection,
+        "realtime_state",
+        "last_error_code",
+        "TEXT NOT NULL DEFAULT ''",
+    )?;
+    connection.query_row("SELECT eizhu_capture_enabled(1)", [], |_| Ok(()))?;
     Ok(())
 }
 

@@ -9,6 +9,12 @@ permissions:
   contents: write
 
 jobs:
+  quality:
+    if: github.ref == 'refs/heads/main'
+    uses: ./.github/workflows/quality-core.yml
+    permissions:
+      contents: read
+
   metadata:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
@@ -50,7 +56,7 @@ jobs:
 
   build:
     if: github.ref == 'refs/heads/main'
-    needs: metadata
+    needs: [metadata, quality]
     uses: ./.github/workflows/build-desktop.yml
     with:
       channel: stable

@@ -25,9 +25,14 @@ pub fn init<R: Runtime, C: DeserializeOwned>(
 
 impl<R: Runtime> MasterKeyStore<R> {
     pub fn load(&self) -> crate::Result<LoadResponse> {
-        self.0.run_mobile_plugin("load", ()).map_err(Into::into)
+        self.load_scoped("default")
     }
 
+    pub fn load_scoped(&self, namespace: &str) -> crate::Result<LoadResponse> {
+        self.0
+            .run_mobile_plugin("load", crate::LoadRequest { namespace })
+            .map_err(Into::into)
+    }
     pub fn store(&self, request: StoreRequest<'_>) -> crate::Result<()> {
         self.0
             .run_mobile_plugin("store", request)

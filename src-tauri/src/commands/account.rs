@@ -19,8 +19,12 @@ pub(crate) async fn account_login(
     service: State<'_, AccountService>,
     email: String,
     password: String,
+    workspace: State<'_, crate::app::WorkspaceManager>,
 ) -> Result<AccountStatus, CommandError> {
-    service.login(email.trim(), &password).await
+    let password = zeroize::Zeroizing::new(password);
+    let result = service.login(email.trim(), &password).await?;
+    workspace.activate_account().await?;
+    Ok(result)
 }
 
 #[tauri::command]
@@ -28,12 +32,20 @@ pub(crate) async fn account_register(
     service: State<'_, AccountService>,
     email: String,
     password: String,
+    workspace: State<'_, crate::app::WorkspaceManager>,
 ) -> Result<AccountStatus, CommandError> {
-    service.register(email.trim(), &password).await
+    let password = zeroize::Zeroizing::new(password);
+    let result = service.register(email.trim(), &password).await?;
+    workspace.activate_account().await?;
+    Ok(result)
 }
 
 #[tauri::command]
-pub(crate) async fn account_logout(service: State<'_, AccountService>) -> Result<(), CommandError> {
+pub(crate) async fn account_logout(
+    service: State<'_, AccountService>,
+    workspace: State<'_, crate::app::WorkspaceManager>,
+) -> Result<(), CommandError> {
+    workspace.activate(0).await?;
     service.logout().await
 }
 
@@ -50,4 +62,63 @@ pub(crate) async fn account_set_sync_enabled(
     enabled: bool,
 ) -> Result<AccountStatus, CommandError> {
     service.set_sync_enabled(enabled).await
+}
+
+#[tauri::command]
+pub(crate) async fn workspace_status(
+    workspace: State<'_, crate::app::WorkspaceManager>,
+) -> Result<crate::app::WorkspaceStatus, CommandError> {
+    workspace.status()
+}
+#[tauri::command]
+pub(crate) async fn workspace_activate(
+    workspace: State<'_, crate::app::WorkspaceManager>,
+    user_id: i64,
+) -> Result<(), CommandError> {
+    if user_id == 0 {
+        workspace.activate(0).await
+    } else {
+        workspace.activate_account().await
+    }
+}
+
+#[tauri::command]
+pub(crate) async fn workspace_import_local(
+    workspace: State<'_, crate::app::WorkspaceManager>,
+    workspace_generation: Option<u64>,
+) -> Result<(), CommandError> {
+    workspace.import_local(workspace_generation).await
+}
+
+#[tauri::command]
+pub(crate) async fn account_send_verification_email(
+    service: State<'_, AccountService>,
+) -> Result<(), CommandError> {
+    service.send_verification_email().await
+}
+#[tauri::command]
+pub(crate) async fn account_verify_email(
+    service: State<'_, AccountService>,
+    code: String,
+) -> Result<(), CommandError> {
+    let code = zeroize::Zeroizing::new(code);
+    service.verify_email(&code).await
+}
+#[tauri::command]
+pub(crate) async fn account_request_password_reset(
+    service: State<'_, AccountService>,
+    email: String,
+) -> Result<(), CommandError> {
+    service.request_password_reset(email.trim()).await
+}
+#[tauri::command]
+pub(crate) async fn account_reset_password(
+    service: State<'_, AccountService>,
+    email: String,
+    code: String,
+    new_password: String,
+) -> Result<(), CommandError> {
+    let code = zeroize::Zeroizing::new(code);
+    let password = zeroize::Zeroizing::new(new_password);
+    service.reset_password(email.trim(), &code, &password).await
 }

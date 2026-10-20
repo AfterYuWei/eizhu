@@ -4,7 +4,7 @@ use tokio::io::AsyncReadExt;
 use crate::{
     error::CommandError,
     infrastructure::platform::document_gateway::{DocumentDescriptor, DocumentGateway},
-    sftp::{self, SftpService, SftpUploadResponse},
+    sftp::{self, SftpUploadResponse},
 };
 
 #[tauri::command]
@@ -76,15 +76,21 @@ pub(crate) async fn document_export_text(
 }
 
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub(crate) async fn sftp_upload_document(
     gateway: State<'_, DocumentGateway>,
-    service: State<'_, SftpService>,
+    service_workspace: State<'_, crate::app::WorkspaceManager>,
     session_id: String,
     reference: String,
     dest_dir: String,
     overwrite: Option<bool>,
     conflict_resolution: Option<String>,
+    workspace_generation: Option<u64>,
 ) -> Result<SftpUploadResponse, CommandError> {
+    let service = service_workspace
+        .current(workspace_generation)?
+        .sftp
+        .clone();
     let (path, name, size) = gateway.resolve(&reference)?;
     let result = async {
         let resolution = conflict_resolution.unwrap_or_else(|| {
@@ -95,7 +101,7 @@ pub(crate) async fn sftp_upload_document(
             }
         });
         let Some(begin) = sftp::sftp_upload_begin_with_resolution(
-            service.inner(),
+            &service,
             session_id,
             name,
             dest_dir,
@@ -120,13 +126,13 @@ pub(crate) async fn sftp_upload_document(
                 if count == 0 {
                     break;
                 }
-                sftp::upload_chunk(service.inner(), &upload_id, &buffer[..count]).await?;
+                sftp::upload_chunk(&service, &upload_id, &buffer[..count]).await?;
             }
-            sftp::sftp_upload_finish(service.inner(), upload_id.clone()).await
+            sftp::sftp_upload_finish(&service, upload_id.clone()).await
         }
         .await;
         if transfer.is_err() {
-            let _ = sftp::sftp_upload_abort(service.inner(), upload_id).await;
+            let _ = sftp::sftp_upload_abort(&service, upload_id).await;
         }
         transfer
     }
@@ -147,11 +153,16 @@ pub(crate) async fn sftp_upload_document(
 pub(crate) async fn sftp_export_download(
     app: AppHandle,
     gateway: State<'_, DocumentGateway>,
-    service: State<'_, SftpService>,
+    service_workspace: State<'_, crate::app::WorkspaceManager>,
     task_id: String,
+    workspace_generation: Option<u64>,
 ) -> Result<Option<String>, CommandError> {
-    let (path, name) = sftp::sftp_download_artifact(service.inner(), &task_id).await?;
+    let service = service_workspace
+        .current(workspace_generation)?
+        .sftp
+        .clone();
+    let (path, name) = sftp::sftp_download_artifact(&service, &task_id).await?;
     let result = gateway.export_file(&app, &path, name, "application/octet-stream".into());
-    let _ = sftp::sftp_download_close(service.inner(), task_id).await;
+    let _ = sftp::sftp_download_close(&service, task_id).await;
     result
 }

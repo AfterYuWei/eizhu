@@ -1,0 +1,51 @@
+/* Full-window desktop settings. The session view remains mounted underneath. */
+.desktop-shell > .settings-page {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  overflow: hidden;
+  background: var(--surface-panel);
+  color: var(--fg-2);
+  font: 400 var(--sans-size) / 1.5 var(--sans);
+}
+.settings-page-loading { display: grid; place-items: center; }
+.settings-page-layout { display: flex; height: 100%; min-height: 0; gap: 0; }
+.settings-page-sidebar { display: flex; flex-direction: column; flex: 0 0 275px; min-width: 0; overflow: hidden; padding: 0 16px 16px; background: var(--surface-sidebar); }
+.settings-page-titlebar { height: 48px; flex-shrink: 0; margin: 0 -16px; }
+.settings-page-back-row { flex-shrink: 0; padding-bottom: 8px; border-bottom: 1px solid var(--edge-soft); }
+.settings-page .settings-page-back { justify-content: flex-start; width: 100%; min-height: var(--desktop-menu-row-height, 36px); height: auto; padding: 7px 9px; gap: 8px; font-weight: 400; }
+.settings-page-profile { display: grid; grid-template-columns: 32px minmax(0, 1fr); column-gap: 8px; row-gap: 2px; flex-shrink: 0; padding: 22px 4px 24px; }
+.settings-page-profile .shell-avatar { grid-row: span 2; width: 32px; height: 32px; align-self: center; }
+.settings-page-profile .shell-account-name { align-self: end; }
+.settings-page-profile .shell-mode { justify-self: start; align-self: start; }
+.settings-page .settings-nav { flex: 1; flex-direction: column; align-items: stretch; justify-content: flex-start; width: 100%; height: auto; min-height: 0; overflow-y: auto; gap: 2px; padding: 0; border: 0; }
+.settings-page .settings-nav-item { flex: 0 0 auto; width: 100%; min-height: var(--desktop-menu-row-height, 36px); height: auto; padding: 7px 9px; gap: 8px; font: 400 var(--sans-size) / 1.5 var(--sans); }
+.settings-page .settings-nav-item > svg { width: var(--desktop-menu-icon-size, 16px); height: var(--desktop-menu-icon-size, 16px); }
+.settings-page .settings-nav-item[data-state='active'] { color: var(--fg-2); background: var(--shell-selected); }
+.settings-page .settings-nav-item:hover, .settings-page .settings-page-back:hover { color: var(--fg-2); background: var(--shell-hover); }
+.settings-page-main { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; }
+.settings-page-heading { flex-shrink: 0; padding: 48px 40px 24px; user-select: none; }
+.settings-page-heading h1 { margin: 0; font: 600 20px / 28px var(--sans); color: var(--fg); }
+.settings-page .settings-content { padding: 0 40px 48px; scrollbar-gutter: stable; }
+.settings-page .settings-section { max-width: 1120px; padding: 0; margin-bottom: 28px; }
+.settings-page .settings-section-title { padding: 0; margin: 0 0 12px; border: 0; font: 500 var(--sans-size) / 1.5 var(--sans); letter-spacing: 0; text-transform: none; color: var(--fg-2); }
+.settings-page .settings-field { min-height: 72px; padding: 14px 0; }
+.settings-page .settings-field-desc { font-size: max(12px, calc(var(--sans-size) - 2px)); line-height: 1.5; }
+.settings-page .settings-card { overflow: hidden; border: 1px solid var(--edge-soft); border-radius: var(--r-lg); background: var(--surface-app); }
+.settings-page .settings-card > .settings-field { padding: 16px 18px; }
+.settings-page .settings-card > .settings-divider { margin: 0; }
+.settings-page .settings-select, .settings-page .settings-theme-btn { width: 220px; max-width: 100%; min-height: 36px; height: auto; padding-block: 6px; }
+.settings-page .settings-number-input { min-height: 36px; height: auto; padding-block: 6px; }
+.settings-page :is(button, input, [role='combobox']) { font-family: var(--sans); font-size: var(--sans-size); line-height: 1.5; }
+
+@media (max-width: 960px) {
+  .settings-page-sidebar { flex-basis: 220px; }
+  .settings-page-heading { padding-inline: 28px; }
+  .settings-page .settings-content { padding-inline: 28px; }
+}
+@media (max-width: 680px) {
+  .settings-page-sidebar { flex-basis: 180px; padding-inline: 12px; }
+  .settings-page-heading { padding-inline: 20px; }
+  .settings-page .settings-content { padding-inline: 20px; }
+  .settings-page .settings-select, .settings-page .settings-theme-btn { width: 100%; }
+}

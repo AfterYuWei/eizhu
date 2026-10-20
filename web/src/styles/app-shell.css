@@ -43,28 +43,61 @@
   /* 右侧留出窗口控制按钮的空间，避免遮挡 */
   padding-right: 0;
 }
-/* macOS：使用系统原生交通灯（左侧红黄绿圆形按钮），不自绘控制按钮。
-   标题栏左侧需留出交通灯空间（约 78px），避免按钮被交通灯遮挡。
-   header-left 此时承载侧边栏/SFTP/主题按钮，整体右移避让交通灯。 */
+/* macOS：原生交通灯与 40px 工具栏居中对齐，位置见 tauri.macos.conf.json。
+   左侧保留独立的窗口控制区及留白，右侧保持与普通工具栏相同的边距。 */
 .eizhu-header.titlebar.is-desktop.is-mac {
-  padding-left: 78px;
+  padding-left: 88px;
+  padding-right: 8px;
+}
+.eizhu-header.is-mac .header-left {
+  gap: 4px;
+}
+.eizhu-header.is-mac .hdr-icon-btn {
+  height: 28px;
+  padding-inline: 8px;
+  color: var(--fg-2);
+}
+.eizhu-header.is-mac .hdr-icon-btn:hover {
+  color: var(--fg);
+}
+.eizhu-header.is-mac .hdr-icon-btn.active {
+  color: var(--accent);
+}
+.eizhu-header.is-mac .hdr-icon-btn.active:hover {
+  color: var(--accent-hi);
+}
+/* 窄窗口优先保留搜索空间；图标按钮仍有标题提示和无障碍名称。 */
+@media (max-width: 1080px) {
+  .eizhu-header.is-mac .header-left .hdr-icon-btn {
+    width: 28px;
+    padding-inline: 0;
+  }
+  .eizhu-header.is-mac .header-left .hdr-icon-btn-label {
+    display: none;
+  }
 }
 
-/* ===== 窗口控制按钮（Windows 原生风格） ===== */
-/* 仅桌面环境渲染。三个按钮高度与标题栏等高，宽度对齐 Win10/11 caption button。
+/* ===== 窗口控制按钮（VS Code 风格） ===== */
+/* 仅桌面环境渲染。10px 细线图标居中，46px 宽的直角点击区域与标题栏等高。
    配色用主题变量跟随深浅主题；关闭按钮悬停保留 Windows 原生红色 #E81123。 */
 .titlebar-controls {
   display: flex;
+  flex-shrink: 0;
   align-items: stretch;
   height: 100%;
   margin-left: 4px;
+  user-select: none;
+  -webkit-app-region: no-drag;
 }
 .tb-btn {
   width: 46px;
+  height: 100%;
+  padding: 0;
   display: flex;
   align-items: center;
   justify-content: center;
   border: none;
+  border-radius: 0;
   background: transparent;
   color: var(--fg-2);
   cursor: default;
@@ -75,6 +108,11 @@
 }
 .tb-btn:active {
   background: var(--bg-active);
+}
+.tb-btn:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: -2px;
+  box-shadow: none;
 }
 /* 关闭按钮：悬停红色背景 + 白色图标，与 Windows 原生一致（红色不随主题变化） */
 .tb-close:hover {
@@ -93,12 +131,13 @@
   align-items: center;
   gap: 2px;
   justify-content: flex-start;
-  min-width: 0;
+  min-width: max-content;
 }
 .header-center {
-  flex: 0 0 auto;
+  flex: 0 1 440px;
   width: 440px;
   max-width: 40vw;
+  min-width: 120px;
 }
 .header-right {
   flex: 1;
@@ -106,7 +145,7 @@
   align-items: center;
   gap: 2px;
   justify-content: flex-end;
-  min-width: 0;
+  min-width: max-content;
 }
 .header-search {
   position: relative;

@@ -10,6 +10,8 @@ interface EditorToolbarProps {
   conflict: boolean
   hasSession: boolean
   onSave: () => void
+  onCompare?: () => void
+  onSaveAs?: () => void
   onReload: () => void
   onClose: () => void
 }
@@ -25,6 +27,8 @@ export function EditorToolbar({
   conflict,
   hasSession,
   onSave,
+  onCompare,
+  onSaveAs,
   onReload,
   onClose,
 }: EditorToolbarProps) {
@@ -55,6 +59,8 @@ export function EditorToolbar({
           </span>
         )}
 
+        {onCompare && <Button variant="outline" size="sm" onClick={onCompare} disabled={loading || saving}>{conflict ? '比较与合并' : '比较远端'}</Button>}
+        {onSaveAs && <Button variant="outline" size="sm" onClick={onSaveAs} disabled={loading || saving}>另存为</Button>}
         <Button
           type="button"
           variant="outline"

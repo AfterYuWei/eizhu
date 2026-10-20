@@ -1289,13 +1289,12 @@
   right: 8px;
   bottom: calc(8px + var(--safe-inset-bottom));
   z-index: 51;
-  border-radius: var(--m-radius-sheet);
-  background: var(--m-glass-heavy);
-  backdrop-filter: blur(40px) saturate(1.8);
-  -webkit-backdrop-filter: blur(40px) saturate(1.8);
-  box-shadow:
-    var(--m-specular),
-    var(--shadow-floating);
+  /* Portal 挂在 body 下，无法继承 .mobile-layout 的材质和圆角令牌。 */
+  border: 1px solid var(--edge-panel-strong);
+  border-radius: var(--m-radius-sheet, 28px);
+  background: var(--surface-overlay);
+  color: var(--fg);
+  box-shadow: var(--shadow-overlay);
   outline: none;
   touch-action: pan-y;
 }
@@ -1312,9 +1311,9 @@
 }
 
 :root[data-eizhu-mobile] .m-sheet-title {
-  margin: 4px 16px 2px;
-  color: var(--fg-4);
-  font: 400 0.8125rem/1 var(--sans);
+  margin: 4px 20px 8px;
+  color: var(--fg-3);
+  font: 500 0.8125rem/1.4 var(--sans);
   text-align: center;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1340,7 +1339,20 @@
   cursor: pointer;
   touch-action: manipulation;
 }
-:root[data-eizhu-mobile] .m-sheet-item + .m-sheet-item { margin-top: 1px; }
+:root[data-eizhu-mobile] .m-sheet-item + .m-sheet-item {
+  position: relative;
+  margin-top: 1px;
+}
+:root[data-eizhu-mobile] .m-sheet-item + .m-sheet-item::before {
+  content: '';
+  position: absolute;
+  top: -1px;
+  right: 14px;
+  left: 14px;
+  height: 1px;
+  background: var(--border-subtle);
+  pointer-events: none;
+}
 :root[data-eizhu-mobile] .m-sheet-item:active { background: var(--bg-active); }
 :root[data-eizhu-mobile] .m-sheet-item svg { width: 18px; height: 18px; color: var(--fg-3); }
 :root[data-eizhu-mobile] .m-sheet-item.is-danger { color: var(--red); }
@@ -2054,11 +2066,6 @@
   .mobile-layout .msftp-selection-bar,
   .mobile-layout .msftp-transfer-summary { backdrop-filter: none; -webkit-backdrop-filter: none; }
   .mobile-layout .m-feedback {
-    background: var(--surface-overlay);
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
-  }
-  :root[data-eizhu-mobile] .m-sheet {
     background: var(--surface-overlay);
     backdrop-filter: none;
     -webkit-backdrop-filter: none;

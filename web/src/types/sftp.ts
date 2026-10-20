@@ -18,7 +18,7 @@ export interface SftpTreeNode extends SftpEntry {
 
 export type TransferDirection = 'upload' | 'download' | 'transfer'
 export type DirectoryTransferMode = 'preserve' | 'archive'
-export type TransferStatus = 'queued' | 'transferring' | 'completed' | 'failed' | 'cancelled'
+export type TransferStatus = 'queued' | 'transferring' | 'completed' | 'failed' | 'cancelled' | 'paused' | 'recoverable'
 
 export interface TransferTask {
   id: string
@@ -34,6 +34,10 @@ export interface TransferTask {
   error_message?: string
   error_code?: string
   retryable?: boolean
+  execution_generation?: number
+  confirmed_offset?: number
+  source_profile?: string
+  target_profile?: string
 }
 
 /** A connected SFTP target server. */
@@ -75,6 +79,8 @@ export interface SftpUploadResponse {
 
 export interface SftpUploadBeginResponse extends SftpUploadResponse {
   upload_id: string
+  received?: number
+  sequence?: number
 }
 
 /** Response from the SFTP download command. */
@@ -140,6 +146,7 @@ export interface SftpFileReadResponse {
   line_ending: LineEnding
   /** True when the file's owner-write bit is unset. */
   read_only: boolean
+  content_hash?: string
 }
 
 /** Editor write request. */
@@ -147,6 +154,8 @@ export interface SftpFileWriteRequest {
   content: string
   /** Must match the server's current ModTime; mismatch → 409 FILE_MODIFIED. */
   expected_mod_time: string
+  expected_content_hash?: string
+  create_new?: boolean
   line_ending?: LineEnding
 }
 
@@ -156,4 +165,5 @@ export interface SftpFileWriteResponse {
   path: string
   size: number
   mod_time: string
+  content_hash?: string
 }

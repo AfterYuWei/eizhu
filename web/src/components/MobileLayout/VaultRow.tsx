@@ -1,3 +1,4 @@
+import { ItemSyncBadge } from '@/components/SyncIndicator'
 import { motion } from 'motion/react'
 import { AlertTriangle, ChevronRight, KeyRound, LockKeyhole, Pencil, Trash2 } from 'lucide-react'
 import { useSwipeActions } from './useSwipeActions'
@@ -69,7 +70,7 @@ export function VaultRow({ item, onOpen, onRequestDelete, onLongPress }: VaultRo
       >
         <span className={`m-row-icon m-vault-row-icon is-${item.type}`}><Icon size={17} /></span>
         <span className="m-row-copy">
-          <span className="m-row-name">{item.name || '未命名'}</span>
+          <span className="m-row-name">{item.name || '未命名'}<ItemSyncBadge type="vault" id={item.id} /></span>
           <span className="m-row-meta">{meta}</span>
         </span>
         <span className="m-row-tail">

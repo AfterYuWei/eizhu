@@ -68,6 +68,7 @@ pub(crate) struct ClientHandler {
     known: String,
     current: Arc<Mutex<Option<String>>>,
     verifier: Arc<dyn HostKeyVerifier>,
+    forwarding: Option<super::forwarding::ForwardingRegistration>,
 }
 
 impl client::Handler for ClientHandler {
@@ -89,6 +90,23 @@ impl client::Handler for ClientHandler {
             )
             .await)
     }
+    async fn server_channel_open_forwarded_tcpip(
+        &mut self,
+        channel: russh::Channel<client::Msg>,
+        connected_address: &str,
+        connected_port: u32,
+        _originator_address: &str,
+        _originator_port: u32,
+        reply: client::ChannelOpenHandle,
+        _session: &mut client::Session,
+    ) -> Result<(), Self::Error> {
+        if let Some(registration) = &self.forwarding {
+            registration
+                .accept(channel, connected_address, connected_port, reply)
+                .await;
+        }
+        Ok(())
+    }
 }
 
 pub(crate) struct ConnectedRoute {
@@ -98,6 +116,23 @@ pub(crate) struct ConnectedRoute {
 }
 
 impl ConnectedRoute {
+    pub(super) async fn shutdown(mut self) {
+        let _ = timeout(
+            Duration::from_secs(5),
+            self.handle
+                .disconnect(russh::Disconnect::ByApplication, "tunnel stopped", "zh-CN"),
+        )
+        .await;
+        let _ = timeout(Duration::from_secs(5), &mut self.handle).await;
+        for jump in self._jump_handles.iter_mut().rev() {
+            let _ = timeout(
+                Duration::from_secs(5),
+                jump.disconnect(russh::Disconnect::ByApplication, "tunnel stopped", "zh-CN"),
+            )
+            .await;
+            let _ = timeout(Duration::from_secs(5), jump).await;
+        }
+    }
     pub(crate) fn host_keys(&self) -> &[(String, String)] {
         &self.host_keys
     }
@@ -145,17 +180,43 @@ pub(crate) async fn connect_route(
     verifier: Arc<dyn HostKeyVerifier>,
     auth_responder: Option<Arc<dyn AuthenticationResponder>>,
 ) -> Result<ConnectedRoute, SshError> {
-    connect_node(root, verifier, auth_responder).await
+    connect_node(root, verifier, auth_responder, None, None).await
+}
+
+pub(super) async fn connect_forwarding_route(
+    root: ResolvedProfileNode,
+    verifier: Arc<dyn HostKeyVerifier>,
+    auth_responder: Arc<dyn AuthenticationResponder>,
+    forwarding: super::forwarding::ForwardingRegistration,
+    scope: super::connection_scope::ConnectionScope,
+) -> Result<ConnectedRoute, SshError> {
+    connect_node(
+        root,
+        verifier,
+        Some(auth_responder),
+        Some(forwarding),
+        Some(scope),
+    )
+    .await
 }
 
 fn connect_node(
     mut node: ResolvedProfileNode,
     verifier: Arc<dyn HostKeyVerifier>,
     auth_responder: Option<Arc<dyn AuthenticationResponder>>,
+    forwarding: Option<super::forwarding::ForwardingRegistration>,
+    scope: Option<super::connection_scope::ConnectionScope>,
 ) -> Pin<Box<dyn Future<Output = Result<ConnectedRoute, SshError>> + Send>> {
     Box::pin(async move {
         let (stream, jump_handles, mut host_keys) = if let Some(jump) = node.jump.take() {
-            let mut route = connect_node(*jump, verifier.clone(), auth_responder.clone()).await?;
+            let mut route = connect_node(
+                *jump,
+                verifier.clone(),
+                auth_responder.clone(),
+                None,
+                scope.clone(),
+            )
+            .await?;
             let channel = timeout(
                 CONNECT_TIMEOUT,
                 route.handle.channel_open_direct_tcpip(
@@ -182,6 +243,11 @@ fn connect_node(
             )
         };
 
+        let stream = if let Some(scope) = &scope {
+            scope.wrap(stream)
+        } else {
+            stream
+        };
         let current = Arc::new(Mutex::new(None));
         let handler = ClientHandler {
             profile_id: node.profile_id.clone(),
@@ -189,6 +255,7 @@ fn connect_node(
             known: node.known_host_key.clone(),
             current: current.clone(),
             verifier,
+            forwarding,
         };
         let config = Arc::new(client::Config {
             inactivity_timeout: Some(Duration::from_secs(120)),

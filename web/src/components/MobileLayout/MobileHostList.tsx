@@ -1,3 +1,4 @@
+import { ItemSyncBadge } from '@/components/SyncIndicator'
 import { lazy, useEffect, useMemo, useRef, useState, createElement } from 'react'
 import { Plus, Search, X, Server } from 'lucide-react'
 import { toast } from 'sonner'
@@ -200,7 +201,7 @@ export function MobileHostList() {
                   <section key={group.id}>
                     <h2 className="m-eyebrow">
                       {createElement(resolveGroupIcon(group.icon), { size: 12, 'aria-hidden': true })}
-                      <span>{group.name}</span>
+                      <span>{group.name}<ItemSyncBadge type="group" id={group.id} /></span>
                       <span className="m-eyebrow-count">{list.length}</span>
                     </h2>
                     <div className="m-card">{list.map(renderRow)}</div>

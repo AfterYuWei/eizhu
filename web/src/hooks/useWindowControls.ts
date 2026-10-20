@@ -2,9 +2,8 @@ import { useEffect, useState } from 'react'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { getPlatformCapabilities, isDesktopRuntime } from '@/lib/platform'
 
-// 桌面环境标识与平台探测。
-// 平台用 navigator.userAgent 判定（WKWebView/WebView2/WebKitGTK 的 UA 均含明确标识），
-// 而非 invoke('get_platform')——标题栏布局是同步渲染决策，不能等异步返回。
+// 启动时 initializePlatform 已加载 Rust 返回的平台能力；标题栏渲染直接读取
+// 同一份能力，避免依赖 UA 猜测平台或首次渲染后再移动窗口按钮。
 
 /** 是否运行在 Tauri 桌面环境（浏览器下为 false）。 */
 export function isDesktop(): boolean {

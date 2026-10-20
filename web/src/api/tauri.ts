@@ -1,3 +1,4 @@
+import { workspaceGeneration } from '@/lib/workspaceScope'
 import { invoke } from '@tauri-apps/api/core'
 
 interface CommandError {
@@ -52,7 +53,13 @@ export async function invokeCommand<T>(
   args?: Record<string, unknown>,
 ): Promise<T> {
   try {
-    return await invoke<T>(command, args)
+    const generation = workspaceGeneration()
+    const scoped = !command.startsWith('account_') && !['workspace_status', 'workspace_activate'].includes(command)
+    const result = await invoke<T>(command, scoped && generation !== undefined ? { ...args, workspaceGeneration: generation } : args)
+    if (scoped && generation !== workspaceGeneration()) {
+      throw new TauriAPIError('WORKSPACE_CHANGED', '数据空间已切换，请重试')
+    }
+    return result
   } catch (cause) {
     if (typeof window === 'undefined' || !('__TAURI_INTERNALS__' in window)) {
       throw new TauriAPIError(

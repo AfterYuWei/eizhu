@@ -1,3 +1,5 @@
+import { workspaceGeneration } from '@/lib/workspaceScope'
+import type { CompletionGeneratorRequest } from '@/types/completion'
 import { useState, useRef, useCallback, useEffect } from 'react'
 import type { Terminal } from '@xterm/xterm'
 import {
@@ -7,12 +9,12 @@ import {
   isCdPathContext,
   type ParserKey,
   buildCompletionInsertPlan,
-  parseDynamicOutputByParser,
-  splitOutputLines,
+  parseCompletionData,
+  rankCompletionCandidates,
   type Suggestion,
 } from '@/lib/completionEngine'
 import { createCompletionCache, type CompletionCache } from '@/lib/completionCache'
-import { recordCommand, queryHistory } from '@/lib/commandHistory'
+import { recordCommand, queryHistory, reliableHistoryCommand } from '@/lib/commandHistory'
 import {
   resyncFromTerminal,
   moveCursorInBuffer,
@@ -25,9 +27,12 @@ import type { CompleteResponsePayload } from '@/types/sessionMessage'
 interface UseCompletionOptions {
   getTerminal: () => Terminal | null
   sendInput: (data: string) => void
-  sendComplete: (requestId: string, script: string, cwd?: string) => void
+  sendComplete: (requestId: string, generator: CompletionGeneratorRequest, cwd?: string) => void
   getCwd: () => string | undefined
   enabled: boolean
+  profileId?: string
+  tabId?: string
+  connectionKey?: string
 }
 
 /** 级联菜单中的一列：一组候选 + 当前选中索引 */
@@ -48,7 +53,11 @@ export interface CompletionPopupState {
 }
 
 interface RequestMeta {
-  script: string
+  key: string
+  generator: CompletionGeneratorRequest
+  startedAt: number
+  input: string
+  scope: string
   cwd?: string
 }
 
@@ -74,7 +83,7 @@ const EMPTY_POPUP: CompletionPopupState = {
   cascade: false,
 }
 
-export function useCompletion({ getTerminal, sendInput, sendComplete, getCwd, enabled }: UseCompletionOptions) {
+export function useCompletion({ getTerminal, sendInput, sendComplete, getCwd, enabled, profileId = '', tabId = '', connectionKey = '' }: UseCompletionOptions) {
   const [popup, setPopup] = useState<CompletionPopupState>(EMPTY_POPUP)
 
   const bufferRef = useRef<BufferState>({ text: '', cursor: 0, stale: false })
@@ -90,7 +99,9 @@ export function useCompletion({ getTerminal, sendInput, sendComplete, getCwd, en
   /** 展开子目录的 in-flight 请求（key: requestId） */
   const expandMetaRef = useRef(new Map<string, ExpandRequestMeta>())
   // 缓存实例用 useState 惰性初始化（仅创建一次），避免 render 期访问 ref
-  const [cache] = useState<CompletionCache>(() => createCompletionCache())
+  const scopeRef = useRef('')
+  useEffect(() => { scopeRef.current = JSON.stringify([profileId, tabId, connectionKey]) }, [profileId, tabId, connectionKey])
+  const [cache] = useState<CompletionCache>(() => createCompletionCache(() => String(workspaceGeneration())))
 
   useEffect(() => { sendInputRef.current = sendInput }, [sendInput])
   useEffect(() => { sendCompleteRef.current = sendComplete }, [sendComplete])
@@ -107,7 +118,7 @@ export function useCompletion({ getTerminal, sendInput, sendComplete, getCwd, en
     const cwd = getCwdRef.current()
     // 用当前路径 token 作为历史匹配前缀；为空则用 cwd
     const pathPrefix = currentToken || cwd || ''
-    const historyItems = queryHistory(pathPrefix, cwd, 6).map<Suggestion>((h) => ({
+    const historyItems = queryHistory(profileId, pathPrefix, cwd, 6).map<Suggestion>((h) => ({
       name: h.command,
       type: 'history',
       count: h.count,
@@ -115,7 +126,7 @@ export function useCompletion({ getTerminal, sendInput, sendComplete, getCwd, en
       origin: 'dynamic',
     }))
     return [...historyItems, ...dirs]
-  }, [])
+  }, [profileId])
 
   const recompute = useCallback(() => {
     const buffer = bufferRef.current
@@ -132,9 +143,10 @@ export function useCompletion({ getTerminal, sendInput, sendComplete, getCwd, en
 
     const isCd = isCdPathContext(ctx)
     const staticSuggestions = getSuggestions(ctx).suggestions
-    const generator = getDynamicGenerator(ctx, getCwdRef.current())
+    const generator = getDynamicGenerator(ctx)
 
     const openWith = (suggestions: Suggestion[], parser: ParserKey | null) => {
+      suggestions = rankCompletionCandidates(suggestions)
       const cols: CompletionColumn[] = [{ suggestions, selectedIndex: -1 }]
       setPopup({ open: true, columns: cols, activeColumn: 0, sourceParser: parser, cascade: isCd })
     }
@@ -149,9 +161,10 @@ export function useCompletion({ getTerminal, sendInput, sendComplete, getCwd, en
     }
 
     const cwd = getCwdRef.current()
-    const cached = cache.get(generator.script, cwd, generator.cacheTtl)
+    const key = JSON.stringify([scopeRef.current, generator])
+    const cached = cache.get(key, cwd, generator.cacheTtl)
     if (cached) {
-      const dynamicSuggestions = parseDynamicOutputByParser(cached.join('\n'), ctx.currentToken, generator.parser, generator.dirsOnly)
+      const dynamicSuggestions = parseCompletionData(cached, ctx.currentToken, generator.parser, generator.dirsOnly)
       let suggestions = mergeSuggestions(staticSuggestions, dynamicSuggestions)
       if (isCd) {
         suggestions = buildCdRootColumn(dynamicSuggestions, ctx.currentToken)
@@ -173,15 +186,16 @@ export function useCompletion({ getTerminal, sendInput, sendComplete, getCwd, en
     const pendingId = pendingRequestRef.current
     if (pendingId) {
       const pendingMeta = requestMetaRef.current.get(pendingId)
-      if (pendingMeta?.script === generator.script && pendingMeta.cwd === cwd) {
+      if (pendingMeta?.key === key && pendingMeta.cwd === cwd && Date.now() - pendingMeta.startedAt < 4000) {
         return
       }
     }
 
     const requestId = nextRequestId()
     pendingRequestRef.current = requestId
-    requestMetaRef.current.set(requestId, { script: generator.script, cwd })
-    sendCompleteRef.current(requestId, generator.script, cwd)
+    for (const [id, meta] of requestMetaRef.current) if (Date.now() - meta.startedAt >= 4000) requestMetaRef.current.delete(id)
+    requestMetaRef.current.set(requestId, { key, generator, cwd, startedAt: Date.now(), input: buffer.text, scope: scopeRef.current })
+    sendCompleteRef.current(requestId, generator, cwd)
   }, [closePopup, buildCdRootColumn, cache])
 
   const scheduleRecompute = useCallback(() => {
@@ -243,10 +257,12 @@ export function useCompletion({ getTerminal, sendInput, sendComplete, getCwd, en
     if (suggestion.type !== 'directory' || !suggestion.isDir) return false
 
     const dirPath = suggestion.name // 如 "Projects/" 或 "/Projects/lanya/"
-    const script = `ls -1 -A -F '${dirPath.replace(/'/g, `'\\''`)}' 2>/dev/null`
+    const generator: CompletionGeneratorRequest = { generatorId: 'paths', params: { directory: dirPath, prefix: '' } }
+    const key = JSON.stringify([scopeRef.current, generator])
     const cwd = getCwdRef.current()
 
     const appendColumn = (dirs: Suggestion[]) => {
+      dirs = rankCompletionCandidates(dirs)
       if (dirs.length === 0) return
       setPopup((current) => {
         if (!current.open) return current
@@ -257,15 +273,17 @@ export function useCompletion({ getTerminal, sendInput, sendComplete, getCwd, en
       })
     }
 
-    const cached = cache.get(script, cwd, 3000)
+    const cached = cache.get(key, cwd, 3000)
     if (cached) {
-      appendColumn(parseDynamicOutputByParser(cached.join('\n'), dirPath, 'directory-list'))
+      appendColumn(parseCompletionData(cached, dirPath, 'directory-list'))
       return true
     }
 
     const requestId = nextRequestId()
-    expandMetaRef.current.set(requestId, { script, cwd, parentDepth: colIndex, dirPath })
-    sendCompleteRef.current(requestId, script, cwd)
+    for (const [id, meta] of expandMetaRef.current) if (Date.now() - meta.startedAt >= 4000) expandMetaRef.current.delete(id)
+    if (expandMetaRef.current.size >= 8) return false
+    expandMetaRef.current.set(requestId, { key, generator, cwd, parentDepth: colIndex, dirPath, startedAt: Date.now(), input: bufferRef.current.text, scope: scopeRef.current })
+    sendCompleteRef.current(requestId, generator, cwd)
     return true
   }, [cache])
 
@@ -335,7 +353,7 @@ export function useCompletion({ getTerminal, sendInput, sendComplete, getCwd, en
   }, [hoverSelect, applySelection])
 
   const handleData = useCallback((data: string): boolean => {
-    if (!enabledRef.current || inTuiRef.current) return false
+    if (inTuiRef.current && data !== '\x03') return false
 
     if (data === '\x1b[A' || data === '\x1b[B') {
       if (popupRef.current.open) {
@@ -356,10 +374,11 @@ export function useCompletion({ getTerminal, sendInput, sendComplete, getCwd, en
         }
         closePopup()
       }
-      // 采集历史命令（在清空前记录）
-      const cmdText = bufferRef.current.text.trim()
-      if (cmdText) {
-        recordCommand(cmdText, getCwdRef.current())
+      const cmdText = reliableHistoryCommand(bufferRef.current, getTerminal())
+      if (cmdText && profileId) {
+        void recordCommand(profileId, tabId, cmdText, getCwdRef.current()).catch(() => {
+          // 持久化失败不阻断远端输入；历史设置页仍提供读取错误提示。
+        })
       }
       if (isTuiCommand(bufferRef.current.text)) {
         inTuiRef.current = true
@@ -461,15 +480,9 @@ export function useCompletion({ getTerminal, sendInput, sendComplete, getCwd, en
     }
 
     if (data === '\t') {
-      // 级联/普通面板开启时，Tab 应用选中项（无选中则透传）
-      if (popupRef.current.open) {
-        const col = popupRef.current.columns[popupRef.current.activeColumn]
-        if (col && col.selectedIndex >= 0) {
-          applySelection()
-          return true
-        }
-      }
-      return false
+      closePopup()
+      bufferRef.current.stale = true
+      return false // Tab remains a remote shell control key.
     }
 
     if (data.length > 0 && data.charCodeAt(0) >= 0x20) {
@@ -486,7 +499,7 @@ export function useCompletion({ getTerminal, sendInput, sendComplete, getCwd, en
     bufferRef.current.stale = true
     closePopup()
     return false
-  }, [applySelection, closePopup, collapseColumn, expandDirectory, getTerminal, navigateColumn, scheduleRecompute, selectFirstDirectory])
+  }, [applySelection, closePopup, collapseColumn, expandDirectory, getTerminal, navigateColumn, scheduleRecompute, selectFirstDirectory, profileId, tabId])
 
   const handleOutputData = useCallback((data: string) => {
     const state = detectTuiSequence(data)
@@ -503,10 +516,9 @@ export function useCompletion({ getTerminal, sendInput, sendComplete, getCwd, en
     const expandMeta = expandMetaRef.current.get(payload.request_id)
     if (expandMeta) {
       expandMetaRef.current.delete(payload.request_id)
-      if (payload.error) return
-      const lines = splitOutputLines(payload.output)
-      cache.set(expandMeta.script, expandMeta.cwd, lines)
-      const dirs = parseDynamicOutputByParser(lines.join('\n'), expandMeta.dirPath, 'directory-list')
+      if (payload.error || payload.exit_code !== 0 || Date.now() - expandMeta.startedAt >= 4000 || expandMeta.input !== bufferRef.current.text || expandMeta.cwd !== getCwdRef.current() || expandMeta.scope !== scopeRef.current) return
+      cache.set(expandMeta.key, expandMeta.cwd, payload)
+      const dirs = parseCompletionData(payload, expandMeta.dirPath, 'directory-list')
       if (dirs.length === 0) return
       setPopup((current) => {
         if (!current.open) return current
@@ -522,16 +534,17 @@ export function useCompletion({ getTerminal, sendInput, sendComplete, getCwd, en
 
     const meta = requestMetaRef.current.get(payload.request_id)
     if (!meta) return
+    if (Date.now() - meta.startedAt >= 4000 || meta.input !== bufferRef.current.text || meta.cwd !== getCwdRef.current() || meta.scope !== scopeRef.current) { requestMetaRef.current.delete(payload.request_id); if (pendingRequestRef.current === payload.request_id) pendingRequestRef.current = null; recompute(); return }
 
     requestMetaRef.current.delete(payload.request_id)
-    if (!payload.error) {
-      cache.set(meta.script, meta.cwd, splitOutputLines(payload.output))
+    if (!payload.error && payload.exit_code === 0) {
+      cache.set(meta.key, meta.cwd, payload)
     }
 
     if (payload.request_id !== pendingRequestRef.current) return
     pendingRequestRef.current = null
 
-    if (payload.error) return
+    if (payload.error || payload.exit_code !== 0) return
 
     const buffer = bufferRef.current
     if (buffer.stale || !enabledRef.current || inTuiRef.current) return
@@ -547,6 +560,8 @@ export function useCompletion({ getTerminal, sendInput, sendComplete, getCwd, en
     closePopup()
     cache.clear()
   }, [closePopup, cache])
+
+  useEffect(() => { reset() }, [connectionKey, profileId, reset])
 
   useEffect(() => {
     return () => {
@@ -568,15 +583,5 @@ export function useCompletion({ getTerminal, sendInput, sendComplete, getCwd, en
 }
 
 function mergeSuggestions(staticSuggestions: Suggestion[], dynamicSuggestions: Suggestion[]): Suggestion[] {
-  const merged: Suggestion[] = []
-  const seen = new Set<string>()
-
-  for (const suggestion of [...staticSuggestions, ...dynamicSuggestions]) {
-    const key = `${suggestion.type}\0${suggestion.name}`
-    if (seen.has(key)) continue
-    seen.add(key)
-    merged.push(suggestion)
-  }
-
-  return merged
+  return rankCompletionCandidates([...staticSuggestions, ...dynamicSuggestions])
 }

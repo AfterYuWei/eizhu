@@ -54,13 +54,19 @@ HTTP 或 WebSocket 服务。
 
 ### 桌面与移动端
 
-- 桌面构建覆盖 Windows x64、macOS Apple Silicon 和 Linux x64。
+- 桌面构建覆盖 Windows x64、macOS Apple Silicon / Intel x64 和 Linux x64。
 - Linux 提供 AppImage、deb 和 rpm，Windows 提供安装程序，macOS 提供 dmg。
 - 桌面端支持正式版与测试版更新通道。
 - Android/iOS 共用 Rust 核心和移动端界面；当前仍处于持续真机与商店发布门禁验证阶段，
   详见 [移动端发布说明](docs/MOBILE_RELEASE.md)。
 
 ## 下载
+
+macOS 新版 Release 的安装包按处理器区分：Intel 选择 `_x64.dmg`，Apple Silicon 选择 `_aarch64.dmg`。
+
+[![macOS Intel 下载](https://img.shields.io/badge/macOS-Intel-000000?logo=apple&logoColor=white)](https://github.com/AfterYuWei/eizhu/releases)
+
+点击 Intel 徽标进入 Release 页面，选择包含 `_x64.dmg` 的新版；下方固定下载链接保留历史版本。
 
 ### 正式版（Stable）
 
@@ -100,7 +106,7 @@ HTTP 或 WebSocket 服务。
 [查看全部发布记录](https://github.com/AfterYuWei/eizhu/releases)
 
 > [!NOTE]
-> macOS 当前只提供 Apple Silicon 版本。iOS 测试包未签名，不能直接安装，需要自行签名后侧载；
+> iOS 测试包未签名，不能直接安装，需要自行签名后侧载；
 > Android/iOS 仍处于真机验证阶段。安装测试版前建议备份现有数据。
 
 ## 本地开发
@@ -140,7 +146,7 @@ make web-dev
 
 ## 构建与验证
 
-构建桌面安装包：
+构建桌面安装包前，在环境中设置实际 HTTPS 账号服务地址 `EIZHU_ACCOUNT_SERVER`（打包会拒绝缺失或占位地址；开发和单元测试不受影响）：
 
 ```bash
 npm run desktop:build

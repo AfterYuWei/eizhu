@@ -1,3 +1,4 @@
+import type { CompletionGeneratorRequest } from '@/types/completion'
 import { invokeCommand } from './tauri'
 import type { Session, SessionCreateRequest, SessionCreateResponse } from '@/types/session'
 import type { SessionMessage } from '@/types/sessionMessage'
@@ -42,8 +43,8 @@ export const sessionApi = {
   respondAuth: (requestId: string, responses: string[]) =>
     invokeCommand<void>('session_auth_respond', { requestId, responses }),
 
-  complete: (id: string, requestId: string, script: string, cwd?: string) =>
-    invokeCommand<void>('session_complete', { id, requestId, script, cwd }),
+  complete: (id: string, requestId: string, generator: CompletionGeneratorRequest, cwd?: string) =>
+    invokeCommand<void>('session_complete', { id, requestId, ...generator, cwd }),
 
   close: (id: string) => invokeCommand<void>('session_close', { id }),
 }

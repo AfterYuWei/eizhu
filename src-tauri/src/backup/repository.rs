@@ -21,8 +21,8 @@ const STRATEGY_OVERWRITE: &str = "overwrite";
 
 #[derive(Clone)]
 pub(super) struct BackupRepository {
-    database: Database,
-    encryptor: Encryptor,
+    pub(super) database: Database,
+    pub(super) encryptor: Encryptor,
 }
 
 impl BackupRepository {
@@ -92,14 +92,54 @@ impl BackupRepository {
         payload: &BackupPayload,
         strategy: &str,
         group_order: &[usize],
+        expected_generation: Option<i64>,
     ) -> Result<BackupImportResult, CommandError> {
         let mut connection = self
             .database
             .connect()
             .map_err(|error| CommandError::new("IMPORT_FAILED", error.to_string()))?;
         let transaction = connection
-            .transaction()
+            .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
             .map_err(|error| CommandError::new("IMPORT_FAILED", error.to_string()))?;
+        if let Some(expected) = expected_generation {
+            let current: i64 = transaction
+                .query_row(
+                    "SELECT next_generation FROM realtime_state WHERE id=1",
+                    [],
+                    |r| r.get(0),
+                )
+                .map_err(CommandError::database)?;
+            if current != expected {
+                return Err(CommandError::new(
+                    "PREVIEW_CHANGED",
+                    "本地数据已变化，请重新预览",
+                ));
+            }
+        }
+        // A device-protected safety snapshot participates in the same transaction.
+        let before = BackupPayload {
+            groups: export_groups(&transaction)?,
+            vault: export_vault(&transaction, &self.encryptor)?,
+            profiles: export_profiles(&transaction, &self.encryptor)?,
+            snippets: export_snippets(&transaction)?,
+        };
+        let plaintext = zeroize::Zeroizing::new(
+            serde_json::to_string(&before).map_err(CommandError::database)?,
+        );
+        let encrypted = self
+            .encryptor
+            .encrypt(&plaintext)
+            .map_err(CommandError::database)?;
+        transaction.execute_batch("CREATE TABLE IF NOT EXISTS backup_safety(id TEXT PRIMARY KEY,payload TEXT NOT NULL,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)").map_err(CommandError::database)?;
+        transaction
+            .execute(
+                "INSERT INTO backup_safety(id,payload) VALUES(?1,?2)",
+                params![uuid::Uuid::new_v4().to_string(), encrypted],
+            )
+            .map_err(CommandError::database)?;
+        if strategy == "replace" {
+            transaction.execute_batch("DELETE FROM profiles;DELETE FROM snippets;UPDATE groups SET parent_id=NULL;DELETE FROM groups;DELETE FROM vault;").map_err(CommandError::database)?;
+        }
         let mut result = BackupImportResult {
             imported: BackupStats::default(),
             skipped: BackupStats::default(),
@@ -154,6 +194,7 @@ impl BackupRepository {
                 })?,
             );
         }
+        validate_links(&transaction)?;
         normalize_vault_usernames(&transaction).map_err(|error| {
             CommandError::new(
                 "IMPORT_FAILED",
@@ -192,6 +233,85 @@ fn add_result(result: &mut BackupImportResult, resource: Resource, action: Impor
         Resource::Profile => target.profiles += 1,
         Resource::Snippet => target.snippets += 1,
     }
+}
+
+fn validate_links(transaction: &Transaction<'_>) -> Result<(), CommandError> {
+    use std::collections::{HashMap, HashSet};
+    let mut groups = transaction
+        .prepare("SELECT id,COALESCE(parent_id,'') FROM groups")
+        .map_err(CommandError::database)?;
+    let groups = groups
+        .query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))
+        .map_err(CommandError::database)?
+        .collect::<Result<HashMap<_, _>, _>>()
+        .map_err(CommandError::database)?;
+    let mut profiles = transaction
+        .prepare("SELECT id,group_id,vault_id,options FROM profiles")
+        .map_err(CommandError::database)?;
+    let profiles = profiles
+        .query_map([], |r| {
+            Ok((
+                r.get::<_, String>(0)?,
+                r.get::<_, String>(1)?,
+                r.get::<_, String>(2)?,
+                r.get::<_, String>(3)?,
+            ))
+        })
+        .map_err(CommandError::database)?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(CommandError::database)?;
+    let profile_ids = profiles
+        .iter()
+        .map(|p| p.0.as_str())
+        .collect::<HashSet<_>>();
+    let mut jumps = HashMap::new();
+    for (id, group, vault, options) in &profiles {
+        if !group.is_empty() && !groups.contains_key(group) {
+            return Err(CommandError::new(
+                "IMPORT_FAILED",
+                "备份包含缺失的服务器分组",
+            ));
+        }
+        if !vault.is_empty() {
+            let exists: bool = transaction
+                .query_row(
+                    "SELECT EXISTS(SELECT 1 FROM vault WHERE id=?1)",
+                    [vault],
+                    |r| r.get(0),
+                )
+                .map_err(CommandError::database)?;
+            if !exists {
+                return Err(CommandError::new("IMPORT_FAILED", "备份包含缺失的凭据引用"));
+            }
+        }
+        let value: serde_json::Value = serde_json::from_str(options)
+            .map_err(|_| CommandError::new("IMPORT_FAILED", "备份中的连接选项无效"))?;
+        if value["proxy"]["type"] == "jump" {
+            let target = value["proxy"]["jump_profile_id"]
+                .as_str()
+                .unwrap_or_default();
+            if !profile_ids.contains(target) {
+                return Err(CommandError::new(
+                    "IMPORT_FAILED",
+                    "备份包含缺失的跳板服务器",
+                ));
+            }
+            jumps.insert(id.clone(), target.to_owned());
+        }
+    }
+    for edges in [&groups, &jumps] {
+        for id in edges.keys() {
+            let mut seen = HashSet::new();
+            let mut next = id.as_str();
+            while !next.is_empty() {
+                if !seen.insert(next) {
+                    return Err(CommandError::new("IMPORT_FAILED", "备份形成循环引用"));
+                }
+                next = edges.get(next).map(String::as_str).unwrap_or_default();
+            }
+        }
+    }
+    Ok(())
 }
 
 fn export_groups(transaction: &Transaction<'_>) -> Result<Vec<BackupGroup>, CommandError> {
@@ -246,9 +366,9 @@ fn export_vault(
     for row in rows {
         let (id, entry_type, data, name, username, remark, fingerprint, created_at, updated_at) =
             row.map_err(CommandError::database)?;
-        let plaintext = encryptor.decrypt(&data).map_err(|error| {
+        let plaintext = zeroize::Zeroizing::new(encryptor.decrypt(&data).map_err(|error| {
             CommandError::new("EXPORT_FAILED", format!("decrypt vault {id}: {error}"))
-        })?;
+        })?);
         output.push(BackupVaultItem {
             id,
             name,
@@ -324,12 +444,12 @@ fn export_profiles(
         let inline_credential = if inline.is_empty() {
             None
         } else {
-            let raw = encryptor.decrypt(&inline).map_err(|error| {
+            let raw = zeroize::Zeroizing::new(encryptor.decrypt(&inline).map_err(|error| {
                 CommandError::new(
                     "EXPORT_FAILED",
                     format!("decode inline credential for profile {id}: {error}"),
                 )
-            })?;
+            })?);
             Some(serde_json::from_str(&raw).map_err(|error| {
                 CommandError::new(
                     "EXPORT_FAILED",
@@ -405,8 +525,8 @@ fn import_group(
         return Ok(ImportAction::Skipped);
     }
     let sql = if strategy == STRATEGY_OVERWRITE {
-        "INSERT OR REPLACE INTO groups (id,name,parent_id,icon,sort_order,created_at) \
-         VALUES (?1,?2,?3,?4,?5,?6)"
+        "INSERT INTO groups (id,name,parent_id,icon,sort_order,created_at) \
+         VALUES (?1,?2,?3,?4,?5,?6) ON CONFLICT(id) DO UPDATE SET name=excluded.name,parent_id=excluded.parent_id,icon=excluded.icon,sort_order=excluded.sort_order"
     } else {
         "INSERT INTO groups (id,name,parent_id,icon,sort_order,created_at) \
          VALUES (?1,?2,?3,?4,?5,?6)"
@@ -441,6 +561,7 @@ fn import_vault(
         BackupError::Repository(format!("vault item {} has no credential", item.id))
     })?;
     let (plaintext, fingerprint) = encode_plaintext(credential, &item.entry_type)?;
+    let plaintext = zeroize::Zeroizing::new(plaintext);
     let encrypted = encryptor
         .encrypt(&plaintext)
         .map_err(|error| BackupError::Repository(error.to_string()))?;
@@ -482,9 +603,11 @@ fn import_profile(
     }
     let inline = match item.inline_credential.as_ref() {
         Some(credential) => {
-            let raw = serde_json::to_string(credential)
-                .map_err(|error| BackupError::Repository(error.to_string()))?;
-            if raw == "{}" {
+            let raw = zeroize::Zeroizing::new(
+                serde_json::to_string(credential)
+                    .map_err(|error| BackupError::Repository(error.to_string()))?,
+            );
+            if raw.as_str() == "{}" {
                 String::new()
             } else {
                 encryptor

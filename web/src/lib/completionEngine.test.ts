@@ -65,14 +65,14 @@ describe('completionEngine', () => {
   it('resolves dynamic generators for option values attached with equals', () => {
     expect(getDynamicGenerator(ctx('kubectl --namespace=ku'))).toMatchObject({
       parser: 'kubectl-name',
-      script: 'kubectl get namespaces -o name',
+      generatorId: 'kubectl-resources', params: { resource: 'namespaces' },
     })
   })
 
   it('renders namespace-aware dynamic scripts when namespace uses equals syntax', () => {
     expect(getDynamicGenerator(ctx('kubectl get pods --namespace=kube-system po'))).toMatchObject({
       parser: 'kubectl-name',
-      script: 'kubectl get pods -o name -n kube-system',
+      generatorId: 'kubectl-resources', params: { resource: 'pods', namespace: 'kube-system' },
     })
   })
 
@@ -150,4 +150,32 @@ describe('completionEngine', () => {
       { name: '/real/', displayName: 'real/', type: 'directory', isDir: true, origin: 'dynamic' },
     ])
   })
+})
+
+
+it('结构化文件候选保留后缀、空格、中文及引号并安全编码插入', async () => {
+  const { parseCompletionData, pathGeneratorParams } = await import('./completionEngine')
+  const data = { output: '', candidates: [{ name: "中文 name@*", is_dir: false }, { name: "目录's", is_dir: true }] }
+  expect(pathGeneratorParams('"空 格/中')).toEqual({ directory: '空 格/', prefix: '中' })
+  expect(parseCompletionData(data, '"空 格/中', 'file-list')[0].name).toBe('空 格/中文 name@*')
+  expect(buildCompletionInsertPlan('"空 格/中', '空 格/中文 name@*').insertText).toBe('文 name@*')
+  expect(parseCompletionData(data, '', 'directory-list', true).map((item) => item.name)).toEqual(["目录's/"])
+  expect(buildCompletionInsertPlan('', "目录's/").insertText).toBe("目录\\'s/")
+})
+
+it('处理 -- 之后的文件名、重复选项、互斥选项及重复可用选项', () => {
+  const names = (input: string) => getSuggestions(tokenize(input)).suggestions.map((s) => s.name)
+  expect(names('git checkout -b feature -')).not.toContain('-B')
+  expect(names('git checkout -b feature -')).not.toContain('-b')
+  expect(names('git commit -m one -')).toContain('-m')
+  expect(names('kubectl get pods -n default -')).not.toContain('--namespace')
+  expect(names('git checkout -- -')).not.toContain('--help')
+  expect(getDynamicGenerator(tokenize('git checkout -- -'))?.generatorId).toBe('paths')
+})
+it('异步候选顺序稳定、静态在前且最多 200 项', async () => {
+  const { rankCompletionCandidates } = await import('./completionEngine')
+  const input = [{ name: 'z', type: 'arg' as const, origin: 'static' as const }, { name: 'b', type: 'arg' as const, origin: 'dynamic' as const }, { name: 'a', type: 'arg' as const, origin: 'dynamic' as const }]
+  expect(rankCompletionCandidates(input).map((s) => s.name)).toEqual(['z', 'a', 'b'])
+  expect(rankCompletionCandidates([...input].reverse())).toEqual(rankCompletionCandidates(input))
+  expect(rankCompletionCandidates(Array.from({ length: 210 }, (_, i) => ({ name: String(i), type: 'arg' })))).toHaveLength(200)
 })

@@ -29,7 +29,6 @@ use crate::{
     server_detail,
 };
 
-const COMPLETE_TIMEOUT: Duration = Duration::from_millis(400);
 const SHELL_DETECT_TIMEOUT: Duration = Duration::from_secs(10);
 const PRE_ATTACH_OUTPUT_LIMIT: usize = 1024 * 1024;
 const OUTPUT_BATCH_BYTES: usize = 32 * 1024;
@@ -114,7 +113,8 @@ enum SessionCommand {
     },
     Complete {
         request_id: String,
-        script: String,
+        generator_id: String,
+        params: super::CompletionParams,
         cwd: Option<String>,
     },
 }
@@ -129,8 +129,7 @@ pub(super) struct Session {
     host_key_decision: StdMutex<Option<HostKeyDecision>>,
     trusted_once_host_keys: StdMutex<HashSet<String>>,
     host_key_notify: Notify,
-    pending_auth: StdMutex<Option<PendingAuthentication>>,
-    auth_notify: Notify,
+    authentication: super::AuthenticationCoordinator,
     cancel: CancellationToken,
     commands: Mutex<Option<mpsc::Sender<SessionCommand>>>,
     pending_resize: StdMutex<Option<(u32, u32)>>,
@@ -190,11 +189,6 @@ impl SessionDelivery {
 struct HostKeyDecision {
     fingerprint: String,
     persist: bool,
-}
-
-struct PendingAuthentication {
-    request_id: String,
-    responses: Option<Vec<String>>,
 }
 
 impl Session {
@@ -266,8 +260,7 @@ impl Session {
             host_key_decision: StdMutex::new(None),
             trusted_once_host_keys: StdMutex::new(HashSet::new()),
             host_key_notify: Notify::new(),
-            pending_auth: StdMutex::new(None),
-            auth_notify: Notify::new(),
+            authentication: super::AuthenticationCoordinator::default(),
             cancel: CancellationToken::new(),
             commands: Mutex::new(None),
             pending_resize: StdMutex::new(None),
@@ -303,7 +296,6 @@ impl Session {
     pub(super) fn cancel(&self) {
         self.cancel.cancel();
         self.host_key_notify.notify_waiters();
-        self.auth_notify.notify_waiters();
     }
 
     pub(super) fn dimensions(&self) -> (u32, u32) {
@@ -449,23 +441,6 @@ impl Session {
         );
     }
 
-    fn provide_auth_response(&self, request_id: &str, responses: Vec<String>) -> bool {
-        let mut pending = self
-            .pending_auth
-            .lock()
-            .expect("authentication mutex poisoned");
-        let Some(request) = pending.as_mut() else {
-            return false;
-        };
-        if request.request_id != request_id || request.responses.is_some() {
-            return false;
-        }
-        request.responses = Some(responses);
-        drop(pending);
-        self.auth_notify.notify_waiters();
-        true
-    }
-
     fn emit_message(&self, message_type: &str, data: &str, payload: Option<Value>) {
         let message = ClientMessage {
             session_id: self.id.clone(),
@@ -609,61 +584,23 @@ impl AuthenticationResponder for Session {
         request: AuthenticationRequest,
     ) -> Pin<Box<dyn Future<Output = Result<Vec<String>, String>> + Send + 'a>> {
         Box::pin(async move {
-            let request_id = uuid::Uuid::new_v4().to_string();
-            let prompts = request
-                .prompts
-                .iter()
-                .map(|prompt| json!({"prompt":prompt.prompt,"echo":prompt.echo}))
-                .collect::<Vec<_>>();
-            *self
-                .pending_auth
-                .lock()
-                .expect("authentication mutex poisoned") = Some(PendingAuthentication {
-                request_id: request_id.clone(),
-                responses: None,
-            });
-            self.stage("auth_interactive", "warn", "服务器需要补充交互式认证信息");
-            self.emit_message(
-                "auth_request",
-                "",
-                Some(json!({
-                    "request_id":request_id,
-                    "profile_id":request.profile_id,
-                    "name":request.name,
-                    "instructions":request.instructions,
-                    "prompts":prompts,
-                })),
-            );
-            loop {
-                let response = {
-                    let mut pending = self
-                        .pending_auth
-                        .lock()
-                        .expect("authentication mutex poisoned");
-                    pending
-                        .as_mut()
-                        .and_then(|request| request.responses.take())
-                };
-                if let Some(response) = response {
-                    *self
-                        .pending_auth
-                        .lock()
-                        .expect("authentication mutex poisoned") = None;
-                    return Ok(response);
-                }
-                tokio::select! {
-                    _ = self.cancel.cancelled() => {
-                        return Err("用户取消了 keyboard-interactive 认证".into());
+            self.authentication
+                .request(request, &self.cancel, |payload| {
+                    if payload["closed"] == true {
+                        self.emit_message("auth_request_closed", "", Some(payload));
+                    } else {
+                        self.stage("auth_interactive", "warn", "服务器需要补充交互式认证信息");
+                        self.emit_message("auth_request", "", Some(payload));
                     }
-                    _ = self.auth_notify.notified() => {}
-                }
-            }
+                })
+                .await
         })
     }
 }
 
 #[derive(Clone)]
 pub(crate) struct SshService {
+    authentication: super::AuthenticationCoordinator,
     manager: SessionManager,
     profiles: ProfileService,
     audit: AuditRepository,
@@ -677,6 +614,7 @@ impl SshService {
         events: Arc<dyn SessionEventSink>,
     ) -> Self {
         Self {
+            authentication: super::AuthenticationCoordinator::default(),
             manager: SessionManager::default(),
             profiles,
             audit,
@@ -694,7 +632,9 @@ impl SshService {
         let resolved = self.profiles.resolve_connection(&request.profile_id)?;
         let cols = request.cols.filter(|value| *value > 0).unwrap_or(80);
         let rows = request.rows.filter(|value| *value > 0).unwrap_or(24);
-        let session = Arc::new(Session::new(&resolved, self.events.clone(), cols, rows));
+        let mut session = Session::new(&resolved, self.events.clone(), cols, rows);
+        session.authentication = self.authentication.clone();
+        let session = Arc::new(session);
         let response = SessionCreateResponse {
             session_id: session.id.clone(),
             status: "connecting".into(),
@@ -890,6 +830,19 @@ impl SshService {
         let mut output_flush = tokio::time::interval(OUTPUT_BATCH_INTERVAL);
         output_flush.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
         output_flush.tick().await;
+        // Poll completion alongside PTY I/O; its timeout must not stall terminal input.
+        type CompletionFuture<'a> = Pin<
+            Box<
+                dyn Future<
+                        Output = (
+                            String,
+                            Result<super::completion::CompletionResult, SshError>,
+                        ),
+                    > + Send
+                    + 'a,
+            >,
+        >;
+        let mut completion: Option<CompletionFuture<'_>> = None;
         loop {
             tokio::select! {
                 _ = session.cancel.cancelled() => {
@@ -921,26 +874,28 @@ impl SshService {
                         }
                         let _ = response.send(result);
                     }
-                    Some(SessionCommand::Complete { request_id, script, cwd }) => {
-                        let result = run_completion(&route.handle, script, cwd).await;
-                        let payload = match result {
-                            Ok((output, code)) => json!({
-                                "request_id":request_id,
-                                "output":output,
-                                "error":"",
-                                "exit_code":code,
-                            }),
-                            Err(error) => json!({
-                                "request_id":request_id,
-                                "output":"",
-                                "error":error.to_string(),
-                                "exit_code":-1,
-                            }),
-                        };
-                        session.emit_message("complete_response", "", Some(payload));
+                    Some(SessionCommand::Complete { request_id, generator_id, params, cwd }) => {
+                        if completion.is_some() {
+                            session.emit_message("complete_response", "", Some(json!({"request_id": request_id, "output": "", "error": "正在处理补全请求", "exit_code": -1})));
+                        } else {
+                            let handle = &route.handle;
+                            completion = Some(Box::pin(async move {
+                                let result = super::completion::run(handle, generator_id, params, cwd).await;
+                                (request_id, result)
+                            }));
+                        }
                     }
                     None => session.cancel.cancel(),
                 },
+                response = async { completion.as_mut().expect("guarded completion").await }, if completion.is_some() => {
+                    completion = None;
+                    let (request_id, result) = response;
+                    let payload = match result {
+                        Ok(result) => json!({"request_id":request_id, "output":result.output, "candidates":result.candidates, "error":"", "exit_code":result.exit_code}),
+                        Err(error) => json!({"request_id":request_id, "output":"", "error":error.to_string(), "exit_code":-1}),
+                    };
+                    session.emit_message("complete_response", "", Some(payload));
+                }
                 _ = output_flush.tick(), if !pending_output.is_empty() => {
                     session.emit_message("output", &std::mem::take(&mut pending_output), None);
                 }
@@ -1159,17 +1114,20 @@ impl SshService {
         &self,
         id: &str,
         request_id: String,
-        script: String,
+        generator_id: String,
+        params: super::CompletionParams,
         cwd: Option<String>,
     ) -> Result<(), CommandError> {
-        if request_id.is_empty() || script.is_empty() {
-            return Ok(());
+        if request_id.is_empty() || request_id.len() > 128 {
+            return Err(CommandError::new("VALIDATION", "补全请求标识非法"));
         }
+        super::completion::validate(&generator_id, &params, cwd.as_deref())?;
         self.send_command(
             id,
             SessionCommand::Complete {
                 request_id,
-                script,
+                generator_id,
+                params,
                 cwd,
             },
         )
@@ -1181,21 +1139,10 @@ impl SshService {
         request_id: &str,
         responses: Vec<String>,
     ) -> Result<(), CommandError> {
-        if responses.len() > 32 {
-            return Err(CommandError::new(
-                "VALIDATION",
-                "too many authentication responses",
-            ));
-        }
-        for session in self.manager.sessions().await {
-            if session.provide_auth_response(request_id, responses.clone()) {
-                return Ok(());
-            }
-        }
-        Err(CommandError::new(
-            "AUTH_REQUEST_NOT_FOUND",
-            "authentication request is no longer active",
-        ))
+        self.authentication.respond(request_id, responses)
+    }
+    pub(crate) fn authentication(&self) -> super::AuthenticationCoordinator {
+        self.authentication.clone()
     }
 
     pub(crate) async fn close(&self, id: &str) -> Result<(), CommandError> {
@@ -1287,14 +1234,16 @@ impl SshService {
         let previous = self.manager.get(id).await?;
         let resolved = self.profiles.resolve_connection(&previous.profile_id)?;
         let (cols, rows) = previous.dimensions();
-        let session = Arc::new(Session::reconnecting(
+        let mut session = Session::reconnecting(
             &resolved,
             self.events.clone(),
             id.to_owned(),
             cols,
             rows,
             previous.is_attached(),
-        ));
+        );
+        session.authentication = self.authentication.clone();
+        let session = Arc::new(session);
         session.stage("reconnecting", "info", "正在恢复 SSH 会话");
         self.manager.replace(id, session.clone()).await;
         let state = self.clone();
@@ -1373,43 +1322,6 @@ fn osc7_setup_command(shell: RemoteShell) -> String {
         }
     };
     format!(r#"{hook};printf "\033]1337;eizhuOsc7Ready\007""#)
-}
-
-async fn run_completion(
-    handle: &client::Handle<ClientHandler>,
-    script: String,
-    cwd: Option<String>,
-) -> Result<(String, i32), SshError> {
-    let command = match cwd.filter(|value| !value.is_empty()) {
-        Some(cwd) => format!("cd {} && {script}", shell_quote(&cwd)),
-        None => script,
-    };
-    timeout(COMPLETE_TIMEOUT, async {
-        let mut channel = handle
-            .channel_open_session()
-            .await
-            .map_err(|error| error.to_string())?;
-        channel
-            .exec(true, command)
-            .await
-            .map_err(|error| error.to_string())?;
-        let mut output = Vec::new();
-        let mut code = 0_i32;
-        while let Some(message) = channel.wait().await {
-            match message {
-                ChannelMsg::Data { data } => output.extend_from_slice(&data),
-                ChannelMsg::ExitStatus { exit_status } => code = exit_status as i32,
-                _ => {}
-            }
-        }
-        Ok::<_, SshError>((String::from_utf8_lossy(&output).into_owned(), code))
-    })
-    .await
-    .map_err(|_| "timeout".to_owned())?
-}
-
-fn shell_quote(value: &str) -> String {
-    format!("'{}'", value.replace('\'', "'\\''"))
 }
 
 #[derive(Default)]
@@ -1625,7 +1537,7 @@ mod tests {
 
     #[test]
     fn shell_quote_escapes_single_quotes() {
-        assert_eq!(shell_quote("a'b"), "'a'\\''b'");
+        assert_eq!(crate::ssh::completion::quote("a'b"), "'a'\\''b'");
     }
 
     #[test]

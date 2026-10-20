@@ -1,7 +1,8 @@
 # GitHub Actions 发版流程
 
-eizhu 采用 `dev` / `main` 双分支晋级模型：`dev` 是测试通道，`main` 是正式通道。
-发版只由分支推送触发，不再通过人工创建 tag 触发。
+eizhu 采用 `dev` / `main` 双分支晋级模型：日常开发提交到 `dev`，`dev` 对接测试版通道；
+`main` 只接收经过验证的发布版本，并对接正式版通道。桌面和移动端发版只由这两个
+分支的推送触发，不再通过人工创建 tag 触发。
 
 > GitHub Release 底层必须关联 tag。工作流会在发布时自动创建 tag，
 > 它是 Release 的不可变标识，不是发版入口，无需人工维护。
@@ -33,9 +34,19 @@ test 版本号由「提交计数 + 短 SHA」组成（如 `0.4.2-test.486.1a2b3c
 `-test.<sha>` 字典序回退导致覆盖安装被强制要求先卸载；短 SHA 提供构建可追溯性，
 同一提交重跑时版本不变、资产覆盖到同一个 test Release。
 
+## 账号服务地址与质量门禁
+
+配置仓库 Variables `EIZHU_ACCOUNT_SERVER_TEST` 与 `EIZHU_ACCOUNT_SERVER_STABLE` 为实际 HTTPS 账号服务地址。
+
+测试服务尚未确定时，`dev` 通道在变量未配置或为空时暂用 `https://account.eizhu.invalid/`，允许先出测试包；此时账号登录和同步功能暂不可用，配置真实地址后重新构建即可启用。两个通道严格独立，正式通道仍要求真实地址，不会回退测试服务或占位地址。
+
+打包入口继续拒绝其他占位域名和携带认证信息的地址。本地 `desktop:build` 需要环境变量 `EIZHU_ACCOUNT_SERVER`，使用上述临时地址时还需设置 `EIZHU_BUILD_CHANNEL=test`；普通开发与单元测试不需要。
+
+桌面发布构建依赖同一提交的 `quality-core.yml`：前端测试、lint、构建，Rust 检查及桌面烟测全部通过才继续。Quality 产物与安装包产物分开筛选，前端静态文件不会混入 Release。
+
 ## 推荐发版流程
 
-1. 日常开发通过功能分支 PR 合入 `dev`。
+1. 日常开发在 `dev` 分支进行；需要多人协作时，也可通过 PR 合入 `dev`。
 2. `dev` 每次推送自动运行质量门禁，并发布三平台测试版。
 3. 进入发布候选阶段时，按 SemVer 提升 `VERSION` 与 `VERSION_MOBILE`，完成回归后由
    `dev` 提 PR 到 `main`。
@@ -52,6 +63,7 @@ test 版本号由「提交计数 + 短 SHA」组成（如 `0.4.2-test.486.1a2b3c
 |------|------|-----------|
 | Windows (x64) | NSIS 安装程序 `.exe` | ✅ |
 | macOS (Apple Silicon) | DMG 镜像 + `.app.tar.gz` | ✅ |
+| macOS (Intel x64) | DMG 镜像 + `.app.tar.gz` | ✅ |
 | Linux (Debian/Ubuntu) | `.deb` | ❌（手动覆盖安装） |
 | Linux (Fedora/RHEL) | `.rpm` | ❌（手动覆盖安装） |
 | Linux (通用) | `.AppImage` | ✅ |
@@ -60,6 +72,12 @@ test 版本号由「提交计数 + 短 SHA」组成（如 `0.4.2-test.486.1a2b3c
 
 稳定版与测试版的 updater 清单分别为 `latest-stable-*` 和 `latest-test-*`，
 由固定的 `tauri-update-channel` Release 保存最新指针。
+macOS 分别在 Apple Silicon 与 `macos-15-intel` runner 上构建
+`aarch64-apple-darwin` 和 `x86_64-apple-darwin`，两者都执行 bundle 烟测和二进制架构检查。
+DMG 分别以 `_aarch64.dmg` 和 `_x64.dmg` 结尾；签名后的更新归档统一为
+`eizhu_<版本>_<aarch64|x64>.app.tar.gz`，避免合并产物时同名覆盖。
+客户端通过 Rust updater 返回的编译目标选择 `darwin-aarch64` 或 `darwin-x86_64` 清单。
+
 移动端产物（APK / IPA）上传到与桌面相同的版本 Release，资产文件名以
 `eizhu-<VERSION_MOBILE>…` 标识移动端版本；iOS 测试 IPA 通过
 `tauri ios build --no-sign` 产出，正式与测试分支均不读取 App Store Connect 密钥，
@@ -84,4 +102,12 @@ Windows 覆盖安装说明：`tauri.conf.json` 已启用 `bundle.windows.allowDo
 ```bash
 npm run desktop:build
 npm run desktop:smoke
+```
+
+在 macOS 上可显式选择打包架构（账号服务地址要求同上）：
+
+```bash
+rustup target add x86_64-apple-darwin aarch64-apple-darwin
+npm run desktop:build -- --target x86_64-apple-darwin
+npm run desktop:build -- --target aarch64-apple-darwin
 ```

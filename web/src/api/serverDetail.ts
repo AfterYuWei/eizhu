@@ -49,7 +49,6 @@ export interface ServerMetrics {
   net_rx: number
   net_tx: number
   net_detail: NetIfStat[]
-  timestamp: number
 }
 
 // Re-export unified types from sftp (backend returns SftpEntry format)

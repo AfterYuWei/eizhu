@@ -1,13 +1,19 @@
 //! Tauri IPC adapter layer.
+mod tunnel;
+pub(crate) use tunnel::*;
 
 mod account;
 mod audit;
 mod backup;
+mod backup_compat;
 #[cfg(desktop)]
 mod desktop;
 mod document;
 mod group;
+mod legacy_backup;
+pub(crate) use backup_compat::*;
 mod lifecycle;
+mod local_state;
 mod platform;
 mod profile;
 mod server_detail;
@@ -24,7 +30,9 @@ pub(crate) use backup::*;
 pub(crate) use desktop::*;
 pub(crate) use document::*;
 pub(crate) use group::*;
+pub(crate) use legacy_backup::*;
 pub(crate) use lifecycle::*;
+pub(crate) use local_state::*;
 pub(crate) use platform::*;
 pub(crate) use profile::*;
 pub(crate) use server_detail::*;

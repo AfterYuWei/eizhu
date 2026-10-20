@@ -10,9 +10,9 @@ use url::Url;
 use crate::{account::AccountService, error::CommandError};
 
 use super::{
-    model::{CloudIndex, SyncProviderConfig},
+    model::{BackupTargetConfig, CloudIndex},
     oauth,
-    repository::SyncRepository,
+    repository::ArchiveRepository,
 };
 
 const GDRIVE_API: &str = "https://www.googleapis.com/drive/v3";
@@ -53,19 +53,21 @@ const AWS_ENCODE_SET: &AsciiSet = &CONTROLS
 #[derive(Clone)]
 pub struct CloudProvider {
     id: String,
-    name: String,
-    config: SyncProviderConfig,
-    repository: SyncRepository,
+    namespace: String,
+    config: BackupTargetConfig,
+    repository: ArchiveRepository,
     client: Client,
     account: AccountService,
+    user: i64,
 }
 
 impl CloudProvider {
     pub fn new(
         id: String,
-        config: SyncProviderConfig,
-        repository: SyncRepository,
+        config: BackupTargetConfig,
+        repository: ArchiveRepository,
         account: AccountService,
+        user: i64,
     ) -> Result<Self, CommandError> {
         let client = Client::builder()
             .timeout(Duration::from_secs(60))
@@ -73,20 +75,20 @@ impl CloudProvider {
             .map_err(network_error)?;
         Ok(Self {
             id,
-            name: config.name.clone(),
+            namespace: {
+                let (device, space) = repository.identity()?;
+                format!("{space}-{device}")
+            },
             config,
             repository,
             client,
             account,
+            user,
         })
     }
 
     pub fn id(&self) -> &str {
         &self.id
-    }
-
-    pub fn name(&self) -> &str {
-        &self.name
     }
 
     pub async fn ping(&mut self) -> Result<(), CommandError> {
@@ -109,7 +111,16 @@ impl CloudProvider {
             }
             "gdrive" => self.ensure_gdrive_folder().await.map(|_| ()),
             "onedrive" => self.ensure_onedrive_folder().await,
-            "account" => self.account.me().await.map(|_| ()),
+            "account" => self
+                .account
+                .json_for::<serde_json::Value>(
+                    self.user,
+                    Method::GET,
+                    "api/backup/v1/objects",
+                    None,
+                )
+                .await
+                .map(|_| ()),
             other => Err(CommandError::new(
                 "SYNC_FAILED",
                 format!("暂不支持的云服务类型: {other}"),
@@ -152,7 +163,17 @@ impl CloudProvider {
             }
             "gdrive" => self.gdrive_upload(name, bytes).await,
             "onedrive" => self.onedrive_put(name, bytes).await,
-            "account" => self.account.put_object(name, bytes).await,
+            "account" => self
+                .account
+                .backup_object(
+                    self.user,
+                    Method::PUT,
+                    &self.account_path(name),
+                    Some(bytes),
+                    name == "index.json",
+                )
+                .await
+                .map(|_| ()),
             other => Err(unsupported(other)),
         }
     }
@@ -183,7 +204,18 @@ impl CloudProvider {
                     .await?;
                 response
             }
-            "account" => return self.account.get_object(name).await,
+            "account" => {
+                return self
+                    .account
+                    .backup_object(
+                        self.user,
+                        Method::GET,
+                        &self.account_path(name),
+                        None,
+                        name == "index.json",
+                    )
+                    .await
+            }
             other => return Err(unsupported(other)),
         };
         if response.status() == StatusCode::NOT_FOUND {
@@ -215,7 +247,19 @@ impl CloudProvider {
                 self.oauth_request(Method::DELETE, self.onedrive_item_url(name), vec![], None)
                     .await?
             }
-            "account" => return self.account.delete_object(name).await,
+            "account" => {
+                return self
+                    .account
+                    .backup_object(
+                        self.user,
+                        Method::DELETE,
+                        &self.account_path(name),
+                        None,
+                        false,
+                    )
+                    .await
+                    .map(|_| ())
+            }
             other => return Err(unsupported(other)),
         };
         if response.status() == StatusCode::NOT_FOUND || response.status().is_success() {
@@ -225,15 +269,44 @@ impl CloudProvider {
         }
     }
 
+    fn account_path(&self, name: &str) -> String {
+        if name == "index.json" {
+            format!("api/backup/v1/indices/{}", self.namespace)
+        } else {
+            format!("api/backup/v1/objects/{}-{name}", self.namespace)
+        }
+    }
+
     async fn webdav_request(
         &self,
         method: Method,
         name: &str,
         body: Vec<u8>,
     ) -> Result<Response, CommandError> {
+        if method == Method::PUT {
+            let folder = format!(
+                "{}/eizhu-{}/",
+                self.config.endpoint.trim_end_matches('/'),
+                self.namespace
+            );
+            let mut request = self.client.request(
+                Method::from_bytes(b"MKCOL").expect("constant method"),
+                folder,
+            );
+            if !self.config.username.is_empty() || !self.config.password.is_empty() {
+                request = request.basic_auth(&self.config.username, Some(&self.config.password));
+            }
+            let response = request.send().await.map_err(network_error)?;
+            if !response.status().is_success()
+                && response.status() != StatusCode::METHOD_NOT_ALLOWED
+            {
+                return Err(http_error("创建备份目录失败", response).await);
+            }
+        }
         let url = format!(
-            "{}/{}",
+            "{}/eizhu-{}/{}",
             self.config.endpoint.trim_end_matches('/'),
+            self.namespace,
             name.trim_start_matches('/')
         );
         let mut request = self.client.request(method, url).body(body);
@@ -260,8 +333,9 @@ impl CloudProvider {
             &self.config.s3_region
         };
         let key = format!(
-            "{}{}",
+            "{}spaces/{}/{}",
             normalize_prefix(&self.config.s3_prefix),
+            self.namespace,
             name.trim_start_matches('/')
         );
         let encoded_key = key
@@ -394,16 +468,14 @@ impl CloudProvider {
     }
 
     async fn ensure_gdrive_folder(&mut self) -> Result<String, CommandError> {
-        if !self.config.drive_folder_id.is_empty() {
-            return Ok(self.config.drive_folder_id.clone());
-        }
+        let folder_name = format!("{BACKUP_FOLDER}-{}", self.namespace);
         let mut url = Url::parse(&format!("{GDRIVE_API}/files")).expect("constant URL");
         url.query_pairs_mut()
             .append_pair(
                 "q",
                 &format!(
                     "name='{}' and mimeType='application/vnd.google-apps.folder' and trashed=false",
-                    BACKUP_FOLDER
+                    folder_name
                 ),
             )
             .append_pair("fields", "files(id,name)");
@@ -431,7 +503,7 @@ impl CloudProvider {
             item.id
         } else {
             let body = serde_json::to_vec(&serde_json::json!({
-                "name": BACKUP_FOLDER,
+                "name": folder_name,
                 "mimeType": "application/vnd.google-apps.folder"
             }))
             .expect("serializable");
@@ -454,9 +526,6 @@ impl CloudProvider {
                 })?
                 .id
         };
-        self.config.drive_folder_id.clone_from(&folder);
-        self.repository
-            .save_provider_config(&self.id, &self.config)?;
         Ok(folder)
     }
 
@@ -535,9 +604,10 @@ impl CloudProvider {
         } else {
             &self.config.onedrive_folder
         };
+        let folder = format!("{folder}-{}", self.namespace);
         format!(
             "{GRAPH_API}/me/drive/root:/{}/{}",
-            utf8_percent_encode(folder, AWS_ENCODE_SET),
+            utf8_percent_encode(&folder, AWS_ENCODE_SET),
             utf8_percent_encode(name, AWS_ENCODE_SET)
         )
     }
@@ -548,6 +618,7 @@ impl CloudProvider {
         } else {
             &self.config.onedrive_folder
         };
+        let folder = format!("{folder}-{}", self.namespace);
         let body = serde_json::to_vec(&serde_json::json!({
             "name": folder,
             "folder": {},

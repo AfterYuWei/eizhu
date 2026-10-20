@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { extractInputFromLine, isTuiCommand } from './completionBuffer'
+import { extractInputFromLine, isTuiCommand, resyncFromTerminal } from './completionBuffer'
 
 describe('completionBuffer', () => {
   it('detects tui commands behind shell prefixes', () => {
@@ -21,4 +21,9 @@ describe('completionBuffer', () => {
       promptEnd: 0,
     })
   })
+})
+
+it('读取滚动后的实际光标行，避免取到旧缓冲', () => {
+  const terminal = { buffer: { active: { baseY: 100, cursorY: 2, getLine: (row: number) => row === 102 ? { isWrapped: false, translateToString: () => 'user@host$ 中文命令' } : undefined } } }
+  expect(resyncFromTerminal(() => terminal as unknown as import('@xterm/xterm').Terminal).text).toBe('中文命令')
 })

@@ -30,7 +30,10 @@ impl<R: tauri::Runtime> SecureKeyStore for MobileKeyStore<'_, R> {
 
     fn store(&self, value: &str) -> Result<(), String> {
         self.0
-            .store(tauri_plugin_master_key_store::StoreRequest { value })
+            .store(tauri_plugin_master_key_store::StoreRequest {
+                value,
+                namespace: "default",
+            })
             .map_err(|error| error.to_string())
     }
 }
@@ -45,6 +48,44 @@ pub(crate) fn load_or_create(
 
     load_or_create_with_store(
         &MobileKeyStore(app.master_key_store()),
+        database,
+        legacy_path,
+    )
+}
+
+#[cfg(mobile)]
+pub(crate) fn load_or_create_scoped(
+    app: &tauri::AppHandle,
+    database: &Database,
+    legacy_path: &Path,
+    namespace: &str,
+) -> Result<Encryptor, CommandError> {
+    use tauri_plugin_master_key_store::MasterKeyStoreExt;
+    struct Scoped<'a, R: tauri::Runtime> {
+        store: &'a tauri_plugin_master_key_store::MasterKeyStore<R>,
+        namespace: &'a str,
+    }
+    impl<R: tauri::Runtime> SecureKeyStore for Scoped<'_, R> {
+        fn load(&self) -> Result<Option<String>, String> {
+            self.store
+                .load_scoped(self.namespace)
+                .map(|r| r.value)
+                .map_err(|e| e.to_string())
+        }
+        fn store(&self, value: &str) -> Result<(), String> {
+            self.store
+                .store(tauri_plugin_master_key_store::StoreRequest {
+                    value,
+                    namespace: self.namespace,
+                })
+                .map_err(|e| e.to_string())
+        }
+    }
+    load_or_create_with_store(
+        &Scoped {
+            store: app.master_key_store(),
+            namespace,
+        },
         database,
         legacy_path,
     )
@@ -127,7 +168,13 @@ fn validate_persisted_ciphertexts(
              UNION ALL SELECT 'sync-provider',config FROM sync_providers WHERE config!='' \
              UNION ALL SELECT 'sync-password',value FROM sync_settings \
                  WHERE key='sync_password' AND value!='' \
-             UNION ALL SELECT 'account-session',token FROM account_session WHERE token!=''",
+             UNION ALL SELECT 'account-session',token FROM account_session WHERE token!='' \
+             UNION ALL SELECT 'backup-target',config FROM backup_targets WHERE config!='' \
+             UNION ALL SELECT 'backup-password',value FROM backup_settings WHERE key='backup_password' AND value!='' \
+             UNION ALL SELECT 'backup-cleanup-target',config FROM backup_cloud_cleanup \
+             UNION ALL SELECT 'outbox',payload FROM realtime_outbox \
+             UNION ALL SELECT 'data-key',local_key FROM realtime_state WHERE local_key IS NOT NULL \
+             UNION ALL SELECT 'sync-password-v2',password FROM realtime_state WHERE password IS NOT NULL",
         )
         .map_err(CommandError::database)?;
     let rows = statement
@@ -137,12 +184,40 @@ fn validate_persisted_ciphertexts(
         .map_err(CommandError::database)?;
     for row in rows {
         let (kind, ciphertext) = row.map_err(CommandError::database)?;
-        encryptor.decrypt(&ciphertext).map_err(|_| {
+        Zeroizing::new(encryptor.decrypt(&ciphertext).map_err(|_| {
             CommandError::new(
                 "MASTER_KEY_VALIDATION",
                 format!("master key cannot decrypt persisted {kind} data"),
             )
-        })?;
+        })?);
+    }
+    for table in [
+        "realtime_safety",
+        "backup_safety",
+        "backup_restore_previews",
+    ] {
+        let exists: bool = connection
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name=?1)",
+                [table],
+                |r| r.get(0),
+            )
+            .map_err(CommandError::database)?;
+        if !exists {
+            continue;
+        }
+        let mut statement = connection
+            .prepare(&format!("SELECT payload FROM {table}"))
+            .map_err(CommandError::database)?;
+        let rows = statement
+            .query_map([], |r| r.get::<_, String>(0))
+            .map_err(CommandError::database)?;
+        for row in rows {
+            let encrypted = row.map_err(CommandError::database)?;
+            let _plain = Zeroizing::new(encryptor.decrypt(&encrypted).map_err(|_| {
+                CommandError::new("MASTER_KEY_VALIDATION", "设备密钥无法解密安全快照")
+            })?);
+        }
     }
     Ok(())
 }

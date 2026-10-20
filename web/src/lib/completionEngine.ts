@@ -1,3 +1,4 @@
+import type { CompletionGeneratorRequest, CompletionData } from '@/types/completion'
 // Completion engine: tokenization, spec traversal, static matching and
 // dynamic generator resolution.
 
@@ -25,8 +26,7 @@ export interface CompletionResult {
 
 export type ParserKey = 'git-branch' | 'docker-ps' | 'kubectl-name' | 'file-list' | 'line-list' | 'directory-list'
 
-export interface DynamicGenerator {
-  script: string
+export interface DynamicGenerator extends CompletionGeneratorRequest {
   cacheTtl: number
   parser: ParserKey
   dirsOnly?: boolean
@@ -41,6 +41,8 @@ interface ResolutionState {
   path: Array<Spec | Subcommand>
   level: Spec | Subcommand
   argSource?: Arg
+  usedOptions: Set<string>
+  endOfOptions: boolean
 }
 
 interface TokenParseState {
@@ -103,19 +105,20 @@ export function getSuggestions(ctx: CompletionContext): CompletionResult {
   const state = resolveState(ctx)
   if (!state) return { suggestions: [] }
 
-  const currentArgSource = state.argSource ?? resolveCurrentTokenArgSource(state.path, ctx.currentToken)
+  const currentArgSource = state.argSource ?? (!state.endOfOptions ? resolveCurrentTokenArgSource(state.path, ctx.currentToken) : undefined)
   if (currentArgSource) {
     return { suggestions: getArgSuggestions(currentArgSource, currentValue) }
   }
 
   const suggestions: Suggestion[] = []
+  if (state.endOfOptions) return { suggestions: getArgSuggestions(state.level.args, currentValue) }
   if (currentValue.startsWith('-')) {
-    appendOptionSuggestions(suggestions, getAvailableOptions(state.path), currentValue)
+    appendOptionSuggestions(suggestions, getAvailableOptions(state.path).filter((option) => (option.repeatable || !state.usedOptions.has(option.name)) && !option.exclusiveWith?.some((name) => state.usedOptions.has(name))), currentValue)
     return { suggestions: dedupeSuggestions(suggestions) }
   }
 
   appendSubcommandSuggestions(suggestions, state.level.subcommands, currentValue)
-  appendOptionSuggestions(suggestions, getAvailableOptions(state.path), currentValue)
+  appendOptionSuggestions(suggestions, getAvailableOptions(state.path).filter((option) => (option.repeatable || !state.usedOptions.has(option.name)) && !option.exclusiveWith?.some((name) => state.usedOptions.has(name))), currentValue)
   suggestions.push(...getArgSuggestions(state.level.args, currentValue))
   return { suggestions: dedupeSuggestions(suggestions) }
 }
@@ -133,36 +136,24 @@ function getKubectlNamespace(tokens: string[]): string {
   return 'default'
 }
 
-function renderScript(script: string, ctx: CompletionContext, cwd?: string): string {
-  return script
-    .replace(/\{\{namespace\}\}/g, getKubectlNamespace(ctx.tokens))
-    .replace(/\{\{cwd\}\}/g, cwd ?? '')
-}
-
-function buildFileListScript(currentToken: string): string {
-  const lastSlash = currentToken.lastIndexOf('/')
-  const dir = lastSlash >= 0 ? currentToken.slice(0, lastSlash + 1) : '.'
-  const escapedDir = dir.replace(/'/g, "'\\''")
-  return `ls -1 -A -F '${escapedDir}' 2>/dev/null`
-}
-
-export function getDynamicGenerator(ctx: CompletionContext, cwd?: string): DynamicGenerator | null {
+export function getDynamicGenerator(ctx: CompletionContext): DynamicGenerator | null {
   if (ctx.cursorTokenIndex === 0) return null
 
   const state = resolveState(ctx)
   if (!state) return null
 
   const currentValue = getCurrentCompletionValue(ctx.currentToken)
-  const currentArgSource = state.argSource ?? resolveCurrentTokenArgSource(state.path, ctx.currentToken)
-  if (!currentArgSource && currentValue.startsWith('-')) return null
+  const currentArgSource = state.argSource ?? (!state.endOfOptions ? resolveCurrentTokenArgSource(state.path, ctx.currentToken) : undefined)
+  if (!state.endOfOptions && !currentArgSource && currentValue.startsWith('-')) return null
 
-  const arg = currentArgSource ?? state.level.args
+  const arg = state.endOfOptions && ctx.tokens[0] === 'git' ? { fileGenerator: { dirsOnly: false } } : currentArgSource ?? state.level.args
   if (!arg) return null
 
   if (arg.fileGenerator) {
     const isCd = isCdPathContext(ctx)
     return {
-      script: buildFileListScript(extractCurrentTokenRawValue(ctx.currentToken)),
+      generatorId: 'paths',
+      params: pathGeneratorParams(ctx.currentToken),
       cacheTtl: arg.fileGenerator.cacheTtl ?? 3000,
       // cd 命令走 directory-list，产出可级联展开的 directory 候选；
       // 其它文件命令保持 file-list（文件+目录混合，type:'arg'）。
@@ -173,7 +164,8 @@ export function getDynamicGenerator(ctx: CompletionContext, cwd?: string): Dynam
 
   if (!arg.generator) return null
   return {
-    script: renderScript(arg.generator.script, ctx, cwd),
+    generatorId: arg.generator.generatorId,
+    params: { ...arg.generator.params, ...(arg.generator.generatorId === 'kubectl-resources' ? { namespace: getKubectlNamespace(ctx.tokens) } : {}) },
     cacheTtl: arg.generator.cacheTtl ?? 10000,
     parser: arg.generator.parser ?? 'git-branch',
   }
@@ -409,6 +401,8 @@ function resolveState(ctx: CompletionContext): ResolutionState | null {
   let level: Spec | Subcommand = spec
   const path: Array<Spec | Subcommand> = [spec]
   let pendingArg: Arg | undefined
+  let endOfOptions = false
+  const usedOptions = new Set<string>()
 
   for (let i = 1; i < ctx.cursorTokenIndex; i++) {
     const token = decodeToken(ctx.tokens[i] ?? '')
@@ -417,8 +411,11 @@ function resolveState(ctx: CompletionContext): ResolutionState | null {
       continue
     }
 
+    if (token === '--') { endOfOptions = true; continue }
+    if (endOfOptions) continue
     const optionMatch = matchOptionToken(path, token)
     if (optionMatch) {
+      usedOptions.add(optionMatch.option.name)
       if (!optionMatch.usesEquals) {
         pendingArg = optionMatch.option.args
       }
@@ -443,7 +440,7 @@ function resolveState(ctx: CompletionContext): ResolutionState | null {
     return null
   }
 
-  return { path, level, argSource: pendingArg }
+  return { path, level, argSource: pendingArg, usedOptions, endOfOptions }
 }
 
 function findOption(path: Array<Spec | Subcommand>, token: string): Option | undefined {
@@ -583,5 +580,37 @@ function encodeCompletionText(text: string, quote: '"' | "'" | null): string {
   if (quote === '"') {
     return text.replace(/["\\$`]/g, '\\$&')
   }
-  return text.replace(/([^A-Za-z0-9_./-])/g, '\\$1')
+  return text.replace(/([^\p{L}\p{M}\p{N}_./-])/gu, '\\$1')
+}
+
+
+export function pathGeneratorParams(token: string) {
+  const value = getCurrentCompletionValue(token)
+  const slash = value.lastIndexOf('/')
+  return { directory: slash >= 0 ? value.slice(0, slash + 1) : '.', prefix: slash >= 0 ? value.slice(slash + 1) : value }
+}
+
+export function parseCompletionData(data: CompletionData, currentToken: string, parser: ParserKey, dirsOnly = false): Suggestion[] {
+  if ((parser === 'file-list' || parser === 'directory-list') && data.candidates) {
+    const value = getCurrentCompletionValue(currentToken)
+    const slash = value.lastIndexOf('/')
+    const directory = slash >= 0 ? value.slice(0, slash + 1) : ''
+    const prefix = slash >= 0 ? value.slice(slash + 1) : value
+    return data.candidates.filter((candidate) => candidate.name.startsWith(prefix) && (!dirsOnly || candidate.is_dir))
+      .map((candidate) => ({ name: directory + candidate.name + (candidate.is_dir ? '/' : ''), displayName: candidate.name + (candidate.is_dir ? '/' : ''), type: parser === 'directory-list' ? 'directory' as const : 'arg' as const, isDir: candidate.is_dir, origin: 'dynamic' as const }))
+  }
+  return parseDynamicOutputByParser(data.output, currentToken, parser, dirsOnly)
+}
+
+
+/** Static entries remain first; deterministic ties avoid selection jumping on async merges. */
+export function rankCompletionCandidates(input: Suggestion[]): Suggestion[] {
+  return dedupeSuggestions(input).sort((a, b) => {
+    const origin = Number(b.origin === 'static') - Number(a.origin === 'static')
+    if (origin) return origin
+    if (a.type === 'history' && b.type === 'history' && a.count !== b.count) return (b.count ?? 0) - (a.count ?? 0)
+    const directory = Number(Boolean(b.isDir)) - Number(Boolean(a.isDir))
+    if (directory) return directory
+    return a.name < b.name ? -1 : a.name > b.name ? 1 : a.type < b.type ? -1 : a.type > b.type ? 1 : 0
+  }).slice(0, 200)
 }

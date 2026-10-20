@@ -15,11 +15,11 @@ SFTP 由 `src-tauri/src/sftp/` 实现，React 封装位于 `web/src/api/sftp.ts`
 ## 传输
 
 - `sftp_upload_begin` / `sftp_upload_chunk` / `sftp_upload_finish` / `sftp_upload_abort`：
-  浏览器通过 `File.stream()` 顺序推送原生二进制块，Rust 直接写入目标文件；单块 512 KiB，
-  后端硬限制 1 MiB。每次 invoke 仅在目标 writer 写入完成后返回，形成端到端背压；异常或取消
-  会关闭 writer 并删除未完成的目标文件。Android/iOS 使用同尺寸的 Base64 分块 command，
+  浏览器通过 `File.stream()` 顺序推送原生二进制块，将 WebView 产生的小片段合并为 512 KiB，
+  后端硬限制 1 MiB。Rust 复用暂存文件句柄，每次 invoke 仅在写入确认及同步完成后返回，形成
+  端到端背压；暂停或异常关闭句柄并保留检查点，取消清理暂存文件。Android/iOS 使用同尺寸的 Base64 分块 command，
   避开移动端 WebView 对 raw invoke body/response 的限制，仍不会聚合完整文件。
-- `sftp_download`：Rust 以 128 KiB 缓冲从 SFTP 流式落盘；多文件/目录先流式复制到临时目录，
+- `sftp_download`：Rust 以 1 MiB 检查点从 SFTP 流式落盘，连续读取复用句柄和有界预读；多文件/目录先流式复制到临时目录，
   再直接写入 ZIP 文件，全程不聚合文件内容到内存。
 - `sftp_download_chunk` / `sftp_download_close`：前端以 `ReadableStream` 按 offset 拉取 512 KiB
   二进制块；EOF、取消或读取异常都会调用 close 删除落盘文件和任务。
@@ -28,6 +28,10 @@ SFTP 由 `src-tauri/src/sftp/` 实现，React 封装位于 `web/src/api/sftp.ts`
 
 冲突策略为 `ask`、`overwrite`、`rename`、`skip`。进度通过
 `eizhu-sftp-message` event 推送，任务状态仍可轮询，最多同时执行五个传输。
+文件传输不计算内容摘要，也不为恢复或覆盖检测回读文件内容；断点恢复检查源文件大小和修改时间、
+暂存文件大小及已确认偏移，覆盖检测使用目标大小和修改时间。无法识别大小和修改时间均未变化的
+内容修改。重复上传块仅按需读取该块并逐字节比较。旧检查点中的摘要字段会被忽略，无需迁移数据库。
+界面在提交期间显示“正在完成”，提交成功后才显示 100%。
 
 ## 连接能力
 

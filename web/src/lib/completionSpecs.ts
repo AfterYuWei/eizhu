@@ -1,3 +1,4 @@
+import type { CompletionGeneratorId, CompletionParams } from '@/types/completion'
 // 自建补全 Spec（精简数据格式，非 Fig 运行时格式）
 
 export type SuggestionType = 'command' | 'subcommand' | 'option' | 'arg' | 'directory' | 'history'
@@ -22,7 +23,8 @@ export interface Arg {
   name?: string
   description?: string
   generator?: {
-    script: string
+    generatorId: CompletionGeneratorId
+    params?: CompletionParams
     cacheTtl?: number
     parser?: 'git-branch' | 'docker-ps' | 'kubectl-name' | 'line-list'
   }
@@ -34,6 +36,8 @@ export interface Arg {
 }
 
 export interface Option {
+  repeatable?: boolean
+  exclusiveWith?: string[]
   name: string
   description?: string
   args?: Arg
@@ -57,7 +61,7 @@ export interface Spec {
 
 const namespaceArg: Arg = {
   generator: {
-    script: 'kubectl get namespaces -o name',
+    generatorId: 'kubectl-resources', params: { resource: 'namespaces' },
     cacheTtl: 10000,
     parser: 'kubectl-name',
   },
@@ -76,54 +80,54 @@ const fileArg = (dirsOnly = false): Arg => ({
   fileGenerator: { dirsOnly, cacheTtl: 3000 },
 })
 
-const lineListArg = (script: string, cacheTtl = 5000): Arg => ({
+const lineListArg = (generatorId: CompletionGeneratorId, cacheTtl = 5000): Arg => ({
   generator: {
-    script,
+    generatorId,
     cacheTtl,
     parser: 'line-list',
   },
 })
 
 const gitBranchArg: Arg = {
-  generator: { script: 'git branch --list', cacheTtl: 5000, parser: 'git-branch' },
+  generator: { generatorId: 'git-branches', cacheTtl: 5000, parser: 'git-branch' },
 }
 
-const gitRemoteArg: Arg = lineListArg('git remote', 5000)
+const gitRemoteArg: Arg = lineListArg('git-remotes', 5000)
 
 const dockerContainerArg = (all = false): Arg => ({
   generator: {
-    script: all ? "docker ps -a --format '{{.ID}}\\t{{.Names}}'" : "docker ps --format '{{.ID}}\\t{{.Names}}'",
+    generatorId: 'docker-containers', params: { all },
     cacheTtl: 3000,
     parser: 'docker-ps',
   },
 })
 
 const kubectlPodArg: Arg = {
-  generator: { script: 'kubectl get pods -o name -n {{namespace}}', cacheTtl: 3000, parser: 'kubectl-name' },
+  generator: { generatorId: 'kubectl-resources', params: { resource: 'pods' }, cacheTtl: 3000, parser: 'kubectl-name' },
 }
 
-const systemdServiceUnitsArg = lineListArg(`systemctl list-unit-files --type=service --no-pager --no-legend 2>/dev/null | awk '{print $1}'`, 10000)
-const systemdActiveUnitsArg = lineListArg(`systemctl list-units --type=service --no-pager --no-legend 2>/dev/null | awk '{print $1}'`, 10000)
-const systemdFailedUnitsArg = lineListArg(`systemctl list-units --state=failed --type=service --no-pager --no-legend 2>/dev/null | awk '{print $1}'`, 10000)
+const systemdServiceUnitsArg = lineListArg('systemd-service-units', 10000)
+const systemdActiveUnitsArg = lineListArg('systemd-active-units', 10000)
+const systemdFailedUnitsArg = lineListArg('systemd-failed-units', 10000)
 
-const npmScriptArg = lineListArg(`node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('package.json','utf8'));for(const key of Object.keys((p&&p.scripts)||{})){console.log(key)}"`, 10000)
+const npmScriptArg = lineListArg('npm-scripts', 10000)
 
 const k8sResourceTypes: Subcommand[] = [
   { name: 'pods', description: 'Pod', args: kubectlPodArg },
-  { name: 'deployments', description: 'Deployment', args: { generator: { script: 'kubectl get deployments -o name -n {{namespace}}', cacheTtl: 3000, parser: 'kubectl-name' } } },
-  { name: 'services', description: 'Service', args: { generator: { script: 'kubectl get services -o name -n {{namespace}}', cacheTtl: 3000, parser: 'kubectl-name' } } },
-  { name: 'configmaps', description: 'ConfigMap', args: { generator: { script: 'kubectl get configmaps -o name -n {{namespace}}', cacheTtl: 3000, parser: 'kubectl-name' } } },
-  { name: 'secrets', description: 'Secret', args: { generator: { script: 'kubectl get secrets -o name -n {{namespace}}', cacheTtl: 3000, parser: 'kubectl-name' } } },
-  { name: 'nodes', description: 'Node', args: { generator: { script: 'kubectl get nodes -o name', cacheTtl: 10000, parser: 'kubectl-name' } } },
+  { name: 'deployments', description: 'Deployment', args: { generator: { generatorId: 'kubectl-resources', params: { resource: 'deployments' }, cacheTtl: 3000, parser: 'kubectl-name' } } },
+  { name: 'services', description: 'Service', args: { generator: { generatorId: 'kubectl-resources', params: { resource: 'services' }, cacheTtl: 3000, parser: 'kubectl-name' } } },
+  { name: 'configmaps', description: 'ConfigMap', args: { generator: { generatorId: 'kubectl-resources', params: { resource: 'configmaps' }, cacheTtl: 3000, parser: 'kubectl-name' } } },
+  { name: 'secrets', description: 'Secret', args: { generator: { generatorId: 'kubectl-resources', params: { resource: 'secrets' }, cacheTtl: 3000, parser: 'kubectl-name' } } },
+  { name: 'nodes', description: 'Node', args: { generator: { generatorId: 'kubectl-resources', params: { resource: 'nodes' }, cacheTtl: 10000, parser: 'kubectl-name' } } },
   { name: 'namespaces', description: 'Namespace', args: namespaceArg },
-  { name: 'ingresses', description: 'Ingress', args: { generator: { script: 'kubectl get ingresses -o name -n {{namespace}}', cacheTtl: 3000, parser: 'kubectl-name' } } },
-  { name: 'jobs', description: 'Job', args: { generator: { script: 'kubectl get jobs -o name -n {{namespace}}', cacheTtl: 3000, parser: 'kubectl-name' } } },
-  { name: 'cronjobs', description: 'CronJob', args: { generator: { script: 'kubectl get cronjobs -o name -n {{namespace}}', cacheTtl: 3000, parser: 'kubectl-name' } } },
-  { name: 'statefulsets', description: 'StatefulSet', args: { generator: { script: 'kubectl get statefulsets -o name -n {{namespace}}', cacheTtl: 3000, parser: 'kubectl-name' } } },
-  { name: 'daemonsets', description: 'DaemonSet', args: { generator: { script: 'kubectl get daemonsets -o name -n {{namespace}}', cacheTtl: 3000, parser: 'kubectl-name' } } },
-  { name: 'replicasets', description: 'ReplicaSet', args: { generator: { script: 'kubectl get replicasets -o name -n {{namespace}}', cacheTtl: 3000, parser: 'kubectl-name' } } },
-  { name: 'persistentvolumeclaims', description: 'PVC', args: { generator: { script: 'kubectl get persistentvolumeclaims -o name -n {{namespace}}', cacheTtl: 3000, parser: 'kubectl-name' } } },
-  { name: 'serviceaccounts', description: 'ServiceAccount', args: { generator: { script: 'kubectl get serviceaccounts -o name -n {{namespace}}', cacheTtl: 3000, parser: 'kubectl-name' } } },
+  { name: 'ingresses', description: 'Ingress', args: { generator: { generatorId: 'kubectl-resources', params: { resource: 'ingresses' }, cacheTtl: 3000, parser: 'kubectl-name' } } },
+  { name: 'jobs', description: 'Job', args: { generator: { generatorId: 'kubectl-resources', params: { resource: 'jobs' }, cacheTtl: 3000, parser: 'kubectl-name' } } },
+  { name: 'cronjobs', description: 'CronJob', args: { generator: { generatorId: 'kubectl-resources', params: { resource: 'cronjobs' }, cacheTtl: 3000, parser: 'kubectl-name' } } },
+  { name: 'statefulsets', description: 'StatefulSet', args: { generator: { generatorId: 'kubectl-resources', params: { resource: 'statefulsets' }, cacheTtl: 3000, parser: 'kubectl-name' } } },
+  { name: 'daemonsets', description: 'DaemonSet', args: { generator: { generatorId: 'kubectl-resources', params: { resource: 'daemonsets' }, cacheTtl: 3000, parser: 'kubectl-name' } } },
+  { name: 'replicasets', description: 'ReplicaSet', args: { generator: { generatorId: 'kubectl-resources', params: { resource: 'replicasets' }, cacheTtl: 3000, parser: 'kubectl-name' } } },
+  { name: 'persistentvolumeclaims', description: 'PVC', args: { generator: { generatorId: 'kubectl-resources', params: { resource: 'persistentvolumeclaims' }, cacheTtl: 3000, parser: 'kubectl-name' } } },
+  { name: 'serviceaccounts', description: 'ServiceAccount', args: { generator: { generatorId: 'kubectl-resources', params: { resource: 'serviceaccounts' }, cacheTtl: 3000, parser: 'kubectl-name' } } },
 ]
 
 const gitSpec: Spec = {
@@ -136,10 +140,10 @@ const gitSpec: Spec = {
   ],
   subcommands: [
     { name: 'add', description: '添加文件到暂存区', options: [{ name: '-A' }, { name: '-u' }, { name: '-p' }], args: fileArg() },
-    { name: 'commit', description: '提交暂存区', options: [{ name: '-m', args: { name: 'message' } }, { name: '--amend' }, { name: '-a' }] },
+    { name: 'commit', description: '提交暂存区', options: [{ name: '-m', repeatable: true, args: { name: 'message' } }, { name: '--amend' }, { name: '-a' }] },
     { name: 'push', description: '推送提交', options: [{ name: '-u' }, { name: '-f' }, { name: '--tags' }] },
     { name: 'pull', description: '拉取并合并', options: [{ name: '--rebase' }, { name: '--no-commit' }] },
-    { name: 'checkout', description: '切换分支或恢复文件', options: [{ name: '-b' }, { name: '-B' }], args: gitBranchArg },
+    { name: 'checkout', description: '切换分支或恢复文件', options: [{ name: '-b', exclusiveWith: ['-B'] }, { name: '-B', exclusiveWith: ['-b'] }], args: gitBranchArg },
     { name: 'branch', description: '管理分支', options: [{ name: '-a' }, { name: '-d' }, { name: '-m' }], args: gitBranchArg },
     { name: 'merge', description: '合并分支', options: [{ name: '--no-ff' }, { name: '--squash' }], args: gitBranchArg },
     { name: 'rebase', description: '变基', options: [{ name: '-i' }, { name: '--abort' }], args: gitBranchArg },
@@ -189,7 +193,7 @@ const dockerSpec: Spec = {
         { name: '--name', args: { name: 'name' } },
         { name: '-p', args: { name: 'port' } },
         { name: '-v', args: { name: 'volume' } },
-        { name: '-e', args: { name: 'env' } },
+        { name: '-e', repeatable: true, args: { name: 'env' } },
         { name: '--rm' },
         { name: '--network', args: { name: 'network' } },
       ],
@@ -230,8 +234,8 @@ const kubectlSpec: Spec = {
   description: 'Kubernetes CLI',
   options: [
     { name: '--help', description: '显示帮助' },
-    { name: '-n', description: '指定命名空间', args: namespaceArg },
-    { name: '--namespace', description: '指定命名空间', args: namespaceArg },
+    { name: '-n', exclusiveWith: ['--namespace'], description: '指定命名空间', args: namespaceArg },
+    { name: '--namespace', exclusiveWith: ['-n'], description: '指定命名空间', args: namespaceArg },
     { name: '--kubeconfig', description: '指定 kubeconfig 文件', args: fileArg() },
     { name: '-o', description: '输出格式', args: outputFormatArg },
     { name: '-v', description: '日志级别', args: { name: 'level' } },
@@ -241,8 +245,8 @@ const kubectlSpec: Spec = {
       name: 'get',
       description: '获取资源',
       options: [
-        { name: '-n', args: namespaceArg },
-        { name: '--namespace', args: namespaceArg },
+        { name: '-n', exclusiveWith: ['--namespace'], args: namespaceArg },
+        { name: '--namespace', exclusiveWith: ['-n'], args: namespaceArg },
         { name: '-o', args: outputFormatArg },
         { name: '-w' },
         { name: '--all-namespaces' },
@@ -250,14 +254,14 @@ const kubectlSpec: Spec = {
       subcommands: k8sResourceTypes,
     },
     { name: 'describe', description: '查看资源详情', subcommands: k8sResourceTypes },
-    { name: 'logs', description: '查看日志', options: [{ name: '-n', args: namespaceArg }, { name: '--namespace', args: namespaceArg }, { name: '-f' }, { name: '--tail', args: { name: 'lines' } }, { name: '-p' }, { name: '--previous' }], args: kubectlPodArg },
-    { name: 'exec', description: '进入容器', options: [{ name: '-n', args: namespaceArg }, { name: '--namespace', args: namespaceArg }, { name: '-it' }, { name: '--' }], args: kubectlPodArg },
+    { name: 'logs', description: '查看日志', options: [{ name: '-n', exclusiveWith: ['--namespace'], args: namespaceArg }, { name: '--namespace', exclusiveWith: ['-n'], args: namespaceArg }, { name: '-f' }, { name: '--tail', args: { name: 'lines' } }, { name: '-p' }, { name: '--previous' }], args: kubectlPodArg },
+    { name: 'exec', description: '进入容器', options: [{ name: '-n', exclusiveWith: ['--namespace'], args: namespaceArg }, { name: '--namespace', exclusiveWith: ['-n'], args: namespaceArg }, { name: '-it' }, { name: '--' }], args: kubectlPodArg },
     { name: 'apply', description: '应用配置', options: [{ name: '-f', args: fileArg() }, { name: '-k', args: fileArg(true) }, { name: '--dry-run' }] },
     { name: 'delete', description: '删除资源', options: [{ name: '-f', args: fileArg() }, { name: '--grace-period', args: { name: 'seconds' } }], subcommands: k8sResourceTypes },
     { name: 'create', description: '创建资源' },
     { name: 'edit', description: '编辑资源', subcommands: k8sResourceTypes },
     { name: 'scale', description: '伸缩副本', subcommands: k8sResourceTypes },
-    { name: 'port-forward', description: '端口转发', options: [{ name: '-n', args: namespaceArg }, { name: '--namespace', args: namespaceArg }], args: kubectlPodArg },
+    { name: 'port-forward', description: '端口转发', options: [{ name: '-n', exclusiveWith: ['--namespace'], args: namespaceArg }, { name: '--namespace', exclusiveWith: ['-n'], args: namespaceArg }], args: kubectlPodArg },
     {
       name: 'rollout',
       description: '滚动管理',
@@ -273,7 +277,7 @@ const kubectlSpec: Spec = {
       description: '配置管理',
       subcommands: [
         { name: 'view', description: '查看配置' },
-        { name: 'use-context', description: '切换上下文', args: lineListArg('kubectl config get-contexts -o name', 10000) },
+        { name: 'use-context', description: '切换上下文', args: lineListArg('kubectl-contexts', 10000) },
         { name: 'get-contexts', description: '列出上下文' },
         { name: 'current-context', description: '当前上下文' },
       ],

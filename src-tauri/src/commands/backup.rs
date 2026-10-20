@@ -4,10 +4,9 @@ use serde::Serialize;
 use tauri::State;
 
 use crate::{
-    backup::{BackupImportResult, BackupPreview, BackupService},
+    backup::{BackupImportResult, BackupPreview},
     error::CommandError,
     infrastructure::platform::document_gateway::DocumentGateway,
-    sync::SyncService,
 };
 
 #[derive(Serialize)]
@@ -84,12 +83,17 @@ pub(crate) async fn backup_pick_file(
 #[tauri::command]
 pub(crate) async fn backup_export(
     app: tauri::AppHandle,
-    service: State<'_, BackupService>,
+    service_workspace: State<'_, crate::app::WorkspaceManager>,
     mode: String,
     password: Option<String>,
+    workspace_generation: Option<u64>,
 ) -> Result<Option<String>, CommandError> {
+    let service = service_workspace
+        .current(workspace_generation)?
+        .backup
+        .clone();
     use tauri_plugin_dialog::DialogExt;
-    let service = service.inner().clone();
+    let service = service.clone();
     tauri::async_runtime::spawn_blocking(move || {
         let bytes = service.export_bytes(&mode, password.as_deref().unwrap_or_default())?;
         let Some(path) = app
@@ -116,11 +120,16 @@ pub(crate) async fn backup_export(
 pub(crate) async fn backup_export(
     app: tauri::AppHandle,
     gateway: State<'_, DocumentGateway>,
-    service: State<'_, BackupService>,
+    service_workspace: State<'_, crate::app::WorkspaceManager>,
     mode: String,
     password: Option<String>,
+    workspace_generation: Option<u64>,
 ) -> Result<Option<String>, CommandError> {
-    let service = service.inner().clone();
+    let service = service_workspace
+        .current(workspace_generation)?
+        .backup
+        .clone();
+    let service = service.clone();
     let bytes = tauri::async_runtime::spawn_blocking(move || {
         service.export_bytes(&mode, password.as_deref().unwrap_or_default())
     })
@@ -148,12 +157,17 @@ fn resolve_backup_path(
 
 #[tauri::command]
 pub(crate) async fn backup_preview(
-    service: State<'_, BackupService>,
+    service_workspace: State<'_, crate::app::WorkspaceManager>,
     gateway: State<'_, DocumentGateway>,
     file_path: String,
     password: Option<String>,
+    workspace_generation: Option<u64>,
 ) -> Result<BackupPreview, CommandError> {
-    let service = service.inner().clone();
+    let service = service_workspace
+        .current(workspace_generation)?
+        .backup
+        .clone();
+    let service = service.clone();
     let file_path = resolve_backup_path(gateway.inner(), &file_path)?;
     tauri::async_runtime::spawn_blocking(move || {
         service.preview(
@@ -167,14 +181,18 @@ pub(crate) async fn backup_preview(
 
 #[tauri::command]
 pub(crate) async fn backup_import(
-    service: State<'_, BackupService>,
+    service_workspace: State<'_, crate::app::WorkspaceManager>,
     gateway: State<'_, DocumentGateway>,
-    sync: State<'_, SyncService>,
     file_path: String,
     strategy: String,
     password: Option<String>,
+    workspace_generation: Option<u64>,
 ) -> Result<BackupImportResult, CommandError> {
-    let service = service.inner().clone();
+    let workspace = service_workspace.current(workspace_generation)?;
+    let service = workspace.backup.clone();
+    let sync = workspace.sync.clone();
+    let archive = workspace.archive.clone();
+    let service = service.clone();
     let document_reference = file_path
         .starts_with("document://")
         .then_some(file_path.clone());
@@ -196,5 +214,6 @@ pub(crate) async fn backup_import(
         gateway.release(&reference)?;
     }
     sync.notify_change();
+    archive.notify_change();
     Ok(result)
 }
