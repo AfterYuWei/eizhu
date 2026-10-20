@@ -29,7 +29,6 @@ let application = NSApplication.shared
 application.setActivationPolicy(.prohibited)
 
 let height = native("TOOLBAR_HEIGHT")
-let buttonSize = native("BUTTON_SIZE")
 require(height / 2 == targetCenter, "Rust and CSS toolbar heights must agree")
 
 // Compact/legacy metrics reproduce the 12pt buttons and different baseline that
@@ -60,7 +59,7 @@ for compact in [false, true] {
         window.setContentSize(size)
         let viewportBounds = window.contentView!.bounds
         viewport.frame = NSRect(x: 0, y: 0, width: viewportBounds.width, height: viewportBounds.height - (compact ? 4 : 0))
-        let drawingBounds = buttons.map { $0.bounds }
+        let nativeSizes = buttons.map { $0.frame.size }
         for _ in 0..<2 {
             let titlebar = buttons[0].superview!.superview!
             var frame = titlebar.frame
@@ -69,11 +68,11 @@ for compact in [false, true] {
             titlebar.frame = frame
             let content = viewport
             for (index, button) in buttons.enumerated() {
-                let bounds = button.bounds
                 let point = NSPoint(x: native("FIRST_BUTTON_CENTER_X") + Double(index) * native("BUTTON_SPACING"), y: content.isFlipped ? content.bounds.minY + height / 2 : content.bounds.maxY - height / 2)
                 let center = button.superview!.convert(point, from: content)
-                button.frame = NSRect(x: center.x - buttonSize / 2, y: center.y - buttonSize / 2, width: buttonSize, height: buttonSize)
-                button.bounds = bounds
+                var frame = button.frame
+                frame.origin = NSPoint(x: center.x - frame.width / 2, y: center.y - frame.height / 2)
+                button.frame = frame
                 button.needsDisplay = true
             }
             let rects = buttons.map { content.convert($0.bounds, from: $0) }
@@ -81,12 +80,12 @@ for compact in [false, true] {
             for center in centers {
                 require(abs(center - targetCenter) <= 0.5, "native center \(center) does not match CSS center \(targetCenter)")
             }
-            require(rects.allSatisfy { abs($0.width - buttonSize) < 0.1 && abs($0.height - buttonSize) < 0.1 }, "native hit targets must be \(buttonSize)pt")
-            require(buttons.enumerated().allSatisfy { abs($0.element.bounds.width - drawingBounds[$0.offset].width) < 0.001 && abs($0.element.bounds.height - drawingBounds[$0.offset].height) < 0.001 }, "drawing bounds must not compound across passes")
+            require(buttons.enumerated().allSatisfy { abs($0.element.frame.width - nativeSizes[$0.offset].width) < 0.001 && abs($0.element.frame.height - nativeSizes[$0.offset].height) < 0.001 }, "native button dimensions must be preserved")
+            require(buttons.enumerated().allSatisfy { abs(rects[$0.offset].width - nativeSizes[$0.offset].width) < 0.1 && abs(rects[$0.offset].height - nativeSizes[$0.offset].height) < 0.1 }, "native hit targets must match native button dimensions")
             require(rects.last!.maxX + 8 <= reservedWidth, "native buttons overlap toolbar reservation")
             require(!window.isVisible, "verification window must remain invisible")
         }
-        print("PASS compact=\(compact), \(Int(size.width))×\(Int(size.height)): native centers=\(targetCenter)pt, hit targets=\(buttonSize)pt")
+        print("PASS compact=\(compact), \(Int(size.width))×\(Int(size.height)): native centers=\(targetCenter)pt, native button dimensions preserved")
     }
     window.close()
 }

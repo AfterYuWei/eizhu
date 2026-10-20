@@ -1,12 +1,11 @@
 //! Native AppKit buttons aligned in webview coordinates, independent of SDK metrics.
 
 use objc2::{msg_send, runtime::AnyObject};
-use objc2_foundation::{NSPoint, NSRect, NSSize};
+use objc2_foundation::{NSPoint, NSRect};
 use tauri::{WebviewWindow, WindowEvent};
 
 // Read by scripts/verify-macos-window-chrome.swift as the production contract.
 const TOOLBAR_HEIGHT: f64 = 64.0;
-const BUTTON_SIZE: f64 = 16.0;
 const FIRST_BUTTON_CENTER_X: f64 = 31.0;
 const BUTTON_SPACING: f64 = 23.0;
 
@@ -84,21 +83,18 @@ unsafe fn align_buttons(window: &AnyObject, content: &AnyObject) {
         let Some(parent) = parent.as_ref() else {
             continue;
         };
-        let bounds: NSRect = msg_send![button, bounds];
+        let mut frame: NSRect = msg_send![button, frame];
         let center = NSPoint::new(
             FIRST_BUTTON_CENTER_X + index as f64 * BUTTON_SPACING,
             center_y,
         );
         let center: NSPoint = msg_send![parent, convertPoint: center, fromView: content];
-        let size = NSSize::new(BUTTON_SIZE, BUTTON_SIZE);
-        let frame = NSRect::new(
-            NSPoint::new(center.x - size.width / 2.0, center.y - size.height / 2.0),
-            size,
-        );
+        // Keep AppKit's native button dimensions. Resizing these private
+        // titlebar controls can stretch their glyphs into horizontal ovals on
+        // compact macOS metrics; centering the original frame is sufficient.
+        frame.origin.x = center.x - frame.size.width / 2.0;
+        frame.origin.y = center.y - frame.size.height / 2.0;
         let _: () = msg_send![button, setFrame: frame];
-        // Preserve the original drawing bounds: 12pt/14pt native glyphs scale
-        // together with their hit area instead of being clipped in a bigger frame.
-        let _: () = msg_send![button, setBounds: bounds];
         let _: () = msg_send![button, setNeedsDisplay: true];
     }
 }
