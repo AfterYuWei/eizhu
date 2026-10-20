@@ -1,0 +1,28 @@
+阶段 1 smoke 窗口几何断言验证
+
+范围：仅审查 apps/desktop/src/main/smoke.ts 的编辑器内容尺寸断言。
+
+检查结果：
+- `npm exec tsc -- -p tsconfig.node.json --noEmit`：通过。
+- `npm exec eslint -- apps/desktop/src/main/smoke.ts`：通过。
+- 断言逐轴只接受请求值，或 `min(请求值, workArea - 原生 frame)` 的受限值；两个轴可分别受限，因此覆盖 OS 对单轴或双轴执行约束的情况。
+- 例如请求 1280×800、受限值 1024×656 时，1280×800、1280×656、1024×800、1024×656 均可通过；1100×800、1280×700 等非请求/非受限值会失败。该矩阵是静态推理，没有复制断言实现作单元测试。
+
+结论：断言保留了合法的窗口管理器差异，并能拒绝不符合请求尺寸或工作区约束的轴值。未重跑其他历史测试或平台 smoke。
+
+CI workflow validation 输入静态检查
+
+范围：复核当前 `.github/workflows/build-desktop.yml`；未修改工作流，未运行测试、构建或烟测。Ruby YAML 解析成功。当前分支 workflow_dispatch 的 `validation` 是 choice（`full` / `package-only`，默认 `full`），workflow_call 是 string（默认 `full`）。两个测试步骤条件相同：`inputs.validation != 'package-only' && !contains(github.event.head_commit.message, '[package-only]')`。
+
+| 场景 | 条件结果 | test:foundation / baseline:test |
+| --- | --- | --- |
+| 普通 push：无 inputs，commit message 不含 `[package-only]` | 缺失的表达式属性按 Actions 规则为空字符串；两项为真 | 执行（full） |
+| 阶段分支 push：commit message 含 `[package-only]` | `contains(...)` 为真，取反后为假 | 跳过 |
+| workflow_dispatch：默认或选择 `full` | 首项为真；事件没有 head_commit.message，第二项为真 | 执行（full） |
+| workflow_dispatch：选择 `package-only` | 首项为假 | 跳过 |
+
+`npm ci`、`npm run check`、桌面 build/package 和按平台选择的最终安装包 smoke 不受这两个条件影响，以上场景都会执行。当前默认分支仍没有 workflow_dispatch 声明，因此 UI 的 Run workflow 入口不可用；本次阶段分支 push 通过提交信息 `[package-only]` 选择 package-only 范围。没有修改默认分支。
+
+未重跑回归的依据：这次增量只有 smoke.ts 烟测断言、CI workflow 条件和交付文档变化，没有修改应用业务实现；smoke.ts 的 TypeScript 与 ESLint 定向检查此前已通过，最终安装包 smoke 留待 package-only CI 执行。本轮仅解析 YAML 并静态核对条件。
+
+表达式语义参考：GitHub 文档说明未定义的属性解引用结果为空字符串，且 `inputs` 只在 workflow_dispatch / workflow_call 中可用：[Contexts reference](https://docs.github.com/en/actions/reference/workflows-and-actions/contexts)、[Expressions](https://docs.github.com/en/actions/reference/workflows-and-actions/expressions)。

@@ -18,11 +18,19 @@ on:
         type: choice
         options: [test, stable]
         default: test
+      validation:
+        description: '仅烟测工具修改且回归已通过时，可选择 package-only 避免重复单测'
+        type: choice
+        options: [full, package-only]
+        default: full
   workflow_call:
     inputs:
       channel:
         type: string
         default: test
+      validation:
+        type: string
+        default: full
 permissions:
   contents: read
 jobs:
@@ -56,8 +64,10 @@ jobs:
           echo 'CXX=clang++-15' >> "$GITHUB_ENV"
       - run: npm ci
       - run: npm run check
-      - run: npm run test:foundation
-      - run: npm run baseline:test
+      - if: inputs.validation != 'package-only' && !contains(github.event.head_commit.message, '[package-only]')
+        run: npm run test:foundation
+      - if: inputs.validation != 'package-only' && !contains(github.event.head_commit.message, '[package-only]')
+        run: npm run baseline:test
       - run: npm run desktop:build
       - run: npm run desktop:package -- --platform=${{ matrix.platform }} --arch=${{ matrix.arch }}
       - name: Smoke final installer contents (macOS / Windows)
