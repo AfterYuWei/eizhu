@@ -1,7 +1,7 @@
 # 开发指南
 
 使用 Node 24 LTS、npm 和平台原生编译工具；Electron 运行时随安装包分发。执行一次根目录 `npm ci`，不要为子工作区生成锁文件。
-Windows 使用受支持的 Visual Studio C++ 工具，macOS 使用 Xcode Command Line Tools，Linux 需要 Clang/Clang++、Python、GTK/NSS、密钥库运行库及打包工具。Linux 原生重建与打包统一默认 Clang，显式 CC/CXX 配置继续生效。
+Windows 使用受支持的 Visual Studio C++ 工具，macOS 使用 Xcode Command Line Tools，Linux 需要支持 C++20 `std::source_location` 的 Clang 15+、Python、GTK/NSS、密钥库运行库及打包工具。Linux 原生重建与打包统一默认 Clang，显式 CC/CXX 配置继续生效；Ubuntu 22.04 CI 明确设置 `CC=clang-15`、`CXX=clang++-15`，不使用系统默认的 Clang 14。
 Electron 44 的 npm 包提供显式安装器；根 postinstall 会先运行官方安装器并校验分发包，再按 Electron ABI 重建原生模块，不能以 npm 依赖目录存在推断桌面运行时已安装。
 `npm run desktop:dev` 启动 electron-vite 和桌面应用。开发目录为系统应用数据根下 `eizhu-desktop-dev`，安装版为 `eizhu-desktop`，两者均不读取旧目录。
 

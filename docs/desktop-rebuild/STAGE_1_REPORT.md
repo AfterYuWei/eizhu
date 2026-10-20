@@ -2,7 +2,7 @@
 
 记录日期：2026-10-20。阶段 0 已获用户确认；本轮只实施阶段 1。
 
-**当前状态：基础工程已落地，阶段门禁尚未通过。** 本机 macOS x64 最终 DMG 内容烟测通过，并保存三张截图。首轮四目标 CI 失败日志现已读取，正在复验 Electron 分发安装、Linux 编译器和 Windows 样本换行保护；原生交互及桌面外壳确认也未完成。暂不进入阶段 2。
+**当前状态：基础工程已落地，阶段门禁尚未通过。** 本机 macOS x64 最终 DMG 内容烟测通过，并保存三张截图。第二轮 CI 的 macOS x64 最终包已通过，其余三目标修正已完成本机定向验证，等待新一轮远端复验；原生交互及桌面外壳确认也未完成。暂不进入阶段 2。
 
 ## 交付范围与差异
 
@@ -17,7 +17,7 @@
 | 数据目录 | 安装版 `eizhu-desktop`、开发版 `eizhu-desktop-dev`；Chromium 同样隔离 | 不查找或读取旧数据库、密钥、设置和任务；烟测另用临时目录 |
 | 密钥基础 | 系统密钥库优先；首次初始化受限文件兜底；已有密钥损坏、无法解锁或丢失时报错 | 文件兜底有单测和先前 macOS 烟测；各平台真实系统密钥库仍待验 |
 | 前端 | 桌面 React 组件、样式及交互保留；领域 DTO 归入 contracts；设置先水化再启动 UI | 领域接口预留，未实现操作返回 `STAGE_NOT_READY`，不以空数据或假成功冒充完成 |
-| 编辑器资源 | Monaco、字体、图标与 worker 本地打包；保留原有编辑器组件 | 先前包中真实执行 TS/JSON worker；远端文件、安全保存、真实脏标签保护属阶段 4 |
+| 编辑器资源 | Monaco、字体、图标与 worker 本地打包；保留原有编辑器组件 | 最新本机及远端 macOS x64 包真实执行 TS/JSON worker；远端文件、安全保存、真实脏标签保护属阶段 4 |
 | 打包 | Windows NSIS；macOS 分架构 DMG/ZIP；Linux AppImage/deb/rpm；四目标原生 CI | CI 已配置不等于执行通过；测试包不发布 Release |
 | 更新 | 保留 stable/test 及 updater 依赖，未实现更新检查明确报阶段未就绪 | 独立更新源、下载与候选固定、签名及真实升级属阶段 6 |
 
@@ -69,12 +69,13 @@
 | 固定兼容回归 | 本会话此前 10 项通过 | 两类旧备份、三种模式、负例、加密/同步向量及不可变清单；不代表生产导入器已实现 |
 | 独立补验 | Luna 通过 | 当前 `npm run check`、受影响主进程/契约代码 lint、架构检查及 5 份相关 Actions YAML 语法解析 |
 | 新增生命周期回归 | Luna 专项 6 项通过 | 等待真实退出、强杀后等待、超时/强杀失败、通道抛错及已退出进程；同时补查主进程/共享代码类型与受影响文件 lint，见专项证据 |
-| 固定样本 checkout 保护 | Luna 四类样本比对通过 | 新增 `.gitattributes` 禁止固定目录换行转换；强制 autocrlf 后的 JSON/两类备份/JPEG 与原文件字节一致，不宣称已修复 Windows CI |
+| 固定样本 checkout 保护 | Luna 四类样本比对通过 | 新增 `.gitattributes` 禁止固定目录换行转换；强制 autocrlf 后的 JSON/两类备份/JPEG 与原文件字节一致，第二轮 Windows CI 已通过固定样本检查 |
 | Electron 原生模块 | 最新 macOS x64 包通过 | SQLite、argon2、ssh2 模块与两个 Worker 在真实 Electron 进程树运行；不是仅在开发 Node 下加载 |
 | 最终 DMG 内容启动 | 最新 macOS x64 包通过 | Luna 从最终 DMG 取出应用后启动；Node/require 不可用，错误码、服务崩溃/恢复、设置持久化及本地 Monaco worker 均通过，等待应用真实退出并返回 0 |
+| 新增语言服务等待回归 | Luna 3 项通过 | 暂时未注册后成功、其他错误立即失败、15 秒超时；见 [专项记录](evidence/stage-1/smoke-fixes-check.txt) |
 | 最新源码 build/package | macOS x64 通过 | 原生依赖按 Electron ABI 重建，生成未签名 DMG/ZIP；自动审批曾因用量限制未执行，后经同一正常审批入口恢复并完成 |
 
-历史测试共 221 项通过，新增生命周期专项 6 项通过；子代理没有重复运行历史测试，且无法从当前临时目录独立取回旧日志，因此报告区分会话执行记录与新补验证据。[生命周期专项证据](evidence/stage-1/lifecycle-check.txt)保存本次结果；[机器可读状态](evidence/stage-1/review-status.json)记录边界；[最新最终包烟测](evidence/stage-1/mac-x64-package-smoke.json)与[先前包记录](evidence/stage-1/mac-x64-previous-package-smoke.json)分开保留，均已去掉本机临时目录地址。
+历史测试共 221 项通过，新增生命周期专项 6 项与语言服务等待专项 3 项通过；子代理没有重复运行历史测试，且无法从当前临时目录独立取回旧日志，因此报告区分会话执行记录与新补验证据。[生命周期专项证据](evidence/stage-1/lifecycle-check.txt)保存本次结果；[机器可读状态](evidence/stage-1/review-status.json)记录边界；[最新最终包烟测](evidence/stage-1/mac-x64-package-smoke.json)与[先前包记录](evidence/stage-1/mac-x64-previous-package-smoke.json)分开保留，均已去掉本机临时目录地址。
 
 最新烟测退出码为 0。日志仍记录 Electron 的空 icon 参数警告与 macOS Chromium `task_policy_set ... invalid argument` 行，未导致本次断言或退出失败；不将这些日志包装成零警告结果。
 
@@ -84,10 +85,10 @@
 
 | 目标 | 已有产物/执行 | 当前门禁 |
 |---|---|---|
-| macOS x64 | 本机最新 DMG 内容烟测通过；CI 首轮通过检查/回归/build，package 失败 | 远端打包待修；原生按钮、全屏、系统密钥库及人工 UI 确认待验 |
-| macOS arm64 | CI 首轮通过检查/回归/build，package 失败 | 无最终安装产物启动证据 |
-| Windows x64 | CI 首轮通过 npm ci、类型检查和基础测试，baseline:test 失败 | build/package/smoke 跳过；缩放、路径、ACL/密钥库未实测 |
-| Linux x64 | CI 首轮 npm ci 失败 | 后续检查、构建与烟测跳过；各发行版安装、X11/Wayland、权限/密钥库未实测 |
+| macOS x64 | 本机最新 DMG 与第二轮 CI 最终 DMG 烟测通过 | 最新修正继续远端复验；原生按钮、全屏、系统密钥库及人工 UI 确认待验 |
+| macOS arm64 | 第二轮 CI 已打包，smoke 在 Monaco 注册时序失败 | 有界等待修正待远端烟测 |
+| Windows x64 | 第二轮 CI 固定样本检查、构建与 NSIS 打包通过，smoke 尺寸断言失败 | 工作区尺寸修正待远端烟测；缩放、路径、ACL/密钥库未实测 |
+| Linux x64 | 第二轮 CI npm ci 在 Clang14 编译失败 | Clang15 待复验；后续检查、构建与烟测未执行；各发行版安装、X11/Wayland、权限/密钥库未实测 |
 
 首轮 [GitHub Actions #51](https://github.com/AfterYuWei/eizhu/actions/runs/39384397849) 对应上述提交，[机器矩阵](evidence/stage-1/ci-run-39384397849.json)保留实际通过与跳过的步骤。用户登录后已通过 GitHub 的原始日志页面读取底层错误；[首轮原因摘要](evidence/stage-1/ci-first-run-causes.txt)保存定位与核对结果。
 
@@ -100,9 +101,16 @@
 
 最新产物版本为 0.4.4，Electron 44.9.0、内置 Node 24.22.0、ABI 149。产物大小、SHA-256 和时间见机器可读状态。产物位于根目录 `artifacts/desktop/`，未签名，不作为正式发布。
 
-最新报告约 741ms 指 main 模块开始执行至窗口显示，未覆盖完整进程冷启动；内存快照包含额外 Monaco 测试窗口，不能当作空闲内存或混合负载性能结论。20 连接/4 活跃终端/5 路传输、P95 与 8 小时稳定性尚未执行。
+报告中的首窗口耗时指 main 模块开始执行至窗口显示，未覆盖完整进程冷启动；具体单次值见 JSON。内存快照包含额外 Monaco 测试窗口，不能当作空闲内存或混合负载性能结论。20 连接/4 活跃终端/5 路传输、P95 与 8 小时稳定性尚未执行。
 
 依赖已精确锁定用于验证，但四目标原生组合尚未全部验收。此前依赖审计记录为 8 项中危、2 项低危，无高危/严重项；主要涉及构建依赖链及 Monaco 相关依赖，不通过强制降级掩盖。签名、公证、证书和真实更新均未验证。
+
+第二轮 [GitHub Actions #52](https://github.com/AfterYuWei/eizhu/actions/runs/39386722963)，提交 `ddaa4176501bf5a99b6d5113322955d44efd1f44`，[矩阵及原因](evidence/stage-1/ci-retry-ddaa417.json)：macOS x64 的最终 DMG 烟测已通过；其余任务待以下修正复验。
+
+- Linux 已成功安装 Electron 分发，但 Clang 14 编译 V8 的 `std::source_location` 失败。Ubuntu 22.04 CI 改为明确使用已提供该能力的 Clang 15，并通过 CC/CXX 传入安装及打包流程。
+- Windows 固定样本检查和打包已通过；CI 工作区为 1024×728，系统将初始编辑器窗口限制到该大小，原测试硬编码 1280×800 失败。尺寸断言改为按显示器工作区和实际原生 frame 计算上限，记录 `editorGeometry`。产品默认仍为 1280×800。
+- macOS arm64 已完成打包，Monaco 烟测在异步语言注册完成前读取 TS worker，报 `TypeScript not registered!`。烟测只对 TS/JSON 已知的未注册状态进行最长 15 秒的等待，其他模块/worker/CSP 错误立即失败；仍须实际返回类型诊断及 JSON markers 才通过。
+- 新增语言服务等待的三项定向测试通过，不重新执行未受影响的本机历史回归；实际 Windows/arm64 烟测与 Linux 编译继续由远端验证。
 
 ## 文档与下一步门禁
 

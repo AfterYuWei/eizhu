@@ -1,4 +1,4 @@
-import { app, BrowserWindow as TestWindow } from 'electron'
+import { app, BrowserWindow as TestWindow, screen } from 'electron'
 import type { BrowserWindow } from 'electron'
 import { join } from 'node:path'
 import { writeFile } from 'node:fs/promises'
@@ -52,7 +52,22 @@ export async function runSmoke(options: {
   await writeFile(join(root, 'home-dark.png'), (await window.webContents.capturePage()).toPNG())
 
   const editor = windows.create('editor')
-  assert.deepEqual(editor.getContentSize(), [1280, 800])
+  const available = screen.getDisplayMatching(editor.getBounds()).workAreaSize
+  const content = editor.getContentSize()
+  const outer = editor.getSize()
+  const frameWidth = outer[0] - content[0]
+  const frameHeight = outer[1] - content[1]
+  const editorGeometry = {
+    requested: [1280, 800],
+    actual: content,
+    workArea: [available.width, available.height],
+    frame: [frameWidth, frameHeight],
+  }
+  // Windows CI has a 1024px display: the OS can constrain the initial native window to its work area.
+  assert.deepEqual(content, [
+    Math.min(1280, available.width - frameWidth),
+    Math.min(800, available.height - frameHeight),
+  ])
   await options.load(editor)
   await shown(editor)
   assert.equal(await windows.confirmTransition(), true)
@@ -120,6 +135,7 @@ export async function runSmoke(options: {
     crypto,
     renderer,
     editor: true,
+    editorGeometry,
     recovery: {
       failed,
       generation: restored.generation,

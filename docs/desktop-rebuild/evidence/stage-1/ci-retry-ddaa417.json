@@ -1,0 +1,96 @@
+{
+  "runId": 39386722963,
+  "runNumber": 52,
+  "url": "https://github.com/AfterYuWei/eizhu/actions/runs/39386722963",
+  "commit": "ddaa4176501bf5a99b6d5113322955d44efd1f44",
+  "branch": "codex/electron-stage-1",
+  "status": "completed",
+  "conclusion": "failure",
+  "recordedAt": "2026-10-20T07:35:01Z",
+  "detailLogs": "read-through-authenticated-GitHub-job-raw-log-pages",
+  "artifactsProduced": [
+    "eizhu-test-darwin-arm64",
+    "eizhu-test-darwin-x64",
+    "eizhu-test-win32-x64"
+  ],
+  "source": "GitHub Actions public run/jobs/artifacts API; GPT-6 Luna independent monitor",
+  "jobs": [
+    {
+      "target": "linux-x64",
+      "id": 118508210207,
+      "conclusion": "failure",
+      "failedStep": "npm ci",
+      "cause": "native:rebuild failed compiling cpu-features against Electron 44.9.0 headers with Clang 14; std::source_location was unavailable",
+      "notRun": [
+        "check",
+        "foundation",
+        "baseline",
+        "build",
+        "package",
+        "installer-smoke",
+        "AppImage-smoke"
+      ],
+      "artifactProduced": false
+    },
+    {
+      "target": "win32-x64",
+      "id": 118508210478,
+      "conclusion": "failure",
+      "passed": [
+        "npm ci",
+        "check",
+        "foundation",
+        "baseline",
+        "build",
+        "package"
+      ],
+      "failedStep": "Smoke final installer contents (macOS / Windows)",
+      "cause": "installed app smoke expected window bounds [1280, 800], observed [1024, 728]",
+      "artifactProduced": true
+    },
+    {
+      "target": "darwin-arm64",
+      "id": 118508210513,
+      "conclusion": "failure",
+      "passed": [
+        "npm ci",
+        "check",
+        "foundation",
+        "baseline",
+        "build",
+        "package"
+      ],
+      "failedStep": "Smoke final installer contents (macOS / Windows)",
+      "cause": "installed app smoke reported TypeScript not registered, then Smoke exit 1",
+      "artifactProduced": true
+    },
+    {
+      "target": "darwin-x64",
+      "id": 118508210538,
+      "conclusion": "success",
+      "passed": [
+        "npm ci",
+        "check",
+        "foundation",
+        "baseline",
+        "build",
+        "package",
+        "installer-smoke"
+      ],
+      "artifactProduced": true
+    }
+  ],
+  "installerSmoke": {
+    "attempted": [
+      "win32-x64",
+      "darwin-arm64",
+      "darwin-x64"
+    ],
+    "passed": ["darwin-x64"],
+    "failed": ["win32-x64", "darwin-arm64"],
+    "skipped": ["linux-x64"],
+    "appImageX11Smoke": "skipped on all jobs; Linux stopped at npm ci"
+  },
+  "rerunTriggered": false,
+  "evidenceDirectory": "artifacts/ci/retry-ddaa417/"
+}

@@ -39,7 +39,7 @@
   "keyMode": "restricted-file",
   "health": {
     "context": {
-      "runtimeId": "0b7b6a4f-5036-46b1-8c19-b33119841ab5",
+      "runtimeId": "037b31bf-9745-4c6f-b28d-9e4cf2bd097c",
       "workspaceId": "offline",
       "generation": 1
     },
@@ -57,7 +57,7 @@
     "bridge": "function",
     "health": {
       "context": {
-        "runtimeId": "0b7b6a4f-5036-46b1-8c19-b33119841ab5",
+        "runtimeId": "037b31bf-9745-4c6f-b28d-9e4cf2bd097c",
         "workspaceId": "offline",
         "generation": 1
       },
@@ -69,6 +69,24 @@
     "inputValidation": "BAD_REQUEST"
   },
   "editor": true,
+  "editorGeometry": {
+    "requested": [
+      1280,
+      800
+    ],
+    "actual": [
+      1280,
+      800
+    ],
+    "workArea": [
+      1920,
+      985
+    ],
+    "frame": [
+      0,
+      32
+    ]
+  },
   "recovery": {
     "failed": "RUNTIME_UNAVAILABLE",
     "generation": 2,
@@ -81,16 +99,16 @@
     "json": true,
     "model": true
   },
-  "firstWindowMs": 822.975443,
+  "firstWindowMs": 696.620926,
   "processMetrics": [
     {
       "type": "Browser",
       "memory": {
-        "workingSetSize": 174380,
-        "peakWorkingSetSize": 210988
+        "workingSetSize": 175436,
+        "peakWorkingSetSize": 208032
       },
       "cpu": {
-        "cumulativeCPUUsage": 1.258162,
+        "cumulativeCPUUsage": 1.261143,
         "percentCPUUsage": 0,
         "idleWakeupsPerSecond": 0
       }
@@ -98,11 +116,11 @@
     {
       "type": "GPU",
       "memory": {
-        "workingSetSize": 69660,
-        "peakWorkingSetSize": 71300
+        "workingSetSize": 69680,
+        "peakWorkingSetSize": 71372
       },
       "cpu": {
-        "cumulativeCPUUsage": 0.739014,
+        "cumulativeCPUUsage": 0.641328,
         "percentCPUUsage": 0,
         "idleWakeupsPerSecond": 0
       }
@@ -110,11 +128,11 @@
     {
       "type": "Utility",
       "memory": {
-        "workingSetSize": 29832,
-        "peakWorkingSetSize": 29832
+        "workingSetSize": 29848,
+        "peakWorkingSetSize": 29848
       },
       "cpu": {
-        "cumulativeCPUUsage": 0.144343,
+        "cumulativeCPUUsage": 0.124456,
         "percentCPUUsage": 0,
         "idleWakeupsPerSecond": 0
       }
@@ -122,11 +140,11 @@
     {
       "type": "Tab",
       "memory": {
-        "workingSetSize": 160252,
-        "peakWorkingSetSize": 160252
+        "workingSetSize": 160896,
+        "peakWorkingSetSize": 160896
       },
       "cpu": {
-        "cumulativeCPUUsage": 1.028951,
+        "cumulativeCPUUsage": 0.892645,
         "percentCPUUsage": 0,
         "idleWakeupsPerSecond": 0
       }
@@ -134,11 +152,11 @@
     {
       "type": "Tab",
       "memory": {
-        "workingSetSize": 161496,
-        "peakWorkingSetSize": 161496
+        "workingSetSize": 160248,
+        "peakWorkingSetSize": 160248
       },
       "cpu": {
-        "cumulativeCPUUsage": 0.632984,
+        "cumulativeCPUUsage": 0.669565,
         "percentCPUUsage": 0,
         "idleWakeupsPerSecond": 0
       }
@@ -146,11 +164,11 @@
     {
       "type": "Utility",
       "memory": {
-        "workingSetSize": 85824,
-        "peakWorkingSetSize": 85824
+        "workingSetSize": 85696,
+        "peakWorkingSetSize": 85696
       },
       "cpu": {
-        "cumulativeCPUUsage": 0.305595,
+        "cumulativeCPUUsage": 0.287459,
         "percentCPUUsage": 0,
         "idleWakeupsPerSecond": 0
       }
@@ -158,11 +176,11 @@
     {
       "type": "Tab",
       "memory": {
-        "workingSetSize": 271540,
-        "peakWorkingSetSize": 273468
+        "workingSetSize": 270952,
+        "peakWorkingSetSize": 272884
       },
       "cpu": {
-        "cumulativeCPUUsage": 1.563581,
+        "cumulativeCPUUsage": 1.529329,
         "percentCPUUsage": 0,
         "idleWakeupsPerSecond": 0
       }
@@ -173,5 +191,5 @@
     "home-dark.png",
     "editor-empty.png"
   ],
-  "evidenceNote": "2026-10-20 原生安装流程修正后，由Luna再次验收最新macOS x64最终DMG，退出码0；本机有Electron缓存。"
+  "evidenceNote": "Luna 独立上下文从最新本机 macOS x64 最终 DMG 启动；只替换临时数据目录，其他结果保留。"
 }

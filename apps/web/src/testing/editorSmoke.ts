@@ -1,4 +1,5 @@
 import { loader, monaco } from '@/lib/monaco'
+import { languageWorkerReady } from './languageWorkerReady'
 const result = document.getElementById('result')!
 async function check(): Promise<void> {
   await loader.init()
@@ -8,7 +9,10 @@ async function check(): Promise<void> {
     monaco.Uri.parse('inmemory://eizhu/smoke.ts'),
   )
   const editor = monaco.editor.create(document.getElementById('editor')!, { model })
-  const getWorker = await monaco.typescript.getTypeScriptWorker()
+  const getWorker = await languageWorkerReady(
+    () => monaco.typescript.getTypeScriptWorker(),
+    'TypeScript not registered!',
+  )
   const worker = await getWorker(model.uri)
   const diagnostics = await worker.getSemanticDiagnostics(model.uri.toString())
   if (!diagnostics.some((diagnostic) => diagnostic.code === 2322))
@@ -18,7 +22,7 @@ async function check(): Promise<void> {
     'json',
     monaco.Uri.parse('inmemory://eizhu/smoke.json'),
   )
-  const getJsonWorker = await monaco.json.getWorker()
+  const getJsonWorker = await languageWorkerReady(() => monaco.json.getWorker(), 'JSON not registered!')
   await getJsonWorker(json.uri)
   for (
     let attempt = 0;

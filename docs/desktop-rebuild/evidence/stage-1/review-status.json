@@ -1,10 +1,10 @@
 {
-  "recordedAt": "2026-10-20T07:28:07.623Z",
+  "recordedAt": "2026-10-20T07:40:43.747770+00:00",
   "status": "stage-1-gate-pending",
   "sourceSnapshot": {
     "algorithm": "sha256(sorted(path + NUL + file-sha256 + LF))",
-    "sha256": "66d6e16a0f3bfa470a2347f646aa798ab6e5f56c92107d987121afa225c47ca3",
-    "files": 643,
+    "sha256": "d5ac452647968c3f1cdfef8d62b7d28214a772653ffce2d4074a5d31fb20cc10",
+    "files": 645,
     "includes": [
       "apps (excluding out/node_modules)",
       "packages",
@@ -18,33 +18,32 @@
       ".prettierrc.json",
       ".gitattributes"
     ],
-    "gitCommit": "2f3f1b58b8877b7a76ea3e2dbd513e158f51cac8",
     "followupChanges": [
-      "根原生安装流程显式运行Electron官方安装器",
-      "Linux重建/打包默认Clang并在CI安装Clang",
-      "Windows固定证据字节保护，等待远端复验"
-    ]
+      "Electron 官方分发安装及 Linux 工具链修正已在 ddaa417 远端复验；macOS x64 最终包通过",
+      "Linux CI 使用 Clang15，Windows 烟测按工作区约束计算，Monaco 语言注册有界等待，等待新一轮远端复验"
+    ],
+    "implementationBaseCommit": "2f3f1b58b8877b7a76ea3e2dbd513e158f51cac8"
   },
   "artifacts": [
     {
       "path": "artifacts/desktop/eizhu-0.4.4-mac-x64.dmg",
-      "bytes": 157923725,
-      "modifiedAt": "2026-10-20T07:25:59.018Z",
-      "sha256": "44be785ff80e06923629b52a8ef4e7da202d94a6d71c88d14cbfa1e8c9f703b6",
+      "bytes": 157925276,
+      "modifiedAt": "2026-10-20T07:38:17.025067+00:00",
+      "sha256": "eec7f1fe34f3c01693b693678dbc853369fc59ef21e2297eef85c4e9fb9417f5",
       "matchesCurrentRuntimeSource": true
     },
     {
       "path": "artifacts/desktop/eizhu-0.4.4-mac-x64.zip",
-      "bytes": 157268131,
-      "modifiedAt": "2026-10-20T07:26:09.344Z",
-      "sha256": "44c435fa2ecb6389059c94d475f63c231d522ec62103cd82009229e0b03065b4",
+      "bytes": 157268386,
+      "modifiedAt": "2026-10-20T07:38:27.625749+00:00",
+      "sha256": "e373f92fddc5238b06634b3721cd98022317763210d3a5a6253c0152841ada66",
       "matchesCurrentRuntimeSource": true
     },
     {
       "path": "artifacts/desktop/mac/eizhu.app/Contents/Resources/app.asar",
-      "bytes": 38449033,
-      "modifiedAt": "2026-10-20T07:25:50.459Z",
-      "sha256": "f604f33af0125c5d37da9ad8b773ccfd64235604ccf33dd67c3d6cc9d0c52917",
+      "bytes": 38450189,
+      "modifiedAt": "2026-10-20T07:38:09.688738+00:00",
+      "sha256": "802024d61bf3a56f69246a9db91e0f123ad9b631dcdc5c4cba8d3826f3248cf8",
       "matchesCurrentRuntimeSource": true
     }
   ],
@@ -96,7 +95,7 @@
       ],
       "screenshotsArchived": 3,
       "report": "mac-x64-package-smoke.json",
-      "logs": "artifacts/logs/stage-1-package-smoke.log",
+      "logs": "artifacts/logs/stage-1-smoke-fix-smoke.log",
       "warnings": [
         "Electron native_image undefined icon argument",
         "macOS Chromium task_policy_set invalid argument"
@@ -121,20 +120,34 @@
       "representatives": 4,
       "autocrlf": true,
       "evidence": "fixture-byte-check.txt",
-      "windowsCIFailureFixed": false
+      "windowsCIFailureFixed": true
     },
     "nativeSetup": {
       "passed": true,
       "evidence": "native-setup-check.txt",
-      "coldElectronInstallVerified": false,
+      "coldElectronInstallVerified": true,
       "linuxClangCompileVerified": false
+    },
+    "smokeFixes": {
+      "passed": true,
+      "newUnitTests": 3,
+      "historicalTestsRepeated": false,
+      "evidence": "smoke-fixes-check.txt",
+      "checks": [
+        "npm run check",
+        "受影响文件 ESLint",
+        "workflow YAML",
+        "desktop:build",
+        "macOS x64 desktop:package",
+        "最终 DMG smoke"
+      ]
     }
   },
   "platforms": {
-    "darwin-x64": "latest-local-final-dmg-passed-remote-package-failed",
-    "darwin-arm64": "ci-package-failed",
-    "win32-x64": "ci-baseline-failed",
-    "linux-x64": "ci-npm-ci-failed"
+    "darwin-x64": "local-final-dmg-and-ci-run-52-passed",
+    "darwin-arm64": "ci-package-passed-monaco-smoke-failed-fix-pending",
+    "win32-x64": "ci-package-passed-window-size-smoke-failed-fix-pending",
+    "linux-x64": "ci-clang14-compile-failed-clang15-pending"
   },
   "screenshots": {
     "current": [
@@ -176,84 +189,113 @@
     "resolution": "正常 require_escalated 审批重新通过；最新 build/package/DMG smoke 均已执行成功"
   },
   "ci": {
-    "runId": 39384397849,
-    "runNumber": 51,
-    "url": "https://github.com/AfterYuWei/eizhu/actions/runs/39384397849",
-    "commit": "2f3f1b58b8877b7a76ea3e2dbd513e158f51cac8",
+    "runId": 39386722963,
+    "runNumber": 52,
+    "url": "https://github.com/AfterYuWei/eizhu/actions/runs/39386722963",
+    "commit": "ddaa4176501bf5a99b6d5113322955d44efd1f44",
     "branch": "codex/electron-stage-1",
     "status": "completed",
     "conclusion": "failure",
-    "recordedAt": "2026-10-20T07:14:44.901Z",
-    "detailLogs": "read-through-authenticated-GitHub-raw-logs-page",
-    "artifactsProduced": false,
-    "source": "GitHub Actions public run/jobs/check-runs API; GPT-6 Luna independent monitor",
+    "recordedAt": "2026-10-20T07:35:01Z",
+    "detailLogs": "read-through-authenticated-GitHub-job-raw-log-pages",
+    "artifactsProduced": [
+      "eizhu-test-darwin-arm64",
+      "eizhu-test-darwin-x64",
+      "eizhu-test-win32-x64"
+    ],
+    "source": "GitHub Actions public run/jobs/artifacts API; GPT-6 Luna independent monitor",
     "jobs": [
       {
         "target": "linux-x64",
-        "id": 118500649873,
+        "id": 118508210207,
         "conclusion": "failure",
         "failedStep": "npm ci",
+        "cause": "native:rebuild failed compiling cpu-features against Electron 44.9.0 headers with Clang 14; std::source_location was unavailable",
         "notRun": [
           "check",
           "foundation",
           "baseline",
           "build",
           "package",
-          "smoke"
-        ]
+          "installer-smoke",
+          "AppImage-smoke"
+        ],
+        "artifactProduced": false
       },
       {
         "target": "win32-x64",
-        "id": 118500649882,
+        "id": 118508210478,
         "conclusion": "failure",
         "passed": [
           "npm ci",
           "check",
-          "foundation"
-        ],
-        "failedStep": "baseline:test",
-        "notRun": [
+          "foundation",
+          "baseline",
           "build",
-          "package",
-          "smoke"
-        ]
+          "package"
+        ],
+        "failedStep": "Smoke final installer contents (macOS / Windows)",
+        "cause": "installed app smoke expected window bounds [1280, 800], observed [1024, 728]",
+        "artifactProduced": true
       },
       {
         "target": "darwin-arm64",
-        "id": 118500649524,
+        "id": 118508210513,
         "conclusion": "failure",
         "passed": [
           "npm ci",
           "check",
           "foundation",
           "baseline",
-          "build"
+          "build",
+          "package"
         ],
-        "failedStep": "desktop:package -- --platform=darwin --arch=arm64",
-        "notRun": [
-          "smoke"
-        ]
+        "failedStep": "Smoke final installer contents (macOS / Windows)",
+        "cause": "installed app smoke reported TypeScript not registered, then Smoke exit 1",
+        "artifactProduced": true
       },
       {
         "target": "darwin-x64",
-        "id": 118500649911,
-        "conclusion": "failure",
+        "id": 118508210538,
+        "conclusion": "success",
         "passed": [
           "npm ci",
           "check",
           "foundation",
           "baseline",
-          "build"
+          "build",
+          "package",
+          "installer-smoke"
         ],
-        "failedStep": "desktop:package -- --platform=darwin --arch=x64",
-        "notRun": [
-          "smoke"
-        ]
+        "artifactProduced": true
       }
     ],
-    "evidence": "ci-run-39384397849.json",
-    "userAuthorizedPush": true,
-    "causes": "ci-first-run-causes.txt",
-    "followup": "fixes-ready-for-push"
-  }
+    "installerSmoke": {
+      "attempted": [
+        "win32-x64",
+        "darwin-arm64",
+        "darwin-x64"
+      ],
+      "passed": [
+        "darwin-x64"
+      ],
+      "failed": [
+        "win32-x64",
+        "darwin-arm64"
+      ],
+      "skipped": [
+        "linux-x64"
+      ],
+      "appImageX11Smoke": "skipped on all jobs; Linux stopped at npm ci"
+    },
+    "rerunTriggered": false,
+    "evidenceDirectory": "artifacts/ci/retry-ddaa417/",
+    "followup": "three-target-fixes-locally-verified-ready-for-push"
+  },
+  "ciHistory": [
+    {
+      "runId": 39384397849,
+      "evidence": "ci-run-39384397849.json"
+    }
+  ]
 }
