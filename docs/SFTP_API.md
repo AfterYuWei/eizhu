@@ -1,39 +1,12 @@
-# SFTP 领域接口
+# SFTP、传输与独立编辑器
 
-SFTP 由 `src-tauri/src/sftp/` 实现，React 封装位于 `web/src/api/sftp.ts`。
+阶段 1 保留双栏、多标签、传输队列和独立编辑器的 React UI，替换容器接口；SFTP/安全保存业务在阶段 4 实现。
+当前未启用会话创建、文件读写、拖出或恢复任务，不用模拟结果代替协议实现。
 
-## 会话与文件
+领域接口及 DTO 统一在 `packages/contracts`，前端流式上传以 512 KiB 有界块并等待确认；下载按消费拉取，取消等待句柄释放。
+后续文件流优先在 Node 内处理，不使用 Base64，不把大文件整个放入 React 或控制 RPC。跨服务器、目录/归档、冲突处理、五路并发和检查点均在阶段 4 验收。
 
-- `sftp_create_session`、`sftp_get_session`、`sftp_list_sessions`、`sftp_close_session`
-- `sftp_list`、`sftp_stat`、`sftp_tree`
-- `sftp_mkdir`、`sftp_rename`、`sftp_delete`、`sftp_move`
-- `sftp_read_file`、`sftp_write_file`
-
-路径使用 POSIX 表示；本机会话在 Windows 上把 `/C:/...` 转回原生路径。目录列表默认
-隐藏点文件。编辑器限制 10 MiB，拒绝二进制和非 UTF-8 内容，并用 `mod_time` 乐观锁避免覆盖。
-
-## 传输
-
-- `sftp_upload_begin` / `sftp_upload_chunk` / `sftp_upload_finish` / `sftp_upload_abort`：
-  浏览器通过 `File.stream()` 顺序推送原生二进制块，将 WebView 产生的小片段合并为 512 KiB，
-  后端硬限制 1 MiB。Rust 复用暂存文件句柄，每次 invoke 仅在写入确认及同步完成后返回，形成
-  端到端背压；暂停或异常关闭句柄并保留检查点，取消清理暂存文件。Android/iOS 使用同尺寸的 Base64 分块 command，
-  避开移动端 WebView 对 raw invoke body/response 的限制，仍不会聚合完整文件。
-- `sftp_download`：Rust 以 1 MiB 检查点从 SFTP 流式落盘，连续读取复用句柄和有界预读；多文件/目录先流式复制到临时目录，
-  再直接写入 ZIP 文件，全程不聚合文件内容到内存。
-- `sftp_download_chunk` / `sftp_download_close`：前端以 `ReadableStream` 按 offset 拉取 512 KiB
-  二进制块；EOF、取消或读取异常都会调用 close 删除落盘文件和任务。
-- `sftp_transfer`：不同会话间流式 relay；目录可保留结构或生成 `tar.gz`。
-- `sftp_list_transfers`、`sftp_cancel_transfer`、`sftp_clear_completed_transfers`。
-
-冲突策略为 `ask`、`overwrite`、`rename`、`skip`。进度通过
-`eizhu-sftp-message` event 推送，任务状态仍可轮询，最多同时执行五个传输。
-文件传输不计算内容摘要，也不为恢复或覆盖检测回读文件内容；断点恢复检查源文件大小和修改时间、
-暂存文件大小及已确认偏移，覆盖检测使用目标大小和修改时间。无法识别大小和修改时间均未变化的
-内容修改。重复上传块仅按需读取该块并逐字节比较。旧检查点中的摘要字段会被忽略，无需迁移数据库。
-界面在提交期间显示“正在完成”，提交成功后才显示 100%。
-
-## 连接能力
-
-远端会话复用 `ssh/transport.rs`，支持密码、私钥、SSH agent、SOCKS5、HTTP CONNECT
-和多级 SSH jump。主机指纹变化会拒绝 SFTP 建连；用户需先在 Profile 测试中确认新指纹。
+独立窗口延迟创建，main 保留窗口所有权和未就绪打开队列。编辑器持有未保存内容，关闭/退出/工作区切换通过 main 的确认协议协调。
+本地 Monaco、语法资源与 Worker 随包交付。后续读取继续限制 10 MiB，拒绝二进制与非法 UTF-8。
+远端写入必须比较三份内容，保留权限，暂存、校验后最终提交；缺少安全替换能力时保留原文件并使用另存流程。
+真实 OpenSSH 集成、断网/取消/冲突、系统拖放与各平台原子保存尚待阶段 4 验证。

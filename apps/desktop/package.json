@@ -1,0 +1,19 @@
+{
+  "name": "@eizhu/desktop",
+  "version": "0.0.0",
+  "private": true,
+  "description": "eizhu 桌面终端与 SFTP 客户端",
+  "author": "yuweinfo",
+  "main": "out/main/index.cjs",
+  "dependencies": {
+    "better-sqlite3": "13.0.3",
+    "argon2": "0.45.1",
+    "electron-updater": "6.8.9",
+    "ssh2": "1.17.0"
+  },
+  "type": "module",
+  "devDependencies": {
+    "@eizhu/contracts": "*",
+    "@eizhu/core": "*"
+  }
+}

@@ -1,14 +1,9 @@
-# 终端命令补全设计
+# 终端补全设计
 
-补全引擎分三层：静态命令、上下文参数和可取消的远端只读查询。前端实现位于
-`web/src/lib/completionEngine.ts` 与 `web/src/hooks/useCompletion.ts`，Rust 执行入口位于
-`src-tauri/src/ssh/session.rs`。
+现有桌面解析、候选过滤和交互保留在 `apps/web/src/lib/completionEngine.ts`、`apps/web/src/hooks/useCompletion.ts` 及相关测试中。
+共享生成器 DTO 位于 `packages/contracts/src/models/completion.ts`。阶段 1 只保留 UI，远端补全随 SSH 在阶段 3 实现。
 
-终端通过 `session_complete` command 提交 `request_id`、脚本和可选工作目录。Rust 在现有
-SSH 连接上创建独立 exec channel，设置短超时并返回 `complete_response` Tauri event。
-前端只接受当前请求 ID 的结果，因此旧查询、超时查询和切换标签后的结果不会污染菜单。
-
-远端脚本必须只读，并由前端生成器白名单控制。Rust 对工作目录做 shell quoting；失败、
-超时或连接关闭只会让动态补全降级，不影响终端 PTY。
-
-验证重点：tokenize/quote、命令定位、缓存、请求竞态、超时丢弃、UTF-8 输出及工作目录转义。
+`window.eizhu.session.complete` 只接受会话、请求 ID、受控 generatorId/params 和可选工作目录，不开放任意 shell 执行。
+阶段 3 启用前必须补齐参数/输出运行时 schema、窗口和会话归属、空间/代次与请求对应检查。
+远端生成器在所属 SSH 连接上使用短超时、取消、输出上限和只读白名单；工作目录需要严格 quoting。
+迟到响应不能覆盖新输入、不同目录或新数据空间的候选。中文输入、粘贴、TUI、Tab/方向键与现有桌面提示语继续按冻结案例验收。

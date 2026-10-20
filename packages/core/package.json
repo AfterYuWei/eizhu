@@ -1,0 +1,15 @@
+{
+  "name": "@eizhu/core",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./*": "./src/*.ts"
+  },
+  "dependencies": {
+    "@eizhu/contracts": "*",
+    "better-sqlite3": "13.0.3",
+    "argon2": "0.45.1",
+    "ssh2": "1.17.0"
+  }
+}

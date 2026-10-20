@@ -1,88 +1,18 @@
-# eizhu 开发指南
+# 开发指南
 
-eizhu 是基于 React、Tauri 2 与 Rust 的 SSH/SFTP 客户端。当前发布桌面版本，Rust
-核心与 Tauri mobile entry 为 Android/iOS 复用预留。所有业务领域都在 Tauri 进程内运行，
-前端通过细粒度 command 与 event 通信，不启动本地服务进程。
+使用 Node 24 LTS、npm 和平台原生编译工具；Electron 运行时随安装包分发。执行一次根目录 `npm ci`，不要为子工作区生成锁文件。
+Windows 使用受支持的 Visual Studio C++ 工具，macOS 使用 Xcode Command Line Tools，Linux 需要 C++/Python、GTK/NSS、密钥库运行库及打包工具。
+`npm run desktop:dev` 启动 electron-vite 和桌面应用。开发目录为系统应用数据根下 `eizhu-desktop-dev`，安装版为 `eizhu-desktop`，两者均不读取旧目录。
 
-## 开发环境
+`npm run check` 检查全工作区类型，`npm run lint` 检查 TypeScript 与前端规范，`npm test` 运行基础设施、桌面 UI/适配器和固定兼容回归。
+`npm run baseline:verify` 从冻结 Git revision 取证；CI checkout 必须保留该提交历史。固定样本不是当前数据库，也不允许普通验证刷新。
 
-- Node.js 22+
-- Rust 1.89+
-- 各平台的 Tauri 2 系统依赖
+Electron 或原生依赖变化后执行 `npm run native:rebuild`。Node 和 Electron 的原生 ABI 不可互相替代；数据库与原生 KDF 必须在 Electron 进程树中烟测。
+`npm run desktop:build` 输出 `apps/desktop/out`，`npm run desktop:package` 输出 `artifacts/desktop`。
+`npm run desktop:smoke` 使用隔离临时目录验证构建输出；最终产物用 `npm run desktop:smoke:package -- <安装包>`。
+烟测 JSON 保存在 `artifacts/smoke/<platform>-<arch>.json`，截图保存在同名子目录；CI 一并归档。不能使用早于当前源码的报告作为最终验证。
+Linux GUI 烟测需要 X11 显示环境，可使用 `xvfb-run`，不得通过关闭窗口沙箱来绕过配置错误。
 
-```bash
-npm ci
-npm --prefix web ci
-make dev
-```
-
-`make dev` 会同时启动 Vite 与 Tauri/Rust 后端，可测试 SSH、SFTP 和持久化功能。仅调试
-React 界面时可使用 `make web-dev`；该模式不提供 Tauri IPC，不能执行连接测试等原生功能。
-
-## 验证
-
-```bash
-npm --prefix web run test:unit
-npm --prefix web run lint
-npm --prefix web run build
-cd src-tauri
-cargo fmt --all -- --check
-cargo check --locked
-cargo clippy --all-targets --all-features --locked -- -D warnings
-cargo test --locked
-```
-
-生产构建使用 `npm run desktop:build`。React 产物位于 `web/dist`，由 Tauri 直接打包。
-
-## 架构
-
-Rust 入口在 `src-tauri/src/lib.rs`，`app/bootstrap.rs` 按顺序初始化 SQLite、凭据加密、
-审计、Profile/Vault/Group/Snippet、备份与同步、SSH 会话和 SFTP 会话。
-
-- `commands/`：全部 Tauri IPC adapter；不执行 SQL、加密或底层 SSH/SFTP 流程。
-- `infrastructure/database/`：SQLite schema、兼容迁移、WAL 与 busy timeout。
-- `profile/`、`vault/`、`group/`、`snippet/`、`audit/`：本地 feature 与各自 repository。
-- `backup/`：完整版本和隔离恢复；`backup/archive/`：第三方/官方对象备份、OAuth 与独立调度。
-- `sync/`：账号条目加密、事务队列、实时提交、SSE、差异与冲突。
-- `app/workspace.rs`：账号空间隔离、装配和任务退出，协议与数据迁移见 `docs/DATA_SYNC.md`。
-- `ssh/transport.rs`：直连、SOCKS5、HTTP CONNECT、SSH jump 与认证。
-- `ssh/session.rs`、`session_manager.rs`：PTY、终端 I/O、补全、host-key 与生命周期。
-- `ssh/authentication.rs`：终端/隧道共用认证请求；`ssh/tunnel.rs`、`forwarding.rs`、`socks.rs`：三类隧道、回传通道与 SOCKS5。
-- `local_state/`：账号/服务器隔离的加密历史与本地配置；布局、传输和隧道均排除云同步/完整备份。
-- `sftp/`：会话、文件操作、编辑、上传下载与跨会话传输。
-- `app/events.rs`：SSH/SFTP feature event port 的 Tauri adapter。
-- `infrastructure/platform/desktop/`：对话框、drag-out、日志、legacy path/settings。
-- `server_detail.rs`：通过现有 SSH/SFTP 会话采集主机信息和运行指标。
-
-完整依赖、错误、所有权和移动端边界见 `docs/RUST_ARCHITECTURE.md`。
-
-React 的领域 API 位于 `web/src/api/`，统一使用 `invokeCommand`；实时消息由
-`eizhu-session-message`、`eizhu-sftp-message` 等 Tauri event 承载。
-
-## 数据与安全
-
-数据保存在系统的 `eizhu` 用户目录：SQLite 数据库为
-`eizhu.db`，主密钥为 `key`。账号空间有独立数据库、设备密钥和备份目录；原库作为本地空间保留，认证元数据位于 `application.db`。凭据只在 Rust 内存中解密，连接配置解析结构在析构时清零。
-SSH 主机密钥以 SHA-256 指纹验证；未知指纹在成功连接后保存，变化时要求用户确认。
-
-## 前端约定
-
-- 用户可见文本保持中文。
-- 新组件优先使用 `web/src/components/ui/` 中的 shadcn/ui。
-- 颜色使用语义 CSS 变量，圆角与 `DESIGN.md` 一致。
-- 类名合并使用 `cn()`。
-- Profile/Group 图标只能使用 `web/src/lib/serverIcons.tsx` 与 `groupIcons.tsx` 的稳定 key。
-
-## 桌面改造回归与原生验收
-
-本轮实现与提交记录见 [DESKTOP_ROADMAP.md](DESKTOP_ROADMAP.md)，交付状态和原生验收步骤见 [DESKTOP_DELIVERY.md](DESKTOP_DELIVERY.md)。不运行本地完整构建时，可单独执行 TypeScript 静态检查：
-
-```bash
-node --test scripts/*.test.mjs
-./web/node_modules/.bin/tsc --noEmit -p web/tsconfig.app.json
-./web/node_modules/.bin/tsc --noEmit -p web/tsconfig.node.json
-cd src-tauri
-cargo test --all-features --locked --lib
-```
-
-SSH/SFTP 协议测试使用进程内回环服务，执行环境必须允许监听回环地址。指标沿用现有收集器，仅可见详情按三秒轮询；后台和侧栏折叠停止后续刷新，内存只保留每主机最新指标，账号切换清空。系统指标不展示趋势图，也不缓存历史样本。完整构建、桌面烟测和安装更新由远端 CI 及原生验收完成。
+当前只开放阶段 1 基础能力。领域实现时先定义运行时 schema 和归属规则，再接通仓储/协议适配，最后启用 preload 方法。
+不增加通用 command 兼容层，不编写旧数据库迁移，不让测试替身进入正式启动路径。
+各阶段需提交截图/交互差异、测试结果、平台未验证项，经用户确认后继续。

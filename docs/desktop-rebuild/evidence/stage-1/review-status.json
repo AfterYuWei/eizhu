@@ -1,0 +1,163 @@
+{
+  "recordedAt": "2026-10-20T07:04:52.322Z",
+  "status": "stage-1-gate-pending",
+  "sourceSnapshot": {
+    "algorithm": "sha256(sorted(path + NUL + file-sha256 + LF))",
+    "sha256": "0df5829df88073719e23c234cf5c29906d550f92f961e3a2864e4a72e16e2aa5",
+    "files": 641,
+    "includes": [
+      "apps (excluding out/node_modules)",
+      "packages",
+      "scripts",
+      ".github/workflows",
+      "VERSION",
+      "package.json",
+      "package-lock.json",
+      "tsconfig.node.json",
+      "eslint.config.mjs",
+      ".prettierrc.json"
+    ]
+  },
+  "artifacts": [
+    {
+      "path": "artifacts/desktop/eizhu-0.4.4-mac-x64.dmg",
+      "bytes": 157923480,
+      "modifiedAt": "2026-10-20T07:02:43.426Z",
+      "sha256": "94715363cff7ea3ab381a64f30c9b378521e18d7643be7aa1f8bb20d1a2d168f",
+      "matchesCurrentRuntimeSource": true
+    },
+    {
+      "path": "artifacts/desktop/eizhu-0.4.4-mac-x64.zip",
+      "bytes": 157268131,
+      "modifiedAt": "2026-10-20T07:02:43.302Z",
+      "sha256": "528e5fd90e89bf41e8e0a7c5e859c7da9e3e0943bcb04c2a6ffdf719d412227a",
+      "matchesCurrentRuntimeSource": true
+    },
+    {
+      "path": "artifacts/desktop/mac/eizhu.app/Contents/Resources/app.asar",
+      "bytes": 38449033,
+      "modifiedAt": "2026-10-20T07:02:25.789Z",
+      "sha256": "f604f33af0125c5d37da9ad8b773ccfd64235604ccf33dd67c3d6cc9d0c52917",
+      "matchesCurrentRuntimeSource": true
+    }
+  ],
+  "tests": {
+    "previousSession": {
+      "foundation": 15,
+      "frontendFiles": 50,
+      "frontendTests": 196,
+      "baseline": 10,
+      "passed": true,
+      "rawLogsArchived": false,
+      "note": "基于主代理此前执行记录；没有重复运行已通过的测试。"
+    },
+    "independentLunaAudit": {
+      "passed": [
+        "npm run check",
+        "受影响主进程和契约代码 ESLint",
+        "npm run architecture:verify",
+        "5 份相关 GitHub Actions YAML 语法解析"
+      ],
+      "repeatedPreviouslyPassedTests": false
+    },
+    "screenshotArchiveCheck": {
+      "passed": true,
+      "checks": [
+        "node --check scripts/smoke-desktop.mjs",
+        "归档路径与 CI artifact glob 静态核对",
+        "报告和证据链接核对"
+      ],
+      "nativeExecuted": false
+    },
+    "lifecycle": {
+      "tests": 6,
+      "passed": true,
+      "typeCheck": "npx tsc -p tsconfig.node.json --noEmit",
+      "lint": "受影响 5 个 main 文件通过；prefer-const 修正后仅补跑实现文件 lint",
+      "evidence": "lifecycle-check.txt",
+      "historicalTestsRepeated": false
+    },
+    "finalNativeSmoke": {
+      "passed": true,
+      "delegatedTo": "GPT-6 Luna (independent context)",
+      "platform": "darwin-x64",
+      "packaged": true,
+      "exitCode": 0,
+      "editorContentSize": [
+        1280,
+        800
+      ],
+      "screenshotsArchived": 3,
+      "report": "mac-x64-package-smoke.json",
+      "logs": "artifacts/logs/stage-1-package-smoke.log",
+      "warnings": [
+        "Electron native_image undefined icon argument",
+        "macOS Chromium task_policy_set invalid argument"
+      ]
+    },
+    "build": {
+      "passed": true,
+      "log": "artifacts/logs/stage-1-build.log"
+    },
+    "package": {
+      "passed": true,
+      "signed": false,
+      "log": "artifacts/logs/stage-1-package.log"
+    },
+    "ciPreflight": {
+      "passed": true,
+      "docsOnlyPushDoesNotRetrigger": true,
+      "executedNativeCI": false
+    }
+  },
+  "platforms": {
+    "darwin-x64": "latest-final-dmg-passed",
+    "darwin-arm64": "not-run",
+    "win32-x64": "not-run",
+    "linux-x64": "not-run"
+  },
+  "screenshots": {
+    "current": [
+      "mac-x64-home-light.png",
+      "mac-x64-home-dark.png",
+      "mac-x64-editor-empty.png"
+    ],
+    "previousPackage": "temporary-files-unavailable"
+  },
+  "previousArtifacts": [
+    {
+      "path": "artifacts/desktop/eizhu-0.4.4-mac-x64.dmg",
+      "bytes": 157892357,
+      "modifiedAt": "2026-10-20T03:46:50.012Z",
+      "sha256": "8f4db9091406171e51a04c84e6c596f6d857c2b6e91645c3bd840d7409a1e6fd",
+      "matchesCurrentSource": false
+    },
+    {
+      "path": "artifacts/desktop/eizhu-0.4.4-mac-x64.zip",
+      "bytes": 157238190,
+      "modifiedAt": "2026-10-20T03:46:59.361Z",
+      "sha256": "8ff34af884c9db8398ba4c0778bc26683cf2ee2aa23fdc266a5b409880d44fe7",
+      "matchesCurrentSource": false
+    },
+    {
+      "path": "artifacts/desktop/mac/eizhu.app/Contents/Resources/app.asar",
+      "bytes": 38417975,
+      "modifiedAt": "2026-10-20T03:46:42.364Z",
+      "sha256": "9698c744ff072c56b573692ee2672207f6fa47e0e069db995c59cfd96da50418",
+      "matchesCurrentSource": false
+    }
+  ],
+  "priorBlocker": {
+    "action": "最新源码构建、打包及最终 DMG 烟测",
+    "reason": "automatic-approval-review-quota-exceeded",
+    "executed": false,
+    "retrySuggested": "2026-10-20T15:17:00+08:00",
+    "resolved": true,
+    "resolution": "正常 require_escalated 审批重新通过；最新 build/package/DMG smoke 均已执行成功"
+  },
+  "ci": {
+    "branch": "codex/electron-stage-1",
+    "userAuthorizedPush": true,
+    "status": "awaiting-push"
+  }
+}

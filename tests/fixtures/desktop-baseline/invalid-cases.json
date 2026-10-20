@@ -1,0 +1,75 @@
+{
+  "cases": [
+    {
+      "file": "invalid/future-version.eizhubackup",
+      "importCode": "INVALID_BACKUP_FORMAT",
+      "originalPayloadPreserved": true,
+      "password": "fixture-only-备份密码🔐",
+      "previewCode": "INVALID_BACKUP_FORMAT"
+    },
+    {
+      "file": "invalid/unknown-format.eizhubackup",
+      "importCode": "INVALID_BACKUP_FORMAT",
+      "originalPayloadPreserved": true,
+      "password": "fixture-only-备份密码🔐",
+      "previewCode": "INVALID_BACKUP_FORMAT"
+    },
+    {
+      "file": "invalid/unknown-mode.eizhubackup",
+      "importCode": "INVALID_BACKUP_FORMAT",
+      "originalPayloadPreserved": true,
+      "password": "fixture-only-备份密码🔐",
+      "previewCode": "INVALID_BACKUP_FORMAT"
+    },
+    {
+      "file": "invalid/cyclic-groups.eizhubackup",
+      "importCode": "IMPORT_FAILED",
+      "originalPayloadPreserved": true,
+      "password": "fixture-only-备份密码🔐",
+      "previewCode": "IMPORT_FAILED"
+    },
+    {
+      "file": "invalid/missing-jump.eizhubackup",
+      "importCode": "IMPORT_FAILED",
+      "originalPayloadPreserved": true,
+      "password": "fixture-only-备份密码🔐",
+      "previewCode": "IMPORT_FAILED"
+    },
+    {
+      "file": "invalid/missing-vault.eizhubackup",
+      "importCode": "IMPORT_FAILED",
+      "originalPayloadPreserved": true,
+      "password": "fixture-only-备份密码🔐",
+      "previewCode": "IMPORT_FAILED"
+    },
+    {
+      "file": "invalid/corrupt-tag.eizhubackup",
+      "importCode": "INVALID_PASSWORD",
+      "originalPayloadPreserved": true,
+      "password": "fixture-only-备份密码🔐",
+      "previewCode": "INVALID_PASSWORD"
+    },
+    {
+      "file": "invalid/missing-kdf.eizhubackup",
+      "importCode": "INVALID_BACKUP_FORMAT",
+      "originalPayloadPreserved": true,
+      "password": "fixture-only-备份密码🔐",
+      "previewCode": "INVALID_BACKUP_FORMAT"
+    },
+    {
+      "file": "invalid/invalid-kdf.eizhubackup",
+      "importCode": "INVALID_BACKUP_FORMAT",
+      "originalPayloadPreserved": true,
+      "password": "fixture-only-备份密码🔐",
+      "previewCode": "INVALID_BACKUP_FORMAT"
+    },
+    {
+      "file": "invalid/wrong-password.eizhubackup",
+      "importCode": "INVALID_PASSWORD",
+      "originalPayloadPreserved": true,
+      "password": "wrong-password",
+      "previewCode": "INVALID_PASSWORD"
+    }
+  ],
+  "synthetic": true
+}

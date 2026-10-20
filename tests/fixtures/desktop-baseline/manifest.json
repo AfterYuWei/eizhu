@@ -1,0 +1,2770 @@
+{
+  "schemaVersion": 1,
+  "sourceCommit": "d8a20e0f77ab04af4a4a729f94884a68c4022a5f",
+  "capturedAt": "2026-10-20T02:24:17.383Z",
+  "timezone": "Asia/Shanghai",
+  "syntheticOnly": true,
+  "stage": 0,
+  "userApproved": false,
+  "preexistingChanges": [
+    "CLAUDE.md deleted",
+    "CODEBUDDY.md deleted"
+  ],
+  "provenance": {
+    "eizhu": "Produced by the original BackupService.export_bytes and imported/re-exported through the original service in disposable databases.",
+    "xcontrol": "Compatibility specimens constructed from the original exporter with the legacy format/AAD; verified by the original decoder and importer. These are not claimed to be historical XControl exports.",
+    "historicalXcontrol": "Existing Go/XControl ciphertext copied verbatim from backup::service::tests::argon2_and_aes_match_go_backup_fixture.",
+    "sync": "Produced by original sync::crypto::{wrap,aad,seal} and original Push serialization.",
+    "screenshots": "Existing React renderer captured through browser UI. No native OS chrome, live SSH, or real user data is represented."
+  },
+  "counts": {
+    "cases": 39,
+    "commands": 183,
+    "desktopCommands": 183,
+    "mobileOnlyCommands": 0,
+    "events": 7
+  },
+  "sourceFiles": [
+    {
+      "path": ".github/workflows/build-android-apk.yml",
+      "gitBlob": "137c2683cfa1a5a67096780ab09556bcab2ca98b"
+    },
+    {
+      "path": ".github/workflows/build-desktop-stable.yml",
+      "gitBlob": "3e1022c1d72000f439afd405ae1471bb4d6446d0"
+    },
+    {
+      "path": ".github/workflows/build-desktop-test.yml",
+      "gitBlob": "09dfa0d07b769608e9801683935f201c1f4c2d94"
+    },
+    {
+      "path": ".github/workflows/build-desktop.yml",
+      "gitBlob": "c9f153ec763add76ae1cb0fc9645c9c6238f410f"
+    },
+    {
+      "path": ".github/workflows/build-mobile.yml",
+      "gitBlob": "671a9a5b539bfc54affdecf0324047fff44e25df"
+    },
+    {
+      "path": ".github/workflows/quality-core.yml",
+      "gitBlob": "0e67c2c9761f46ad8821ca75a449530ca9b1335c"
+    },
+    {
+      "path": ".github/workflows/quality.yml",
+      "gitBlob": "bd54ee7ae704a0e68289b8b7c88c6ca0011f547f"
+    },
+    {
+      "path": "AGENTS.md",
+      "gitBlob": "a1c55eca5c39dd918eec3778c5c9c996ea2208b2"
+    },
+    {
+      "path": "DESIGN.md",
+      "gitBlob": "3fac1b23b5f34d992d942a4f5182587b09730a8f"
+    },
+    {
+      "path": "README.md",
+      "gitBlob": "9a4df252f2661d3ff6bbd074aeb341fec74ce8e6"
+    },
+    {
+      "path": "VERSION",
+      "gitBlob": "6f2743d65dc06508954334e88edb660bf8efea20"
+    },
+    {
+      "path": "docs/DATA_SYNC.md",
+      "gitBlob": "bbc41be72922e60e5571fb590bd30f6ec96e2db6"
+    },
+    {
+      "path": "docs/DESKTOP_RUNTIME.md",
+      "gitBlob": "95a82890bb537a8c53c207913b2d5f9d6445b799"
+    },
+    {
+      "path": "docs/DEVELOPMENT.md",
+      "gitBlob": "208cb83d6aab643e1aa8f5533a443aaf63031123"
+    },
+    {
+      "path": "docs/RUST_ARCHITECTURE.md",
+      "gitBlob": "1d08c615956d3a22e046937fcefb54c58a6bef4b"
+    },
+    {
+      "path": "docs/SFTP_API.md",
+      "gitBlob": "46ac53045afa1ac5aa112fc8f0f9f4796fea626c"
+    },
+    {
+      "path": "package-lock.json",
+      "gitBlob": "31ca5033b9e3221b80d4529c827486600344479f"
+    },
+    {
+      "path": "package.json",
+      "gitBlob": "39638b79bb93707134c082821430cbe883e03808"
+    },
+    {
+      "path": "scripts/account-server-config.mjs",
+      "gitBlob": "c15da3453a54cac0660aa857e38ee6f28853a64e"
+    },
+    {
+      "path": "scripts/account-server-config.test.mjs",
+      "gitBlob": "c6dce75171481180e3a1d09197a044f4158b1522"
+    },
+    {
+      "path": "scripts/desktop-release.test.mjs",
+      "gitBlob": "dff63546fc7fe0ec5061719501c7091958223f35"
+    },
+    {
+      "path": "scripts/make-latest-json.mjs",
+      "gitBlob": "3c2adf33e134d5bf9a4c7bb4cf4dbe38e30dafd2"
+    },
+    {
+      "path": "scripts/make-release-body.mjs",
+      "gitBlob": "b62a54d919c90a9b5306ba3d89177ef84cae70e0"
+    },
+    {
+      "path": "scripts/prepare-android-signing.mjs",
+      "gitBlob": "2527ba96cfa6a52320b00768c82517b22e24254a"
+    },
+    {
+      "path": "scripts/prepare-macos-updater.mjs",
+      "gitBlob": "38c74034c60d7115b0cf14bf53da58aed411e1e7"
+    },
+    {
+      "path": "scripts/round-app-icon.mjs",
+      "gitBlob": "9a479988d39210bdb921fe9a58f04f36b5fdaaa4"
+    },
+    {
+      "path": "scripts/run-tauri.mjs",
+      "gitBlob": "d39e0ef315c7ea6ab2d4cae40e415ac06d211547"
+    },
+    {
+      "path": "scripts/verify-macos-window-chrome.swift",
+      "gitBlob": "69cf22791c15ab0c6c998d6371abe6d16b33e25e"
+    },
+    {
+      "path": "scripts/verify-mobile-icons.mjs",
+      "gitBlob": "53bfa972d6c0ae165b09ae96e2f752f997478c48"
+    },
+    {
+      "path": "src-tauri/Cargo.lock",
+      "gitBlob": "90f2488718d88536bb16c9bd865ff6b9a45c0608"
+    },
+    {
+      "path": "src-tauri/Cargo.toml",
+      "gitBlob": "6dc67d8ec0ea409cfabfe4086e88b562ac89b125"
+    },
+    {
+      "path": "src-tauri/app-icon.png",
+      "gitBlob": "7e9a54195ecb4a0e8e5e54d951845d112d42bba6"
+    },
+    {
+      "path": "src-tauri/icons/128x128.png",
+      "gitBlob": "36011c7ddc2d66ece92a572733f94683e9c7422d"
+    },
+    {
+      "path": "src-tauri/icons/128x128@2x.png",
+      "gitBlob": "d1ac759a893adb1039cc3eee48eed8dba6b43a1c"
+    },
+    {
+      "path": "src-tauri/icons/32x32.png",
+      "gitBlob": "69a90b5620ba1db83f3c588499b6922b2332d487"
+    },
+    {
+      "path": "src-tauri/icons/64x64.png",
+      "gitBlob": "34c381898eae9a21db3badedf4a0a49128975fe1"
+    },
+    {
+      "path": "src-tauri/icons/Square107x107Logo.png",
+      "gitBlob": "71df978e84119ce72374e3102bb113303019238e"
+    },
+    {
+      "path": "src-tauri/icons/Square142x142Logo.png",
+      "gitBlob": "a346231a2f4e8ef6227f1f9d18be0fbc722d3cf6"
+    },
+    {
+      "path": "src-tauri/icons/Square150x150Logo.png",
+      "gitBlob": "6e3eaa05c0c5784913fb2241d87d159013e43d19"
+    },
+    {
+      "path": "src-tauri/icons/Square284x284Logo.png",
+      "gitBlob": "afa40158ce05f821f8a441dba8feff8a482c2e53"
+    },
+    {
+      "path": "src-tauri/icons/Square30x30Logo.png",
+      "gitBlob": "2bab9cad792a8e30172bbbd2211facc98717b04d"
+    },
+    {
+      "path": "src-tauri/icons/Square310x310Logo.png",
+      "gitBlob": "e92f618fbcf4dceee0d534b42479d30f44799fa3"
+    },
+    {
+      "path": "src-tauri/icons/Square44x44Logo.png",
+      "gitBlob": "c4e0a1f22852d451ac927e0a509d3807f26c0cd7"
+    },
+    {
+      "path": "src-tauri/icons/Square71x71Logo.png",
+      "gitBlob": "984808f69ab13a73e864c9d7e4811d4279329a2a"
+    },
+    {
+      "path": "src-tauri/icons/Square89x89Logo.png",
+      "gitBlob": "5816114ac64b5cc904e9a4ffda5c060da6814b83"
+    },
+    {
+      "path": "src-tauri/icons/StoreLogo.png",
+      "gitBlob": "6c6147cc47191703f6fe38425fe927c0cf191d65"
+    },
+    {
+      "path": "src-tauri/icons/android/mipmap-anydpi-v26/ic_launcher.xml",
+      "gitBlob": "7f007aa93afad99018fda1a88d9dd5fb23ffc4ea"
+    },
+    {
+      "path": "src-tauri/icons/android/mipmap-hdpi/ic_launcher.png",
+      "gitBlob": "3fe477e438239e207a7a0d6e595d6f97cea88485"
+    },
+    {
+      "path": "src-tauri/icons/android/mipmap-hdpi/ic_launcher_foreground.png",
+      "gitBlob": "3a5e285cdd5c49966e0ff57bab18da0e3471a94c"
+    },
+    {
+      "path": "src-tauri/icons/android/mipmap-hdpi/ic_launcher_monochrome.png",
+      "gitBlob": "3a5e285cdd5c49966e0ff57bab18da0e3471a94c"
+    },
+    {
+      "path": "src-tauri/icons/android/mipmap-hdpi/ic_launcher_round.png",
+      "gitBlob": "50cd1b8c0b2b446609629923b07c54ef3700bf9d"
+    },
+    {
+      "path": "src-tauri/icons/android/mipmap-mdpi/ic_launcher.png",
+      "gitBlob": "231ea3b1b8249ab09048c4e012e04784323f43fe"
+    },
+    {
+      "path": "src-tauri/icons/android/mipmap-mdpi/ic_launcher_foreground.png",
+      "gitBlob": "4575984f3b1ab8000826493a7d8813ab8087f86f"
+    },
+    {
+      "path": "src-tauri/icons/android/mipmap-mdpi/ic_launcher_monochrome.png",
+      "gitBlob": "4575984f3b1ab8000826493a7d8813ab8087f86f"
+    },
+    {
+      "path": "src-tauri/icons/android/mipmap-mdpi/ic_launcher_round.png",
+      "gitBlob": "45433ba40d80289efbc0c94f949a3e6e56cc60a2"
+    },
+    {
+      "path": "src-tauri/icons/android/mipmap-xhdpi/ic_launcher.png",
+      "gitBlob": "63a9100d2076a34211f2cba5985de491aad87dc5"
+    },
+    {
+      "path": "src-tauri/icons/android/mipmap-xhdpi/ic_launcher_foreground.png",
+      "gitBlob": "78567c723ae2fa9d650c6653508e01167731e1e1"
+    },
+    {
+      "path": "src-tauri/icons/android/mipmap-xhdpi/ic_launcher_monochrome.png",
+      "gitBlob": "78567c723ae2fa9d650c6653508e01167731e1e1"
+    },
+    {
+      "path": "src-tauri/icons/android/mipmap-xhdpi/ic_launcher_round.png",
+      "gitBlob": "c2c499b84ef1a87626fccc433c433edf67d1177b"
+    },
+    {
+      "path": "src-tauri/icons/android/mipmap-xxhdpi/ic_launcher.png",
+      "gitBlob": "91f1ccb9e8535a98d850b3e22aa4a9b1ed3ce7ce"
+    },
+    {
+      "path": "src-tauri/icons/android/mipmap-xxhdpi/ic_launcher_foreground.png",
+      "gitBlob": "9a54cba0f530e75f32f35ff91cf6c2f7571ecf75"
+    },
+    {
+      "path": "src-tauri/icons/android/mipmap-xxhdpi/ic_launcher_monochrome.png",
+      "gitBlob": "9a54cba0f530e75f32f35ff91cf6c2f7571ecf75"
+    },
+    {
+      "path": "src-tauri/icons/android/mipmap-xxhdpi/ic_launcher_round.png",
+      "gitBlob": "83733b4a35a3bc844aabaccbec9ac7e7503ffbc7"
+    },
+    {
+      "path": "src-tauri/icons/android/mipmap-xxxhdpi/ic_launcher.png",
+      "gitBlob": "5d26fbc6a5548720ea06e2d53ec52a0c1c5f5a5a"
+    },
+    {
+      "path": "src-tauri/icons/android/mipmap-xxxhdpi/ic_launcher_foreground.png",
+      "gitBlob": "10115bf643036dd381ec8c7a79ba26ce8448dad6"
+    },
+    {
+      "path": "src-tauri/icons/android/mipmap-xxxhdpi/ic_launcher_monochrome.png",
+      "gitBlob": "10115bf643036dd381ec8c7a79ba26ce8448dad6"
+    },
+    {
+      "path": "src-tauri/icons/android/mipmap-xxxhdpi/ic_launcher_round.png",
+      "gitBlob": "f9f560747245fd6d2b297ba6bb92089015e0fc09"
+    },
+    {
+      "path": "src-tauri/icons/android/values/ic_launcher_background.xml",
+      "gitBlob": "1b33ced89da711b9341672f104dca32ccafdb1dc"
+    },
+    {
+      "path": "src-tauri/icons/icon.icns",
+      "gitBlob": "376208d16471b85436f99f1b5bbdd5183ca49b5c"
+    },
+    {
+      "path": "src-tauri/icons/icon.ico",
+      "gitBlob": "74abff2286875454012759b2c7769bf492f0a68a"
+    },
+    {
+      "path": "src-tauri/icons/icon.png",
+      "gitBlob": "66ed14a7b6fb9ca80dd86d903f2d51d229afa7a4"
+    },
+    {
+      "path": "src-tauri/icons/ios/AppIcon-20x20@1x.png",
+      "gitBlob": "390b58c2e21e9662e338a9586eb662f7a86f3bbd"
+    },
+    {
+      "path": "src-tauri/icons/ios/AppIcon-20x20@2x-1.png",
+      "gitBlob": "d40c250e670df875f215a566bb4d211cabb3165f"
+    },
+    {
+      "path": "src-tauri/icons/ios/AppIcon-20x20@2x.png",
+      "gitBlob": "d40c250e670df875f215a566bb4d211cabb3165f"
+    },
+    {
+      "path": "src-tauri/icons/ios/AppIcon-20x20@3x.png",
+      "gitBlob": "2338f499972ac5234ad3cbc1bf9e0e97522f8199"
+    },
+    {
+      "path": "src-tauri/icons/ios/AppIcon-29x29@1x.png",
+      "gitBlob": "4a35adfc767fd9d842649f5c75847bdb725e6a62"
+    },
+    {
+      "path": "src-tauri/icons/ios/AppIcon-29x29@2x-1.png",
+      "gitBlob": "277ba0f0e25889ae42537e5d4069dbb3fa5beb3c"
+    },
+    {
+      "path": "src-tauri/icons/ios/AppIcon-29x29@2x.png",
+      "gitBlob": "277ba0f0e25889ae42537e5d4069dbb3fa5beb3c"
+    },
+    {
+      "path": "src-tauri/icons/ios/AppIcon-29x29@3x.png",
+      "gitBlob": "365f81b2b525bc9b3f54e58ac3dd2c89a736c8fb"
+    },
+    {
+      "path": "src-tauri/icons/ios/AppIcon-40x40@1x.png",
+      "gitBlob": "d40c250e670df875f215a566bb4d211cabb3165f"
+    },
+    {
+      "path": "src-tauri/icons/ios/AppIcon-40x40@2x-1.png",
+      "gitBlob": "289414266b2b686dd2dad7ef946ead06de91d497"
+    },
+    {
+      "path": "src-tauri/icons/ios/AppIcon-40x40@2x.png",
+      "gitBlob": "289414266b2b686dd2dad7ef946ead06de91d497"
+    },
+    {
+      "path": "src-tauri/icons/ios/AppIcon-40x40@3x.png",
+      "gitBlob": "cb79b84d5035f09e7a0b4c6decd166eece68fe34"
+    },
+    {
+      "path": "src-tauri/icons/ios/AppIcon-512@2x.png",
+      "gitBlob": "2db9914069dd0d67bbaf3aa251eaac800731566d"
+    },
+    {
+      "path": "src-tauri/icons/ios/AppIcon-60x60@2x.png",
+      "gitBlob": "cb79b84d5035f09e7a0b4c6decd166eece68fe34"
+    },
+    {
+      "path": "src-tauri/icons/ios/AppIcon-60x60@3x.png",
+      "gitBlob": "0945df1b7b13ae45293f9a8f4b6516ecb487324d"
+    },
+    {
+      "path": "src-tauri/icons/ios/AppIcon-76x76@1x.png",
+      "gitBlob": "2a44ad5abb0faddd062a12ad2c1820839cbabf96"
+    },
+    {
+      "path": "src-tauri/icons/ios/AppIcon-76x76@2x.png",
+      "gitBlob": "42738276ea067f6a4a4e7a414ede2b17d51e510e"
+    },
+    {
+      "path": "src-tauri/icons/ios/AppIcon-83.5x83.5@2x.png",
+      "gitBlob": "f768aad3bb8c365599386a0dcd672f5bb87c6691"
+    },
+    {
+      "path": "src-tauri/src/account/client.rs",
+      "gitBlob": "796b9cdbb4f45675ef0bb769e181be821fad3054"
+    },
+    {
+      "path": "src-tauri/src/account/mod.rs",
+      "gitBlob": "e4d6f28402c9b2d6efc71667482d6cc5f726f615"
+    },
+    {
+      "path": "src-tauri/src/account/model.rs",
+      "gitBlob": "72e2c137ecc367d55b340854a1a0c7e0fbb35354"
+    },
+    {
+      "path": "src-tauri/src/account/repository.rs",
+      "gitBlob": "9f4f3fce8c58968137328c5786aacf86dc2b773c"
+    },
+    {
+      "path": "src-tauri/src/account/service.rs",
+      "gitBlob": "7957bea710ba2377fc36a72b270e20ded894c47c"
+    },
+    {
+      "path": "src-tauri/src/app/bootstrap.rs",
+      "gitBlob": "e5107db4bbeedb13059ed4bf371150ce03cede51"
+    },
+    {
+      "path": "src-tauri/src/app/events.rs",
+      "gitBlob": "82dafd87a1fa91d375a83bd249b5df6f9d0312e2"
+    },
+    {
+      "path": "src-tauri/src/app/lifecycle.rs",
+      "gitBlob": "fb04a7ce31ea0fd0165fa714b126d0dc30409c82"
+    },
+    {
+      "path": "src-tauri/src/app/logging.rs",
+      "gitBlob": "4239ada8cb876ef2f1b0808094759a00e4c14359"
+    },
+    {
+      "path": "src-tauri/src/app/mod.rs",
+      "gitBlob": "ddb6d6ff780b739d05756dc11bfa765df9c16dab"
+    },
+    {
+      "path": "src-tauri/src/app/workspace.rs",
+      "gitBlob": "7a3fe9b61bd3a5b98983d2b3ac7cded6491f8592"
+    },
+    {
+      "path": "src-tauri/src/audit/mod.rs",
+      "gitBlob": "1b441baaa79985fe0b4bdd65a5ea7f9a174f7cec"
+    },
+    {
+      "path": "src-tauri/src/audit/model.rs",
+      "gitBlob": "79021170a34b74d3e86c6728a725aa8ca6cb1183"
+    },
+    {
+      "path": "src-tauri/src/audit/repository.rs",
+      "gitBlob": "b7a9c70865020c60c426674ef97a0c6ce44c6e08"
+    },
+    {
+      "path": "src-tauri/src/backup/archive/cloud.rs",
+      "gitBlob": "b659dcaa6c3ba4f8696330bd4fddbfe02f7f4b74"
+    },
+    {
+      "path": "src-tauri/src/backup/archive/error.rs",
+      "gitBlob": "b07459a5361f9413429bbc0565e07b32a11df468"
+    },
+    {
+      "path": "src-tauri/src/backup/archive/mod.rs",
+      "gitBlob": "89a828c7139652792ab76d90f293f16b230fcb08"
+    },
+    {
+      "path": "src-tauri/src/backup/archive/model.rs",
+      "gitBlob": "c7b3a0ca796dcaabc530f8337fb2fea2117305ac"
+    },
+    {
+      "path": "src-tauri/src/backup/archive/oauth.rs",
+      "gitBlob": "52219b502e8fd994f098f0356f823e1bfbc1428d"
+    },
+    {
+      "path": "src-tauri/src/backup/archive/provider.rs",
+      "gitBlob": "f40dbd7c158d79c82d7b82ccf0a88541e03918d0"
+    },
+    {
+      "path": "src-tauri/src/backup/archive/repository.rs",
+      "gitBlob": "8fadf78063f6ce04494ad7241b61be458a9bc81b"
+    },
+    {
+      "path": "src-tauri/src/backup/archive/scheduler.rs",
+      "gitBlob": "172391b70d75c3b03a8f1588aaa8e65c6df6ddbd"
+    },
+    {
+      "path": "src-tauri/src/backup/archive/service.rs",
+      "gitBlob": "83d483484bd6b939b8409568d0fe1b9341c041a7"
+    },
+    {
+      "path": "src-tauri/src/backup/error.rs",
+      "gitBlob": "c78c78cab19d818b84d770cf1e46d30a5956a4d6"
+    },
+    {
+      "path": "src-tauri/src/backup/format.rs",
+      "gitBlob": "18406ca057831503980c6f6d3c200f1f7a16c55d"
+    },
+    {
+      "path": "src-tauri/src/backup/mod.rs",
+      "gitBlob": "c0b54b0d3d8f451a4b0ec7f7a5edcf4bd4ae7969"
+    },
+    {
+      "path": "src-tauri/src/backup/model.rs",
+      "gitBlob": "a4ee83ac63f3553de796566d31273243649b0d02"
+    },
+    {
+      "path": "src-tauri/src/backup/repository.rs",
+      "gitBlob": "aa69683a74c8ee1df4e569cd6bc7011ecdfbb7ad"
+    },
+    {
+      "path": "src-tauri/src/backup/service.rs",
+      "gitBlob": "372f526c53c84b36d5dabdf02bc9c7863917284e"
+    },
+    {
+      "path": "src-tauri/src/commands/account.rs",
+      "gitBlob": "b931269455d0d85c87439b29fb75e513ca6b2481"
+    },
+    {
+      "path": "src-tauri/src/commands/audit.rs",
+      "gitBlob": "37cb1219f14ff8d3f8076746d45697f1dddaa4c3"
+    },
+    {
+      "path": "src-tauri/src/commands/backup.rs",
+      "gitBlob": "d61a5c6ae169889d8fe0524a041d6d3d559a669c"
+    },
+    {
+      "path": "src-tauri/src/commands/backup_compat.rs",
+      "gitBlob": "4f702c88e610b1b803017b59b0c05798add1dcd0"
+    },
+    {
+      "path": "src-tauri/src/commands/desktop.rs",
+      "gitBlob": "a3163b833bedb0aaa1cdc59ea8b3a74a897c095c"
+    },
+    {
+      "path": "src-tauri/src/commands/document.rs",
+      "gitBlob": "2e150eb82f07ea3dd5900cdb1301b9636b84126b"
+    },
+    {
+      "path": "src-tauri/src/commands/group.rs",
+      "gitBlob": "3e346f70640f98f7c02a90c516c072064efd2ee0"
+    },
+    {
+      "path": "src-tauri/src/commands/legacy_backup.rs",
+      "gitBlob": "3eea670e9e33f2751dd8a18cac5a3f080e8c9aaa"
+    },
+    {
+      "path": "src-tauri/src/commands/lifecycle.rs",
+      "gitBlob": "579dd3b97b0a1807f01c9ebb9bb50564ceb76703"
+    },
+    {
+      "path": "src-tauri/src/commands/local_state.rs",
+      "gitBlob": "b06886d46ad7ccd94b0d47bc1ed3e9cbe5d4c870"
+    },
+    {
+      "path": "src-tauri/src/commands/mod.rs",
+      "gitBlob": "d3713ce6d4d8c549921b6bc6ed2907b76072f441"
+    },
+    {
+      "path": "src-tauri/src/commands/platform.rs",
+      "gitBlob": "9ebe5911140d0185550fd0fd7d3eccf0b1623067"
+    },
+    {
+      "path": "src-tauri/src/commands/profile.rs",
+      "gitBlob": "7c363bb839b7dace8a7b55c83cb2005b73a5f4a4"
+    },
+    {
+      "path": "src-tauri/src/commands/server_detail.rs",
+      "gitBlob": "21b306a8bd76e37e6ec2c5f6f2b814db5f2484a2"
+    },
+    {
+      "path": "src-tauri/src/commands/sftp.rs",
+      "gitBlob": "393133082b6b2665aa87d37386c54bc6f6be0633"
+    },
+    {
+      "path": "src-tauri/src/commands/snippet.rs",
+      "gitBlob": "5e1134d409c13f816d601a50433c3554ba247a94"
+    },
+    {
+      "path": "src-tauri/src/commands/ssh.rs",
+      "gitBlob": "8c39999af0cca09b4ff3dc4030f09721c6c51315"
+    },
+    {
+      "path": "src-tauri/src/commands/sync.rs",
+      "gitBlob": "3cbe35b198f4625a60cd76c199a1d7d6d0d5eb0e"
+    },
+    {
+      "path": "src-tauri/src/commands/tunnel.rs",
+      "gitBlob": "cc5af9066c5ac4dacc14760993762b6be60f4c5e"
+    },
+    {
+      "path": "src-tauri/src/commands/vault.rs",
+      "gitBlob": "686766d47f659587ccee91099c0f7850506946c2"
+    },
+    {
+      "path": "src-tauri/src/error.rs",
+      "gitBlob": "d68c2c1bcf334fc6a01d1a578b0a05ba0dbe6ffe"
+    },
+    {
+      "path": "src-tauri/src/group/mod.rs",
+      "gitBlob": "c982dff44ab4297df99c6978a096f67dc1dac3fa"
+    },
+    {
+      "path": "src-tauri/src/group/model.rs",
+      "gitBlob": "029b5a24c4537e9f65d8379fb7bd2fa1b2413600"
+    },
+    {
+      "path": "src-tauri/src/group/repository.rs",
+      "gitBlob": "2914954a94ed59096620168538563294958ae66e"
+    },
+    {
+      "path": "src-tauri/src/group/service.rs",
+      "gitBlob": "19b5f097b48b634a2abc8eead41bc5c6fccb3fdb"
+    },
+    {
+      "path": "src-tauri/src/infrastructure/database/connection.rs",
+      "gitBlob": "ca83538a89b5fb58e63cce44a9b8d9c0277e776f"
+    },
+    {
+      "path": "src-tauri/src/infrastructure/database/error.rs",
+      "gitBlob": "d23c77979b1a7bc67fac6db0e2ad0b8bbecb0c26"
+    },
+    {
+      "path": "src-tauri/src/infrastructure/database/migration.rs",
+      "gitBlob": "1b2eec4be04e0853031c45d6e9d7e4c4a25d093e"
+    },
+    {
+      "path": "src-tauri/src/infrastructure/database/mod.rs",
+      "gitBlob": "b84a861753b63f5f1f49423ec0351408b3d3a52b"
+    },
+    {
+      "path": "src-tauri/src/infrastructure/database/sync_migration.rs",
+      "gitBlob": "b7974e8bdbab9e68873987e634db36fa2d190fdc"
+    },
+    {
+      "path": "src-tauri/src/infrastructure/mod.rs",
+      "gitBlob": "9bcdce2cb92722f7ef904e0834c51524327a213c"
+    },
+    {
+      "path": "src-tauri/src/infrastructure/platform/desktop/dialogs.rs",
+      "gitBlob": "ac0bf88fd25ce5895efb986d8d223c05afa5ba1e"
+    },
+    {
+      "path": "src-tauri/src/infrastructure/platform/desktop/drag_out.rs",
+      "gitBlob": "350d7b672f9cbd379a1a2a83073a55984d0dd1ed"
+    },
+    {
+      "path": "src-tauri/src/infrastructure/platform/desktop/editor_transition.rs",
+      "gitBlob": "89b4cf145440684d873ed79c09897eac7feb8b1d"
+    },
+    {
+      "path": "src-tauri/src/infrastructure/platform/desktop/editor_window.rs",
+      "gitBlob": "b3fc195d653f88674ffb9e3445f4175fe9cf3d0a"
+    },
+    {
+      "path": "src-tauri/src/infrastructure/platform/desktop/error.rs",
+      "gitBlob": "6d3618d487483b910cf53f77519deadc03cc9c11"
+    },
+    {
+      "path": "src-tauri/src/infrastructure/platform/desktop/logs.rs",
+      "gitBlob": "75bebf92c23bf49a20ca115f32ae7da5099bb86a"
+    },
+    {
+      "path": "src-tauri/src/infrastructure/platform/desktop/macos_chrome.rs",
+      "gitBlob": "299495186d8245657ed065345b084ea76e81a341"
+    },
+    {
+      "path": "src-tauri/src/infrastructure/platform/desktop/main_window.rs",
+      "gitBlob": "3f5b14c185794cb6326a25b1eb3f038e3e552d73"
+    },
+    {
+      "path": "src-tauri/src/infrastructure/platform/desktop/mod.rs",
+      "gitBlob": "326f7b6520bc9928d7dc2a598c9c5d63ad9f8ac6"
+    },
+    {
+      "path": "src-tauri/src/infrastructure/platform/desktop/paths.rs",
+      "gitBlob": "db2f691cf2f928db21fd85710a094dfa101d41eb"
+    },
+    {
+      "path": "src-tauri/src/infrastructure/platform/desktop/settings_migration.rs",
+      "gitBlob": "791ae9ac5487170f1a8a9a637c30be6cb2e0a195"
+    },
+    {
+      "path": "src-tauri/src/infrastructure/platform/document_gateway.rs",
+      "gitBlob": "b0eb1ef13afcb31aaa379bc86ee7fe97189865ac"
+    },
+    {
+      "path": "src-tauri/src/infrastructure/platform/local_files.rs",
+      "gitBlob": "7170dcf144a9451168120bdcf5954f1020347392"
+    },
+    {
+      "path": "src-tauri/src/infrastructure/platform/master_key_store.rs",
+      "gitBlob": "53ef730eeadf5400d5c2ba593989133ac38192d2"
+    },
+    {
+      "path": "src-tauri/src/infrastructure/platform/mod.rs",
+      "gitBlob": "ca568e4f61c2fdf15829bac03d78646d7d885470"
+    },
+    {
+      "path": "src-tauri/src/lib.rs",
+      "gitBlob": "84ba5deec883d6d421edd4a2974cf9dd3b686350"
+    },
+    {
+      "path": "src-tauri/src/local_state/mod.rs",
+      "gitBlob": "9f1d049468af59a2fa6f7a01ef2931d018e7731a"
+    },
+    {
+      "path": "src-tauri/src/local_state/model.rs",
+      "gitBlob": "bf99bad18b3fbe10faa42b27aee208118a5984f4"
+    },
+    {
+      "path": "src-tauri/src/local_state/repository.rs",
+      "gitBlob": "6c6e23f48484a03ed56765b1a33a2fd7518fd553"
+    },
+    {
+      "path": "src-tauri/src/local_state/service.rs",
+      "gitBlob": "e04324d47f17698593f7f7b762e235936d1a72a4"
+    },
+    {
+      "path": "src-tauri/src/main.rs",
+      "gitBlob": "28c420f2115c9a9e440192c10e661e08d6dd5fb3"
+    },
+    {
+      "path": "src-tauri/src/profile/connection.rs",
+      "gitBlob": "8c26993a58e31ac4ad0383a40ac8797d070fc276"
+    },
+    {
+      "path": "src-tauri/src/profile/error.rs",
+      "gitBlob": "064b35ff55ab42ea8a876c342c5d11d80e678861"
+    },
+    {
+      "path": "src-tauri/src/profile/legacy.rs",
+      "gitBlob": "86dc1465d27d596b47c87efbbcebeb8980bf318a"
+    },
+    {
+      "path": "src-tauri/src/profile/mod.rs",
+      "gitBlob": "a270572663992aac47d04e8851eda9886692ba1d"
+    },
+    {
+      "path": "src-tauri/src/profile/model.rs",
+      "gitBlob": "bd15a0536868c0232b35238380954cd3dbeff6a0"
+    },
+    {
+      "path": "src-tauri/src/profile/repository.rs",
+      "gitBlob": "5dbde4a10f604efa603eff259b3ccb34f12d72a0"
+    },
+    {
+      "path": "src-tauri/src/profile/service.rs",
+      "gitBlob": "24e1a68a723ca84bdb5e8be948d68d717c3e4915"
+    },
+    {
+      "path": "src-tauri/src/server_detail.rs",
+      "gitBlob": "1c8174ac352a82a5e5ccee8cae5cc605dbcaf56b"
+    },
+    {
+      "path": "src-tauri/src/sftp/backend.rs",
+      "gitBlob": "e13e9a1b539925c52572d50b71008486e1154c7f"
+    },
+    {
+      "path": "src-tauri/src/sftp/editor.rs",
+      "gitBlob": "7ea8462ba7652541c9c2759442f49174f2dfbd10"
+    },
+    {
+      "path": "src-tauri/src/sftp/error.rs",
+      "gitBlob": "1e057f50573a83dc7c2f8c05d985f0646f56fdbf"
+    },
+    {
+      "path": "src-tauri/src/sftp/events.rs",
+      "gitBlob": "bbf2cb25189917f2253de45e24b28681510eaca5"
+    },
+    {
+      "path": "src-tauri/src/sftp/mod.rs",
+      "gitBlob": "9324609181ef376d43197814862bd243ed613af5"
+    },
+    {
+      "path": "src-tauri/src/sftp/resumable.rs",
+      "gitBlob": "73d1c005455beb4ab4a05d51984aaa496e83e4d9"
+    },
+    {
+      "path": "src-tauri/src/sftp/state.rs",
+      "gitBlob": "67963e2bcd108758c701cae89e1bccf506f706c3"
+    },
+    {
+      "path": "src-tauri/src/sftp/task_repository.rs",
+      "gitBlob": "7b3e12a45fe3520178373b5a36d982bba49d4d6f"
+    },
+    {
+      "path": "src-tauri/src/sftp/transfer.rs",
+      "gitBlob": "3db5da3cf10f2136dd3abc48687b1f693ddfefe3"
+    },
+    {
+      "path": "src-tauri/src/snippet/mod.rs",
+      "gitBlob": "2938e2cffbf6da6cc9f059d0fec2d1177206d81c"
+    },
+    {
+      "path": "src-tauri/src/snippet/model.rs",
+      "gitBlob": "d0eb6b130f5ae1181b7ecaa00e1f828a6f0acda8"
+    },
+    {
+      "path": "src-tauri/src/snippet/repository.rs",
+      "gitBlob": "793e5969ee952d3dc240b536807f6418412d05eb"
+    },
+    {
+      "path": "src-tauri/src/snippet/service.rs",
+      "gitBlob": "794074748f69c75f0614b8246add3c9dc29525e4"
+    },
+    {
+      "path": "src-tauri/src/ssh/authentication.rs",
+      "gitBlob": "8ca83804460b93c6aeba4e48ae388325b5e67399"
+    },
+    {
+      "path": "src-tauri/src/ssh/completion.rs",
+      "gitBlob": "48058fc5645ff3131da89c1a7a5d1f1d8649723c"
+    },
+    {
+      "path": "src-tauri/src/ssh/connection_scope.rs",
+      "gitBlob": "d282b9c0952f60099d224862357255ec65f1735d"
+    },
+    {
+      "path": "src-tauri/src/ssh/error.rs",
+      "gitBlob": "274b1521a559cdc65957b48a03b97ee69a13dcd0"
+    },
+    {
+      "path": "src-tauri/src/ssh/events.rs",
+      "gitBlob": "cc4d0c65852531c603b8c7017bd88094426aaed5"
+    },
+    {
+      "path": "src-tauri/src/ssh/forwarding.rs",
+      "gitBlob": "53731b954d5837ce0f70d033998d7a706c6306ac"
+    },
+    {
+      "path": "src-tauri/src/ssh/mod.rs",
+      "gitBlob": "76ba8aa3808c968f932d1f76039b3bbc23a76dfd"
+    },
+    {
+      "path": "src-tauri/src/ssh/profile_test.rs",
+      "gitBlob": "1f885880d65c226d8496b9bbab128b793dbaf990"
+    },
+    {
+      "path": "src-tauri/src/ssh/session.rs",
+      "gitBlob": "946f9146a26c883159195e8a15c6731c243ed7a3"
+    },
+    {
+      "path": "src-tauri/src/ssh/session_manager.rs",
+      "gitBlob": "30cb465e2be3ee7b2e9c771b483f6acbb693181a"
+    },
+    {
+      "path": "src-tauri/src/ssh/socks.rs",
+      "gitBlob": "e09892f05ae75e520286ade366210365e5c5a7e5"
+    },
+    {
+      "path": "src-tauri/src/ssh/transport.rs",
+      "gitBlob": "79371b0b1f7b420fe1cd9b551934c5c2e9a699dc"
+    },
+    {
+      "path": "src-tauri/src/ssh/tunnel.rs",
+      "gitBlob": "43f723bb4e767481b375fbc005efac5a07efc7a9"
+    },
+    {
+      "path": "src-tauri/src/ssh/tunnel/tests.rs",
+      "gitBlob": "f67007b3125a1643b91b675f1213fc536ed7ae53"
+    },
+    {
+      "path": "src-tauri/src/ssh/tunnel_repository.rs",
+      "gitBlob": "0301484c1a488788ba954ed69872182d336bf260"
+    },
+    {
+      "path": "src-tauri/src/sync/crypto.rs",
+      "gitBlob": "95f31fc445d33173ccd7fe94f063099c5ad80fb8"
+    },
+    {
+      "path": "src-tauri/src/sync/mod.rs",
+      "gitBlob": "29d4feade6df3d7738d4cd69b6f3b0a339b005e7"
+    },
+    {
+      "path": "src-tauri/src/sync/model.rs",
+      "gitBlob": "da0b4e9e6fb1ae15a87769c4f1b5c337faf6007a"
+    },
+    {
+      "path": "src-tauri/src/sync/repository.rs",
+      "gitBlob": "b29b9e3b48950ad8467917c0fd028b07570d26d1"
+    },
+    {
+      "path": "src-tauri/src/sync/scheduler.rs",
+      "gitBlob": "437d3a7fb49439bd117c7ff0690d1de27700590b"
+    },
+    {
+      "path": "src-tauri/src/sync/service.rs",
+      "gitBlob": "366c105cd6a2a362958aea278df12a439c6ff837"
+    },
+    {
+      "path": "src-tauri/src/vault/crypto.rs",
+      "gitBlob": "9ce02ba15b0b9543f0dc83133b53a7a8b2cdb78a"
+    },
+    {
+      "path": "src-tauri/src/vault/error.rs",
+      "gitBlob": "fe14422f9713dc7d5d9ec8c9706a7cc7d1de288d"
+    },
+    {
+      "path": "src-tauri/src/vault/mod.rs",
+      "gitBlob": "a6d31fd58112ab8b6984b14b98d23a25f35c4c21"
+    },
+    {
+      "path": "src-tauri/src/vault/model.rs",
+      "gitBlob": "75143cc5effec4bfa9696e812bbf1f3c7b38259d"
+    },
+    {
+      "path": "src-tauri/src/vault/repository.rs",
+      "gitBlob": "58474e674127947f8725e3ee4a6d2a8889e123ab"
+    },
+    {
+      "path": "src-tauri/src/vault/service.rs",
+      "gitBlob": "20cfa4a639df805fb97aee259f84bffa01328d9a"
+    },
+    {
+      "path": "src-tauri/tauri.conf.json",
+      "gitBlob": "0fd36c8ff9af21a7a25e008bf52d787a484f64e8"
+    },
+    {
+      "path": "src-tauri/tauri.linux.conf.json",
+      "gitBlob": "726462fac341121f37403043da6ff05916a2f76c"
+    },
+    {
+      "path": "src-tauri/tauri.macos.conf.json",
+      "gitBlob": "7e076db02a0071e1939d1480efa2586f81d04dab"
+    },
+    {
+      "path": "src-tauri/tauri.windows.conf.json",
+      "gitBlob": "5d19182f8be7151c9e477e8a9dba0f27d5d6c56f"
+    },
+    {
+      "path": "web/package-lock.json",
+      "gitBlob": "90aa9498bc2e0580e3d353eb91f0230ea00dfc70"
+    },
+    {
+      "path": "web/package.json",
+      "gitBlob": "4c9d33d108ed021d251ecb624ee0864df83281d8"
+    },
+    {
+      "path": "web/public/eizhu-logo.svg",
+      "gitBlob": "330c9f785062bf0fb8b6323df0b9bfa709aa3558"
+    },
+    {
+      "path": "web/public/favicon.svg",
+      "gitBlob": "7595ece285ba8cfe7ad5254ca467ad703bb74823"
+    },
+    {
+      "path": "web/public/fonts/fira-code-latin-ext-wght-normal.woff2",
+      "gitBlob": "eac15ae2503647f12c2d291bafbbc23828a00e16"
+    },
+    {
+      "path": "web/public/fonts/fira-code-latin-wght-normal.woff2",
+      "gitBlob": "ed70084f325626a627a13f8c37af71e798dd6efe"
+    },
+    {
+      "path": "web/public/fonts/fonts.css",
+      "gitBlob": "3729c2a6a4d7b0d844a66e8bd973a723eca6b16f"
+    },
+    {
+      "path": "web/public/fonts/inter-latin-ext-wght-normal.woff2",
+      "gitBlob": "479d010d2902fa3a5b48e84a973db1978b2e9949"
+    },
+    {
+      "path": "web/public/fonts/inter-latin-wght-normal.woff2",
+      "gitBlob": "d15208de03cd1ad7c5199f0a0ce915fe841e4722"
+    },
+    {
+      "path": "web/public/fonts/jetbrains-mono-latin-ext-wght-normal.woff2",
+      "gitBlob": "01769d9e63d89d35d21547fdcfe84382a68cfe7c"
+    },
+    {
+      "path": "web/public/fonts/jetbrains-mono-latin-wght-normal.woff2",
+      "gitBlob": "cd5102a44c763f1cfe9f2b199fd5d7257491c0dd"
+    },
+    {
+      "path": "web/public/fonts/noto-sans-sc-100-wght-normal.woff2",
+      "gitBlob": "d4ce8e911c841e9f82ef0b5deb4709d7d9f68cb2"
+    },
+    {
+      "path": "web/public/fonts/noto-sans-sc-101-wght-normal.woff2",
+      "gitBlob": "9c4ffaa1028464edae4095ee7ccc0db595996b9e"
+    },
+    {
+      "path": "web/public/fonts/noto-sans-sc-102-wght-normal.woff2",
+      "gitBlob": "352b0a299cb172431b08768cf244f6ae6882093e"
+    },
+    {
+      "path": "web/public/fonts/noto-sans-sc-103-wght-normal.woff2",
+      "gitBlob": "03f233f9502020b411758f5c7c0c57d414304e71"
+    },
+    {
+      "path": "web/public/fonts/noto-sans-sc-104-wght-normal.woff2",
+      "gitBlob": "3958f85eec3f221cda31d0c1bd8bcdb52d51e489"
+    },
+    {
+      "path": "web/public/fonts/noto-sans-sc-105-wght-normal.woff2",
+      "gitBlob": "813657e000961b1df7ce118e037768bccf772665"
+    },
+    {
+      "path": "web/public/fonts/noto-sans-sc-106-wght-normal.woff2",
+      "gitBlob": "3c96cd2d51e9e88c37efb419e34a1cd1c9fa923b"
+    },
+    {
+      "path": "web/public/fonts/noto-sans-sc-107-wght-normal.woff2",
+      "gitBlob": "79655a393f20d93457b466b742c68134b667c2f0"
+    },
+    {
+      "path": "web/public/fonts/noto-sans-sc-108-wght-normal.woff2",
+      "gitBlob": "8f0f43881054860024930c99b2ae7d6a38c6874f"
+    },
+    {
+      "path": "web/public/fonts/noto-sans-sc-109-wght-normal.woff2",
+      "gitBlob": "f1269860e95ca503c9db81da61c1525539d3978c"
+    },
+    {
+      "path": "web/public/fonts/noto-sans-sc-110-wght-normal.woff2",
+      "gitBlob": "832f5b4dab01f561a11a91f0405bf207a6f5c406"
+    },
+    {
+      "path": "web/public/fonts/noto-sans-sc-111-wght-normal.woff2",
+      "gitBlob": "0fea47c43340cb4b2b5abb64aff6a19b5492d449"
+    },
+    {
+      "path": "web/public/fonts/noto-sans-sc-112-wght-normal.woff2",
+      "gitBlob": "d9fc8cb874ce062589d8426b52f3cf807ca83905"
+    },
+    {
+      "path": "web/public/fonts/noto-sans-sc-113-wght-normal.woff2",
+      "gitBlob": "e4b3cf588644c8f1212da7fe9bf923db20bd3b55"
+    },
+    {
+      "path": "web/public/fonts/noto-sans-sc-114-wght-normal.woff2",
+      "gitBlob": "35f469fb2ed2f489582d84aa337f1aab752651b6"
+    },
+    {
+      "path": "web/public/fonts/noto-sans-sc-115-wght-normal.woff2",
+      "gitBlob": "a31f56b9eefed0be4234026672dbb325280d8225"
+    },
+    {
+      "path": "web/public/fonts/noto-sans-sc-116-wght-normal.woff2",
+      "gitBlob": "3446114a87dcab786c66fc012e692ef5e7256265"
+    },
+    {
+      "path": "web/public/fonts/noto-sans-sc-117-wght-normal.woff2",
+      "gitBlob": "b4f4e4ed827880ff9e828cea7e23d621dcb77a56"
+    },
+    {
+      "path": "web/public/fonts/noto-sans-sc-118-wght-normal.woff2",
+      "gitBlob": "addf0ae5f333aecc8d3474f5a08ca13971967b30"
+    },
+    {
+      "path": "web/public/fonts/noto-sans-sc-119-wght-normal.woff2",
+      "gitBlob": "1a7c02cca8f9fe0092645c5bbb252f5e1799c89e"
+    },
+    {
+      "path": "web/public/fonts/noto-sans-sc-21-wght-normal.woff2",
+      "gitBlob": "a7801008766a56f2d53b3a0cb41ff6ca1152bb80"
+    },
+    {
+      "path": "web/public/fonts/noto-sans-sc-22-wght-normal.woff2",
+      "gitBlob": "5cf3105302707842b244629c0faff1590cc50f17"
+    },
+    {
+      "path": "web/public/fonts/noto-sans-sc-23-wght-normal.woff2",
+      "gitBlob": "90595ac0f6b23465ce1977a6cb0defe56f0fb9cd"
+    },
+    {
+      "path": "web/public/fonts/noto-sans-sc-24-wght-normal.woff2",
+      "gitBlob": "353d74b014422259cb4acdfeb8d4ab1bbf77306d"
+    },
+    {
+      "path": "web/public/fonts/noto-sans-sc-25-wght-normal.woff2",
+      "gitBlob": "c33bbceef39f55176940fac30179ad168a167a7b"
+    },
+    {
+      "path": "web/public/fonts/noto-sans-sc-26-wght-normal.woff2",
+      "gitBlob": "1c19f2a49f5f9468b135482beaa2d8731522c554"
+    },
+    {
+      "path": "web/public/fonts/noto-sans-sc-27-wght-normal.woff2",
+      "gitBlob": "aa5297a3df8968c18acd3feda8df6b2e9d3cd2cc"
+    },
+    {
+      "path": "web/public/fonts/noto-sans-sc-28-wght-normal.woff2",
+      "gitBlob": "82aaacc01954b24772b8f4d5bfee5a8495e9b1d4"
+    },
+    {
+      "path": "web/public/fonts/noto-sans-sc-29-wght-normal.woff2",
+      "gitBlob": "fd66a754e19e2c761a6d44d708a29d62e2cdab90"
+    },
+    {
+      "path": "web/public/fonts/noto-sans-sc-30-wght-normal.woff2",
+      "gitBlob": "8c295bdcae189376d72c203290bd330f17d47e75"
+    },
+    {
+      "path": "web/public/fonts/noto-sans-sc-31-wght-normal.woff2",
+      "gitBlob": "dfdd147d3f9e558b171ab75db534d3f5fec095fc"
+    },
+    {
+      "path": "web/public/fonts/noto-sans-sc-32-wght-normal.woff2",
+      "gitBlob": "d3e8a9a89745eb46fcc7c82410f76d5b7c09de8b"
+    },
+    {
+      "path": "web/public/fonts/noto-sans-sc-33-wght-normal.woff2",
+      "gitBlob": "6d72ef906b57f5e9ca200cfa841597d2c6aa19c2"
+    },
+    {
+      "path": "web/public/fonts/noto-sans-sc-34-wght-normal.woff2",
+      "gitBlob": "882b38062a28ae599e9028b38797b548122dd216"
+    },
+    {
+      "path": "web/public/fonts/noto-sans-sc-35-wght-normal.woff2",
+      "gitBlob": "f8d78e4e61c92b1e978b2bfda8d1d33c4609d62b"
+    },
+    {
+      "path": "web/public/fonts/noto-sans-sc-36-wght-normal.woff2",
+      "gitBlob": "f0f609a49a770649098ba8c3daadb1487fdad851"
+    },
+    {
+      "path": "web/public/fonts/noto-sans-sc-37-wght-normal.woff2",
+      "gitBlob": "28c17fefd0bcf4d8e20f59457749e80f84516599"
+    },
+    {
+      "path": "web/public/fonts/noto-sans-sc-38-wght-normal.woff2",
+      "gitBlob": "6c54ed574f3d3e8f1d27211f8b6338bd8b2d4e36"
+    },
+    {
+      "path": "web/public/fonts/noto-sans-sc-39-wght-normal.woff2",
+      "gitBlob": "e6bea8a103a81a288cc33d41b85cbcfc451c1719"
+    },
+    {
+      "path": "web/public/fonts/noto-sans-sc-4-wght-normal.woff2",
+      "gitBlob": "a137c3652808a1fd2410f2cf25b304bdad1907f8"
+    },
+    {
+      "path": "web/public/fonts/noto-sans-sc-40-wght-normal.woff2",
+      "gitBlob": "6b3407679628406a392d7bad6f57c3b5b8e58cd7"
+    },
+    {
+      "path": "web/public/fonts/noto-sans-sc-41-wght-normal.woff2",
+      "gitBlob": "cb6e85089d3671ead5943dab1e3a1bd9dac61ed5"
+    },
+    {
+      "path": "web/public/fonts/noto-sans-sc-42-wght-normal.woff2",
+      "gitBlob": "0f926e472a84210e8cc50ea3562811f93d55f940"
+    },
+    {
+      "path": "web/public/fonts/noto-sans-sc-43-wght-normal.woff2",
+      "gitBlob": "797f8f3616976129edd5b42867a198a6f010953e"
+    },
+    {
+      "path": "web/public/fonts/noto-sans-sc-44-wght-normal.woff2",
+      "gitBlob": "00be4ffc78498006e3858320f680020fa4a6603e"
+    },
+    {
+      "path": "web/public/fonts/noto-sans-sc-45-wght-normal.woff2",
+      "gitBlob": "7493892cbe66f63a1a05d3e981a6ba0c1663a51c"
+    },
+    {
+      "path": "web/public/fonts/noto-sans-sc-46-wght-normal.woff2",
+      "gitBlob": "6bee2f076c66002015b2531100ef50bd3b69d8ae"
+    },
+    {
+      "path": "web/public/fonts/noto-sans-sc-47-wght-normal.woff2",
+      "gitBlob": "32ede843d4506869e27687251e215c9155fea1d0"
+    },
+    {
+      "path": "web/public/fonts/noto-sans-sc-48-wght-normal.woff2",
+      "gitBlob": "5a9b074c1a55171e5a455a8d6668cc94e2006acd"
+    },
+    {
+      "path": "web/public/fonts/noto-sans-sc-49-wght-normal.woff2",
+      "gitBlob": "357e10ff6f33f722dea21968668ebc62eebfd9bc"
+    },
+    {
+      "path": "web/public/fonts/noto-sans-sc-5-wght-normal.woff2",
+      "gitBlob": "b96b1b617a84af4b8b193ae45822aa8395b888d1"
+    },
+    {
+      "path": "web/public/fonts/noto-sans-sc-50-wght-normal.woff2",
+      "gitBlob": "0b0d773f9c6fe0f8c89e665d8a63649ed3098e89"
+    },
+    {
+      "path": "web/public/fonts/noto-sans-sc-51-wght-normal.woff2",
+      "gitBlob": "2df33952fbc4173f83205117d28fccd26a2a56b0"
+    },
+    {
+      "path": "web/public/fonts/noto-sans-sc-52-wght-normal.woff2",
+      "gitBlob": "164020bda6ed7bd0078f0e65e647a4e1ded20b13"
+    },
+    {
+      "path": "web/public/fonts/noto-sans-sc-53-wght-normal.woff2",
+      "gitBlob": "a3b8e70e20ba87896c09af181165910c3008b0b6"
+    },
+    {
+      "path": "web/public/fonts/noto-sans-sc-54-wght-normal.woff2",
+      "gitBlob": "ffd5b19969d7a3b9a39b88540e573c817b4b3047"
+    },
+    {
+      "path": "web/public/fonts/noto-sans-sc-55-wght-normal.woff2",
+      "gitBlob": "78e18053fd8b833f65b10bf0737e34827bd701c1"
+    },
+    {
+      "path": "web/public/fonts/noto-sans-sc-56-wght-normal.woff2",
+      "gitBlob": "22a0a667ef91e32a9051eafed32a1c7efab27072"
+    },
+    {
+      "path": "web/public/fonts/noto-sans-sc-57-wght-normal.woff2",
+      "gitBlob": "c04387c60c57a224c3bab96fb5a0402f704b38da"
+    },
+    {
+      "path": "web/public/fonts/noto-sans-sc-58-wght-normal.woff2",
+      "gitBlob": "28029704f75a9c6ff848bfb2816847557d4187cf"
+    },
+    {
+      "path": "web/public/fonts/noto-sans-sc-59-wght-normal.woff2",
+      "gitBlob": "0220ad77da7aebd9bbd4f708fa498a5e36d8060a"
+    },
+    {
+      "path": "web/public/fonts/noto-sans-sc-6-wght-normal.woff2",
+      "gitBlob": "5b261f8d838aae2082b26a4214e3ea5233ed5a33"
+    },
+    {
+      "path": "web/public/fonts/noto-sans-sc-60-wght-normal.woff2",
+      "gitBlob": "a3dec4a5d3e8a0e537e584401702fdf109c24075"
+    },
+    {
+      "path": "web/public/fonts/noto-sans-sc-61-wght-normal.woff2",
+      "gitBlob": "7c6b2876e3063681e1a31c594b5f36e080e03162"
+    },
+    {
+      "path": "web/public/fonts/noto-sans-sc-62-wght-normal.woff2",
+      "gitBlob": "9171d569518d103b09ce142d25c6f295cbb15426"
+    },
+    {
+      "path": "web/public/fonts/noto-sans-sc-63-wght-normal.woff2",
+      "gitBlob": "54dbcba8c4fff53d36b02117c921702103c2245c"
+    },
+    {
+      "path": "web/public/fonts/noto-sans-sc-64-wght-normal.woff2",
+      "gitBlob": "4dd37219c7c3fff44fcd7c452399c34c61a2c7a6"
+    },
+    {
+      "path": "web/public/fonts/noto-sans-sc-65-wght-normal.woff2",
+      "gitBlob": "21c31a61cc88de845cfe9b0a81ac313c4f49e07b"
+    },
+    {
+      "path": "web/public/fonts/noto-sans-sc-66-wght-normal.woff2",
+      "gitBlob": "0d9c98555b89f0c351e6e8abb37be6bb4373f2e5"
+    },
+    {
+      "path": "web/public/fonts/noto-sans-sc-67-wght-normal.woff2",
+      "gitBlob": "63d116773785076f7bf6435d0c9ddb5a11f971b5"
+    },
+    {
+      "path": "web/public/fonts/noto-sans-sc-68-wght-normal.woff2",
+      "gitBlob": "68779216fefeaa4c49ed3965ddeb0f56b8ea49cb"
+    },
+    {
+      "path": "web/public/fonts/noto-sans-sc-69-wght-normal.woff2",
+      "gitBlob": "7cc854e9f9ed8e0ffaa0b83718c6ee2f339f8d39"
+    },
+    {
+      "path": "web/public/fonts/noto-sans-sc-70-wght-normal.woff2",
+      "gitBlob": "5401749fe11bd63bb4e91128f86ce084e23af484"
+    },
+    {
+      "path": "web/public/fonts/noto-sans-sc-71-wght-normal.woff2",
+      "gitBlob": "22cedcba704b99234e3b747173ecfd989be10037"
+    },
+    {
+      "path": "web/public/fonts/noto-sans-sc-72-wght-normal.woff2",
+      "gitBlob": "07f1c20c1233586c8b0164c699c98ede47e3aa17"
+    },
+    {
+      "path": "web/public/fonts/noto-sans-sc-73-wght-normal.woff2",
+      "gitBlob": "480bc9d763b923b45fafc9ef0de34c6eef7b87ad"
+    },
+    {
+      "path": "web/public/fonts/noto-sans-sc-74-wght-normal.woff2",
+      "gitBlob": "fdb7fd746cf652d366b64c0789bf068288375e1e"
+    },
+    {
+      "path": "web/public/fonts/noto-sans-sc-75-wght-normal.woff2",
+      "gitBlob": "1c17be3e596f726e06b77f07655a23a4bed047d3"
+    },
+    {
+      "path": "web/public/fonts/noto-sans-sc-76-wght-normal.woff2",
+      "gitBlob": "d83346f38bca47d7f84dc98b45c58de3ed7194ca"
+    },
+    {
+      "path": "web/public/fonts/noto-sans-sc-77-wght-normal.woff2",
+      "gitBlob": "8664883e734ad04a0397f54f3a72c90f76a9b06a"
+    },
+    {
+      "path": "web/public/fonts/noto-sans-sc-78-wght-normal.woff2",
+      "gitBlob": "ae10c2a35a3fb84e6edc8475e6a8b3a9e4530920"
+    },
+    {
+      "path": "web/public/fonts/noto-sans-sc-79-wght-normal.woff2",
+      "gitBlob": "55b7c664b7923b71e295c75a385a28de0f6545b6"
+    },
+    {
+      "path": "web/public/fonts/noto-sans-sc-80-wght-normal.woff2",
+      "gitBlob": "998013a3e36eb4344e904333b72adbcd8ba786b2"
+    },
+    {
+      "path": "web/public/fonts/noto-sans-sc-81-wght-normal.woff2",
+      "gitBlob": "09587fcd40d36e3efd70fa9d05e9b37fadabb60e"
+    },
+    {
+      "path": "web/public/fonts/noto-sans-sc-82-wght-normal.woff2",
+      "gitBlob": "4f8cd7a7b6047c0ed592c6f6ebb1b01603662c88"
+    },
+    {
+      "path": "web/public/fonts/noto-sans-sc-83-wght-normal.woff2",
+      "gitBlob": "24b03c8be5d22060454d684faa2538c541666578"
+    },
+    {
+      "path": "web/public/fonts/noto-sans-sc-84-wght-normal.woff2",
+      "gitBlob": "3cff8e8eb6c442d01a84f47289812e5903a51456"
+    },
+    {
+      "path": "web/public/fonts/noto-sans-sc-85-wght-normal.woff2",
+      "gitBlob": "9dd172db14e9aaa4a77e42c925d1dd50959ef60f"
+    },
+    {
+      "path": "web/public/fonts/noto-sans-sc-86-wght-normal.woff2",
+      "gitBlob": "4519e44754f5e3e0ac5254f6da6a30e714d65075"
+    },
+    {
+      "path": "web/public/fonts/noto-sans-sc-87-wght-normal.woff2",
+      "gitBlob": "76182302667bee0467be2569d84fb8bb403fa985"
+    },
+    {
+      "path": "web/public/fonts/noto-sans-sc-88-wght-normal.woff2",
+      "gitBlob": "072261021f7b56362964ad8b80365e507e082af3"
+    },
+    {
+      "path": "web/public/fonts/noto-sans-sc-89-wght-normal.woff2",
+      "gitBlob": "6301c24aea7ed3b4e5e4856efb9ffe53beea5526"
+    },
+    {
+      "path": "web/public/fonts/noto-sans-sc-90-wght-normal.woff2",
+      "gitBlob": "5de2501d4dcd986a96ebf73a313eccb0854d221d"
+    },
+    {
+      "path": "web/public/fonts/noto-sans-sc-91-wght-normal.woff2",
+      "gitBlob": "b0bd6b68aae6e41709033280ea9c5723df611284"
+    },
+    {
+      "path": "web/public/fonts/noto-sans-sc-97-wght-normal.woff2",
+      "gitBlob": "751c6e17e337d348ef1f6ede8b00dfa8d7be14ee"
+    },
+    {
+      "path": "web/public/fonts/noto-sans-sc-98-wght-normal.woff2",
+      "gitBlob": "728a7ad802504b994c176f0a9ed688531b0d653a"
+    },
+    {
+      "path": "web/public/fonts/noto-sans-sc-99-wght-normal.woff2",
+      "gitBlob": "e8c72bd7445f27bd3dafd47aa249700d05c4edf7"
+    },
+    {
+      "path": "web/public/fonts/noto-sans-sc-cyrillic-wght-normal.woff2",
+      "gitBlob": "95581b5837b8c83711fbc1b4faa6734af6550e94"
+    },
+    {
+      "path": "web/public/fonts/noto-sans-sc-latin-ext-wght-normal.woff2",
+      "gitBlob": "8069eca0e502cb3709254b4c9cd4b1e8c3b1b2e3"
+    },
+    {
+      "path": "web/public/fonts/noto-sans-sc-latin-wght-normal.woff2",
+      "gitBlob": "275058dda4ce0ed0c7ae5b00605db691d882b98a"
+    },
+    {
+      "path": "web/public/icons.svg",
+      "gitBlob": "e9522193d9f796a9748e9ad8c952a5df73c87db9"
+    },
+    {
+      "path": "web/src/App.tsx",
+      "gitBlob": "faf56520dcb5a4b054e059b9fb5bd8766e653a1e"
+    },
+    {
+      "path": "web/src/api/account.test.ts",
+      "gitBlob": "88368d68aab2776d18b84d721087d519ae4de6df"
+    },
+    {
+      "path": "web/src/api/account.ts",
+      "gitBlob": "e4ae3d5a1cb7270d19e017e2c2ff57082d49825a"
+    },
+    {
+      "path": "web/src/api/archive.test.ts",
+      "gitBlob": "19514791ed55f06dc194d9b06bf64d842f92391d"
+    },
+    {
+      "path": "web/src/api/archive.ts",
+      "gitBlob": "d5a4a68b931d380ce9d8f741b29fcbdc35c77ee5"
+    },
+    {
+      "path": "web/src/api/backup.test.ts",
+      "gitBlob": "c652bc9c0634f2ad9b1b44691e349690947fa025"
+    },
+    {
+      "path": "web/src/api/backup.ts",
+      "gitBlob": "569c18bf086182bf1571953e41ffa1457439ed04"
+    },
+    {
+      "path": "web/src/api/document.test.ts",
+      "gitBlob": "7c45c1d82368d5ab652b4254630333f5df98eeab"
+    },
+    {
+      "path": "web/src/api/document.ts",
+      "gitBlob": "6ac590a56de4eb577d8666615dc6df84109fcdb2"
+    },
+    {
+      "path": "web/src/api/edit.ts",
+      "gitBlob": "2803c94f6a22c72ee0cc02a912c5edcd1cb93f5c"
+    },
+    {
+      "path": "web/src/api/group.test.ts",
+      "gitBlob": "a0acc3e73c92c2af6ae7822eb460bd38753927de"
+    },
+    {
+      "path": "web/src/api/group.ts",
+      "gitBlob": "572d1752e3c16439272a73bfc7136d899271e40b"
+    },
+    {
+      "path": "web/src/api/localState.ts",
+      "gitBlob": "db74d43027b2c828705a577ae67a7e3df6c62392"
+    },
+    {
+      "path": "web/src/api/profile.test.ts",
+      "gitBlob": "741cf1083ff1e522685f14dc88e7daa60e2e4abd"
+    },
+    {
+      "path": "web/src/api/profile.ts",
+      "gitBlob": "b66080956b6b64001eac99f87f035a5fa7ad1a61"
+    },
+    {
+      "path": "web/src/api/serverDetail.ts",
+      "gitBlob": "fde7174e52a8a237f60816a4cc0b23a107e7d362"
+    },
+    {
+      "path": "web/src/api/session.test.ts",
+      "gitBlob": "653d5377fc08348c49b81280e7cbe4e02e7c92f8"
+    },
+    {
+      "path": "web/src/api/session.ts",
+      "gitBlob": "4216353dbabde1e492288672d36de3ed8c4c413a"
+    },
+    {
+      "path": "web/src/api/sftp.test.ts",
+      "gitBlob": "e71da4e88646d2cdd4b37cb0eac842677e2908f9"
+    },
+    {
+      "path": "web/src/api/sftp.ts",
+      "gitBlob": "1af9e06aaa9e4bf76cd189b3bfdc6c85113a71b2"
+    },
+    {
+      "path": "web/src/api/snippet.test.ts",
+      "gitBlob": "b9b8ce0eac9cf8fc8e23b0d44780ee5150ae4dd9"
+    },
+    {
+      "path": "web/src/api/snippet.ts",
+      "gitBlob": "ecd25352aaa8fd7ac5c778c1167048d05b0b1148"
+    },
+    {
+      "path": "web/src/api/sync.test.ts",
+      "gitBlob": "9500fce6424fa1c6bb66a614f94d0d7b0ea2de14"
+    },
+    {
+      "path": "web/src/api/sync.ts",
+      "gitBlob": "f1d8ba49b508d94dff9d582446a201e27f6b546d"
+    },
+    {
+      "path": "web/src/api/tauri.test.ts",
+      "gitBlob": "fa78b58f7cf8f01fd9be85c916e265361b60c539"
+    },
+    {
+      "path": "web/src/api/tauri.ts",
+      "gitBlob": "2aeeb30337557ece2e7f06936f41e03f863caba0"
+    },
+    {
+      "path": "web/src/api/tunnel.test.ts",
+      "gitBlob": "4b46e24f754299aa7bc4a9bbf64a78ff01073f2e"
+    },
+    {
+      "path": "web/src/api/tunnel.ts",
+      "gitBlob": "2756fdc3b17cdaec37afe0a429a635ae096e12cb"
+    },
+    {
+      "path": "web/src/api/vault.test.ts",
+      "gitBlob": "268d7cd7a49b0a93264d39a63bceb72b70787c5c"
+    },
+    {
+      "path": "web/src/api/vault.ts",
+      "gitBlob": "a15775627abc7d4d23a9566f9f000861e69f8202"
+    },
+    {
+      "path": "web/src/assets/hero.png",
+      "gitBlob": "02251f4b956c55af2d76fd0788124d7eee2b45eb"
+    },
+    {
+      "path": "web/src/assets/react.svg",
+      "gitBlob": "6c87de9bb3358469122cc991d5cf578927246184"
+    },
+    {
+      "path": "web/src/assets/server-icons/SOURCES.md",
+      "gitBlob": "41a17ea1903bfd4cbb9ce303edc5181a7bbba352"
+    },
+    {
+      "path": "web/src/assets/server-icons/amazon-linux.png",
+      "gitBlob": "2ef1ff7d7477eb6a4d493cc6b6a68fc3e8d170bd"
+    },
+    {
+      "path": "web/src/assets/server-icons/casaos.svg",
+      "gitBlob": "0c82fe0eac4f643009202165633feaffa2c11bbf"
+    },
+    {
+      "path": "web/src/assets/server-icons/fnos.png",
+      "gitBlob": "5a2bdfbfb2545d7124fbd0cd472dd8ee3ef7563e"
+    },
+    {
+      "path": "web/src/assets/server-icons/oracle-linux.png",
+      "gitBlob": "445b5d1295e250381cf4fe91e2cacc2f88fc24cf"
+    },
+    {
+      "path": "web/src/assets/vite.svg",
+      "gitBlob": "5101b674df391399da71c767aa5c976426c9dc7a"
+    },
+    {
+      "path": "web/src/components/CommandPalette/index.test.tsx",
+      "gitBlob": "d265eebb5191e1b921a6efd4c11b267eaba3e151"
+    },
+    {
+      "path": "web/src/components/CommandPalette/index.tsx",
+      "gitBlob": "4ec106afc4347b63926d78fa8d0c7f718ad8d8ae"
+    },
+    {
+      "path": "web/src/components/ConnectionDialog/index.tsx",
+      "gitBlob": "6b61c11d8bd4bd319be1bee62efaa57fa476af58"
+    },
+    {
+      "path": "web/src/components/Editor/CodeEditor.tsx",
+      "gitBlob": "38a1471262309a581e3a367b83cc53602a906e68"
+    },
+    {
+      "path": "web/src/components/Editor/EditorDialog.tsx",
+      "gitBlob": "3c312c1ce37906c0f7af7c3bb6cff5af66c644ce"
+    },
+    {
+      "path": "web/src/components/Editor/EditorMergeDialog.tsx",
+      "gitBlob": "38b7be774758e10d7586ae1feebdaf88d0d15e2a"
+    },
+    {
+      "path": "web/src/components/Editor/EditorSaveAsDialog.tsx",
+      "gitBlob": "f32b7b3bed2434b715f9b39fa1ab9fba30fa6fa9"
+    },
+    {
+      "path": "web/src/components/Editor/EditorStatusBar.tsx",
+      "gitBlob": "dd28a7d7671d06e82bb721431cf4d59ce81f1754"
+    },
+    {
+      "path": "web/src/components/Editor/EditorTabs.tsx",
+      "gitBlob": "c24b56d726730accf810b53024cbb29101bae2ee"
+    },
+    {
+      "path": "web/src/components/Editor/EditorToolbar.tsx",
+      "gitBlob": "f351009a3c49dc0f259ba9ebec6ef9094fa3e2cf"
+    },
+    {
+      "path": "web/src/components/Editor/EditorWindowApp.tsx",
+      "gitBlob": "b5dd8bcf3840fa84a47aa8dee2d8514811990a82"
+    },
+    {
+      "path": "web/src/components/Editor/EditorWindowPage.tsx",
+      "gitBlob": "5f4d3b996598a858a72357dcaaa45754bbdbce23"
+    },
+    {
+      "path": "web/src/components/Editor/index.ts",
+      "gitBlob": "2cc29d0dce983617bc37fc14c741f521fb34e63b"
+    },
+    {
+      "path": "web/src/components/Layout/AccountIdentity.tsx",
+      "gitBlob": "2c25b3affe1ca009042bec799c8b90c3958c1712"
+    },
+    {
+      "path": "web/src/components/Layout/AccountMenu.tsx",
+      "gitBlob": "408eb5df56a738ce1c524fa6dc92fc2a3b72be46"
+    },
+    {
+      "path": "web/src/components/Layout/ConnectionHome.tsx",
+      "gitBlob": "4f965ca1c5e30cd0d9ae44743765c274b27a6e2c"
+    },
+    {
+      "path": "web/src/components/Layout/OpenItems.tsx",
+      "gitBlob": "9b21dcf7e84aba473abc7e1c683d72ac9a970ea2"
+    },
+    {
+      "path": "web/src/components/Layout/ServerInspector.tsx",
+      "gitBlob": "1c4327196b4903697f24c7ce271b9ab20c4fabef"
+    },
+    {
+      "path": "web/src/components/Layout/ShellControls.tsx",
+      "gitBlob": "cd52faef7b5e784a7ef2ff67747f2190b40f8672"
+    },
+    {
+      "path": "web/src/components/Layout/SidebarResizeHandle.test.tsx",
+      "gitBlob": "7b6f10775ec93c29f976d69c92dc22675fc5a398"
+    },
+    {
+      "path": "web/src/components/Layout/SidebarResizeHandle.tsx",
+      "gitBlob": "ff364a44f1a4527c15453c14a51d8e58c4464515"
+    },
+    {
+      "path": "web/src/components/Layout/WorkspaceActions.tsx",
+      "gitBlob": "f4d00ab36a75a11cda473ab3c786b0656af3fa7e"
+    },
+    {
+      "path": "web/src/components/Layout/index.test.tsx",
+      "gitBlob": "59ef959b1dd648151e95f15f3521ee76b69a32dc"
+    },
+    {
+      "path": "web/src/components/Layout/index.tsx",
+      "gitBlob": "1149d3b87bf2238ae0b9ddf31a0f5296d1372a40"
+    },
+    {
+      "path": "web/src/components/Layout/navigation.test.tsx",
+      "gitBlob": "49caeac3475e391906464075b25ed038981da6d8"
+    },
+    {
+      "path": "web/src/components/MobileLayout/HostRow.tsx",
+      "gitBlob": "eb2329655d84a321cf796f81f4a06e0aed8d19d4"
+    },
+    {
+      "path": "web/src/components/MobileLayout/MobileEmpty.tsx",
+      "gitBlob": "fb3c65208a505eb9b2c906bd77c191b0166b1fae"
+    },
+    {
+      "path": "web/src/components/MobileLayout/MobileFeedbackHost.tsx",
+      "gitBlob": "20f28c2b353cde88c0c1850e5f12279aba4ba557"
+    },
+    {
+      "path": "web/src/components/MobileLayout/MobileHeader.tsx",
+      "gitBlob": "3aae8da22ad9b05fcbdb8a61caf82cf8317286cc"
+    },
+    {
+      "path": "web/src/components/MobileLayout/MobileHostList.tsx",
+      "gitBlob": "64d4ce4da979d3bfe10489a509f11d1996d766e3"
+    },
+    {
+      "path": "web/src/components/MobileLayout/MobileInlineNotice.tsx",
+      "gitBlob": "f175f6e9003fd72833ede55fc674172b1860ca00"
+    },
+    {
+      "path": "web/src/components/MobileLayout/MobileSessionsPage.tsx",
+      "gitBlob": "95a5a46553aeeffb5460457b847dee613b172d40"
+    },
+    {
+      "path": "web/src/components/MobileLayout/MobileSettingsPage.tsx",
+      "gitBlob": "ac70b416ab5ac5b6daacdaf82729dba8a633c252"
+    },
+    {
+      "path": "web/src/components/MobileLayout/MobileSettingsPanels.tsx",
+      "gitBlob": "d947b84a9aee05636b33fed2c96f9104b61b07f2"
+    },
+    {
+      "path": "web/src/components/MobileLayout/MobileSheet.tsx",
+      "gitBlob": "ffa18cace81dcf0522072c18bee8aa2f90ace7a7"
+    },
+    {
+      "path": "web/src/components/MobileLayout/MobileTabBar.tsx",
+      "gitBlob": "792c30d73f7fba539bd7a949f453d3eca6a337b6"
+    },
+    {
+      "path": "web/src/components/MobileLayout/MobileVaultPage.tsx",
+      "gitBlob": "4aef7761547b7a371eadd3f3a9c14131398cf989"
+    },
+    {
+      "path": "web/src/components/MobileLayout/VaultRow.tsx",
+      "gitBlob": "7be89d64f5f0ad18f1ecb3158268c3f134bc31aa"
+    },
+    {
+      "path": "web/src/components/MobileLayout/index.tsx",
+      "gitBlob": "e00fc5dd0ac70c4931fe2bb3ea61c1917227195b"
+    },
+    {
+      "path": "web/src/components/MobileLayout/useHeaderCollapse.ts",
+      "gitBlob": "46c27dbab4440846c95f54f79eb960ba88fcc386"
+    },
+    {
+      "path": "web/src/components/MobileLayout/useSafeArea.ts",
+      "gitBlob": "b47a744ecc46e8d6340dc31a8889520192251a8b"
+    },
+    {
+      "path": "web/src/components/MobileLayout/useSwipeActions.ts",
+      "gitBlob": "cbc4603c9fd9c19d59f0861fa9960e2579804a16"
+    },
+    {
+      "path": "web/src/components/ProfileForm/index.tsx",
+      "gitBlob": "e4c11fcb6bc88b57c4c410b378e0ea0743684550"
+    },
+    {
+      "path": "web/src/components/ServerDetail/index.tsx",
+      "gitBlob": "63a36e697abd6188cc26e91ae886cc2644079e04"
+    },
+    {
+      "path": "web/src/components/SettingsDialog/AboutPanel.tsx",
+      "gitBlob": "ecf9bd753ab1ea2e3530417ece46f78c7c441d79"
+    },
+    {
+      "path": "web/src/components/SettingsDialog/AccountEmailForm.test.tsx",
+      "gitBlob": "2194ca2543786b4e9c1be92c034ad20bf6f50d44"
+    },
+    {
+      "path": "web/src/components/SettingsDialog/AccountEmailForm.tsx",
+      "gitBlob": "3779e374a71b84bae8f92966939f6abb0bbece1a"
+    },
+    {
+      "path": "web/src/components/SettingsDialog/AccountPanel.tsx",
+      "gitBlob": "96e07e11e97c859a35ae4882a68fd320973c1e3c"
+    },
+    {
+      "path": "web/src/components/SettingsDialog/ArchivePanel.test.tsx",
+      "gitBlob": "0ff286bb1423384a678f96a5855bd2e5184c9783"
+    },
+    {
+      "path": "web/src/components/SettingsDialog/ArchivePanel.tsx",
+      "gitBlob": "69e5c3859356588095d8f09401a0166403c44565"
+    },
+    {
+      "path": "web/src/components/SettingsDialog/BackupPanel.tsx",
+      "gitBlob": "bcc97b6a8eec0c5efa2970576324a4d1a16c3c00"
+    },
+    {
+      "path": "web/src/components/SettingsDialog/ErrorRecovery.tsx",
+      "gitBlob": "6a31eb0444b974b4b5a8da819bafd40a1139b691"
+    },
+    {
+      "path": "web/src/components/SettingsDialog/HistoryPanel.tsx",
+      "gitBlob": "2fa4d2171a0513a36e69b2da3c0f0590df599676"
+    },
+    {
+      "path": "web/src/components/SettingsDialog/LogPanel.tsx",
+      "gitBlob": "d4c91a6e57dd38bd849345b96e2b02d1b0416e6a"
+    },
+    {
+      "path": "web/src/components/SettingsDialog/MobileDiagnosticsPanel.tsx",
+      "gitBlob": "1d3b02bc94985e115b3a01a4cfbb219f9a2398e5"
+    },
+    {
+      "path": "web/src/components/SettingsDialog/ProviderForm.tsx",
+      "gitBlob": "4e8433fd06a86eec94d76acf8e3b767803b6b610"
+    },
+    {
+      "path": "web/src/components/SettingsDialog/SyncPanel.tsx",
+      "gitBlob": "8f0c0b51dddf9d680dcfcf609c063be0987e8d37"
+    },
+    {
+      "path": "web/src/components/SettingsDialog/TerminalThemePicker.tsx",
+      "gitBlob": "75e8ba0af85c5f7fd5e5bcd6e6ffa1d9adfa1243"
+    },
+    {
+      "path": "web/src/components/SettingsDialog/index.test.tsx",
+      "gitBlob": "b6a9a06300c8316418129044e314b6586ffacdc0"
+    },
+    {
+      "path": "web/src/components/SettingsDialog/index.tsx",
+      "gitBlob": "342f6bfae32c1c94b5325fcd1ad6fdf7f387e23a"
+    },
+    {
+      "path": "web/src/components/SettingsDialog/options.ts",
+      "gitBlob": "873315b31a024ab762cf51178a28ae76f0b61ca0"
+    },
+    {
+      "path": "web/src/components/Sftp/Breadcrumb.tsx",
+      "gitBlob": "5ddf7ae8b59fc12dcb82881f48e96963efc0052b"
+    },
+    {
+      "path": "web/src/components/Sftp/ConflictDialog.tsx",
+      "gitBlob": "76afcb87a8d6e4f765f0717510d5673dd4203675"
+    },
+    {
+      "path": "web/src/components/Sftp/DeleteConfirmDialog.tsx",
+      "gitBlob": "82ed828ee455b0ce82b838a212ae4ef04defb62e"
+    },
+    {
+      "path": "web/src/components/Sftp/DirectoryTransferDialog.tsx",
+      "gitBlob": "d6210899843aecae75996a296d22c046d28452f1"
+    },
+    {
+      "path": "web/src/components/Sftp/FilePane.tsx",
+      "gitBlob": "5b5e0e8cecab097e010d8655593e375a021ce2bf"
+    },
+    {
+      "path": "web/src/components/Sftp/FileRow.tsx",
+      "gitBlob": "76957dce633951755a6e9e1f3d813a47be623d6d"
+    },
+    {
+      "path": "web/src/components/Sftp/FileTree.tsx",
+      "gitBlob": "128794040dd2b51b756306845212f6307196e936"
+    },
+    {
+      "path": "web/src/components/Sftp/HostKeyDialog.tsx",
+      "gitBlob": "cfa86ca39379d73c76ff3a958c77791c8b0a0202"
+    },
+    {
+      "path": "web/src/components/Sftp/InputDialog.tsx",
+      "gitBlob": "238ffc9ba5170e7deda83f294894c4cbc80e5008"
+    },
+    {
+      "path": "web/src/components/Sftp/MobileSftpView.tsx",
+      "gitBlob": "c620af04ceefcc93b17179deb4adcdaa89cb0fcb"
+    },
+    {
+      "path": "web/src/components/Sftp/PaneActions.tsx",
+      "gitBlob": "eec475077495dbd8d2e3309077558efd9ec8a754"
+    },
+    {
+      "path": "web/src/components/Sftp/PaneTabs.tsx",
+      "gitBlob": "db2196a23c08d0ec1f580c673f578a37e7e3252d"
+    },
+    {
+      "path": "web/src/components/Sftp/ServerPicker.tsx",
+      "gitBlob": "7a4470a18d10e02f0bb453e51b5871a039801069"
+    },
+    {
+      "path": "web/src/components/Sftp/SftpContextMenu.tsx",
+      "gitBlob": "4d68cdcf0246e1b43755f2f4405218cc6b1f0032"
+    },
+    {
+      "path": "web/src/components/Sftp/SftpView.tsx",
+      "gitBlob": "148d1c29109d34ee44bed3d0060f7df512618b38"
+    },
+    {
+      "path": "web/src/components/Sftp/TransferQueue.tsx",
+      "gitBlob": "ce429b5426941c6326d03125944004e00454067f"
+    },
+    {
+      "path": "web/src/components/Sftp/storeContext.ts",
+      "gitBlob": "1bc29aa55fab0405f925b684b35168113065a543"
+    },
+    {
+      "path": "web/src/components/Sidebar/GroupForm.tsx",
+      "gitBlob": "497a0e1a466b871e28c3eda986bd5f799f7e3adb"
+    },
+    {
+      "path": "web/src/components/Sidebar/index.tsx",
+      "gitBlob": "46ccb78663c6798502aa0560c2b73dd1ebf28cca"
+    },
+    {
+      "path": "web/src/components/Snippets/SnippetDialog.test.tsx",
+      "gitBlob": "b3eca964868b0a8b1eb3232ad63bb8d09e37a585"
+    },
+    {
+      "path": "web/src/components/Snippets/SnippetDialog.tsx",
+      "gitBlob": "b6d85e0f38606afa4fc9982b91ff6e25ee8f844a"
+    },
+    {
+      "path": "web/src/components/StatusBar/index.tsx",
+      "gitBlob": "cbfd798a2f7eb733de3c2c2edea140a5066b62e0"
+    },
+    {
+      "path": "web/src/components/SyncIndicator.tsx",
+      "gitBlob": "11f6671e0855b357ef91a29541d7d29769eacf1b"
+    },
+    {
+      "path": "web/src/components/Terminal/AuthPromptDialog.tsx",
+      "gitBlob": "562c65f2b12c15df0ee401d858904c7743654629"
+    },
+    {
+      "path": "web/src/components/Terminal/CompletionPanel.tsx",
+      "gitBlob": "9406694e29ce75309ccede437f0b6b05af4eb56e"
+    },
+    {
+      "path": "web/src/components/Terminal/ConnectionPicker.tsx",
+      "gitBlob": "9300319c8ba315c1be1187cb8a364683a4f1cf2a"
+    },
+    {
+      "path": "web/src/components/Terminal/MobileTerminalToolbar.tsx",
+      "gitBlob": "a41a3727b46d281f2c07735b7da2d04c555ffc63"
+    },
+    {
+      "path": "web/src/components/Terminal/SplitControls.tsx",
+      "gitBlob": "2758453901346c8924cca5c9ae9cdadb78391a70"
+    },
+    {
+      "path": "web/src/components/Terminal/TerminalActionMenu.tsx",
+      "gitBlob": "f26c6441191822b563536afe13bfe2716d2ef471"
+    },
+    {
+      "path": "web/src/components/Terminal/TerminalFind.tsx",
+      "gitBlob": "82e0c4329fb49dba5e9d22969960c4e4f849176d"
+    },
+    {
+      "path": "web/src/components/Terminal/TerminalPane.tsx",
+      "gitBlob": "b83806a9fa17d5229fcd3d57c0f4ad71f2cd8942"
+    },
+    {
+      "path": "web/src/components/Terminal/TerminalSelectionHandles.test.ts",
+      "gitBlob": "6a72d1ab4fbd467d0d657d4b6d54e138534a9938"
+    },
+    {
+      "path": "web/src/components/Terminal/TerminalSelectionHandles.tsx",
+      "gitBlob": "9ef0366300a2f2d70c59c24927e218526cd15854"
+    },
+    {
+      "path": "web/src/components/Terminal/TunnelDialog.test.tsx",
+      "gitBlob": "9eb31b7ad485f6c69b46c8d2dc2c49194b9591b6"
+    },
+    {
+      "path": "web/src/components/Terminal/TunnelDialog.tsx",
+      "gitBlob": "74164c32514207bc9d89e556c8101c77e23f0102"
+    },
+    {
+      "path": "web/src/components/Terminal/index.test.tsx",
+      "gitBlob": "3a0b42958d6a2f243c4ff94e67a931fcdfc71503"
+    },
+    {
+      "path": "web/src/components/Terminal/index.tsx",
+      "gitBlob": "9851af31a6e8e3c1b84d6979e16378aadbf2a2d3"
+    },
+    {
+      "path": "web/src/components/ThemeToggle/index.tsx",
+      "gitBlob": "e8277603a101322bdb59c4c45963ab67f2476676"
+    },
+    {
+      "path": "web/src/components/UpdateProgressDetails.tsx",
+      "gitBlob": "4d1793d7dd1304b204503ecf9e70d1a18df1ef9d"
+    },
+    {
+      "path": "web/src/components/UpdateProgressToast.tsx",
+      "gitBlob": "3523ef6e23a27eba4b97cc937cf1def914dff227"
+    },
+    {
+      "path": "web/src/components/Vault/VaultFormDialog.tsx",
+      "gitBlob": "6a1660407bdb7228a741899814501aeb6060338d"
+    },
+    {
+      "path": "web/src/components/Vault/VaultGenerateDialog.tsx",
+      "gitBlob": "59d836fea32c3de6ca5b66a1ca9119684c6d9c6b"
+    },
+    {
+      "path": "web/src/components/Vault/VaultItemRow.tsx",
+      "gitBlob": "0a9bc65e197f39ce57c41ae9db7c089bd17df27d"
+    },
+    {
+      "path": "web/src/components/Vault/VaultList.tsx",
+      "gitBlob": "bd43d7efe11e9e86745b7d2f5ff513e0a503ca2c"
+    },
+    {
+      "path": "web/src/components/Vault/VaultPasswordGenerator.tsx",
+      "gitBlob": "c34ef71bb05b6db83560c34e8619bc2e071bc7b8"
+    },
+    {
+      "path": "web/src/components/Vault/VaultRevealText.tsx",
+      "gitBlob": "c760633146fce9c2af83a69bf650d985af49d430"
+    },
+    {
+      "path": "web/src/components/Vault/VaultSelectButton.tsx",
+      "gitBlob": "46e31d97e2e3fa971397b4e3f4746bf5032ce30e"
+    },
+    {
+      "path": "web/src/components/Vault/VaultSelectDialog.tsx",
+      "gitBlob": "182bdf226e6f7865de5e69bbffeae4f9c4ffdf4e"
+    },
+    {
+      "path": "web/src/components/Vault/VaultView.tsx",
+      "gitBlob": "e36c963a857edfda7f4d5849249fc4d2fc9ae1cd"
+    },
+    {
+      "path": "web/src/components/WindowControls.tsx",
+      "gitBlob": "27cebe545ed1f3f1c10d2985be477a5f9b0e41fe"
+    },
+    {
+      "path": "web/src/components/ui/alert-dialog.tsx",
+      "gitBlob": "f29ab55234c585545043654ff6f38b03723aee28"
+    },
+    {
+      "path": "web/src/components/ui/badge.tsx",
+      "gitBlob": "1a94cc539326e26227271a0b3599be99e0e55fb6"
+    },
+    {
+      "path": "web/src/components/ui/button.tsx",
+      "gitBlob": "e3345d985d14c33e3cb9d8c45cf973807326c944"
+    },
+    {
+      "path": "web/src/components/ui/checkbox.tsx",
+      "gitBlob": "6a771b6d93422df94c8c16b0314ef8f049b3cc44"
+    },
+    {
+      "path": "web/src/components/ui/context-menu.tsx",
+      "gitBlob": "df50950c2fc779c92437de5a0b327b3b704c1abf"
+    },
+    {
+      "path": "web/src/components/ui/dialog.tsx",
+      "gitBlob": "af07d950fa82ef40c4a7b0daf545f66965f7f34a"
+    },
+    {
+      "path": "web/src/components/ui/dropdown-menu.tsx",
+      "gitBlob": "8ee7234e52b1223084c2ebe28769328a08df6e70"
+    },
+    {
+      "path": "web/src/components/ui/input.tsx",
+      "gitBlob": "ddb9b315e34245addded54b1848bb32c80c418cc"
+    },
+    {
+      "path": "web/src/components/ui/label.tsx",
+      "gitBlob": "5aff7469c384001a3f1b49cc5cf8871b10f10386"
+    },
+    {
+      "path": "web/src/components/ui/popover.tsx",
+      "gitBlob": "cb94b893c5525d2c519c3871026917c772ecc8a7"
+    },
+    {
+      "path": "web/src/components/ui/progress.tsx",
+      "gitBlob": "e861aac102eadd146b8c0adce886d05bc72849ac"
+    },
+    {
+      "path": "web/src/components/ui/scroll-area.tsx",
+      "gitBlob": "4542a3e26d68a524dc5e504156eb09dd3440a3f5"
+    },
+    {
+      "path": "web/src/components/ui/select.tsx",
+      "gitBlob": "fcc19e39afccf3986cd501641e142ca4f61e83fb"
+    },
+    {
+      "path": "web/src/components/ui/separator.tsx",
+      "gitBlob": "6a553b978c11cf82c93817b2d0dde1db0e555835"
+    },
+    {
+      "path": "web/src/components/ui/skeleton.tsx",
+      "gitBlob": "a1ceb0545be73aa39a336271ecb69ed6aa69a64d"
+    },
+    {
+      "path": "web/src/components/ui/slider.tsx",
+      "gitBlob": "dc67b027573ee18bd0c6d1b56a86e087f7fe970c"
+    },
+    {
+      "path": "web/src/components/ui/sonner.tsx",
+      "gitBlob": "9f46e06d5c3bc0db870d44fe2a22924b7cc5c893"
+    },
+    {
+      "path": "web/src/components/ui/switch.tsx",
+      "gitBlob": "abf6ed7898a84d86c5781222fb7390e186dabdac"
+    },
+    {
+      "path": "web/src/components/ui/tabs.tsx",
+      "gitBlob": "6e174747a509f8a906ce9cfb27bc2c7603f2b6b5"
+    },
+    {
+      "path": "web/src/components/ui/textarea.tsx",
+      "gitBlob": "bf23f6c255978311c3069f5da3fa10c1d896e8cf"
+    },
+    {
+      "path": "web/src/components/ui/tooltip.tsx",
+      "gitBlob": "c27ff44691eb1f08c7d978ddca588bd6ef0f68e1"
+    },
+    {
+      "path": "web/src/hooks/useCompletion.test.tsx",
+      "gitBlob": "2e845e6051c03f8c19b4c17751c2590c85515dcb"
+    },
+    {
+      "path": "web/src/hooks/useCompletion.ts",
+      "gitBlob": "da7524c6bdf9c97bcfd49bf2643cd2ba99b0669a"
+    },
+    {
+      "path": "web/src/hooks/useExternalDrop.ts",
+      "gitBlob": "493d18a8c0b027059c8c0aa134614d208c249797"
+    },
+    {
+      "path": "web/src/hooks/useMobileIme.ts",
+      "gitBlob": "3303eee18308d94131ea868ee31c821b7db92af0"
+    },
+    {
+      "path": "web/src/hooks/useMobileTerminalGestures.ts",
+      "gitBlob": "2bcc3190a2bd33aa4f851ade0bd3d8812f0e8c5b"
+    },
+    {
+      "path": "web/src/hooks/usePointerDrag.test.tsx",
+      "gitBlob": "4fd57f2e830dad8efb735e4c1af048e7041009e4"
+    },
+    {
+      "path": "web/src/hooks/usePointerDrag.ts",
+      "gitBlob": "94c25b080b35dc1982c8ff701d0ddf246b33f1a4"
+    },
+    {
+      "path": "web/src/hooks/useServerMetrics.test.tsx",
+      "gitBlob": "9fa37bb705dd36330dc636077caa8093171ffa9e"
+    },
+    {
+      "path": "web/src/hooks/useServerMetrics.ts",
+      "gitBlob": "f3d76ca24ea30fce6dda3b06ce730471a3d4daca"
+    },
+    {
+      "path": "web/src/hooks/useSessionChannel.ts",
+      "gitBlob": "01ce6e3707f81d5593fc5e40f37d96bfca86a9d4"
+    },
+    {
+      "path": "web/src/hooks/useSftpTransfer.test.tsx",
+      "gitBlob": "dd363d515a5bafc38e0d2d60e628ac2690cf7b45"
+    },
+    {
+      "path": "web/src/hooks/useSftpTransfer.ts",
+      "gitBlob": "e0f70c8c6fb56d451484833630ff1bbbcad5a542"
+    },
+    {
+      "path": "web/src/hooks/useSidebarPreview.ts",
+      "gitBlob": "3f6137c139530d343d1e895ba85addbf912a7754"
+    },
+    {
+      "path": "web/src/hooks/useSplitSidebar.ts",
+      "gitBlob": "11e0f4d3dc96fc333c96a33e3332ca46562ffbcf"
+    },
+    {
+      "path": "web/src/hooks/useTerminal.ts",
+      "gitBlob": "1422e90034520eabddd6e0f27c420f07cc7dc930"
+    },
+    {
+      "path": "web/src/hooks/useWindowControls.ts",
+      "gitBlob": "a3953fe70f0dd25b19c44426a2a67de178cc1742"
+    },
+    {
+      "path": "web/src/index.css",
+      "gitBlob": "4220556105f253ea84d6db6b39064288f06330f1"
+    },
+    {
+      "path": "web/src/lib/accountEditorGuard.ts",
+      "gitBlob": "973156f1bf717b5e33544c93b7cc560f7c02d5aa"
+    },
+    {
+      "path": "web/src/lib/appLog.ts",
+      "gitBlob": "397dd6ffbfb6a41022b6fe47b353c14d72fe6bb0"
+    },
+    {
+      "path": "web/src/lib/clipboard.test.ts",
+      "gitBlob": "3244d4754afb1129b13caaf21a8edaeb7952c5dd"
+    },
+    {
+      "path": "web/src/lib/clipboard.ts",
+      "gitBlob": "cfe8e8f72c8ee22bcc11a688edd8a803e8f8734a"
+    },
+    {
+      "path": "web/src/lib/commandHistory.test.ts",
+      "gitBlob": "72067b5e464c66d0e29c60e3cc8d7ba7672a352e"
+    },
+    {
+      "path": "web/src/lib/commandHistory.ts",
+      "gitBlob": "5bcb26887935c6d3d4776ace00d708d7f0548323"
+    },
+    {
+      "path": "web/src/lib/completionBuffer.test.ts",
+      "gitBlob": "b4bdcf7c6596d19704ff313626072c1ceecd29e0"
+    },
+    {
+      "path": "web/src/lib/completionBuffer.ts",
+      "gitBlob": "82c96f33cef6eb41848e0105de07d0504f599071"
+    },
+    {
+      "path": "web/src/lib/completionCache.test.ts",
+      "gitBlob": "8620b034fb21031b0caf9aae82e4bd3481437fd4"
+    },
+    {
+      "path": "web/src/lib/completionCache.ts",
+      "gitBlob": "1f8286b8e4efbdc7eb40466559372f3121e3ffc0"
+    },
+    {
+      "path": "web/src/lib/completionEngine.test.ts",
+      "gitBlob": "bdbf969568136819fe58160b20c3ce9f4e19dc64"
+    },
+    {
+      "path": "web/src/lib/completionEngine.ts",
+      "gitBlob": "da1e177905576cdb3f5d7c9618da7ac61246e4b2"
+    },
+    {
+      "path": "web/src/lib/completionPosition.test.ts",
+      "gitBlob": "1ee20fd726d11eaf33ae5e8db298d9c3a02a1793"
+    },
+    {
+      "path": "web/src/lib/completionPosition.ts",
+      "gitBlob": "191fcb87b6e4b7be315ee853290f74042faf98f5"
+    },
+    {
+      "path": "web/src/lib/completionSpecs.ts",
+      "gitBlob": "d6c3b294b8ffe2a6f54b8855227614ee1acbb358"
+    },
+    {
+      "path": "web/src/lib/desktop.test.ts",
+      "gitBlob": "d4420fedb27d183032b559170825d36b808e8842"
+    },
+    {
+      "path": "web/src/lib/desktop.ts",
+      "gitBlob": "bfa470c5809a630bf142e688268e0bccc5e4bb49"
+    },
+    {
+      "path": "web/src/lib/desktopActions.test.ts",
+      "gitBlob": "90cc9a346b5feb35a8f27fe7a1e0cd1775c8a790"
+    },
+    {
+      "path": "web/src/lib/desktopActions.ts",
+      "gitBlob": "a69310e774e6cb5f07aaada4bc5dca720e155275"
+    },
+    {
+      "path": "web/src/lib/desktopSidebar.ts",
+      "gitBlob": "bb6f8889d0b0fa2c3388e828f4eb8fbe287bf293"
+    },
+    {
+      "path": "web/src/lib/dragRegistry.test.ts",
+      "gitBlob": "a1d1342ddd421ba5317105bb9551d901bb50861f"
+    },
+    {
+      "path": "web/src/lib/dragRegistry.ts",
+      "gitBlob": "79713a0b9123e9a6f2d2ed88087817ae4c8f1910"
+    },
+    {
+      "path": "web/src/lib/editorCloseGuard.test.ts",
+      "gitBlob": "a7d8deff17183de80f8a5a1b697e4198f510f507"
+    },
+    {
+      "path": "web/src/lib/editorCloseGuard.ts",
+      "gitBlob": "ffa09de5c7c6fca2401f7b5a908e78852fc0905b"
+    },
+    {
+      "path": "web/src/lib/editorWindow.ts",
+      "gitBlob": "b67be1405b7878bc81748b82873901f8b7831b5d"
+    },
+    {
+      "path": "web/src/lib/fileLanguages.ts",
+      "gitBlob": "9360af83575ab83b79b8f7e4529d6a08f9f78237"
+    },
+    {
+      "path": "web/src/lib/groupIcons.tsx",
+      "gitBlob": "929fba737dd8bd934c2e35afecb495e6ac47c106"
+    },
+    {
+      "path": "web/src/lib/lifecycle.ts",
+      "gitBlob": "6b6ab18b1dc3f4bc8cb0036c09e2abf871b34799"
+    },
+    {
+      "path": "web/src/lib/mobileBack.test.ts",
+      "gitBlob": "03023e0ad9e35f8e2d6cb04a58cf2bba8d9787f3"
+    },
+    {
+      "path": "web/src/lib/mobileBack.ts",
+      "gitBlob": "49b214ffd1f54241a9f5a5af2e9af6b34d936642"
+    },
+    {
+      "path": "web/src/lib/mobileFeedback.test.ts",
+      "gitBlob": "d2d7bf40421e3ede21ef19ec4781038486494aee"
+    },
+    {
+      "path": "web/src/lib/mobileFeedback.ts",
+      "gitBlob": "583a928c3b70aa3b5cb187429e46d98be2856fde"
+    },
+    {
+      "path": "web/src/lib/mobileSftp.test.ts",
+      "gitBlob": "7b36b3bed0a07df12ac47050aeb3232169cce4a9"
+    },
+    {
+      "path": "web/src/lib/mobileSftp.ts",
+      "gitBlob": "5c1944d36771d281adbe60196367b82387453220"
+    },
+    {
+      "path": "web/src/lib/mobileUpdate.test.ts",
+      "gitBlob": "f69059f91ce0ea75a234f068a00b683baff130f9"
+    },
+    {
+      "path": "web/src/lib/mobileUpdate.ts",
+      "gitBlob": "dfff733382e2d36bea8fa8560742d369c29cb6b1"
+    },
+    {
+      "path": "web/src/lib/mobileViewport.test.ts",
+      "gitBlob": "a7db461df63732bb63292fa5dd0c8f037e146ec3"
+    },
+    {
+      "path": "web/src/lib/mobileViewport.ts",
+      "gitBlob": "41fb4a568f6469ff3aaa712f65b5b59175e0653a"
+    },
+    {
+      "path": "web/src/lib/platform.test.ts",
+      "gitBlob": "b2d2d8c09ead7686a4eab171369e349a338ab06a"
+    },
+    {
+      "path": "web/src/lib/platform.ts",
+      "gitBlob": "839bebc3956e95320df6b1ae63c511e8ec8e5ab4"
+    },
+    {
+      "path": "web/src/lib/profileProxy.test.ts",
+      "gitBlob": "0819f5b55cb46ad6a702bee52411bd9bd98ec07a"
+    },
+    {
+      "path": "web/src/lib/profileProxy.ts",
+      "gitBlob": "21325f98e655b5b30da76c990ad70b833489447c"
+    },
+    {
+      "path": "web/src/lib/serverIconKeys.ts",
+      "gitBlob": "b22fcbf86f71c2f40ce23c308f9c2b7588c02b45"
+    },
+    {
+      "path": "web/src/lib/serverIcons.tsx",
+      "gitBlob": "5a67224778969dd8ad66278deca4126cda52bfd6"
+    },
+    {
+      "path": "web/src/lib/snippetInsertion.test.ts",
+      "gitBlob": "6bc2cf4a2cd0ea75cf2aec1eff4831fc90969a9c"
+    },
+    {
+      "path": "web/src/lib/snippetInsertion.ts",
+      "gitBlob": "fb49be71f87d88b1e13a9704965baa8e240e6f75"
+    },
+    {
+      "path": "web/src/lib/syncExperience.test.ts",
+      "gitBlob": "4da3b28db4af0a54684bb2422966ffc3f9ad0992"
+    },
+    {
+      "path": "web/src/lib/syncExperience.ts",
+      "gitBlob": "2436615e3cff68ecf507f4456875a1a429617a96"
+    },
+    {
+      "path": "web/src/lib/terminalActions.ts",
+      "gitBlob": "d1926ca2f37399c0a7a662f45a2fdd4b068c3b92"
+    },
+    {
+      "path": "web/src/lib/terminalLayout.ts",
+      "gitBlob": "d6abb812798eacfa297c728e4ae95887e595a0cc"
+    },
+    {
+      "path": "web/src/lib/terminalSelection.ts",
+      "gitBlob": "67616a6f20ae6e3df2e093c701a23a83da01094e"
+    },
+    {
+      "path": "web/src/lib/terminalThemes.ts",
+      "gitBlob": "0400bd93a2d6e0478bdf2f4294bdbd7764167845"
+    },
+    {
+      "path": "web/src/lib/transferTasks.test.ts",
+      "gitBlob": "f977314fa3f255ff14dc1773810380a09482ea8f"
+    },
+    {
+      "path": "web/src/lib/transferTasks.ts",
+      "gitBlob": "826c77b3158edff16b14b2afc7be517024161d2a"
+    },
+    {
+      "path": "web/src/lib/tunnelStatuses.test.ts",
+      "gitBlob": "41435f525810420c554795db54b7f125e0cc20ad"
+    },
+    {
+      "path": "web/src/lib/tunnelStatuses.ts",
+      "gitBlob": "3ddd30bc0f3b0c31650b31922bb8ad0216d68426"
+    },
+    {
+      "path": "web/src/lib/updater.test.ts",
+      "gitBlob": "31bdefc354f64bb17c277c1adc2797a54f1852c5"
+    },
+    {
+      "path": "web/src/lib/updater.ts",
+      "gitBlob": "8d20eb0d8d6bf4fe0063b08d4dee7c0c07e20a9e"
+    },
+    {
+      "path": "web/src/lib/utils.ts",
+      "gitBlob": "d084ccade0d8b5bd77fd5174993bcef7b57644c9"
+    },
+    {
+      "path": "web/src/lib/vaultIcons.tsx",
+      "gitBlob": "df2abcb638b92d9904a63fb8b61733e1e0eebefe"
+    },
+    {
+      "path": "web/src/lib/vaultKeyActions.test.ts",
+      "gitBlob": "cf71c66cd4e094d12ddd8365032b6da3fc8e5ed1"
+    },
+    {
+      "path": "web/src/lib/vaultKeyActions.ts",
+      "gitBlob": "547130c214fdfdf07200e2cadb2609cad5c8c026"
+    },
+    {
+      "path": "web/src/lib/vaultUsername.test.ts",
+      "gitBlob": "d71a220776345796fff849606fcae484db31637f"
+    },
+    {
+      "path": "web/src/lib/vaultUsername.ts",
+      "gitBlob": "42b40beb0bad3f26e0668705ac1d15a31680ebfe"
+    },
+    {
+      "path": "web/src/lib/workspace.ts",
+      "gitBlob": "65647e2374c3f183e37110708f14df0110f17720"
+    },
+    {
+      "path": "web/src/lib/workspaceScope.ts",
+      "gitBlob": "ed53d69454e12d1343e1eb465adf960febc4843a"
+    },
+    {
+      "path": "web/src/main.tsx",
+      "gitBlob": "2c2a7badd4d91abacd1b33156f3b938c33a17e0f"
+    },
+    {
+      "path": "web/src/store/account.test.ts",
+      "gitBlob": "a5e5be47c7d01bea196bff2160bf8e0a6a6e2596"
+    },
+    {
+      "path": "web/src/store/account.ts",
+      "gitBlob": "933d59fae41874b183928ef998899c6c8710ab36"
+    },
+    {
+      "path": "web/src/store/desktopShell.ts",
+      "gitBlob": "ce0353aa7fbd52cddb91dd81507dd46d75c6bc8a"
+    },
+    {
+      "path": "web/src/store/editor.test.ts",
+      "gitBlob": "9de202e6182b65940120d26a262fb98e76ad99a4"
+    },
+    {
+      "path": "web/src/store/editor.ts",
+      "gitBlob": "0031faab3f91e46045a1c809cc1a7bfb54564f61"
+    },
+    {
+      "path": "web/src/store/history.test.ts",
+      "gitBlob": "dcb3d086e389b2a377b3504e50511e7477e13cd3"
+    },
+    {
+      "path": "web/src/store/history.ts",
+      "gitBlob": "af57c14c68200b5859849363da6422c2769890e9"
+    },
+    {
+      "path": "web/src/store/profile.test.ts",
+      "gitBlob": "153a16ecb9baf76a1b7e815d4fa22cb3982dc5d1"
+    },
+    {
+      "path": "web/src/store/profile.ts",
+      "gitBlob": "aecaa03781aabc185d38d3a405292371aa53d37f"
+    },
+    {
+      "path": "web/src/store/serverDetail.test.ts",
+      "gitBlob": "114cff88fefaaac2c1181292caf86d8ecc6264dd"
+    },
+    {
+      "path": "web/src/store/serverDetail.ts",
+      "gitBlob": "69f1b0a2abcdf9a20669253f4f74d4c257b25e05"
+    },
+    {
+      "path": "web/src/store/session.ts",
+      "gitBlob": "bbdad18c36135c439113e6d26e05f35355b6d3b2"
+    },
+    {
+      "path": "web/src/store/settings.ts",
+      "gitBlob": "ec03f6fae811d3e6eb20662650a2b1534d016020"
+    },
+    {
+      "path": "web/src/store/sftp.ts",
+      "gitBlob": "225171b92de88daee0b0a226eb8262787877ebb8"
+    },
+    {
+      "path": "web/src/store/sftpDrag.test.ts",
+      "gitBlob": "d7f82be033da74eee19f1ad16392e215041f01bc"
+    },
+    {
+      "path": "web/src/store/sidebarDetail.test.ts",
+      "gitBlob": "e8bd0e862d0126df4107124c04e582569baf42da"
+    },
+    {
+      "path": "web/src/store/sidebarDetail.ts",
+      "gitBlob": "62210d076091c1ce41695238376867e17768de65"
+    },
+    {
+      "path": "web/src/store/sync.ts",
+      "gitBlob": "2073de826786e6ff6c06174a72d40d407437052f"
+    },
+    {
+      "path": "web/src/store/terminalLayout.test.ts",
+      "gitBlob": "7c40e142973e80c1bc7a4cb0d7d9015de2ac2899"
+    },
+    {
+      "path": "web/src/store/terminalLayout.ts",
+      "gitBlob": "f5da28d391819b1516be2132a88af15150a5fc01"
+    },
+    {
+      "path": "web/src/store/vault.ts",
+      "gitBlob": "b06313b6f62a8b656a04ab2c5500d71321814827"
+    },
+    {
+      "path": "web/src/styles/app-shell.css",
+      "gitBlob": "491e58118de81a3d0fa118e6f589e21dc9d86078"
+    },
+    {
+      "path": "web/src/styles/command-palette.css",
+      "gitBlob": "9ace3303f830d5d8f07abd64bace80f2206bebf1"
+    },
+    {
+      "path": "web/src/styles/connection-dialog.css",
+      "gitBlob": "ccb1bc15ecba5e1106954f2358bfe51ec8652ca8"
+    },
+    {
+      "path": "web/src/styles/desktop-shell.css",
+      "gitBlob": "d157a02e8333a6a41e32969a429f1a8e2c9e34e9"
+    },
+    {
+      "path": "web/src/styles/editor.css",
+      "gitBlob": "494f03db393974e3bb843c6587f567bcf02f106b"
+    },
+    {
+      "path": "web/src/styles/mobile.css",
+      "gitBlob": "84e1e2a587567e29821ef2b5ba47209b9c394f71"
+    },
+    {
+      "path": "web/src/styles/profile-form.css",
+      "gitBlob": "107eebbfe8f9c055b722d511d89b13da2fb45f3b"
+    },
+    {
+      "path": "web/src/styles/server-detail.css",
+      "gitBlob": "c63cafde8eb4fa81fbbd57c194188b8c9d809286"
+    },
+    {
+      "path": "web/src/styles/settings-page.css",
+      "gitBlob": "900c4153dba4a70aa6067f73c11052b8e4791dfd"
+    },
+    {
+      "path": "web/src/styles/settings.css",
+      "gitBlob": "0d6ad5d4e05e5e6a0cb7741ee9b9dc0363520e17"
+    },
+    {
+      "path": "web/src/styles/sftp-editor.css",
+      "gitBlob": "34ebec001f98ed7d707233397b23584efb70a21c"
+    },
+    {
+      "path": "web/src/styles/sftp.css",
+      "gitBlob": "b90dcb153952ca7e25546785293169c11a828637"
+    },
+    {
+      "path": "web/src/styles/statusbar.css",
+      "gitBlob": "9f3f74d5d47c6285f6ec0ceaa37e89699ea2e0ff"
+    },
+    {
+      "path": "web/src/styles/tabbar.css",
+      "gitBlob": "d7969ef01f6229435ccaa57279663b8f3303f603"
+    },
+    {
+      "path": "web/src/styles/terminal.css",
+      "gitBlob": "a30fd7f18358fca309e56080e9281959d5f2c45a"
+    },
+    {
+      "path": "web/src/styles/vault.css",
+      "gitBlob": "a9e58ae1403418567107cd6b8dc54216e1cbc7ae"
+    },
+    {
+      "path": "web/src/types/account.ts",
+      "gitBlob": "3894160c7c7f03e8a17b871de23bef2e230d2d27"
+    },
+    {
+      "path": "web/src/types/backup.ts",
+      "gitBlob": "1e24819eba2bf1a279c9f397272438df00fa0fa0"
+    },
+    {
+      "path": "web/src/types/completion.ts",
+      "gitBlob": "82fc6d08564578b9d300de83d3fcf9f47c02cff4"
+    },
+    {
+      "path": "web/src/types/group.ts",
+      "gitBlob": "8f4fe94bf685fc33d471cce48d1795b9a580bcf3"
+    },
+    {
+      "path": "web/src/types/profile.ts",
+      "gitBlob": "0f6e5b7c934f6266e5342e6896a6495ab9b3bc26"
+    },
+    {
+      "path": "web/src/types/session.ts",
+      "gitBlob": "9703ed6fb77b78143025e57925bf7f98ddbc64e4"
+    },
+    {
+      "path": "web/src/types/sessionMessage.ts",
+      "gitBlob": "f01691672b6b480065411845522456a572292114"
+    },
+    {
+      "path": "web/src/types/sftp.ts",
+      "gitBlob": "8b5c300229072f46e82ca124093099038a71194b"
+    },
+    {
+      "path": "web/src/types/snippet.ts",
+      "gitBlob": "672e43d91e861272206566302c3d04d270541618"
+    },
+    {
+      "path": "web/src/types/sync.ts",
+      "gitBlob": "f25bff69b1aedefbe15359cc46c05b2ef22376f6"
+    },
+    {
+      "path": "web/src/types/vault.ts",
+      "gitBlob": "532ceb48de4ea5e864ead9f2ebeed23318a81c80"
+    }
+  ],
+  "producerFiles": [
+    {
+      "path": "src-tauri/src/backup/baseline.rs",
+      "sha256": "1674b55eedaa30fc2c536836b3de0fc1141a03705d9745ad33c43883dbd876e3"
+    },
+    {
+      "path": "src-tauri/src/sync/baseline.rs",
+      "sha256": "266fc01330cd60327831b1568a99f044fd54a85e44ebc81fdac9ad4a693af65e"
+    }
+  ],
+  "files": [
+    {
+      "path": "README.md",
+      "bytes": 861,
+      "sha256": "6c7398d1b54d9c4ce89fa8e9d15d7b4392cc23f9377df05e429b159b057f30d1"
+    },
+    {
+      "path": "backup-vectors.json",
+      "bytes": 674,
+      "sha256": "feafd43c1482a4bccc60e7c07e106a2c2c8fbeba9233838bcc48d6b41382503c"
+    },
+    {
+      "path": "cases.json",
+      "bytes": 18838,
+      "sha256": "4fc2ad5ea9cff505bc1d77d55b00bea86025e89f2994173281ebc0ce5f075c2a"
+    },
+    {
+      "path": "eizhu-encrypted.eizhubackup",
+      "bytes": 6734,
+      "sha256": "cabc519dd2c50921fe18751a3f7da9f95f989fdffe1b03de86a0d591ab8ea9ca"
+    },
+    {
+      "path": "eizhu-none.eizhubackup",
+      "bytes": 4698,
+      "sha256": "be05e36e9a201215ba706639877726ac2ddd7267a3f14d3f98a18b3e02b40c16"
+    },
+    {
+      "path": "eizhu-plain.eizhubackup",
+      "bytes": 6443,
+      "sha256": "002fd079af27a071fc7a73024f4c1679ee66e777d9712a4086104ad8cb8c10a6"
+    },
+    {
+      "path": "invalid/corrupt-tag.eizhubackup",
+      "bytes": 6734,
+      "sha256": "dceddc32a31c91f69f5c4bc26482e79a5c5bc5965a95ababd85a95a94036ce68"
+    },
+    {
+      "path": "invalid/cyclic-groups.eizhubackup",
+      "bytes": 6477,
+      "sha256": "cf0863d4133756ef6ef7ebad588aeb663d6aa6950e1f9f7a0bfe7f437cc264f4"
+    },
+    {
+      "path": "invalid/future-version.eizhubackup",
+      "bytes": 6443,
+      "sha256": "fa3ef44b61534f265c8bb250b00ac6926edbcd978cbe0e92847e3a9c025fd99d"
+    },
+    {
+      "path": "invalid/invalid-kdf.eizhubackup",
+      "bytes": 6734,
+      "sha256": "4512fb21a4b0cabc6f62a26df824ebec14e643d74de3cbf722fdb914475349eb"
+    },
+    {
+      "path": "invalid/missing-jump.eizhubackup",
+      "bytes": 6444,
+      "sha256": "a56cbb95e998efb85740c4f0b93b08f8bf40716a2bd3c51ef846691de6fe9324"
+    },
+    {
+      "path": "invalid/missing-kdf.eizhubackup",
+      "bytes": 6601,
+      "sha256": "36bc16049aeabf2c7a271bda69160047fa09f1d59de095cb601fe00e76484ba5"
+    },
+    {
+      "path": "invalid/missing-vault.eizhubackup",
+      "bytes": 6442,
+      "sha256": "3be4305baa2d096e3800edcdf19c7435b028f4cf7b2e52551cf3a2fc066b38b2"
+    },
+    {
+      "path": "invalid/unknown-format.eizhubackup",
+      "bytes": 6450,
+      "sha256": "e97896e9d8b40364eee15eb27d8ee60b6f5c6f76ed3bdc4e23f1bcccdc125db3"
+    },
+    {
+      "path": "invalid/unknown-mode.eizhubackup",
+      "bytes": 6445,
+      "sha256": "3e60272768d47a8ca312f7c9660851b7a05a78b3b1a441ef67f597d031568701"
+    },
+    {
+      "path": "invalid/wrong-password.eizhubackup",
+      "bytes": 6734,
+      "sha256": "d71f9218054e9837922fd3cf87b8490ee1a085d143c93b5d25f8093e25e263d9"
+    },
+    {
+      "path": "invalid-cases.json",
+      "bytes": 2402,
+      "sha256": "24b704dd83dff3333cbffc7a1a73624d47971b42c9407abfdfeb89475a722e2c"
+    },
+    {
+      "path": "legacy-interfaces.json",
+      "bytes": 145421,
+      "sha256": "5511232243b8c1929661ae9f0e6ad18344f348654359d1a05b83d41e35acb349"
+    },
+    {
+      "path": "payload-encrypted.json",
+      "bytes": 4813,
+      "sha256": "5e2ae17bbbb4f402c38b75fc598bae2c45d415251d30f6fc2c6ae3f2d932b03c"
+    },
+    {
+      "path": "payload-none.json",
+      "bytes": 3412,
+      "sha256": "f14188e4af8487f0b57e59be007215e99dfb9d1cde0c9bce6463c749a78a2432"
+    },
+    {
+      "path": "payload-plain.json",
+      "bytes": 4813,
+      "sha256": "5e2ae17bbbb4f402c38b75fc598bae2c45d415251d30f6fc2c6ae3f2d932b03c"
+    },
+    {
+      "path": "screenshots/account-menu.jpg",
+      "bytes": 30781,
+      "sha256": "b4ee88b00780959de1dbc6c70514c81927ccb44c0a48632cb25ab558c26a7529"
+    },
+    {
+      "path": "screenshots/home-collapsed.jpg",
+      "bytes": 17964,
+      "sha256": "8f7e31f77d67e0bea9c5f223917af62003c7b2968bfdd8f0b2d7b39c0f6cd859"
+    },
+    {
+      "path": "screenshots/home-dark.jpg",
+      "bytes": 22323,
+      "sha256": "f6419e8589e4f8ec94010a6131d721cacdd6c4deb8c2e5800d39b7c8f9160810"
+    },
+    {
+      "path": "screenshots/home-light.jpg",
+      "bytes": 27279,
+      "sha256": "36b42e9e2f245a2d2d4a145cd8f2c9c4c552d5ed4435e4f2c5f5dfdf2c038662"
+    },
+    {
+      "path": "screenshots/profile-create.jpg",
+      "bytes": 43625,
+      "sha256": "8fbbce1b18851b0e9f2b208e5b5218240e81b13dd985db722885013626df0a8c"
+    },
+    {
+      "path": "screenshots/search-empty.jpg",
+      "bytes": 34148,
+      "sha256": "511f9c15b6e028fe932de19a5b9f9f8300a85323418313a761071576237ee4a2"
+    },
+    {
+      "path": "screenshots/settings-appearance-dark.jpg",
+      "bytes": 21943,
+      "sha256": "60c54b75ccbaf0739cbcc32b442109544817d759c297f42f3ea4d12a114a6dca"
+    },
+    {
+      "path": "screenshots/settings-appearance-light.jpg",
+      "bytes": 25713,
+      "sha256": "720800c98d1292466f7cc2264e5b4b451e1f67179ae026e74660f7d5daec1f95"
+    },
+    {
+      "path": "screenshots/vault-browser-unavailable.jpg",
+      "bytes": 25637,
+      "sha256": "8df3308a35ac43b4cc4ff87f16c6238aa4777772651795968cdb60bd23d9f63b"
+    },
+    {
+      "path": "screenshots/vault-keygen.jpg",
+      "bytes": 34805,
+      "sha256": "349505d29db0d5ab6fd4572f22145f5849c13a3a8df9a8afa7a51760e0d7fa9c"
+    },
+    {
+      "path": "screenshots.json",
+      "bytes": 4798,
+      "sha256": "abef4e560166c8a669b8767ea9a85c0c3c21e44de7e811a21689cf01cbec2655"
+    },
+    {
+      "path": "sync-v2-vectors.json",
+      "bytes": 2209,
+      "sha256": "3c5a25c17913a3f6e61a7753c677a279ab38b661d253267e5e146179dfa5a03d"
+    },
+    {
+      "path": "xcontrol-encrypted.xcbackup",
+      "bytes": 6737,
+      "sha256": "db2fbff3fd73978b91155277269a4cab146ff68f6eb397ec2efc16ccce7cb4c4"
+    },
+    {
+      "path": "xcontrol-historical-empty.xcbackup",
+      "bytes": 382,
+      "sha256": "cee534359f15624c1c46a5ea263928a8800ff5b4bd3452460490d664d584bcce"
+    },
+    {
+      "path": "xcontrol-none.xcbackup",
+      "bytes": 4701,
+      "sha256": "7c0177c1734729d9f546298e6918294fe13ec9cad5eaa1284006b7eedad61198"
+    },
+    {
+      "path": "xcontrol-plain.xcbackup",
+      "bytes": 6446,
+      "sha256": "ad8040b0bc8f223046ab83212b86b77c7eb3cb83c9c4ca2dab9a4280920565af"
+    }
+  ]
+}

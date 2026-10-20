@@ -1,0 +1,4303 @@
+{
+  "commands": [
+    {
+      "name": "account_login",
+      "module": "account",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "ACCOUNT-01",
+        "ACCOUNT-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/account.rs",
+          "line": 18,
+          "signature": "pub(crate) async fn account_login( service: State<'_, AccountService>, email: String, password: String, workspace: State<'_, crate::app::WorkspaceManager>, ) -> Result<AccountStatus, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/account.ts"
+      ]
+    },
+    {
+      "name": "account_logout",
+      "module": "account",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "ACCOUNT-01",
+        "ACCOUNT-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/account.rs",
+          "line": 44,
+          "signature": "pub(crate) async fn account_logout( service: State<'_, AccountService>, workspace: State<'_, crate::app::WorkspaceManager>, ) -> Result<(), CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/account.ts"
+      ]
+    },
+    {
+      "name": "account_me",
+      "module": "account",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "ACCOUNT-01",
+        "ACCOUNT-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/account.rs",
+          "line": 53,
+          "signature": "pub(crate) async fn account_me( service: State<'_, AccountService>, ) -> Result<AccountUser, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/account.ts"
+      ]
+    },
+    {
+      "name": "account_register",
+      "module": "account",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "ACCOUNT-01",
+        "ACCOUNT-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/account.rs",
+          "line": 31,
+          "signature": "pub(crate) async fn account_register( service: State<'_, AccountService>, email: String, password: String, workspace: State<'_, crate::app::WorkspaceManager>, ) -> Result<AccountStatus, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/account.ts"
+      ]
+    },
+    {
+      "name": "account_request_password_reset",
+      "module": "account",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "ACCOUNT-01",
+        "ACCOUNT-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/account.rs",
+          "line": 108,
+          "signature": "pub(crate) async fn account_request_password_reset( service: State<'_, AccountService>, email: String, ) -> Result<(), CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/account.ts"
+      ]
+    },
+    {
+      "name": "account_reset_password",
+      "module": "account",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "ACCOUNT-01",
+        "ACCOUNT-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/account.rs",
+          "line": 115,
+          "signature": "pub(crate) async fn account_reset_password( service: State<'_, AccountService>, email: String, code: String, new_password: String, ) -> Result<(), CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/account.ts"
+      ]
+    },
+    {
+      "name": "account_send_verification_email",
+      "module": "account",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "ACCOUNT-01",
+        "ACCOUNT-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/account.rs",
+          "line": 94,
+          "signature": "pub(crate) async fn account_send_verification_email( service: State<'_, AccountService>, ) -> Result<(), CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/account.ts"
+      ]
+    },
+    {
+      "name": "account_set_sync_enabled",
+      "module": "account",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "ACCOUNT-01",
+        "ACCOUNT-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/account.rs",
+          "line": 60,
+          "signature": "pub(crate) async fn account_set_sync_enabled( service: State<'_, AccountService>, enabled: bool, ) -> Result<AccountStatus, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/account.ts"
+      ]
+    },
+    {
+      "name": "account_status",
+      "module": "account",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "ACCOUNT-01",
+        "ACCOUNT-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/account.rs",
+          "line": 11,
+          "signature": "pub(crate) async fn account_status( service: State<'_, AccountService>, ) -> Result<AccountStatus, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/account.ts"
+      ]
+    },
+    {
+      "name": "account_verify_email",
+      "module": "account",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "ACCOUNT-01",
+        "ACCOUNT-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/account.rs",
+          "line": 100,
+          "signature": "pub(crate) async fn account_verify_email( service: State<'_, AccountService>, code: String, ) -> Result<(), CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/account.ts"
+      ]
+    },
+    {
+      "name": "app_background_expired",
+      "module": "lifecycle",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "remove-mobile-lifecycle",
+      "note": "删除移动端后台恢复窗口；桌面关闭、网络恢复和采样控制由桌面生命周期管理。",
+      "caseIds": [
+        "RELIABILITY-01",
+        "CLEAN-01"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/lifecycle.rs",
+          "line": 225,
+          "signature": "pub(crate) async fn app_background_expired( lifecycle: State<'_, LifecycleCoordinator>, sessions_workspace: State<'_, crate::app::WorkspaceManager>, sftp_workspace: State<'_, crate::app::WorkspaceManager>, workspace_generation: Option<u64>, ) -> Result<LifecycleSnapshot, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/lib/lifecycle.ts"
+      ]
+    },
+    {
+      "name": "app_diagnostics",
+      "module": "lifecycle",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-platform-contract",
+      "note": "替换平台或运行时适配，逐项保留桌面仍使用的文件、窗口、网络及诊断能力。",
+      "caseIds": [
+        "RELIABILITY-01",
+        "CLEAN-01"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/lifecycle.rs",
+          "line": 86,
+          "signature": "pub(crate) async fn app_diagnostics( app: AppHandle, lifecycle: State<'_, LifecycleCoordinator>, sessions_workspace: State<'_, crate::app::WorkspaceManager>, sftp_workspace: State<'_, crate::app::WorkspaceManager>, workspace_generation: Option<u64>, ) -> Result<AppDiagnostics, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/lib/lifecycle.ts"
+      ]
+    },
+    {
+      "name": "app_disconnect_all_sessions",
+      "module": "lifecycle",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-platform-contract",
+      "note": "替换平台或运行时适配，逐项保留桌面仍使用的文件、窗口、网络及诊断能力。",
+      "caseIds": [
+        "RELIABILITY-01",
+        "CLEAN-01"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/lifecycle.rs",
+          "line": 204,
+          "signature": "pub(crate) async fn app_disconnect_all_sessions( app: AppHandle, lifecycle: State<'_, LifecycleCoordinator>, sessions_workspace: State<'_, crate::app::WorkspaceManager>, sftp_workspace: State<'_, crate::app::WorkspaceManager>, workspace_generation: Option<u64>, ) -> Result<LifecycleSnapshot, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/lib/lifecycle.ts"
+      ]
+    },
+    {
+      "name": "app_lifecycle_status",
+      "module": "lifecycle",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-platform-contract",
+      "note": "替换平台或运行时适配，逐项保留桌面仍使用的文件、窗口、网络及诊断能力。",
+      "caseIds": [
+        "RELIABILITY-01",
+        "CLEAN-01"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/lifecycle.rs",
+          "line": 44,
+          "signature": "pub(crate) fn app_lifecycle_status( lifecycle: State<'_, LifecycleCoordinator>, ) -> LifecycleSnapshot"
+        }
+      ],
+      "frontend": [
+        "web/src/lib/lifecycle.ts"
+      ]
+    },
+    {
+      "name": "app_lifecycle_update",
+      "module": "lifecycle",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "remove-mobile-lifecycle",
+      "note": "删除移动端后台恢复窗口；桌面关闭、网络恢复和采样控制由桌面生命周期管理。",
+      "caseIds": [
+        "RELIABILITY-01",
+        "CLEAN-01"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/lifecycle.rs",
+          "line": 127,
+          "signature": "pub(crate) async fn app_lifecycle_update( app: AppHandle, lifecycle: State<'_, LifecycleCoordinator>, sessions_workspace: State<'_, crate::app::WorkspaceManager>, sftp_workspace: State<'_, crate::app::WorkspaceManager>, sync_workspace: State<'_, crate::app::WorkspaceManager>, phase: LifecyclePhase, workspace_generation: Option<u64>, ) -> Result<LifecycleSnapshot, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/lib/lifecycle.ts"
+      ]
+    },
+    {
+      "name": "app_network_update",
+      "module": "lifecycle",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-platform-contract",
+      "note": "替换平台或运行时适配，逐项保留桌面仍使用的文件、窗口、网络及诊断能力。",
+      "caseIds": [
+        "RELIABILITY-01",
+        "CLEAN-01"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/lifecycle.rs",
+          "line": 51,
+          "signature": "pub(crate) async fn app_network_update( lifecycle: State<'_, LifecycleCoordinator>, sessions_workspace: State<'_, crate::app::WorkspaceManager>, sftp_workspace: State<'_, crate::app::WorkspaceManager>, online: bool, generation: Option<u64>, workspace_generation: Option<u64>, ) -> Result<LifecycleSnapshot, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/lib/lifecycle.ts"
+      ]
+    },
+    {
+      "name": "append_frontend_log",
+      "module": "desktop",
+      "desktop": true,
+      "mobile": false,
+      "disposition": "replace-platform-contract",
+      "note": "替换平台或运行时适配，逐项保留桌面仍使用的文件、窗口、网络及诊断能力。",
+      "caseIds": [
+        "SHELL-04",
+        "EDITOR-03",
+        "PLATFORM-01",
+        "DIAG-01"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/desktop.rs",
+          "line": 74,
+          "signature": "pub(crate) fn append_frontend_log(lines: Vec<String>) -> Result<(), String>"
+        }
+      ],
+      "frontend": [
+        "web/src/lib/appLog.ts"
+      ]
+    },
+    {
+      "name": "audit_list",
+      "module": "audit",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "DIAG-01"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/audit.rs",
+          "line": 6,
+          "signature": "pub(crate) async fn audit_list( repository_workspace: State<'_, crate::app::WorkspaceManager>, profile_id: Option<String>, limit: Option<i64>, workspace_generation: Option<u64>, ) -> Result<Vec<AuditLog>, CommandError>"
+        }
+      ],
+      "frontend": []
+    },
+    {
+      "name": "backup_apply_restore",
+      "module": "legacy_backup",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "ARCHIVE-01",
+        "ARCHIVE-02",
+        "BACKUP-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/legacy_backup.rs",
+          "line": 377,
+          "signature": "pub(crate) async fn backup_apply_restore( service_workspace: State<'_, crate::app::WorkspaceManager>, token: String, mode: String, workspace_generation: Option<u64>, ) -> Result<crate::backup::BackupImportResult, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/archive.ts"
+      ]
+    },
+    {
+      "name": "backup_backup_now",
+      "module": "legacy_backup",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "ARCHIVE-01",
+        "ARCHIVE-02",
+        "BACKUP-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/legacy_backup.rs",
+          "line": 53,
+          "signature": "pub(crate) async fn backup_backup_now( service_workspace: State<'_, crate::app::WorkspaceManager>, workspace_generation: Option<u64>, ) -> Result<BackupNowResult, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/archive.ts"
+      ]
+    },
+    {
+      "name": "backup_cloud_versions",
+      "module": "legacy_backup",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "ARCHIVE-01",
+        "ARCHIVE-02",
+        "BACKUP-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/legacy_backup.rs",
+          "line": 435,
+          "signature": "pub(crate) async fn backup_cloud_versions( service_workspace: State<'_, crate::app::WorkspaceManager>, provider_id: String, workspace_generation: Option<u64>, ) -> Result<serde_json::Value, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/archive.ts"
+      ]
+    },
+    {
+      "name": "backup_create_provider",
+      "module": "legacy_backup",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "ARCHIVE-01",
+        "ARCHIVE-02",
+        "BACKUP-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/legacy_backup.rs",
+          "line": 271,
+          "signature": "pub(crate) async fn backup_create_provider( service_workspace: State<'_, crate::app::WorkspaceManager>, config: BackupTargetConfig, workspace_generation: Option<u64>, ) -> Result<BackupTargetMeta, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/archive.ts"
+      ]
+    },
+    {
+      "name": "backup_delete_provider",
+      "module": "legacy_backup",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "ARCHIVE-01",
+        "ARCHIVE-02",
+        "BACKUP-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/legacy_backup.rs",
+          "line": 305,
+          "signature": "pub(crate) async fn backup_delete_provider( service_workspace: State<'_, crate::app::WorkspaceManager>, id: String, workspace_generation: Option<u64>, ) -> Result<(), CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/archive.ts"
+      ]
+    },
+    {
+      "name": "backup_delete_version",
+      "module": "legacy_backup",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "ARCHIVE-01",
+        "ARCHIVE-02",
+        "BACKUP-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/legacy_backup.rs",
+          "line": 113,
+          "signature": "pub(crate) async fn backup_delete_version( service_workspace: State<'_, crate::app::WorkspaceManager>, id: String, force: bool, workspace_generation: Option<u64>, ) -> Result<(), CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/archive.ts"
+      ]
+    },
+    {
+      "name": "backup_events",
+      "module": "legacy_backup",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "ARCHIVE-01",
+        "ARCHIVE-02",
+        "BACKUP-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/legacy_backup.rs",
+          "line": 127,
+          "signature": "pub(crate) async fn backup_events( service_workspace: State<'_, crate::app::WorkspaceManager>, limit: Option<i64>, workspace_generation: Option<u64>, ) -> Result<Vec<BackupEvent>, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/archive.ts"
+      ]
+    },
+    {
+      "name": "backup_export",
+      "module": "backup",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "BACKUP-01",
+        "BACKUP-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/backup.rs",
+          "line": 84,
+          "signature": "pub(crate) async fn backup_export( app: tauri::AppHandle, service_workspace: State<'_, crate::app::WorkspaceManager>, mode: String, password: Option<String>, workspace_generation: Option<u64>, ) -> Result<Option<String>, CommandError>"
+        },
+        {
+          "source": "src-tauri/src/commands/backup.rs",
+          "line": 120,
+          "signature": "pub(crate) async fn backup_export( app: tauri::AppHandle, gateway: State<'_, DocumentGateway>, service_workspace: State<'_, crate::app::WorkspaceManager>, mode: String, password: Option<String>, workspace_generation: Option<u64>, ) -> Result<Option<String>, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/backup.ts"
+      ]
+    },
+    {
+      "name": "backup_get_settings",
+      "module": "legacy_backup",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "ARCHIVE-01",
+        "ARCHIVE-02",
+        "BACKUP-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/legacy_backup.rs",
+          "line": 143,
+          "signature": "pub(crate) async fn backup_get_settings( service_workspace: State<'_, crate::app::WorkspaceManager>, workspace_generation: Option<u64>, ) -> Result<BackupSettings, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/archive.ts"
+      ]
+    },
+    {
+      "name": "backup_import",
+      "module": "backup",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "BACKUP-01",
+        "BACKUP-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/backup.rs",
+          "line": 183,
+          "signature": "pub(crate) async fn backup_import( service_workspace: State<'_, crate::app::WorkspaceManager>, gateway: State<'_, DocumentGateway>, file_path: String, strategy: String, password: Option<String>, workspace_generation: Option<u64>, ) -> Result<BackupImportResult, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/backup.ts"
+      ]
+    },
+    {
+      "name": "backup_legacy_resolve_conflict",
+      "module": "legacy_backup",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "ARCHIVE-01",
+        "ARCHIVE-02",
+        "BACKUP-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/legacy_backup.rs",
+          "line": 233,
+          "signature": "pub(crate) async fn backup_legacy_resolve_conflict( service_workspace: State<'_, crate::app::WorkspaceManager>, choice: String, workspace_generation: Option<u64>, ) -> Result<ResolvedResult, CommandError>"
+        }
+      ],
+      "frontend": []
+    },
+    {
+      "name": "backup_oauth_url",
+      "module": "legacy_backup",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "ARCHIVE-01",
+        "ARCHIVE-02",
+        "BACKUP-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/legacy_backup.rs",
+          "line": 335,
+          "signature": "pub(crate) async fn backup_oauth_url( service_workspace: State<'_, crate::app::WorkspaceManager>, provider_type: String, provider_id: String, workspace_generation: Option<u64>, ) -> Result<OAuthURLResult, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/archive.ts"
+      ]
+    },
+    {
+      "name": "backup_pick_file",
+      "module": "backup",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "BACKUP-01",
+        "BACKUP-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/backup.rs",
+          "line": 35,
+          "signature": "pub(crate) async fn backup_pick_file( app: tauri::AppHandle, ) -> Result<Option<BackupPickedFile>, CommandError>"
+        },
+        {
+          "source": "src-tauri/src/commands/backup.rs",
+          "line": 64,
+          "signature": "pub(crate) async fn backup_pick_file( app: tauri::AppHandle, gateway: State<'_, DocumentGateway>, ) -> Result<Option<BackupPickedFile>, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/backup.ts"
+      ]
+    },
+    {
+      "name": "backup_preview",
+      "module": "backup",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "BACKUP-01",
+        "BACKUP-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/backup.rs",
+          "line": 159,
+          "signature": "pub(crate) async fn backup_preview( service_workspace: State<'_, crate::app::WorkspaceManager>, gateway: State<'_, DocumentGateway>, file_path: String, password: Option<String>, workspace_generation: Option<u64>, ) -> Result<BackupPreview, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/backup.ts"
+      ]
+    },
+    {
+      "name": "backup_preview_cloud",
+      "module": "legacy_backup",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "ARCHIVE-01",
+        "ARCHIVE-02",
+        "BACKUP-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/legacy_backup.rs",
+          "line": 447,
+          "signature": "pub(crate) async fn backup_preview_cloud( service_workspace: State<'_, crate::app::WorkspaceManager>, provider_id: String, object: String, password: Option<String>, workspace_generation: Option<u64>, ) -> Result<serde_json::Value, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/archive.ts"
+      ]
+    },
+    {
+      "name": "backup_preview_legacy_account",
+      "module": "legacy_backup",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "ARCHIVE-01",
+        "ARCHIVE-02",
+        "BACKUP-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/legacy_backup.rs",
+          "line": 422,
+          "signature": "pub(crate) async fn backup_preview_legacy_account( service_workspace: State<'_, crate::app::WorkspaceManager>, password: String, workspace_generation: Option<u64>, ) -> Result<serde_json::Value, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/archive.ts"
+      ]
+    },
+    {
+      "name": "backup_preview_safety",
+      "module": "legacy_backup",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "ARCHIVE-01",
+        "ARCHIVE-02",
+        "BACKUP-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/legacy_backup.rs",
+          "line": 407,
+          "signature": "pub(crate) async fn backup_preview_safety( service_workspace: State<'_, crate::app::WorkspaceManager>, id: String, workspace_generation: Option<u64>, ) -> Result<serde_json::Value, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/archive.ts"
+      ]
+    },
+    {
+      "name": "backup_preview_version",
+      "module": "legacy_backup",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "ARCHIVE-01",
+        "ARCHIVE-02",
+        "BACKUP-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/legacy_backup.rs",
+          "line": 350,
+          "signature": "pub(crate) async fn backup_preview_version( service_workspace: State<'_, crate::app::WorkspaceManager>, id: String, password: Option<String>, workspace_generation: Option<u64>, ) -> Result<serde_json::Value, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/archive.ts"
+      ]
+    },
+    {
+      "name": "backup_push",
+      "module": "legacy_backup",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "ARCHIVE-01",
+        "ARCHIVE-02",
+        "BACKUP-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/legacy_backup.rs",
+          "line": 220,
+          "signature": "pub(crate) async fn backup_push( service_workspace: State<'_, crate::app::WorkspaceManager>, workspace_generation: Option<u64>, ) -> Result<StartedResult, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/archive.ts"
+      ]
+    },
+    {
+      "name": "backup_restore_version",
+      "module": "legacy_backup",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "ARCHIVE-01",
+        "ARCHIVE-02",
+        "BACKUP-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/legacy_backup.rs",
+          "line": 93,
+          "signature": "pub(crate) async fn backup_restore_version( service_workspace: State<'_, crate::app::WorkspaceManager>, id: String, workspace_generation: Option<u64>, ) -> Result<RestoreResult, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/archive.ts"
+      ]
+    },
+    {
+      "name": "backup_reveal_password",
+      "module": "legacy_backup",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "ARCHIVE-01",
+        "ARCHIVE-02",
+        "BACKUP-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/legacy_backup.rs",
+          "line": 178,
+          "signature": "pub(crate) async fn backup_reveal_password( service_workspace: State<'_, crate::app::WorkspaceManager>, workspace_generation: Option<u64>, ) -> Result<PasswordResult, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/archive.ts"
+      ]
+    },
+    {
+      "name": "backup_safety_versions",
+      "module": "legacy_backup",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "ARCHIVE-01",
+        "ARCHIVE-02",
+        "BACKUP-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/legacy_backup.rs",
+          "line": 394,
+          "signature": "pub(crate) async fn backup_safety_versions( service_workspace: State<'_, crate::app::WorkspaceManager>, workspace_generation: Option<u64>, ) -> Result<serde_json::Value, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/archive.ts"
+      ]
+    },
+    {
+      "name": "backup_shutdown",
+      "module": "legacy_backup",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "ARCHIVE-01",
+        "ARCHIVE-02",
+        "BACKUP-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/legacy_backup.rs",
+          "line": 194,
+          "signature": "pub(crate) async fn backup_shutdown( service_workspace: State<'_, crate::app::WorkspaceManager>, workspace_generation: Option<u64>, ) -> Result<(), CommandError>"
+        }
+      ],
+      "frontend": []
+    },
+    {
+      "name": "backup_status",
+      "module": "legacy_backup",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "ARCHIVE-01",
+        "ARCHIVE-02",
+        "BACKUP-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/legacy_backup.rs",
+          "line": 41,
+          "signature": "pub(crate) async fn backup_status( service_workspace: State<'_, crate::app::WorkspaceManager>, workspace_generation: Option<u64>, ) -> Result<BackupStatus, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/archive.ts"
+      ]
+    },
+    {
+      "name": "backup_submit_latest",
+      "module": "legacy_backup",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "ARCHIVE-01",
+        "ARCHIVE-02",
+        "BACKUP-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/legacy_backup.rs",
+          "line": 207,
+          "signature": "pub(crate) async fn backup_submit_latest( service_workspace: State<'_, crate::app::WorkspaceManager>, workspace_generation: Option<u64>, ) -> Result<StartedResult, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/archive.ts"
+      ]
+    },
+    {
+      "name": "backup_targets",
+      "module": "legacy_backup",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "ARCHIVE-01",
+        "ARCHIVE-02",
+        "BACKUP-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/legacy_backup.rs",
+          "line": 256,
+          "signature": "pub(crate) async fn backup_targets( service_workspace: State<'_, crate::app::WorkspaceManager>, workspace_generation: Option<u64>, ) -> Result<Vec<BackupTargetMeta>, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/archive.ts"
+      ]
+    },
+    {
+      "name": "backup_test_provider",
+      "module": "legacy_backup",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "ARCHIVE-01",
+        "ARCHIVE-02",
+        "BACKUP-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/legacy_backup.rs",
+          "line": 321,
+          "signature": "pub(crate) async fn backup_test_provider( service_workspace: State<'_, crate::app::WorkspaceManager>, id: String, workspace_generation: Option<u64>, ) -> Result<SavedResult, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/archive.ts"
+      ]
+    },
+    {
+      "name": "backup_update_provider",
+      "module": "legacy_backup",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "ARCHIVE-01",
+        "ARCHIVE-02",
+        "BACKUP-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/legacy_backup.rs",
+          "line": 287,
+          "signature": "pub(crate) async fn backup_update_provider( service_workspace: State<'_, crate::app::WorkspaceManager>, id: String, config: BackupTargetConfig, workspace_generation: Option<u64>, ) -> Result<SavedResult, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/archive.ts"
+      ]
+    },
+    {
+      "name": "backup_update_settings",
+      "module": "legacy_backup",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "ARCHIVE-01",
+        "ARCHIVE-02",
+        "BACKUP-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/legacy_backup.rs",
+          "line": 158,
+          "signature": "pub(crate) async fn backup_update_settings( service_workspace: State<'_, crate::app::WorkspaceManager>, mut settings: BackupSettings, backup_password: Option<String>, workspace_generation: Option<u64>, ) -> Result<SavedResult, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/archive.ts"
+      ]
+    },
+    {
+      "name": "backup_versions",
+      "module": "legacy_backup",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "ARCHIVE-01",
+        "ARCHIVE-02",
+        "BACKUP-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/legacy_backup.rs",
+          "line": 78,
+          "signature": "pub(crate) async fn backup_versions( service_workspace: State<'_, crate::app::WorkspaceManager>, workspace_generation: Option<u64>, ) -> Result<Vec<BackupVersion>, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/archive.ts"
+      ]
+    },
+    {
+      "name": "clear_app_log",
+      "module": "desktop",
+      "desktop": true,
+      "mobile": false,
+      "disposition": "replace-platform-contract",
+      "note": "替换平台或运行时适配，逐项保留桌面仍使用的文件、窗口、网络及诊断能力。",
+      "caseIds": [
+        "SHELL-04",
+        "EDITOR-03",
+        "PLATFORM-01",
+        "DIAG-01"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/desktop.rs",
+          "line": 79,
+          "signature": "pub(crate) fn clear_app_log(kind: String) -> Result<(), String>"
+        }
+      ],
+      "frontend": [
+        "web/src/components/SettingsDialog/LogPanel.tsx"
+      ]
+    },
+    {
+      "name": "document_export_text",
+      "module": "document",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-platform-contract",
+      "note": "替换平台或运行时适配，逐项保留桌面仍使用的文件、窗口、网络及诊断能力。",
+      "caseIds": [
+        "PLATFORM-01",
+        "SFTP-02",
+        "VAULT-02",
+        "CLEAN-01"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/document.rs",
+          "line": 54,
+          "signature": "pub(crate) async fn document_export_text( app: AppHandle, gateway: State<'_, DocumentGateway>, content: String, suggested_name: String, mime_type: Option<String>, ) -> Result<Option<String>, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/document.ts"
+      ]
+    },
+    {
+      "name": "document_pick",
+      "module": "document",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-platform-contract",
+      "note": "替换平台或运行时适配，逐项保留桌面仍使用的文件、窗口、网络及诊断能力。",
+      "caseIds": [
+        "PLATFORM-01",
+        "SFTP-02",
+        "VAULT-02",
+        "CLEAN-01"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/document.rs",
+          "line": 11,
+          "signature": "pub(crate) async fn document_pick( app: AppHandle, gateway: State<'_, DocumentGateway>, multiple: Option<bool>, mime_types: Option<Vec<String>>, ) -> Result<Vec<DocumentDescriptor>, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/document.ts"
+      ]
+    },
+    {
+      "name": "document_read_text",
+      "module": "document",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-platform-contract",
+      "note": "替换平台或运行时适配，逐项保留桌面仍使用的文件、窗口、网络及诊断能力。",
+      "caseIds": [
+        "PLATFORM-01",
+        "SFTP-02",
+        "VAULT-02",
+        "CLEAN-01"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/document.rs",
+          "line": 33,
+          "signature": "pub(crate) async fn document_read_text( gateway: State<'_, DocumentGateway>, reference: String, max_bytes: Option<u64>, ) -> Result<String, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/document.ts"
+      ]
+    },
+    {
+      "name": "document_release",
+      "module": "document",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-platform-contract",
+      "note": "替换平台或运行时适配，逐项保留桌面仍使用的文件、窗口、网络及诊断能力。",
+      "caseIds": [
+        "PLATFORM-01",
+        "SFTP-02",
+        "VAULT-02",
+        "CLEAN-01"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/document.rs",
+          "line": 25,
+          "signature": "pub(crate) fn document_release( gateway: State<'_, DocumentGateway>, reference: String, ) -> Result<(), CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/backup.ts",
+        "web/src/api/document.ts"
+      ]
+    },
+    {
+      "name": "editor_window_ready",
+      "module": "desktop",
+      "desktop": true,
+      "mobile": false,
+      "disposition": "replace-platform-contract",
+      "note": "替换平台或运行时适配，逐项保留桌面仍使用的文件、窗口、网络及诊断能力。",
+      "caseIds": [
+        "SHELL-04",
+        "EDITOR-03",
+        "PLATFORM-01",
+        "DIAG-01"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/desktop.rs",
+          "line": 42,
+          "signature": "pub(crate) fn editor_window_ready( app: AppHandle, window: WebviewWindow, coordinator: State<'_, EditorWindowCoordinator>, ) -> Result<(), String>"
+        }
+      ],
+      "frontend": [
+        "web/src/components/Editor/EditorWindowPage.tsx"
+      ]
+    },
+    {
+      "name": "editor_window_show",
+      "module": "desktop",
+      "desktop": true,
+      "mobile": false,
+      "disposition": "replace-platform-contract",
+      "note": "替换平台或运行时适配，逐项保留桌面仍使用的文件、窗口、网络及诊断能力。",
+      "caseIds": [
+        "SHELL-04",
+        "EDITOR-03",
+        "PLATFORM-01",
+        "DIAG-01"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/desktop.rs",
+          "line": 34,
+          "signature": "pub(crate) fn editor_window_show( app: AppHandle, window: WebviewWindow, coordinator: State<'_, EditorWindowCoordinator>, ) -> Result<(), String>"
+        }
+      ],
+      "frontend": [
+        "web/src/components/Editor/EditorWindowApp.tsx",
+        "web/src/main.tsx"
+      ]
+    },
+    {
+      "name": "frontend_ready",
+      "module": "desktop",
+      "desktop": true,
+      "mobile": false,
+      "disposition": "replace-platform-contract",
+      "note": "替换平台或运行时适配，逐项保留桌面仍使用的文件、窗口、网络及诊断能力。",
+      "caseIds": [
+        "SHELL-04",
+        "EDITOR-03",
+        "PLATFORM-01",
+        "DIAG-01"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/desktop.rs",
+          "line": 51,
+          "signature": "pub(crate) fn frontend_ready(app: AppHandle)"
+        }
+      ],
+      "frontend": [
+        "web/src/main.tsx"
+      ]
+    },
+    {
+      "name": "get_platform",
+      "module": "desktop",
+      "desktop": true,
+      "mobile": false,
+      "disposition": "replace-platform-contract",
+      "note": "替换平台或运行时适配，逐项保留桌面仍使用的文件、窗口、网络及诊断能力。",
+      "caseIds": [
+        "SHELL-04",
+        "EDITOR-03",
+        "PLATFORM-01",
+        "DIAG-01"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/desktop.rs",
+          "line": 59,
+          "signature": "pub(crate) fn get_platform() -> &'static str"
+        }
+      ],
+      "frontend": []
+    },
+    {
+      "name": "get_updater_target",
+      "module": "desktop",
+      "desktop": true,
+      "mobile": false,
+      "disposition": "replace-platform-contract",
+      "note": "替换平台或运行时适配，逐项保留桌面仍使用的文件、窗口、网络及诊断能力。",
+      "caseIds": [
+        "SHELL-04",
+        "EDITOR-03",
+        "PLATFORM-01",
+        "DIAG-01"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/desktop.rs",
+          "line": 64,
+          "signature": "pub(crate) fn get_updater_target() -> Option<String>"
+        }
+      ],
+      "frontend": [
+        "web/src/lib/updater.ts"
+      ]
+    },
+    {
+      "name": "group_create",
+      "module": "group",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "PROFILE-01"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/group.rs",
+          "line": 24,
+          "signature": "pub(crate) async fn group_create( service_workspace: State<'_, crate::app::WorkspaceManager>, request: GroupCreateRequest, workspace_generation: Option<u64>, ) -> Result<Group, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/group.ts"
+      ]
+    },
+    {
+      "name": "group_delete",
+      "module": "group",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "PROFILE-01"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/group.rs",
+          "line": 63,
+          "signature": "pub(crate) async fn group_delete( service_workspace: State<'_, crate::app::WorkspaceManager>, id: String, workspace_generation: Option<u64>, ) -> Result<(), CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/group.ts"
+      ]
+    },
+    {
+      "name": "group_list",
+      "module": "group",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "PROFILE-01"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/group.rs",
+          "line": 9,
+          "signature": "pub(crate) async fn group_list( service_workspace: State<'_, crate::app::WorkspaceManager>, workspace_generation: Option<u64>, ) -> Result<Vec<Group>, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/group.ts"
+      ]
+    },
+    {
+      "name": "group_update",
+      "module": "group",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "PROFILE-01"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/group.rs",
+          "line": 43,
+          "signature": "pub(crate) async fn group_update( service_workspace: State<'_, crate::app::WorkspaceManager>, id: String, request: GroupUpdateRequest, workspace_generation: Option<u64>, ) -> Result<Group, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/group.ts"
+      ]
+    },
+    {
+      "name": "history_delete",
+      "module": "local_state",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "LOCAL-01",
+        "TERM-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/local_state.rs",
+          "line": 56,
+          "signature": "pub(crate) async fn history_delete( workspace: State<'_, WorkspaceManager>, profile_id: Option<String>, id: Option<String>, workspace_generation: Option<u64>, ) -> Result<(), CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/localState.ts"
+      ]
+    },
+    {
+      "name": "history_import",
+      "module": "local_state",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "remove-legacy-migration",
+      "note": "删除旧数据迁移入口，新目录从零初始化。",
+      "caseIds": [
+        "LOCAL-01",
+        "TERM-02",
+        "CLEAN-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/local_state.rs",
+          "line": 70,
+          "signature": "pub(crate) async fn history_import( workspace: State<'_, WorkspaceManager>, profile_id: String, entries: Vec<HistoryEntry>, workspace_generation: Option<u64>, ) -> Result<usize, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/localState.ts"
+      ]
+    },
+    {
+      "name": "history_list",
+      "module": "local_state",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "LOCAL-01",
+        "TERM-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/local_state.rs",
+          "line": 32,
+          "signature": "pub(crate) async fn history_list( workspace: State<'_, WorkspaceManager>, profile_id: String, workspace_generation: Option<u64>, ) -> Result<Vec<HistoryEntry>, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/localState.ts"
+      ]
+    },
+    {
+      "name": "history_record",
+      "module": "local_state",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "LOCAL-01",
+        "TERM-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/local_state.rs",
+          "line": 43,
+          "signature": "pub(crate) async fn history_record( workspace: State<'_, WorkspaceManager>, profile_id: String, command: String, cwd: String, workspace_generation: Option<u64>, ) -> Result<(), CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/localState.ts"
+      ]
+    },
+    {
+      "name": "host_key_decide",
+      "module": "ssh",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "SSH-01",
+        "SSH-02",
+        "SSH-03",
+        "TERM-01",
+        "TERM-03"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/ssh.rs",
+          "line": 151,
+          "signature": "pub(crate) async fn host_key_decide( service_workspace: State<'_, crate::app::WorkspaceManager>, request_id: String, fingerprint: String, decision: String, workspace_generation: Option<u64>, ) -> Result<Value, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/session.ts"
+      ]
+    },
+    {
+      "name": "local_state_read",
+      "module": "local_state",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "LOCAL-01",
+        "TERM-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/local_state.rs",
+          "line": 9,
+          "signature": "pub(crate) async fn local_state_read( workspace: State<'_, WorkspaceManager>, key: LocalStateKey, workspace_generation: Option<u64>, ) -> Result<Option<serde_json::Value>, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/localState.ts"
+      ]
+    },
+    {
+      "name": "local_state_write",
+      "module": "local_state",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "LOCAL-01",
+        "TERM-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/local_state.rs",
+          "line": 20,
+          "signature": "pub(crate) async fn local_state_write( workspace: State<'_, WorkspaceManager>, key: LocalStateKey, value: serde_json::Value, workspace_generation: Option<u64>, ) -> Result<(), CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/localState.ts"
+      ]
+    },
+    {
+      "name": "mark_electron_settings_migrated",
+      "module": "desktop",
+      "desktop": true,
+      "mobile": false,
+      "disposition": "remove-legacy-migration",
+      "note": "删除旧数据迁移入口，新目录从零初始化。",
+      "caseIds": [
+        "SHELL-04",
+        "EDITOR-03",
+        "PLATFORM-01",
+        "DIAG-01",
+        "CLEAN-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/desktop.rs",
+          "line": 89,
+          "signature": "pub(crate) fn mark_electron_settings_migrated() -> Result<(), String>"
+        }
+      ],
+      "frontend": [
+        "web/src/lib/desktop.ts"
+      ]
+    },
+    {
+      "name": "migrate_electron_settings",
+      "module": "desktop",
+      "desktop": true,
+      "mobile": false,
+      "disposition": "remove-legacy-migration",
+      "note": "删除旧数据迁移入口，新目录从零初始化。",
+      "caseIds": [
+        "SHELL-04",
+        "EDITOR-03",
+        "PLATFORM-01",
+        "DIAG-01",
+        "CLEAN-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/desktop.rs",
+          "line": 84,
+          "signature": "pub(crate) fn migrate_electron_settings() -> Option<serde_json::Value>"
+        }
+      ],
+      "frontend": [
+        "web/src/lib/desktop.ts"
+      ]
+    },
+    {
+      "name": "open_editor_window",
+      "module": "desktop",
+      "desktop": true,
+      "mobile": false,
+      "disposition": "replace-platform-contract",
+      "note": "替换平台或运行时适配，逐项保留桌面仍使用的文件、窗口、网络及诊断能力。",
+      "caseIds": [
+        "SHELL-04",
+        "EDITOR-03",
+        "PLATFORM-01",
+        "DIAG-01"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/desktop.rs",
+          "line": 7,
+          "signature": "pub(crate) async fn open_editor_window( app: AppHandle, coordinator: State<'_, EditorWindowCoordinator>, session_id: String, session_type: String, path: String, ) -> Result<(), String>"
+        }
+      ],
+      "frontend": [
+        "web/src/lib/editorWindow.ts"
+      ]
+    },
+    {
+      "name": "platform_capabilities",
+      "module": "platform",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-platform-contract",
+      "note": "替换平台或运行时适配，逐项保留桌面仍使用的文件、窗口、网络及诊断能力。",
+      "caseIds": [
+        "PLATFORM-01",
+        "CLEAN-01"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/platform.rs",
+          "line": 26,
+          "signature": "pub(crate) fn platform_capabilities() -> PlatformCapabilities"
+        }
+      ],
+      "frontend": [
+        "web/src/lib/platform.ts"
+      ]
+    },
+    {
+      "name": "profile_confirm_host_key",
+      "module": "ssh",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "SSH-01",
+        "SSH-02",
+        "SSH-03",
+        "TERM-01",
+        "TERM-03"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/ssh.rs",
+          "line": 44,
+          "signature": "pub(crate) async fn profile_confirm_host_key( profiles_workspace: State<'_, crate::app::WorkspaceManager>, id: String, fingerprint: String, workspace_generation: Option<u64>, ) -> Result<Value, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/profile.ts"
+      ]
+    },
+    {
+      "name": "profile_create",
+      "module": "profile",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "PROFILE-01",
+        "PROFILE-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/profile.rs",
+          "line": 42,
+          "signature": "pub(crate) async fn profile_create( state_workspace: State<'_, crate::app::WorkspaceManager>, request: ProfileCreateRequest, workspace_generation: Option<u64>, ) -> Result<Profile, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/profile.ts"
+      ]
+    },
+    {
+      "name": "profile_delete",
+      "module": "profile",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "PROFILE-01",
+        "PROFILE-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/profile.rs",
+          "line": 81,
+          "signature": "pub(crate) async fn profile_delete( state_workspace: State<'_, crate::app::WorkspaceManager>, id: String, workspace_generation: Option<u64>, ) -> Result<(), CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/profile.ts"
+      ]
+    },
+    {
+      "name": "profile_get",
+      "module": "profile",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "PROFILE-01",
+        "PROFILE-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/profile.rs",
+          "line": 26,
+          "signature": "pub(crate) async fn profile_get( state_workspace: State<'_, crate::app::WorkspaceManager>, id: String, workspace_generation: Option<u64>, ) -> Result<Profile, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/profile.ts"
+      ]
+    },
+    {
+      "name": "profile_list",
+      "module": "profile",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "PROFILE-01",
+        "PROFILE-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/profile.rs",
+          "line": 9,
+          "signature": "pub(crate) async fn profile_list( state_workspace: State<'_, crate::app::WorkspaceManager>, group_id: Option<String>, search: Option<String>, workspace_generation: Option<u64>, ) -> Result<Vec<Profile>, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/profile.ts"
+      ]
+    },
+    {
+      "name": "profile_test_existing",
+      "module": "ssh",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "SSH-01",
+        "SSH-02",
+        "SSH-03",
+        "TERM-01",
+        "TERM-03"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/ssh.rs",
+          "line": 30,
+          "signature": "pub(crate) async fn profile_test_existing( profiles_workspace: State<'_, crate::app::WorkspaceManager>, id: String, request: ProfileUpdateRequest, workspace_generation: Option<u64>, ) -> Result<ProfileTestResult, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/profile.ts"
+      ]
+    },
+    {
+      "name": "profile_test_new",
+      "module": "ssh",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "SSH-01",
+        "SSH-02",
+        "SSH-03",
+        "TERM-01",
+        "TERM-03"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/ssh.rs",
+          "line": 17,
+          "signature": "pub(crate) async fn profile_test_new( profiles_workspace: State<'_, crate::app::WorkspaceManager>, request: ProfileCreateRequest, workspace_generation: Option<u64>, ) -> Result<ProfileTestResult, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/profile.ts"
+      ]
+    },
+    {
+      "name": "profile_update",
+      "module": "profile",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "PROFILE-01",
+        "PROFILE-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/profile.rs",
+          "line": 61,
+          "signature": "pub(crate) async fn profile_update( state_workspace: State<'_, crate::app::WorkspaceManager>, id: String, request: ProfileUpdateRequest, workspace_generation: Option<u64>, ) -> Result<Profile, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/profile.ts"
+      ]
+    },
+    {
+      "name": "read_app_log",
+      "module": "desktop",
+      "desktop": true,
+      "mobile": false,
+      "disposition": "replace-platform-contract",
+      "note": "替换平台或运行时适配，逐项保留桌面仍使用的文件、窗口、网络及诊断能力。",
+      "caseIds": [
+        "SHELL-04",
+        "EDITOR-03",
+        "PLATFORM-01",
+        "DIAG-01"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/desktop.rs",
+          "line": 69,
+          "signature": "pub(crate) fn read_app_log(kind: String) -> Result<desktop::AppLogSnapshot, String>"
+        }
+      ],
+      "frontend": [
+        "web/src/components/SettingsDialog/LogPanel.tsx"
+      ]
+    },
+    {
+      "name": "request_app_close",
+      "module": "desktop",
+      "desktop": true,
+      "mobile": false,
+      "disposition": "replace-platform-contract",
+      "note": "替换平台或运行时适配，逐项保留桌面仍使用的文件、窗口、网络及诊断能力。",
+      "caseIds": [
+        "SHELL-04",
+        "EDITOR-03",
+        "PLATFORM-01",
+        "DIAG-01"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/desktop.rs",
+          "line": 17,
+          "signature": "pub(crate) fn request_app_close( app: AppHandle, window: WebviewWindow, coordinator: State<'_, EditorWindowCoordinator>, ) -> Result<(), String>"
+        }
+      ],
+      "frontend": [
+        "web/src/main.tsx"
+      ]
+    },
+    {
+      "name": "request_editor_transition",
+      "module": "desktop",
+      "desktop": true,
+      "mobile": false,
+      "disposition": "replace-platform-contract",
+      "note": "替换平台或运行时适配，逐项保留桌面仍使用的文件、窗口、网络及诊断能力。",
+      "caseIds": [
+        "SHELL-04",
+        "EDITOR-03",
+        "PLATFORM-01",
+        "DIAG-01"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/desktop.rs",
+          "line": 124,
+          "signature": "pub(crate) async fn request_editor_transition( app: AppHandle, window: WebviewWindow, coordinator: State<'_, EditorWindowCoordinator>, ) -> Result<bool, String>"
+        }
+      ],
+      "frontend": [
+        "web/src/lib/accountEditorGuard.ts"
+      ]
+    },
+    {
+      "name": "resolve_app_close",
+      "module": "desktop",
+      "desktop": true,
+      "mobile": false,
+      "disposition": "replace-platform-contract",
+      "note": "替换平台或运行时适配，逐项保留桌面仍使用的文件、窗口、网络及诊断能力。",
+      "caseIds": [
+        "SHELL-04",
+        "EDITOR-03",
+        "PLATFORM-01",
+        "DIAG-01"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/desktop.rs",
+          "line": 25,
+          "signature": "pub(crate) fn resolve_app_close( app: AppHandle, window: WebviewWindow, coordinator: State<'_, EditorWindowCoordinator>, should_close: bool, ) -> Result<(), String>"
+        }
+      ],
+      "frontend": [
+        "web/src/components/Editor/EditorWindowPage.tsx"
+      ]
+    },
+    {
+      "name": "resolve_editor_transition",
+      "module": "desktop",
+      "desktop": true,
+      "mobile": false,
+      "disposition": "replace-platform-contract",
+      "note": "替换平台或运行时适配，逐项保留桌面仍使用的文件、窗口、网络及诊断能力。",
+      "caseIds": [
+        "SHELL-04",
+        "EDITOR-03",
+        "PLATFORM-01",
+        "DIAG-01"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/desktop.rs",
+          "line": 132,
+          "signature": "pub(crate) fn resolve_editor_transition( window: WebviewWindow, coordinator: State<'_, EditorWindowCoordinator>, request_id: String, accepted: bool, ) -> Result<(), String>"
+        }
+      ],
+      "frontend": [
+        "web/src/components/Editor/EditorWindowPage.tsx"
+      ]
+    },
+    {
+      "name": "save_blob_to_disk",
+      "module": "desktop",
+      "desktop": true,
+      "mobile": false,
+      "disposition": "replace-platform-contract",
+      "note": "替换平台或运行时适配，逐项保留桌面仍使用的文件、窗口、网络及诊断能力。",
+      "caseIds": [
+        "SHELL-04",
+        "EDITOR-03",
+        "PLATFORM-01",
+        "DIAG-01"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/desktop.rs",
+          "line": 94,
+          "signature": "pub(crate) async fn save_blob_to_disk( app: AppHandle, bytes: Vec<u8>, suggested_name: String, ) -> Result<Option<String>, String>"
+        }
+      ],
+      "frontend": [
+        "web/src/lib/desktop.ts"
+      ]
+    },
+    {
+      "name": "server_get_info",
+      "module": "server_detail",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "METRICS-01",
+        "EDITOR-01"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/server_detail.rs",
+          "line": 11,
+          "signature": "pub(crate) async fn server_get_info( service_workspace: State<'_, crate::app::WorkspaceManager>, session_id: String, workspace_generation: Option<u64>, ) -> Result<ServerInfo, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/serverDetail.ts"
+      ]
+    },
+    {
+      "name": "server_get_metrics",
+      "module": "server_detail",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "METRICS-01",
+        "EDITOR-01"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/server_detail.rs",
+          "line": 24,
+          "signature": "pub(crate) async fn server_get_metrics( service_workspace: State<'_, crate::app::WorkspaceManager>, session_id: String, workspace_generation: Option<u64>, ) -> Result<ServerMetrics, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/serverDetail.ts"
+      ]
+    },
+    {
+      "name": "session_attach",
+      "module": "ssh",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "SSH-01",
+        "SSH-02",
+        "SSH-03",
+        "TERM-01",
+        "TERM-03"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/ssh.rs",
+          "line": 83,
+          "signature": "pub(crate) async fn session_attach( service_workspace: State<'_, crate::app::WorkspaceManager>, id: String, workspace_generation: Option<u64>, ) -> Result<Vec<ClientMessage>, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/session.ts"
+      ]
+    },
+    {
+      "name": "session_auth_respond",
+      "module": "ssh",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "SSH-01",
+        "SSH-02",
+        "SSH-03",
+        "TERM-01",
+        "TERM-03"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/ssh.rs",
+          "line": 210,
+          "signature": "pub(crate) async fn session_auth_respond( service_workspace: State<'_, crate::app::WorkspaceManager>, request_id: String, responses: Vec<String>, workspace_generation: Option<u64>, ) -> Result<(), CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/session.ts"
+      ]
+    },
+    {
+      "name": "session_close",
+      "module": "ssh",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "SSH-01",
+        "SSH-02",
+        "SSH-03",
+        "TERM-01",
+        "TERM-03"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/ssh.rs",
+          "line": 243,
+          "signature": "pub(crate) async fn session_close( service_workspace: State<'_, crate::app::WorkspaceManager>, id: String, workspace_generation: Option<u64>, ) -> Result<(), CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/session.ts"
+      ]
+    },
+    {
+      "name": "session_complete",
+      "module": "ssh",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "SSH-01",
+        "SSH-02",
+        "SSH-03",
+        "TERM-01",
+        "TERM-03"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/ssh.rs",
+          "line": 224,
+          "signature": "pub(crate) async fn session_complete( service_workspace: State<'_, crate::app::WorkspaceManager>, id: String, request_id: String, generator_id: String, params: crate::ssh::CompletionParams, cwd: Option<String>, workspace_generation: Option<u64>, ) -> Result<(), CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/session.ts"
+      ]
+    },
+    {
+      "name": "session_confirm_host_key",
+      "module": "ssh",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "SSH-01",
+        "SSH-02",
+        "SSH-03",
+        "TERM-01",
+        "TERM-03"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/ssh.rs",
+          "line": 137,
+          "signature": "pub(crate) async fn session_confirm_host_key( service_workspace: State<'_, crate::app::WorkspaceManager>, id: String, fingerprint: Option<String>, workspace_generation: Option<u64>, ) -> Result<Value, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/session.ts"
+      ]
+    },
+    {
+      "name": "session_create",
+      "module": "ssh",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "SSH-01",
+        "SSH-02",
+        "SSH-03",
+        "TERM-01",
+        "TERM-03"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/ssh.rs",
+          "line": 58,
+          "signature": "pub(crate) async fn session_create( service_workspace: State<'_, crate::app::WorkspaceManager>, request: SessionCreateRequest, workspace_generation: Option<u64>, ) -> Result<SessionCreateResponse, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/session.ts"
+      ]
+    },
+    {
+      "name": "session_input",
+      "module": "ssh",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "SSH-01",
+        "SSH-02",
+        "SSH-03",
+        "TERM-01",
+        "TERM-03"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/ssh.rs",
+          "line": 168,
+          "signature": "pub(crate) async fn session_input( service_workspace: State<'_, crate::app::WorkspaceManager>, id: String, data: String, workspace_generation: Option<u64>, ) -> Result<(), CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/session.ts"
+      ]
+    },
+    {
+      "name": "session_list",
+      "module": "ssh",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "SSH-01",
+        "SSH-02",
+        "SSH-03",
+        "TERM-01",
+        "TERM-03"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/ssh.rs",
+          "line": 71,
+          "signature": "pub(crate) async fn session_list( service_workspace: State<'_, crate::app::WorkspaceManager>, workspace_generation: Option<u64>, ) -> Result<Vec<SessionInfo>, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/session.ts"
+      ]
+    },
+    {
+      "name": "session_ping",
+      "module": "ssh",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "SSH-01",
+        "SSH-02",
+        "SSH-03",
+        "TERM-01",
+        "TERM-03"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/ssh.rs",
+          "line": 197,
+          "signature": "pub(crate) async fn session_ping( service_workspace: State<'_, crate::app::WorkspaceManager>, id: String, workspace_generation: Option<u64>, ) -> Result<(), CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/session.ts"
+      ]
+    },
+    {
+      "name": "session_reconnect",
+      "module": "ssh",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "SSH-01",
+        "SSH-02",
+        "SSH-03",
+        "TERM-01",
+        "TERM-03"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/ssh.rs",
+          "line": 124,
+          "signature": "pub(crate) async fn session_reconnect( service_workspace: State<'_, crate::app::WorkspaceManager>, id: String, workspace_generation: Option<u64>, ) -> Result<SessionCreateResponse, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/session.ts"
+      ]
+    },
+    {
+      "name": "session_resize",
+      "module": "ssh",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "SSH-01",
+        "SSH-02",
+        "SSH-03",
+        "TERM-01",
+        "TERM-03"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/ssh.rs",
+          "line": 182,
+          "signature": "pub(crate) async fn session_resize( service_workspace: State<'_, crate::app::WorkspaceManager>, id: String, cols: u32, rows: u32, workspace_generation: Option<u64>, ) -> Result<(), CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/session.ts"
+      ]
+    },
+    {
+      "name": "session_subscribe",
+      "module": "ssh",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "SSH-01",
+        "SSH-02",
+        "SSH-03",
+        "TERM-01",
+        "TERM-03"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/ssh.rs",
+          "line": 96,
+          "signature": "pub(crate) async fn session_subscribe( service_workspace: State<'_, crate::app::WorkspaceManager>, id: String, on_event: Channel<ClientMessage>, workspace_generation: Option<u64>, ) -> Result<String, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/session.ts"
+      ]
+    },
+    {
+      "name": "session_unsubscribe",
+      "module": "ssh",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "SSH-01",
+        "SSH-02",
+        "SSH-03",
+        "TERM-01",
+        "TERM-03"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/ssh.rs",
+          "line": 110,
+          "signature": "pub(crate) async fn session_unsubscribe( service_workspace: State<'_, crate::app::WorkspaceManager>, id: String, subscription_id: String, workspace_generation: Option<u64>, ) -> Result<(), CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/session.ts"
+      ]
+    },
+    {
+      "name": "sftp_cancel_transfer",
+      "module": "sftp",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "SFTP-01",
+        "SFTP-02",
+        "SFTP-03",
+        "EDITOR-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/sftp.rs",
+          "line": 388,
+          "signature": "pub(crate) async fn sftp_cancel_transfer( service_workspace: State<'_, crate::app::WorkspaceManager>, task_id: String, workspace_generation: Option<u64>, ) -> Result<serde_json::Value, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/sftp.ts"
+      ]
+    },
+    {
+      "name": "sftp_clear_completed_transfers",
+      "module": "sftp",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "SFTP-01",
+        "SFTP-02",
+        "SFTP-03",
+        "EDITOR-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/sftp.rs",
+          "line": 401,
+          "signature": "pub(crate) async fn sftp_clear_completed_transfers( service_workspace: State<'_, crate::app::WorkspaceManager>, workspace_generation: Option<u64>, ) -> Result<(), CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/sftp.ts"
+      ]
+    },
+    {
+      "name": "sftp_close_session",
+      "module": "sftp",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "SFTP-01",
+        "SFTP-02",
+        "SFTP-03",
+        "EDITOR-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/sftp.rs",
+          "line": 76,
+          "signature": "pub(crate) async fn sftp_close_session( service_workspace: State<'_, crate::app::WorkspaceManager>, id: String, workspace_generation: Option<u64>, ) -> Result<(), CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/sftp.ts"
+      ]
+    },
+    {
+      "name": "sftp_create_session",
+      "module": "sftp",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "SFTP-01",
+        "SFTP-02",
+        "SFTP-03",
+        "EDITOR-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/sftp.rs",
+          "line": 8,
+          "signature": "pub(crate) async fn sftp_create_session( service_workspace: State<'_, crate::app::WorkspaceManager>, profile_id: String, workspace_generation: Option<u64>, ) -> Result<sftp::SftpCreateSessionResponse, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/sftp.ts"
+      ]
+    },
+    {
+      "name": "sftp_delete",
+      "module": "sftp",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "SFTP-01",
+        "SFTP-02",
+        "SFTP-03",
+        "EDITOR-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/sftp.rs",
+          "line": 162,
+          "signature": "pub(crate) async fn sftp_delete( service_workspace: State<'_, crate::app::WorkspaceManager>, session_id: String, paths: Vec<String>, workspace_generation: Option<u64>, ) -> Result<sftp::SftpDeleteResponse, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/sftp.ts"
+      ]
+    },
+    {
+      "name": "sftp_download",
+      "module": "sftp",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "SFTP-01",
+        "SFTP-02",
+        "SFTP-03",
+        "EDITOR-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/sftp.rs",
+          "line": 316,
+          "signature": "pub(crate) async fn sftp_download( service_workspace: State<'_, crate::app::WorkspaceManager>, session_id: String, paths: Vec<String>, workspace_generation: Option<u64>, ) -> Result<sftp::SftpDownloadResponse, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/sftp.ts"
+      ]
+    },
+    {
+      "name": "sftp_download_chunk",
+      "module": "sftp",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "SFTP-01",
+        "SFTP-02",
+        "SFTP-03",
+        "EDITOR-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/sftp.rs",
+          "line": 330,
+          "signature": "pub(crate) async fn sftp_download_chunk( service_workspace: State<'_, crate::app::WorkspaceManager>, task_id: String, offset: u64, max_bytes: u32, workspace_generation: Option<u64>, ) -> Result<tauri::ipc::Response, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/sftp.ts"
+      ]
+    },
+    {
+      "name": "sftp_download_chunk_base64",
+      "module": "sftp",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "remove-mobile-transport",
+      "note": "删除移动端Base64分块传输，桌面二进制及直接文件流式传输继续保留。",
+      "caseIds": [
+        "SFTP-01",
+        "SFTP-02",
+        "SFTP-03",
+        "EDITOR-02",
+        "CLEAN-01"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/sftp.rs",
+          "line": 346,
+          "signature": "pub(crate) async fn sftp_download_chunk_base64( service_workspace: State<'_, crate::app::WorkspaceManager>, task_id: String, offset: u64, max_bytes: u32, workspace_generation: Option<u64>, ) -> Result<String, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/sftp.ts"
+      ]
+    },
+    {
+      "name": "sftp_download_close",
+      "module": "sftp",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "SFTP-01",
+        "SFTP-02",
+        "SFTP-03",
+        "EDITOR-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/sftp.rs",
+          "line": 361,
+          "signature": "pub(crate) async fn sftp_download_close( service_workspace: State<'_, crate::app::WorkspaceManager>, task_id: String, workspace_generation: Option<u64>, ) -> Result<(), CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/sftp.ts"
+      ]
+    },
+    {
+      "name": "sftp_drag_out",
+      "module": "desktop",
+      "desktop": true,
+      "mobile": false,
+      "disposition": "replace-platform-contract",
+      "note": "替换平台或运行时适配，逐项保留桌面仍使用的文件、窗口、网络及诊断能力。",
+      "caseIds": [
+        "SHELL-04",
+        "EDITOR-03",
+        "PLATFORM-01",
+        "DIAG-01"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/desktop.rs",
+          "line": 106,
+          "signature": "pub(crate) async fn sftp_drag_out( service_workspace: State<'_, crate::app::WorkspaceManager>, source_session_id: String, local_session_id: String, paths: Vec<String>, workspace_generation: Option<u64>, ) -> Result<desktop::DragOutFiles, String>"
+        }
+      ],
+      "frontend": [
+        "web/src/lib/desktop.ts"
+      ]
+    },
+    {
+      "name": "sftp_export_download",
+      "module": "document",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-platform-contract",
+      "note": "替换平台或运行时适配，逐项保留桌面仍使用的文件、窗口、网络及诊断能力。",
+      "caseIds": [
+        "PLATFORM-01",
+        "SFTP-02",
+        "VAULT-02",
+        "CLEAN-01"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/document.rs",
+          "line": 153,
+          "signature": "pub(crate) async fn sftp_export_download( app: AppHandle, gateway: State<'_, DocumentGateway>, service_workspace: State<'_, crate::app::WorkspaceManager>, task_id: String, workspace_generation: Option<u64>, ) -> Result<Option<String>, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/sftp.ts"
+      ]
+    },
+    {
+      "name": "sftp_get_session",
+      "module": "sftp",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "SFTP-01",
+        "SFTP-02",
+        "SFTP-03",
+        "EDITOR-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/sftp.rs",
+          "line": 21,
+          "signature": "pub(crate) async fn sftp_get_session( service_workspace: State<'_, crate::app::WorkspaceManager>, id: String, workspace_generation: Option<u64>, ) -> Result<sftp::SftpSessionInfo, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/sftp.ts"
+      ]
+    },
+    {
+      "name": "sftp_host_key_decide",
+      "module": "sftp",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "SFTP-01",
+        "SFTP-02",
+        "SFTP-03",
+        "EDITOR-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/sftp.rs",
+          "line": 47,
+          "signature": "pub(crate) async fn sftp_host_key_decide( service_workspace: State<'_, crate::app::WorkspaceManager>, request_id: String, fingerprint: String, decision: String, workspace_generation: Option<u64>, ) -> Result<serde_json::Value, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/sftp.ts"
+      ]
+    },
+    {
+      "name": "sftp_list",
+      "module": "sftp",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "SFTP-01",
+        "SFTP-02",
+        "SFTP-03",
+        "EDITOR-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/sftp.rs",
+          "line": 89,
+          "signature": "pub(crate) async fn sftp_list( service_workspace: State<'_, crate::app::WorkspaceManager>, session_id: String, path: String, show_hidden: Option<bool>, workspace_generation: Option<u64>, ) -> Result<sftp::SftpListResponse, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/sftp.ts"
+      ]
+    },
+    {
+      "name": "sftp_list_sessions",
+      "module": "sftp",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "SFTP-01",
+        "SFTP-02",
+        "SFTP-03",
+        "EDITOR-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/sftp.rs",
+          "line": 64,
+          "signature": "pub(crate) async fn sftp_list_sessions( service_workspace: State<'_, crate::app::WorkspaceManager>, workspace_generation: Option<u64>, ) -> Result<Vec<sftp::SftpSessionInfo>, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/sftp.ts"
+      ]
+    },
+    {
+      "name": "sftp_list_transfers",
+      "module": "sftp",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "SFTP-01",
+        "SFTP-02",
+        "SFTP-03",
+        "EDITOR-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/sftp.rs",
+          "line": 374,
+          "signature": "pub(crate) async fn sftp_list_transfers( service_workspace: State<'_, crate::app::WorkspaceManager>, session_id: Option<String>, status: Option<String>, workspace_generation: Option<u64>, ) -> Result<Vec<sftp::TransferTask>, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/sftp.ts"
+      ]
+    },
+    {
+      "name": "sftp_mkdir",
+      "module": "sftp",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "SFTP-01",
+        "SFTP-02",
+        "SFTP-03",
+        "EDITOR-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/sftp.rs",
+          "line": 133,
+          "signature": "pub(crate) async fn sftp_mkdir( service_workspace: State<'_, crate::app::WorkspaceManager>, session_id: String, path: String, workspace_generation: Option<u64>, ) -> Result<sftp::SftpEntry, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/sftp.ts"
+      ]
+    },
+    {
+      "name": "sftp_move",
+      "module": "sftp",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "SFTP-01",
+        "SFTP-02",
+        "SFTP-03",
+        "EDITOR-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/sftp.rs",
+          "line": 441,
+          "signature": "pub(crate) async fn sftp_move( service_workspace: State<'_, crate::app::WorkspaceManager>, session_id: String, paths: Vec<String>, dest_dir: String, conflict_resolution: Option<String>, workspace_generation: Option<u64>, ) -> Result<sftp::SftpMoveResponse, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/sftp.ts"
+      ]
+    },
+    {
+      "name": "sftp_pause_transfer",
+      "module": "sftp",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "SFTP-01",
+        "SFTP-02",
+        "SFTP-03",
+        "EDITOR-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/sftp.rs",
+          "line": 457,
+          "signature": "pub(crate) async fn sftp_pause_transfer( service_workspace: State<'_, crate::app::WorkspaceManager>, task_id: String, workspace_generation: Option<u64>, ) -> Result<sftp::TransferTask, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/sftp.ts"
+      ]
+    },
+    {
+      "name": "sftp_read_file",
+      "module": "sftp",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "SFTP-01",
+        "SFTP-02",
+        "SFTP-03",
+        "EDITOR-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/sftp.rs",
+          "line": 176,
+          "signature": "pub(crate) async fn sftp_read_file( service_workspace: State<'_, crate::app::WorkspaceManager>, session_id: String, path: String, workspace_generation: Option<u64>, ) -> Result<sftp::SftpFileReadResponse, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/edit.ts",
+        "web/src/api/sftp.ts"
+      ]
+    },
+    {
+      "name": "sftp_reconnect_session",
+      "module": "sftp",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "SFTP-01",
+        "SFTP-02",
+        "SFTP-03",
+        "EDITOR-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/sftp.rs",
+          "line": 34,
+          "signature": "pub(crate) async fn sftp_reconnect_session( service_workspace: State<'_, crate::app::WorkspaceManager>, id: String, workspace_generation: Option<u64>, ) -> Result<sftp::SftpCreateSessionResponse, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/sftp.ts"
+      ]
+    },
+    {
+      "name": "sftp_rename",
+      "module": "sftp",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "SFTP-01",
+        "SFTP-02",
+        "SFTP-03",
+        "EDITOR-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/sftp.rs",
+          "line": 147,
+          "signature": "pub(crate) async fn sftp_rename( service_workspace: State<'_, crate::app::WorkspaceManager>, session_id: String, old_path: String, new_path: String, workspace_generation: Option<u64>, ) -> Result<sftp::SftpEntry, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/sftp.ts"
+      ]
+    },
+    {
+      "name": "sftp_resume_transfer",
+      "module": "sftp",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "SFTP-01",
+        "SFTP-02",
+        "SFTP-03",
+        "EDITOR-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/sftp.rs",
+          "line": 469,
+          "signature": "pub(crate) async fn sftp_resume_transfer( service_workspace: State<'_, crate::app::WorkspaceManager>, task_id: String, workspace_generation: Option<u64>, ) -> Result<sftp::TransferTask, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/sftp.ts"
+      ]
+    },
+    {
+      "name": "sftp_resume_upload",
+      "module": "sftp",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "SFTP-01",
+        "SFTP-02",
+        "SFTP-03",
+        "EDITOR-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/sftp.rs",
+          "line": 506,
+          "signature": "pub(crate) async fn sftp_resume_upload( service_workspace: State<'_, crate::app::WorkspaceManager>, task_id: String, size: u64, last_modified: Option<u64>, digests: Option<Vec<String>>, restart: bool, workspace_generation: Option<u64>, ) -> Result<serde_json::Value, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/sftp.ts"
+      ]
+    },
+    {
+      "name": "sftp_retry_transfer",
+      "module": "sftp",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "SFTP-01",
+        "SFTP-02",
+        "SFTP-03",
+        "EDITOR-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/sftp.rs",
+          "line": 481,
+          "signature": "pub(crate) async fn sftp_retry_transfer( service_workspace: State<'_, crate::app::WorkspaceManager>, task_id: String, restart: bool, workspace_generation: Option<u64>, ) -> Result<sftp::TransferTask, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/sftp.ts"
+      ]
+    },
+    {
+      "name": "sftp_stat",
+      "module": "sftp",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "SFTP-01",
+        "SFTP-02",
+        "SFTP-03",
+        "EDITOR-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/sftp.rs",
+          "line": 104,
+          "signature": "pub(crate) async fn sftp_stat( service_workspace: State<'_, crate::app::WorkspaceManager>, session_id: String, path: String, workspace_generation: Option<u64>, ) -> Result<sftp::SftpEntry, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/sftp.ts"
+      ]
+    },
+    {
+      "name": "sftp_transfer",
+      "module": "sftp",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "SFTP-01",
+        "SFTP-02",
+        "SFTP-03",
+        "EDITOR-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/sftp.rs",
+          "line": 414,
+          "signature": "pub(crate) async fn sftp_transfer( service_workspace: State<'_, crate::app::WorkspaceManager>, source_session_id: String, target_session_id: String, paths: Vec<String>, dest_dir: String, conflict_resolution: Option<String>, directory_mode: Option<String>, workspace_generation: Option<u64>, ) -> Result<sftp::SftpTransferResponse, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/sftp.ts"
+      ]
+    },
+    {
+      "name": "sftp_tree",
+      "module": "sftp",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "SFTP-01",
+        "SFTP-02",
+        "SFTP-03",
+        "EDITOR-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/sftp.rs",
+          "line": 118,
+          "signature": "pub(crate) async fn sftp_tree( service_workspace: State<'_, crate::app::WorkspaceManager>, session_id: String, path: String, depth: Option<u32>, workspace_generation: Option<u64>, ) -> Result<sftp::SftpTreeResponse, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/sftp.ts"
+      ]
+    },
+    {
+      "name": "sftp_upload_abort",
+      "module": "sftp",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "SFTP-01",
+        "SFTP-02",
+        "SFTP-03",
+        "EDITOR-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/sftp.rs",
+          "line": 303,
+          "signature": "pub(crate) async fn sftp_upload_abort( service_workspace: State<'_, crate::app::WorkspaceManager>, upload_id: String, workspace_generation: Option<u64>, ) -> Result<(), CommandError>"
+        }
+      ],
+      "frontend": []
+    },
+    {
+      "name": "sftp_upload_begin",
+      "module": "sftp",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "SFTP-01",
+        "SFTP-02",
+        "SFTP-03",
+        "EDITOR-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/sftp.rs",
+          "line": 206,
+          "signature": "pub(crate) async fn sftp_upload_begin( service_workspace: State<'_, crate::app::WorkspaceManager>, session_id: String, name: String, dest_dir: String, overwrite: bool, size: u64, last_modified: Option<u64>, workspace_generation: Option<u64>, ) -> Result<sftp::SftpUploadBeginResponse, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/sftp.ts"
+      ]
+    },
+    {
+      "name": "sftp_upload_checkpoint",
+      "module": "sftp",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "SFTP-01",
+        "SFTP-02",
+        "SFTP-03",
+        "EDITOR-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/sftp.rs",
+          "line": 494,
+          "signature": "pub(crate) async fn sftp_upload_checkpoint( service_workspace: State<'_, crate::app::WorkspaceManager>, task_id: String, workspace_generation: Option<u64>, ) -> Result<serde_json::Value, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/sftp.ts"
+      ]
+    },
+    {
+      "name": "sftp_upload_chunk",
+      "module": "sftp",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "SFTP-01",
+        "SFTP-02",
+        "SFTP-03",
+        "EDITOR-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/sftp.rs",
+          "line": 233,
+          "signature": "pub(crate) async fn sftp_upload_chunk( service_workspace: State<'_, crate::app::WorkspaceManager>, request: tauri::ipc::Request<'_>, workspace_generation: Option<u64>, ) -> Result<sftp::SftpUploadChunkResponse, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/sftp.ts"
+      ]
+    },
+    {
+      "name": "sftp_upload_chunk_base64",
+      "module": "sftp",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "remove-mobile-transport",
+      "note": "删除移动端Base64分块传输，桌面二进制及直接文件流式传输继续保留。",
+      "caseIds": [
+        "SFTP-01",
+        "SFTP-02",
+        "SFTP-03",
+        "EDITOR-02",
+        "CLEAN-01"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/sftp.rs",
+          "line": 275,
+          "signature": "pub(crate) async fn sftp_upload_chunk_base64( service_workspace: State<'_, crate::app::WorkspaceManager>, upload_id: String, data: String, sequence: Option<u64>, workspace_generation: Option<u64>, ) -> Result<sftp::SftpUploadChunkResponse, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/sftp.ts"
+      ]
+    },
+    {
+      "name": "sftp_upload_document",
+      "module": "document",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-platform-contract",
+      "note": "替换平台或运行时适配，逐项保留桌面仍使用的文件、窗口、网络及诊断能力。",
+      "caseIds": [
+        "PLATFORM-01",
+        "SFTP-02",
+        "VAULT-02",
+        "CLEAN-01"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/document.rs",
+          "line": 80,
+          "signature": "pub(crate) async fn sftp_upload_document( gateway: State<'_, DocumentGateway>, service_workspace: State<'_, crate::app::WorkspaceManager>, session_id: String, reference: String, dest_dir: String, overwrite: Option<bool>, conflict_resolution: Option<String>, workspace_generation: Option<u64>, ) -> Result<SftpUploadResponse, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/sftp.ts"
+      ]
+    },
+    {
+      "name": "sftp_upload_finish",
+      "module": "sftp",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "SFTP-01",
+        "SFTP-02",
+        "SFTP-03",
+        "EDITOR-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/sftp.rs",
+          "line": 290,
+          "signature": "pub(crate) async fn sftp_upload_finish( service_workspace: State<'_, crate::app::WorkspaceManager>, upload_id: String, workspace_generation: Option<u64>, ) -> Result<sftp::SftpUploadResponse, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/sftp.ts"
+      ]
+    },
+    {
+      "name": "sftp_write_file",
+      "module": "sftp",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "SFTP-01",
+        "SFTP-02",
+        "SFTP-03",
+        "EDITOR-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/sftp.rs",
+          "line": 190,
+          "signature": "pub(crate) async fn sftp_write_file( service_workspace: State<'_, crate::app::WorkspaceManager>, session_id: String, path: String, request: sftp::SftpFileWriteRequest, workspace_generation: Option<u64>, ) -> Result<sftp::SftpFileWriteResponse, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/edit.ts",
+        "web/src/api/sftp.ts"
+      ]
+    },
+    {
+      "name": "snippet_create",
+      "module": "snippet",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "TERM-03"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/snippet.rs",
+          "line": 24,
+          "signature": "pub(crate) async fn snippet_create( service_workspace: State<'_, crate::app::WorkspaceManager>, request: SnippetCreateRequest, workspace_generation: Option<u64>, ) -> Result<Snippet, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/snippet.ts"
+      ]
+    },
+    {
+      "name": "snippet_delete",
+      "module": "snippet",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "TERM-03"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/snippet.rs",
+          "line": 63,
+          "signature": "pub(crate) async fn snippet_delete( service_workspace: State<'_, crate::app::WorkspaceManager>, id: String, workspace_generation: Option<u64>, ) -> Result<(), CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/snippet.ts"
+      ]
+    },
+    {
+      "name": "snippet_list",
+      "module": "snippet",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "TERM-03"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/snippet.rs",
+          "line": 9,
+          "signature": "pub(crate) async fn snippet_list( service_workspace: State<'_, crate::app::WorkspaceManager>, workspace_generation: Option<u64>, ) -> Result<Vec<Snippet>, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/snippet.ts"
+      ]
+    },
+    {
+      "name": "snippet_update",
+      "module": "snippet",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "TERM-03"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/snippet.rs",
+          "line": 43,
+          "signature": "pub(crate) async fn snippet_update( service_workspace: State<'_, crate::app::WorkspaceManager>, id: String, request: SnippetUpdateRequest, workspace_generation: Option<u64>, ) -> Result<Snippet, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/snippet.ts"
+      ]
+    },
+    {
+      "name": "sync_backup_now",
+      "module": "backup_compat",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-legacy-command-alias",
+      "note": "移除旧IPC别名，对应版本/云备份业务继续保留，不能因legacy文件名而删除能力。",
+      "caseIds": [
+        "ARCHIVE-01",
+        "ARCHIVE-02",
+        "CLEAN-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/backup_compat.rs",
+          "line": 6,
+          "signature": "pub(crate) async fn sync_backup_now( service_workspace: State<'_, crate::app::WorkspaceManager>, workspace_generation: Option<u64>, ) -> Result<BackupNowResult, CommandError>"
+        }
+      ],
+      "frontend": []
+    },
+    {
+      "name": "sync_bootstrap",
+      "module": "sync",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "SYNC-01",
+        "SYNC-02",
+        "ACCOUNT-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/sync.rs",
+          "line": 98,
+          "signature": "pub(crate) async fn sync_bootstrap( service_workspace: State<'_, crate::app::WorkspaceManager>, token: String, mode: String, workspace_generation: Option<u64>, ) -> Result<(), CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/sync.ts"
+      ]
+    },
+    {
+      "name": "sync_change_password",
+      "module": "sync",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "SYNC-01",
+        "SYNC-02",
+        "ACCOUNT-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/sync.rs",
+          "line": 45,
+          "signature": "pub(crate) async fn sync_change_password( service_workspace: State<'_, crate::app::WorkspaceManager>, password: String, workspace_generation: Option<u64>, ) -> Result<(), CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/sync.ts"
+      ]
+    },
+    {
+      "name": "sync_conflicts",
+      "module": "sync",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "SYNC-01",
+        "SYNC-02",
+        "ACCOUNT-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/sync.rs",
+          "line": 57,
+          "signature": "pub(crate) async fn sync_conflicts( service_workspace: State<'_, crate::app::WorkspaceManager>, workspace_generation: Option<u64>, ) -> Result<Vec<Conflict>, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/sync.ts"
+      ]
+    },
+    {
+      "name": "sync_create_provider",
+      "module": "backup_compat",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-legacy-command-alias",
+      "note": "移除旧IPC别名，对应版本/云备份业务继续保留，不能因legacy文件名而删除能力。",
+      "caseIds": [
+        "ARCHIVE-01",
+        "ARCHIVE-02",
+        "CLEAN-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/backup_compat.rs",
+          "line": 100,
+          "signature": "pub(crate) async fn sync_create_provider( service_workspace: State<'_, crate::app::WorkspaceManager>, config: BackupTargetConfig, workspace_generation: Option<u64>, ) -> Result<BackupTargetMeta, CommandError>"
+        }
+      ],
+      "frontend": []
+    },
+    {
+      "name": "sync_delete_provider",
+      "module": "backup_compat",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-legacy-command-alias",
+      "note": "移除旧IPC别名，对应版本/云备份业务继续保留，不能因legacy文件名而删除能力。",
+      "caseIds": [
+        "ARCHIVE-01",
+        "ARCHIVE-02",
+        "CLEAN-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/backup_compat.rs",
+          "line": 124,
+          "signature": "pub(crate) async fn sync_delete_provider( service_workspace: State<'_, crate::app::WorkspaceManager>, id: String, workspace_generation: Option<u64>, ) -> Result<(), CommandError>"
+        }
+      ],
+      "frontend": []
+    },
+    {
+      "name": "sync_delete_version",
+      "module": "backup_compat",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-legacy-command-alias",
+      "note": "移除旧IPC别名，对应版本/云备份业务继续保留，不能因legacy文件名而删除能力。",
+      "caseIds": [
+        "ARCHIVE-01",
+        "ARCHIVE-02",
+        "CLEAN-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/backup_compat.rs",
+          "line": 28,
+          "signature": "pub(crate) async fn sync_delete_version( service_workspace: State<'_, crate::app::WorkspaceManager>, id: String, force: bool, workspace_generation: Option<u64>, ) -> Result<(), CommandError>"
+        }
+      ],
+      "frontend": []
+    },
+    {
+      "name": "sync_events",
+      "module": "backup_compat",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-legacy-command-alias",
+      "note": "移除旧IPC别名，对应版本/云备份业务继续保留，不能因legacy文件名而删除能力。",
+      "caseIds": [
+        "ARCHIVE-01",
+        "ARCHIVE-02",
+        "CLEAN-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/backup_compat.rs",
+          "line": 38,
+          "signature": "pub(crate) async fn sync_events( service_workspace: State<'_, crate::app::WorkspaceManager>, limit: Option<i64>, workspace_generation: Option<u64>, ) -> Result<Vec<BackupEvent>, CommandError>"
+        }
+      ],
+      "frontend": []
+    },
+    {
+      "name": "sync_get_settings",
+      "module": "backup_compat",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-legacy-command-alias",
+      "note": "移除旧IPC别名，对应版本/云备份业务继续保留，不能因legacy文件名而删除能力。",
+      "caseIds": [
+        "ARCHIVE-01",
+        "ARCHIVE-02",
+        "CLEAN-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/backup_compat.rs",
+          "line": 46,
+          "signature": "pub(crate) async fn sync_get_settings( service_workspace: State<'_, crate::app::WorkspaceManager>, workspace_generation: Option<u64>, ) -> Result<serde_json::Value, CommandError>"
+        }
+      ],
+      "frontend": []
+    },
+    {
+      "name": "sync_now",
+      "module": "sync",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "SYNC-01",
+        "SYNC-02",
+        "ACCOUNT-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/sync.rs",
+          "line": 21,
+          "signature": "pub(crate) async fn sync_now( service_workspace: State<'_, crate::app::WorkspaceManager>, workspace_generation: Option<u64>, ) -> Result<(), CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/sync.ts"
+      ]
+    },
+    {
+      "name": "sync_oauth_url",
+      "module": "backup_compat",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-legacy-command-alias",
+      "note": "移除旧IPC别名，对应版本/云备份业务继续保留，不能因legacy文件名而删除能力。",
+      "caseIds": [
+        "ARCHIVE-01",
+        "ARCHIVE-02",
+        "CLEAN-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/backup_compat.rs",
+          "line": 140,
+          "signature": "pub(crate) async fn sync_oauth_url( service_workspace: State<'_, crate::app::WorkspaceManager>, provider_type: String, provider_id: String, workspace_generation: Option<u64>, ) -> Result<OAuthURLResult, CommandError>"
+        }
+      ],
+      "frontend": []
+    },
+    {
+      "name": "sync_preview",
+      "module": "sync",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "SYNC-01",
+        "SYNC-02",
+        "ACCOUNT-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/sync.rs",
+          "line": 87,
+          "signature": "pub(crate) async fn sync_preview( service_workspace: State<'_, crate::app::WorkspaceManager>, workspace_generation: Option<u64>, ) -> Result<serde_json::Value, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/sync.ts"
+      ]
+    },
+    {
+      "name": "sync_providers",
+      "module": "backup_compat",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-legacy-command-alias",
+      "note": "移除旧IPC别名，对应版本/云备份业务继续保留，不能因legacy文件名而删除能力。",
+      "caseIds": [
+        "ARCHIVE-01",
+        "ARCHIVE-02",
+        "CLEAN-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/backup_compat.rs",
+          "line": 93,
+          "signature": "pub(crate) async fn sync_providers( service_workspace: State<'_, crate::app::WorkspaceManager>, workspace_generation: Option<u64>, ) -> Result<Vec<BackupTargetMeta>, CommandError>"
+        }
+      ],
+      "frontend": []
+    },
+    {
+      "name": "sync_push",
+      "module": "backup_compat",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-legacy-command-alias",
+      "note": "移除旧IPC别名，对应版本/云备份业务继续保留，不能因legacy文件名而删除能力。",
+      "caseIds": [
+        "ARCHIVE-01",
+        "ARCHIVE-02",
+        "CLEAN-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/backup_compat.rs",
+          "line": 86,
+          "signature": "pub(crate) async fn sync_push( service_workspace: State<'_, crate::app::WorkspaceManager>, workspace_generation: Option<u64>, ) -> Result<StartedResult, CommandError>"
+        }
+      ],
+      "frontend": []
+    },
+    {
+      "name": "sync_resolve_conflict",
+      "module": "sync",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "SYNC-01",
+        "SYNC-02",
+        "ACCOUNT-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/sync.rs",
+          "line": 70,
+          "signature": "pub(crate) async fn sync_resolve_conflict( service_workspace: State<'_, crate::app::WorkspaceManager>, item_type: String, item_id: String, choice: String, remote_revision: Option<i64>, workspace_generation: Option<u64>, ) -> Result<(), CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/sync.ts"
+      ]
+    },
+    {
+      "name": "sync_restore_version",
+      "module": "backup_compat",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-legacy-command-alias",
+      "note": "移除旧IPC别名，对应版本/云备份业务继续保留，不能因legacy文件名而删除能力。",
+      "caseIds": [
+        "ARCHIVE-01",
+        "ARCHIVE-02",
+        "CLEAN-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/backup_compat.rs",
+          "line": 20,
+          "signature": "pub(crate) async fn sync_restore_version( service_workspace: State<'_, crate::app::WorkspaceManager>, id: String, workspace_generation: Option<u64>, ) -> Result<RestoreResult, CommandError>"
+        }
+      ],
+      "frontend": []
+    },
+    {
+      "name": "sync_reveal_password",
+      "module": "backup_compat",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-legacy-command-alias",
+      "note": "移除旧IPC别名，对应版本/云备份业务继续保留，不能因legacy文件名而删除能力。",
+      "caseIds": [
+        "ARCHIVE-01",
+        "ARCHIVE-02",
+        "CLEAN-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/backup_compat.rs",
+          "line": 76,
+          "signature": "pub(crate) async fn sync_reveal_password( service_workspace: State<'_, crate::app::WorkspaceManager>, workspace_generation: Option<u64>, ) -> Result<serde_json::Value, CommandError>"
+        }
+      ],
+      "frontend": []
+    },
+    {
+      "name": "sync_shutdown",
+      "module": "backup_compat",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-legacy-command-alias",
+      "note": "移除旧IPC别名，对应版本/云备份业务继续保留，不能因legacy文件名而删除能力。",
+      "caseIds": [
+        "ARCHIVE-01",
+        "ARCHIVE-02",
+        "CLEAN-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/backup_compat.rs",
+          "line": 155,
+          "signature": "pub(crate) async fn sync_shutdown( service_workspace: State<'_, crate::app::WorkspaceManager>, workspace_generation: Option<u64>, ) -> Result<(), CommandError>"
+        }
+      ],
+      "frontend": []
+    },
+    {
+      "name": "sync_status",
+      "module": "sync",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "SYNC-01",
+        "SYNC-02",
+        "ACCOUNT-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/sync.rs",
+          "line": 8,
+          "signature": "pub(crate) async fn sync_status( service_workspace: State<'_, crate::app::WorkspaceManager>, workspace_generation: Option<u64>, ) -> Result<SyncStatus, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/sync.ts"
+      ]
+    },
+    {
+      "name": "sync_test_provider",
+      "module": "backup_compat",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-legacy-command-alias",
+      "note": "移除旧IPC别名，对应版本/云备份业务继续保留，不能因legacy文件名而删除能力。",
+      "caseIds": [
+        "ARCHIVE-01",
+        "ARCHIVE-02",
+        "CLEAN-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/backup_compat.rs",
+          "line": 132,
+          "signature": "pub(crate) async fn sync_test_provider( service_workspace: State<'_, crate::app::WorkspaceManager>, id: String, workspace_generation: Option<u64>, ) -> Result<SavedResult, CommandError>"
+        }
+      ],
+      "frontend": []
+    },
+    {
+      "name": "sync_unlock",
+      "module": "sync",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "SYNC-01",
+        "SYNC-02",
+        "ACCOUNT-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/sync.rs",
+          "line": 33,
+          "signature": "pub(crate) async fn sync_unlock( service_workspace: State<'_, crate::app::WorkspaceManager>, password: String, workspace_generation: Option<u64>, ) -> Result<(), CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/sync.ts"
+      ]
+    },
+    {
+      "name": "sync_update_provider",
+      "module": "backup_compat",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-legacy-command-alias",
+      "note": "移除旧IPC别名，对应版本/云备份业务继续保留，不能因legacy文件名而删除能力。",
+      "caseIds": [
+        "ARCHIVE-01",
+        "ARCHIVE-02",
+        "CLEAN-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/backup_compat.rs",
+          "line": 109,
+          "signature": "pub(crate) async fn sync_update_provider( service_workspace: State<'_, crate::app::WorkspaceManager>, id: String, config: BackupTargetConfig, workspace_generation: Option<u64>, ) -> Result<SavedResult, CommandError>"
+        }
+      ],
+      "frontend": []
+    },
+    {
+      "name": "sync_update_settings",
+      "module": "backup_compat",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-legacy-command-alias",
+      "note": "移除旧IPC别名，对应版本/云备份业务继续保留，不能因legacy文件名而删除能力。",
+      "caseIds": [
+        "ARCHIVE-01",
+        "ARCHIVE-02",
+        "CLEAN-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/backup_compat.rs",
+          "line": 61,
+          "signature": "pub(crate) async fn sync_update_settings( service_workspace: State<'_, crate::app::WorkspaceManager>, settings: BackupSettings, sync_password: Option<String>, workspace_generation: Option<u64>, ) -> Result<SavedResult, CommandError>"
+        }
+      ],
+      "frontend": []
+    },
+    {
+      "name": "sync_versions",
+      "module": "backup_compat",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-legacy-command-alias",
+      "note": "移除旧IPC别名，对应版本/云备份业务继续保留，不能因legacy文件名而删除能力。",
+      "caseIds": [
+        "ARCHIVE-01",
+        "ARCHIVE-02",
+        "CLEAN-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/backup_compat.rs",
+          "line": 13,
+          "signature": "pub(crate) async fn sync_versions( service_workspace: State<'_, crate::app::WorkspaceManager>, workspace_generation: Option<u64>, ) -> Result<Vec<BackupVersion>, CommandError>"
+        }
+      ],
+      "frontend": []
+    },
+    {
+      "name": "tunnel_delete",
+      "module": "tunnel",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "TUNNEL-01"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/tunnel.rs",
+          "line": 31,
+          "signature": "pub(crate) async fn tunnel_delete( workspaces: State<'_, WorkspaceManager>, id: String, workspace_generation: Option<u64>, ) -> Result<(), CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/tunnel.ts"
+      ]
+    },
+    {
+      "name": "tunnel_list",
+      "module": "tunnel",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "TUNNEL-01"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/tunnel.rs",
+          "line": 8,
+          "signature": "pub(crate) async fn tunnel_list( workspaces: State<'_, WorkspaceManager>, workspace_generation: Option<u64>, ) -> Result<Vec<TunnelConfig>, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/tunnel.ts"
+      ]
+    },
+    {
+      "name": "tunnel_save",
+      "module": "tunnel",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "TUNNEL-01"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/tunnel.rs",
+          "line": 22,
+          "signature": "pub(crate) async fn tunnel_save( workspaces: State<'_, WorkspaceManager>, config: TunnelConfig, workspace_generation: Option<u64>, ) -> Result<TunnelConfig, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/tunnel.ts"
+      ]
+    },
+    {
+      "name": "tunnel_start",
+      "module": "tunnel",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "TUNNEL-01"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/tunnel.rs",
+          "line": 40,
+          "signature": "pub(crate) async fn tunnel_start( workspaces: State<'_, WorkspaceManager>, id: String, workspace_generation: Option<u64>, ) -> Result<TunnelStatus, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/tunnel.ts"
+      ]
+    },
+    {
+      "name": "tunnel_statuses",
+      "module": "tunnel",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "TUNNEL-01"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/tunnel.rs",
+          "line": 15,
+          "signature": "pub(crate) async fn tunnel_statuses( workspaces: State<'_, WorkspaceManager>, workspace_generation: Option<u64>, ) -> Result<Vec<TunnelStatus>, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/tunnel.ts"
+      ]
+    },
+    {
+      "name": "tunnel_stop",
+      "module": "tunnel",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "TUNNEL-01"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/tunnel.rs",
+          "line": 49,
+          "signature": "pub(crate) async fn tunnel_stop( workspaces: State<'_, WorkspaceManager>, id: String, workspace_generation: Option<u64>, ) -> Result<(), CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/tunnel.ts"
+      ]
+    },
+    {
+      "name": "vault_create",
+      "module": "vault",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "VAULT-01",
+        "VAULT-02",
+        "SECURITY-01"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/vault.rs",
+          "line": 39,
+          "signature": "pub(crate) async fn vault_create( state_workspace: State<'_, crate::app::WorkspaceManager>, request: VaultWriteRequest, workspace_generation: Option<u64>, ) -> Result<VaultItem, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/vault.ts"
+      ]
+    },
+    {
+      "name": "vault_delete",
+      "module": "vault",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "VAULT-01",
+        "VAULT-02",
+        "SECURITY-01"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/vault.rs",
+          "line": 78,
+          "signature": "pub(crate) async fn vault_delete( state_workspace: State<'_, crate::app::WorkspaceManager>, id: String, workspace_generation: Option<u64>, ) -> Result<(), CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/vault.ts"
+      ]
+    },
+    {
+      "name": "vault_generate_key_pair",
+      "module": "vault",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "VAULT-01",
+        "VAULT-02",
+        "SECURITY-01"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/vault.rs",
+          "line": 123,
+          "signature": "pub(crate) async fn vault_generate_key_pair( request: GenerateKeyRequest, ) -> Result<GenerateKeyResponse, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/vault.ts"
+      ]
+    },
+    {
+      "name": "vault_get",
+      "module": "vault",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "VAULT-01",
+        "VAULT-02",
+        "SECURITY-01"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/vault.rs",
+          "line": 26,
+          "signature": "pub(crate) async fn vault_get( state_workspace: State<'_, crate::app::WorkspaceManager>, id: String, workspace_generation: Option<u64>, ) -> Result<VaultItem, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/vault.ts"
+      ]
+    },
+    {
+      "name": "vault_list",
+      "module": "vault",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "VAULT-01",
+        "VAULT-02",
+        "SECURITY-01"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/vault.rs",
+          "line": 12,
+          "signature": "pub(crate) async fn vault_list( state_workspace: State<'_, crate::app::WorkspaceManager>, vault_type: Option<String>, q: Option<String>, workspace_generation: Option<u64>, ) -> Result<Vec<VaultItem>, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/vault.ts"
+      ]
+    },
+    {
+      "name": "vault_references",
+      "module": "vault",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "VAULT-01",
+        "VAULT-02",
+        "SECURITY-01"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/vault.rs",
+          "line": 97,
+          "signature": "pub(crate) async fn vault_references( state_workspace: State<'_, crate::app::WorkspaceManager>, id: String, workspace_generation: Option<u64>, ) -> Result<Vec<ProfileRef>, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/vault.ts"
+      ]
+    },
+    {
+      "name": "vault_reveal",
+      "module": "vault",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "VAULT-01",
+        "VAULT-02",
+        "SECURITY-01"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/vault.rs",
+          "line": 110,
+          "signature": "pub(crate) async fn vault_reveal( state_workspace: State<'_, crate::app::WorkspaceManager>, id: String, workspace_generation: Option<u64>, ) -> Result<Credential, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/vault.ts"
+      ]
+    },
+    {
+      "name": "vault_update",
+      "module": "vault",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "VAULT-01",
+        "VAULT-02",
+        "SECURITY-01"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/vault.rs",
+          "line": 58,
+          "signature": "pub(crate) async fn vault_update( state_workspace: State<'_, crate::app::WorkspaceManager>, id: String, request: VaultWriteRequest, workspace_generation: Option<u64>, ) -> Result<VaultItem, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/vault.ts"
+      ]
+    },
+    {
+      "name": "workspace_activate",
+      "module": "account",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "ACCOUNT-01",
+        "ACCOUNT-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/account.rs",
+          "line": 74,
+          "signature": "pub(crate) async fn workspace_activate( workspace: State<'_, crate::app::WorkspaceManager>, user_id: i64, ) -> Result<(), CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/tauri.ts"
+      ]
+    },
+    {
+      "name": "workspace_import_local",
+      "module": "account",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "ACCOUNT-01",
+        "ACCOUNT-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/account.rs",
+          "line": 86,
+          "signature": "pub(crate) async fn workspace_import_local( workspace: State<'_, crate::app::WorkspaceManager>, workspace_generation: Option<u64>, ) -> Result<(), CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/components/SettingsDialog/SyncPanel.tsx"
+      ]
+    },
+    {
+      "name": "workspace_status",
+      "module": "account",
+      "desktop": true,
+      "mobile": true,
+      "disposition": "replace-domain-contract",
+      "note": "保留业务行为，替换为类型化Electron/Node契约；不要求保留旧命令名称。",
+      "caseIds": [
+        "ACCOUNT-01",
+        "ACCOUNT-02"
+      ],
+      "definitions": [
+        {
+          "source": "src-tauri/src/commands/account.rs",
+          "line": 68,
+          "signature": "pub(crate) async fn workspace_status( workspace: State<'_, crate::app::WorkspaceManager>, ) -> Result<crate::app::WorkspaceStatus, CommandError>"
+        }
+      ],
+      "frontend": [
+        "web/src/api/tauri.ts",
+        "web/src/components/Editor/EditorWindowApp.tsx",
+        "web/src/lib/workspace.ts"
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "eizhu-session-message",
+      "caseIds": [
+        "SSH-03",
+        "TERM-01",
+        "TERM-03",
+        "TUNNEL-01"
+      ],
+      "sources": [
+        "src-tauri/src/app/events.rs",
+        "web/src/components/Terminal/TunnelDialog.tsx"
+      ],
+      "disposition": "replace-typed-event"
+    },
+    {
+      "name": "eizhu-sftp-message",
+      "caseIds": [
+        "SFTP-02",
+        "SFTP-03"
+      ],
+      "sources": [
+        "src-tauri/src/app/events.rs",
+        "web/src/hooks/useSftpTransfer.ts"
+      ],
+      "disposition": "replace-typed-event"
+    },
+    {
+      "name": "eizhu-sync-message",
+      "caseIds": [
+        "SYNC-01",
+        "SYNC-02"
+      ],
+      "sources": [
+        "src-tauri/src/app/workspace.rs",
+        "web/src/App.tsx"
+      ],
+      "disposition": "replace-typed-event"
+    },
+    {
+      "name": "eizhu-workspace-changed",
+      "caseIds": [
+        "ACCOUNT-02"
+      ],
+      "sources": [
+        "src-tauri/src/app/workspace.rs",
+        "web/src/App.tsx",
+        "web/src/components/Editor/EditorWindowApp.tsx"
+      ],
+      "disposition": "replace-typed-event"
+    },
+    {
+      "name": "eizhu-editor-open-file",
+      "caseIds": [
+        "EDITOR-01",
+        "EDITOR-03"
+      ],
+      "sources": [
+        "src-tauri/src/infrastructure/platform/desktop/editor_window.rs",
+        "web/src/components/Editor/EditorWindowPage.tsx"
+      ],
+      "disposition": "replace-typed-event"
+    },
+    {
+      "name": "eizhu-app-close-request",
+      "caseIds": [
+        "EDITOR-03",
+        "RELIABILITY-01"
+      ],
+      "sources": [
+        "src-tauri/src/infrastructure/platform/desktop/editor_window.rs",
+        "web/src/components/Editor/EditorWindowPage.tsx"
+      ],
+      "disposition": "replace-typed-event"
+    },
+    {
+      "name": "eizhu-editor-transition",
+      "caseIds": [
+        "EDITOR-03",
+        "ACCOUNT-02"
+      ],
+      "sources": [
+        "src-tauri/src/infrastructure/platform/desktop/editor_window.rs",
+        "web/src/components/Editor/EditorWindowPage.tsx"
+      ],
+      "disposition": "replace-typed-event"
+    }
+  ]
+}

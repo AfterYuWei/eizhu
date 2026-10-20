@@ -1,0 +1,13 @@
+{
+  "name": "@eizhu/contracts",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./models/*": "./src/models/*.ts"
+  },
+  "dependencies": {
+    "zod": "4.3.6"
+  }
+}
