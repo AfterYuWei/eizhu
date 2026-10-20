@@ -523,4 +523,5 @@ Cards are rectangles at 12–16px radius; marketing buttons and category tabs ar
 ### 原生窗口按钮校验
 
 - macOS 使用 `infrastructure/platform/desktop/macos_chrome.rs` 测量真实 WKWebView 坐标并定位原生按钮，避免将 Tao 的 `trafficLightPosition.y` 误作按钮中心。macOS 26 使用 AppKit 标准控件尺寸，避免紧凑指标令按钮偏小；按钮中心与 WebView 顶部 32pt 处的工具图标共线，保留原生尺寸、圆形绘制和行为。缩放、恢复与聚焦后重新定位，全屏由系统管理。
+- Windows/Linux 在 SSH 工作区上方保留独立窗口栏，工作区整体下移一行，自绘控制按钮不覆盖 SSH 内容；macOS 原生窗口按钮与工具栏共用原布局。
 - 在 macOS 执行 `swift scripts/verify-macos-window-chrome.swift`，使用不可见 AppKit 窗口检查正常与紧凑两套原生尺寸、三种窗口尺寸及重复布局后的中心线、点击区与预留区域。该检查不替代 Tauri 编译及实机窗口拖动、全屏验收。
