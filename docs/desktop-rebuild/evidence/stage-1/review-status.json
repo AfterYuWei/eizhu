@@ -1,10 +1,10 @@
 {
-  "recordedAt": "2026-10-20T07:15:40.641Z",
+  "recordedAt": "2026-10-20T07:28:07.623Z",
   "status": "stage-1-gate-pending",
   "sourceSnapshot": {
     "algorithm": "sha256(sorted(path + NUL + file-sha256 + LF))",
-    "sha256": "6fb0ff21dc55316e9ffb183b44f347b81733bfbaadaffbfd00e597b55c58414a",
-    "files": 642,
+    "sha256": "66d6e16a0f3bfa470a2347f646aa798ab6e5f56c92107d987121afa225c47ca3",
+    "files": 643,
     "includes": [
       "apps (excluding out/node_modules)",
       "packages",
@@ -20,28 +20,30 @@
     ],
     "gitCommit": "2f3f1b58b8877b7a76ea3e2dbd513e158f51cac8",
     "followupChanges": [
-      "固定样本字节保护及文档/CI状态单独跟进，不计为Windows CI修复；应用运行代码与已验本机DMG相同"
+      "根原生安装流程显式运行Electron官方安装器",
+      "Linux重建/打包默认Clang并在CI安装Clang",
+      "Windows固定证据字节保护，等待远端复验"
     ]
   },
   "artifacts": [
     {
       "path": "artifacts/desktop/eizhu-0.4.4-mac-x64.dmg",
-      "bytes": 157923480,
-      "modifiedAt": "2026-10-20T07:02:43.426Z",
-      "sha256": "94715363cff7ea3ab381a64f30c9b378521e18d7643be7aa1f8bb20d1a2d168f",
+      "bytes": 157923725,
+      "modifiedAt": "2026-10-20T07:25:59.018Z",
+      "sha256": "44be785ff80e06923629b52a8ef4e7da202d94a6d71c88d14cbfa1e8c9f703b6",
       "matchesCurrentRuntimeSource": true
     },
     {
       "path": "artifacts/desktop/eizhu-0.4.4-mac-x64.zip",
       "bytes": 157268131,
-      "modifiedAt": "2026-10-20T07:02:43.302Z",
-      "sha256": "528e5fd90e89bf41e8e0a7c5e859c7da9e3e0943bcb04c2a6ffdf719d412227a",
+      "modifiedAt": "2026-10-20T07:26:09.344Z",
+      "sha256": "44c435fa2ecb6389059c94d475f63c231d522ec62103cd82009229e0b03065b4",
       "matchesCurrentRuntimeSource": true
     },
     {
       "path": "artifacts/desktop/mac/eizhu.app/Contents/Resources/app.asar",
       "bytes": 38449033,
-      "modifiedAt": "2026-10-20T07:02:25.789Z",
+      "modifiedAt": "2026-10-20T07:25:50.459Z",
       "sha256": "f604f33af0125c5d37da9ad8b773ccfd64235604ccf33dd67c3d6cc9d0c52917",
       "matchesCurrentRuntimeSource": true
     }
@@ -120,6 +122,12 @@
       "autocrlf": true,
       "evidence": "fixture-byte-check.txt",
       "windowsCIFailureFixed": false
+    },
+    "nativeSetup": {
+      "passed": true,
+      "evidence": "native-setup-check.txt",
+      "coldElectronInstallVerified": false,
+      "linuxClangCompileVerified": false
     }
   },
   "platforms": {
@@ -176,7 +184,7 @@
     "status": "completed",
     "conclusion": "failure",
     "recordedAt": "2026-10-20T07:14:44.901Z",
-    "detailLogs": "awaiting-authenticated-browser-session",
+    "detailLogs": "read-through-authenticated-GitHub-raw-logs-page",
     "artifactsProduced": false,
     "source": "GitHub Actions public run/jobs/check-runs API; GPT-6 Luna independent monitor",
     "jobs": [
@@ -244,6 +252,8 @@
       }
     ],
     "evidence": "ci-run-39384397849.json",
-    "userAuthorizedPush": true
+    "userAuthorizedPush": true,
+    "causes": "ci-first-run-causes.txt",
+    "followup": "fixes-ready-for-push"
   }
 }

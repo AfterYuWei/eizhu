@@ -1,0 +1,15 @@
+首轮四目标 CI 失败原因摘要
+
+来源：GitHub Actions run 39384397849，提交 2f3f1b58b8877b7a76ea3e2dbd513e158f51cac8。以下依据 GitHub Actions job 页面和 View raw logs 页面读取；这里只保存失败步骤摘录，原始日志仍以 GitHub 为准。未触发重跑。
+
+macOS x64：job 118500649911，`npm run desktop:package -- --platform=darwin --arch=x64` 失败。`@electron/rebuild` 中 argon2、better-sqlite3、cpu-features 均完成；进入 electron-builder 26.15.3 打包 Electron 44.9.0 后，在 `app-builder-lib/src/electron/ElectronFramework.ts:193` 报 `The specified electronDist does not exist: .../node_modules/electron/dist`。调用由 `scripts/package-desktop.mjs:16` 发起。日志证据：[job 页面](https://github.com/AfterYuWei/eizhu/actions/runs/39384397849/job/118500649911)；摘录见 `artifacts/ci/first-run-logs/job-118500649911-macos-x64-excerpt.txt`。
+
+macOS arm64：job 118500649524，同一打包错误。原生依赖重建均显示完成，后续同样因 Electron `node_modules/electron/dist` 不存在，在 `ElectronFramework.ts:193` 失败；调用栈到 `scripts/package-desktop.mjs:16`。两架构同因，不是日志中显示的原生模块构建失败。[job 页面](https://github.com/AfterYuWei/eizhu/actions/runs/39384397849/job/118500649524)；摘录见 `artifacts/ci/first-run-logs/job-118500649524-macos-arm64-excerpt.txt`。
+
+Windows x64：job 118500649882 的 `npm run baseline:test` 共 10 项，9 通过、1 失败。最先失败的测试 `frozen source, UI assets and original Rust backup/sync vectors verify independently in Node` 在比较 `README.md` 资产大小时断言失败：实际 870 字节，期望 861 字节。验证器位置为 `scripts/verify-desktop-baseline.mjs:105:12`，测试调用位置为 `scripts/desktop-baseline.test.mjs:12:18`（测试定义 `:11:1`）。日志只证明大小不一致；差额为 9 字节，可能与换行转换有关，但需另行核对固定样本和工作树字节后才能确认。[job 页面](https://github.com/AfterYuWei/eizhu/actions/runs/39384397849/job/118500649882)；摘录见 `artifacts/ci/first-run-logs/job-118500649882-windows-baseline-excerpt.txt`。
+
+Linux x64：job 118500649873 在根 postinstall 的 Electron ABI 重建阶段编译 cpu-features 失败。argon2/better-sqlite3 已完成；首个错误是 Electron 44.9.0 的 v8config.h:865:20 expected identifier before __attribute__（经 v8-primitive.h:657 的 V8_EXPORT 展开），随后 cpufeatures/src/binding.o 编译失败，make exit 2，native:rebuild exit 1。依据已登录 View raw logs 页面读取；修复使用 Linux Clang 默认工具链，不更改第三方 C++ 源或关闭编译诊断。CI实际结果仍待重试。
+
+Windows 换行核对：固定 README 原始 861 字节、9 个 LF；若 checkout 将 LF 转为 CRLF，恰增加 9 字节，与 CI 870 字节一致。已添加 .gitattributes -text，Luna 四类样本 autocrlf 字节验证通过；WindowsCI修复结果仍待重试。
+
+macOS 根因补证：已安装 electron 44.9.0 npm 包没有 scripts.postinstall，提供 install-electron bin 指向 install.js；官方 Electron 42发布说明已宣布取消依赖postinstall下载，当前安装指南要求按需运行安装器。因此原根 postinstall 仅重建ABI不足以准备dist。修复在重建前运行已锁定包内的官方安装器，保留其校验和验证。参考 https://www.electronjs.org/blog/electron-42-0 和 https://github.com/electron/electron/blob/main/docs/tutorial/installation.md 。

@@ -49,7 +49,7 @@ jobs:
           node-version: 24
           cache: npm
       - if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y xvfb rpm libsecret-1-0 libgtk-3-0 libnss3 libasound2
+        run: sudo apt-get update && sudo apt-get install -y clang xvfb rpm libsecret-1-0 libgtk-3-0 libnss3 libasound2
       - run: npm ci
       - run: npm run check
       - run: npm run test:foundation
