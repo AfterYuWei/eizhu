@@ -11,7 +11,7 @@ export class RuntimeHost {
   private child?: UtilityProcess
   private pending = new Map<string, Pending>()
   private stopping?: Promise<void>
-  onEvent?: (name: 'eizhu-session-message', payload: unknown) => void
+  onEvent?: (name: 'eizhu-session-message'|'eizhu-sftp-message', payload: unknown) => void
   readonly context: RuntimeContext
   private root: string
   private directory: string
@@ -44,9 +44,9 @@ export class RuntimeHost {
           message.type === 'event' &&
           sameContext(message.context, this.context) &&
           isDesktopEvent(message.name) &&
-          message.name === 'eizhu-session-message'
+          ['eizhu-session-message','eizhu-sftp-message'].includes(message.name)
         ) {
-          const parsed = eventSchemas['eizhu-session-message'].safeParse(message.payload)
+          const parsed = eventSchemas[message.name as 'eizhu-session-message'|'eizhu-sftp-message'].safeParse(message.payload)
           if (parsed.success) this.onEvent?.(message.name, parsed.data)
         }
         if (message.type === 'ready') {
@@ -79,6 +79,7 @@ export class RuntimeHost {
         root: this.root,
         workers: this.directory,
         key: this.key,
+        localHome:process.argv.includes('--smoke-test')?join(this.root,'stage4','local'):undefined,
       })
     })
   }

@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
-import { stat, writeFile, rename, rm } from 'node:fs/promises'
+import { stat, writeFile, rename, rm,copyFile,open } from 'node:fs/promises'
+import { constants } from 'node:fs'
 import { dirname, join, basename } from 'node:path'
 import { fail, sameContext } from '@eizhu/contracts'
 import type { RuntimeContext } from '@eizhu/contracts'
@@ -73,4 +74,8 @@ export async function saveAtomically(path: string, content: Uint8Array | string)
   } finally {
     await rm(temporary, { force: true })
   }
+}
+export async function exportFileAtomically(source:string,path:string):Promise<void>{
+  const temporary=join(dirname(path),`.eizhu-save-${randomUUID()}.tmp`)
+  try{await copyFile(source,temporary,constants.COPYFILE_EXCL);const handle=await open(temporary,'r+');try{await handle.sync()}finally{await handle.close()}await rename(temporary,path)}finally{await rm(temporary,{force:true})}
 }

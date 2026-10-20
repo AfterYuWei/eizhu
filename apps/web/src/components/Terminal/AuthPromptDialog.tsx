@@ -10,9 +10,10 @@ interface AuthPromptDialogProps {
 }
 export function AuthPromptDialog({ request, onSubmit, onCancel }: AuthPromptDialogProps) {
     const [responses, setResponses] = useState<string[]>([]);
+    const promptCount=request?.prompts.length??0;
     useEffect(() => {
-        setResponses(request?.prompts.map(() => '') ?? []);
-    }, [request]);
+        setResponses(Array.from({length:promptCount},()=>''));
+    }, [request?.request_id,promptCount]);
     return (<Dialog open={Boolean(request)} onOpenChange={(open) => !open && onCancel()}>
       <DialogContent className="w-[min(440px,calc(100vw-2rem))] rounded-[var(--r-lg)]" onPointerDownOutside={(event) => event.preventDefault()}>
         <DialogTitle>{request?.name || 'SSH 交互式认证'}</DialogTitle>

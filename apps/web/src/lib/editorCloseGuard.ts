@@ -1,5 +1,5 @@
 export interface DirtyEditorTab { id: string; content: string; originalContent: string }
-export type EditorCloseRequest = { kind: 'window' } | { kind: 'application' | 'workspace'; requestId: string } | { kind: 'tab'; tabId: string }
+export type EditorCloseRequest = { kind: 'window';requestId?:string } | { kind: 'application' | 'workspace'; requestId: string } | { kind: 'tab'; tabId: string }
 export function isEditorDirty(tab: DirtyEditorTab) { return tab.content !== tab.originalContent }
 export function dirtyEditorTabs(request: EditorCloseRequest, tabs: DirtyEditorTab[]) {
   return tabs.filter((tab) => (request.kind !== 'tab' || tab.id === request.tabId) && isEditorDirty(tab))

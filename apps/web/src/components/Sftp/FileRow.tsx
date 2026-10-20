@@ -37,6 +37,7 @@ function formatSize(bytes: number, isDir: boolean): string {
 
 function formatDate(iso: string): string {
   const d = new Date(iso)
+  if(!Number.isFinite(d.getTime()))return '—'
   return d.toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
 }
 

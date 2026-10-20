@@ -10,9 +10,11 @@ import {
   protocol,
   safeStorage,
   shell,
+  nativeImage,
 } from 'electron'
 import { mkdir, appendFile, writeFile, chmod, open, stat, rename } from 'node:fs/promises'
-import { join, basename, sep } from 'node:path'
+import { join, basename, sep,posix } from 'node:path'
+import { nativePath } from '@eizhu/core/sftp/endpoint'
 import { pathToFileURL } from 'node:url'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
@@ -24,6 +26,8 @@ import {
   isFoundationOperation,
   local,
   ssh,
+  sftp,
+  isSftpOperation,
   isSshOperation,
   isLocalOperation,
   sameContext,
@@ -36,7 +40,7 @@ import { loadDeviceKey } from '@eizhu/core/runtime/device-key'
 import { RuntimeHost } from './runtime-host.ts'
 import { Windows } from './windows.ts'
 import { assetPath, isTrustedPage } from './security.ts'
-import { DocumentGrants, saveAtomically } from './documents.ts'
+import { DocumentGrants, saveAtomically,exportFileAtomically } from './documents.ts'
 import { SensitiveClipboard } from './sensitive-clipboard.ts'
 declare const __EIZHU_VERSION__: string
 declare const __EIZHU_CHANNEL__: string
@@ -80,6 +84,9 @@ let restarting: Promise<RuntimeContext> | undefined
 const documents = new DocumentGrants()
 const sensitiveClipboard = new SensitiveClipboard(clipboard)
 const startedAt = performance.now()
+const editorGrants=new Map<string,Set<string>>()
+const editorBorrowed=new Set<string>()
+const deferredFileCloses=new Set<string>()
 function attachRuntimeEvents(host: RuntimeHost): void {
   host.onEvent = (name, payload) => {
     if (runtime !== host || !healthy) return
@@ -97,6 +104,7 @@ async function restartRuntime(): Promise<RuntimeContext> {
     windows.cancelConfirmations()
     healthy = false
     documents.revoke()
+    editorGrants.clear();editorBorrowed.clear();deferredFileCloses.clear()
     await runtime.close()
     const candidate = new RuntimeHost(
       dataRoot,
@@ -146,7 +154,7 @@ function capabilities(): PlatformCapabilities {
     runtime: 'desktop',
     windowControls: true,
     appUpdates: false,
-    dragOut: false,
+    dragOut: true,
     nativeFilePaths: true,
     documentPicker: true,
     secureKeyStore: keyMode === 'system',
@@ -203,6 +211,34 @@ async function load(window: BrowserWindow): Promise<void> {
   else await window.loadURL('eizhu://app/index.html' + suffix)
 }
 async function execute(window: BrowserWindow, operation: string, input: unknown): Promise<unknown> {
+  if(isSftpOperation(operation)){
+    if(!healthy)fail('RUNTIME_UNAVAILABLE','业务进程不可用，未保存内容已保留')
+    const host=runtime,value=sftp[operation].input.parse(input)
+    if(window===windows.editor){
+      if(!['sftp.readFile','sftp.writeFile'].includes(operation))fail('FORBIDDEN','编辑器仅可读取和保存已授权文件')
+      const d=value as {sessionId:string;path:string;request?:{create_new?:boolean}},paths=editorGrants.get(d.sessionId),path=posix.normalize(d.path)
+      if(!paths?.has(path)&&!(d.request?.create_new&&[...paths??[]].some(p=>posix.dirname(p)===posix.dirname(path))))fail('FORBIDDEN','文件不属于当前编辑器授权')
+    }else if(window!==windows.main)fail('FORBIDDEN','文件会话未授权')
+    if(operation==='sftp.closeSession'&&editorGrants.has((value as {id:string}).id)){deferredFileCloses.add((value as {id:string}).id);return}
+    if(operation==='sftp.exportDownload'){
+      const selected=await host.call<{path:string;name:string}>('sftp.downloadPath',value)
+      const picked=await dialog.showSaveDialog(window,{defaultPath:basename(selected.name)})
+      if(runtime!==host||!healthy)fail('WORKSPACE_CHANGED','运行实例已变化')
+      if(picked.canceled||!picked.filePath)return null
+      await exportFileAtomically(nativePath(selected.path),picked.filePath);return picked.filePath
+    }
+    if(operation==='sftp.startDrag'){
+      const {taskIds}=sftp[operation].input.parse(value),files:string[]=[]
+      for(const taskId of taskIds){const selected=await host.call<{path:string;name:string}>('sftp.downloadPath',{taskId});files.push(nativePath(selected.path))}
+      if(runtime!==host||!healthy)fail('WORKSPACE_CHANGED','运行实例已变化')
+      const icon=nativeImage.createFromPath(join(__dirname,'../../resources/256x256.png'))
+      window.webContents.startDrag({files,file:files[0],icon});return
+    }
+    const result=await host.call(operation,value)
+    if(runtime!==host||!healthy)fail('WORKSPACE_CHANGED','运行实例已变化')
+    if(window===windows.editor&&operation==='sftp.writeFile')editorGrants.get((value as {sessionId:string}).sessionId)?.add(posix.normalize((value as {path:string}).path))
+    return sftp[operation].output.parse(result)
+  }
   if (isSshOperation(operation)) {
     if (window !== windows.main) fail('FORBIDDEN', '仅主窗口可操作 SSH 会话')
     if (!healthy) fail('RUNTIME_UNAVAILABLE', '业务进程不可用')
@@ -355,10 +391,19 @@ async function execute(window: BrowserWindow, operation: string, input: unknown)
     case 'window.close':
       window.close()
       return
-    case 'editor.open':
+    case 'editor.open': {
       if (window !== windows.main) fail('FORBIDDEN', '仅主窗口可打开编辑器')
-      // File/session ownership is enabled with the actual editor use case in stage 4.
-      return fail('STAGE_NOT_READY', '文件编辑将在阶段 4 开放')
+      if(!windows.canOpenEditor())fail('EDITOR_BUSY','请先完成当前关闭或切换确认')
+      const data=foundation['editor.open'].input.parse(value),host=runtime
+      const authorized=await host.call<{sessionId:string;path:string;borrowed:boolean}>('sftp.authorizeEditor',data)
+      if(runtime!==host||!healthy)fail('WORKSPACE_CHANGED','运行实例已变化')
+      if(!windows.canOpenEditor())fail('EDITOR_BUSY','请先完成当前关闭或切换确认')
+      let grants=editorGrants.get(authorized.sessionId);if(!grants)editorGrants.set(authorized.sessionId,grants=new Set());grants.add(authorized.path)
+      if(authorized.borrowed)editorBorrowed.add(authorized.sessionId)
+      const open={...data,sessionId:authorized.sessionId,path:authorized.path}
+      if(!windows.editor){const editor=windows.create('editor');editor.once('closed',()=>{editorGrants.clear();for(const id of new Set([...deferredFileCloses,...editorBorrowed]))void runtime.call('sftp.closeSession',{id}).catch(()=>undefined);deferredFileCloses.clear();editorBorrowed.clear()});windows.enqueueOpen(open);await load(editor)}else{windows.enqueueOpen(open);windows.editor.show();windows.editor.focus()}
+      return
+    }
     case 'editor.ready':
       if (window !== windows.editor) fail('FORBIDDEN', '仅编辑器可确认就绪')
       windows.readyEditor()
@@ -379,7 +424,8 @@ async function execute(window: BrowserWindow, operation: string, input: unknown)
     }
     case 'editor.resolveClose': {
       if (window !== windows.editor) fail('FORBIDDEN', '仅编辑器可确认关闭')
-      windows.closeEditor(foundation['editor.resolveClose'].input.parse(value).shouldClose)
+      const data=foundation['editor.resolveClose'].input.parse(value)
+      windows.closeEditor(data.shouldClose,data.requestId)
       return
     }
     case 'editor.resolveAppClose': {
@@ -572,7 +618,7 @@ async function start(): Promise<void> {
   await load(window)
   if (smoke) {
     const { runSmoke } = await import('./smoke.ts')
-    await runSmoke({ windows, runtime: () => runtime, load, root: dataRoot, keyMode, startedAt })
+    await runSmoke({ windows, runtime: () => runtime, load, root: dataRoot, keyMode, startedAt,assets:join(__dirname,'../renderer/assets') })
     await quit()
   }
 }

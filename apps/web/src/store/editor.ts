@@ -24,7 +24,7 @@ interface EditorStore {
 const normalize = (content: string) => content.replace(/\r\n?/g, '\n')
 const filename = (path: string) => path.split('/').at(-1) || path
 function message(error: unknown) { const e = error as { error?: { message?: string }; message?: string }; return e?.error?.message ?? e?.message ?? '文件操作失败' }
-function code(error: unknown) { return (error as { error?: { code?: string } })?.error?.code ?? '' }
+function code(error: unknown) { const e=error as {code?:string;error?:{code?:string}};return e?.code??e?.error?.code??'' }
 export const useEditorStore = create<EditorStore>((set, get) => {
   const update = (id: string, patch: Partial<EditorTab> | ((tab: EditorTab) => Partial<EditorTab>)) => set((s) => ({ tabs: s.tabs.map((t) => t.id === id ? { ...t, ...(typeof patch === 'function' ? patch(t) : patch) } : t) }))
   const current = (id: string, generation: number | undefined) => generation === workspaceGeneration() && get().tabs.some((t) => t.id === id)

@@ -75,6 +75,13 @@ export class LocalStore {
   close(): void {
     this.cipher.close()
   }
+  transferState(operation:string,input:unknown):unknown{
+    const d=input as {id:string;value?:unknown}
+    if(operation==='sftp.storage.list')return (this.db.prepare("SELECT key,data FROM local_state WHERE key LIKE 'transfer:%'").all() as Array<{key:string;data:Buffer}>).map(r=>this.cipher.open(r.data,r.key))
+    if(!/^[a-f0-9-]{36}$/.test(d.id))fail('BAD_REQUEST','传输编号无效')
+    const key=`transfer:${d.id}`
+    this.db.transaction(()=>{if(operation==='sftp.storage.delete')this.db.prepare('DELETE FROM local_state WHERE key=?').run(key);else this.db.prepare('INSERT INTO local_state VALUES (?,?) ON CONFLICT(key) DO UPDATE SET data=excluded.data').run(key,this.cipher.seal(d.value,key))})()
+  }
   snapshot(): Payload {
     const result = emptyPayload()
     for (const kind of kinds) {

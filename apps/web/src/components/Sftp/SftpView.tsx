@@ -14,6 +14,10 @@ import { useExternalDrop } from '@/hooks/useExternalDrop';
 import { sftpApi } from '@/api/sftp';
 import { HostKeyDialog } from './HostKeyDialog';
 import { isDesktopRuntime } from '@/lib/platform';
+import { registerFileOwner } from '@/lib/fileOwners';
+import { AuthPromptDialog } from '@/components/Terminal/AuthPromptDialog';
+import { bridge } from '@/lib/bridge';
+import { toast } from 'sonner';
 /** SFTP file manager — symmetric dual-pane layout. Both panes are identical
  *  multi-server tab strips; the left pane starts connected to the local
  *  machine, the right pane starts empty. A bottom transfer queue shows
@@ -22,7 +26,8 @@ import { isDesktopRuntime } from '@/lib/platform';
  *  Each SftpView mount creates its OWN store instance (via createSftpStore)
  *  and provides it through context, so opening multiple SFTP tabs yields
  *  fully independent state & rendering. */
-export function SftpView({ initialProfileId, initialPath }: {
+export function SftpView({ initialProfileId, initialPath,ownerId }: {
+    ownerId?:string;
     initialProfileId?: string;
     initialPath?: string;
 } = {}) {
@@ -31,6 +36,7 @@ export function SftpView({ initialProfileId, initialPath }: {
     // initializer so it survives re-renders but is never recreated.
     const [store] = useState<SftpStoreApi>(() => createSftpStore({ includeLocalTab: true }));
     const [pickerPane, setPickerPane] = useState<PaneSide | null>(null);
+    useEffect(()=>ownerId?registerFileOwner(ownerId,()=>store.getState().dispose()):undefined,[ownerId,store]);
     // Load available servers (profiles) on mount
     useEffect(() => {
         let active = true;
@@ -87,11 +93,16 @@ export function SftpView({ initialProfileId, initialPath }: {
 
         <ConflictDialog />
         <HostKeyDialog />
+        <SftpAuthDialog />
         <DirectoryTransferDialog />
         <SftpDialogs />
         {!isDesktopRuntime() && <EditorDialog />}
       </div>
     </SftpStoreContext.Provider>);
+}
+function SftpAuthDialog(){
+  const request=useSftpStore(s=>s.pendingAuth),store=useContext(SftpStoreContext)!
+  return <AuthPromptDialog request={request??undefined} onSubmit={responses=>{if(request)void bridge().session.authRespond({requestId:request.request_id,responses}).then(()=>store.setState({pendingAuth:null})).catch(e=>toast.error(String(e)))}} onCancel={()=>{if(request)void sftpApi.closeSession(request.sessionId).catch(e=>toast.error(String(e)));store.setState({pendingAuth:null})}}/>
 }
 /** Renders all SFTP operation dialogs (new file, new folder, rename, delete confirm).
  *  Must be inside SftpStoreContext.Provider. */

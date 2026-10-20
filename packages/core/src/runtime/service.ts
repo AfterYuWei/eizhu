@@ -1,4 +1,6 @@
 import { SshService } from '../ssh/service.ts'
+import { SftpService } from '../sftp/service.ts'
+import { sftp,isSftpOperation } from '@eizhu/contracts'
 import type { BinaryPort } from '../ssh/stream.ts'
 import { ssh, isSshOperation } from '@eizhu/contracts'
 import { foundation, fail, sameContext, local, isLocalOperation } from '@eizhu/contracts'
@@ -22,6 +24,7 @@ export class RuntimeService {
     this.restoreTokens.add(token)
   }
   private ssh: SshService
+  private sftp:SftpService
   private verification: { root: string; path: string; path3: string }
   readonly context: RuntimeContext
   constructor(
@@ -29,7 +32,8 @@ export class RuntimeService {
     root: string,
     paths: { database: string; compute: string; verification: string; verification3: string },
     key: Uint8Array,
-    emit: (name: 'eizhu-session-message', payload: unknown) => void = () => undefined,
+    emit: (name: 'eizhu-session-message'|'eizhu-sftp-message', payload: unknown) => void = () => undefined,
+    localHome?:string,
   ) {
     this.context = context
     this.verification = {
@@ -43,12 +47,17 @@ export class RuntimeService {
     this.scope.own(() => this.compute.close())
     this.ssh = new SshService(this.database, this.compute, context, emit)
     this.scope.own(() => this.ssh.close())
+    this.sftp=new SftpService(this.ssh,this.database,context,root,emit,localHome)
+    this.scope.own(()=>this.sftp.close())
   }
   async execute(request: RpcRequest): Promise<unknown> {
     if (!sameContext(request.context, this.context)) fail('WORKSPACE_CHANGED', '数据空间已变化，请重试')
     if (this.scope.controller.signal.aborted) fail('RUNTIME_CLOSED', '业务进程正在关闭')
     if (isSshOperation(request.operation))
       return ssh[request.operation].output.parse(await this.ssh.execute(request.operation, request.input))
+    if(isSftpOperation(request.operation))return sftp[request.operation].output.parse(await this.sftp.execute(request.operation,request.input))
+    if(request.operation==='sftp.authorizeEditor'){const d=request.input as {sessionId:string;path:string};return this.sftp.authorizeEditor(d.sessionId,d.path)}
+    if(request.operation==='sftp.downloadPath')return this.sftp.downloadPath((request.input as {taskId:string}).taskId)
     switch (request.operation) {
       case 'runtime.health':
         await this.database.call('health')

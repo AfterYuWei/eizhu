@@ -141,6 +141,8 @@ export interface DocumentDescriptor {
 }
 
 export interface SftpSessionInfo {
+  host_key_request_id?:string
+  auth_request?:import('./sessionMessage.ts').AuthenticationRequestPayload
   id: string
   profile_id: string
   status: string

@@ -42,6 +42,7 @@ parentPort!.on('message', async (message) => {
         clearInterval(historySweep)
         return store.close()
       default:
+        if(operation.startsWith('sftp.storage.'))return store.local.transferState(operation,input)
         if (operation.startsWith('ssh.')) return store.local.sshExecute(operation, input)
         if (isSshOperation(operation))
           return ssh[operation].output.parse(

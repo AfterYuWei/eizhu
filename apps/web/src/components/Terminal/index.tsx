@@ -50,7 +50,7 @@ export function TerminalView() {
             if (tab.kind === 'sftp') {
                 return (<div key={tab.id} className={`absolute inset-0 ${active ? 'block' : 'hidden'}`}>
                 <Suspense fallback={<div className="h-full bg-[var(--bg)]"/>}>
-                  <SftpView initialProfileId={tab.profileId || undefined} initialPath={tab.cwd}/>
+                  <SftpView ownerId={tab.id} initialProfileId={tab.profileId || undefined} initialPath={tab.cwd}/>
                 </Suspense>
               </div>);
             }

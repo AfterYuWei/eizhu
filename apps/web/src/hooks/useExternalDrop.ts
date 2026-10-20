@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { toast } from 'sonner'
 import { bridge } from '@/lib/bridge'
+import { localFilePath } from '@/lib/localFilePath'
 import { getPlatformCapabilities } from '@/lib/platform'
 import { hitTestDropTarget } from '@/lib/dragRegistry'
 import type { SftpStoreApi } from '@/store/sftp'
@@ -9,7 +10,7 @@ export function useExternalDrop(store: SftpStoreApi) {
   useEffect(() => {
     if (!getPlatformCapabilities().dragOut) return
     const drop = (event: DragEvent) => {
-      const paths = [...(event.dataTransfer?.files ?? [])].map(file => bridge().files.pathForFile(file)).filter(Boolean)
+      const paths = [...(event.dataTransfer?.files ?? [])].map(file => localFilePath(bridge().files.pathForFile(file))).filter(Boolean)
       if (!paths.length) return
       event.preventDefault()
       const state = store.getState(), hit = hitTestDropTarget(event.clientX, event.clientY)

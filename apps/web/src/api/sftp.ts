@@ -146,6 +146,7 @@ export const sftpApi = {
       size: file.size,
       lastModified: file.lastModified,
       restart,
+      prefixHash: !restart&&checkpoint.prefix_hash ? Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',await file.slice(0,checkpoint.prefix_bytes).arrayBuffer())),b=>b.toString(16).padStart(2,'0')).join(''):undefined,
     })
     assertWorkspace(generation)
     onTasks?.(begin.tasks)

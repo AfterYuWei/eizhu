@@ -17,6 +17,7 @@ port.on('message', async ({ data, ports }) => {
           root: z.string(),
           workers: z.string(),
           key: z.instanceof(Uint8Array),
+          localHome:z.string().optional(),
         })
         .parse(data)
       service = new RuntimeService(
@@ -30,6 +31,7 @@ port.on('message', async ({ data, ports }) => {
         },
         input.key,
         (name, payload) => port.postMessage({ type: 'event', context: input.context, name, payload }),
+        input.localHome,
       )
       input.key.fill(0)
       await service.execute({

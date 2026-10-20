@@ -53,15 +53,23 @@ export function FilePane({ pane, onPickServer }: FilePaneProps) {
             return;
         }
         toast.loading('正在准备远程文件…', { id: DRAG_OUT_TOAST });
+        const controller=new AbortController();
+        const cancel=()=>controller.abort();
+        const key=(event:KeyboardEvent)=>{if(event.key==='Escape')cancel()};
+        window.addEventListener('pointerup',cancel);window.addEventListener('pointercancel',cancel);window.addEventListener('blur',cancel);window.addEventListener('keydown',key);
+        const detach=()=>{window.removeEventListener('pointerup',cancel);window.removeEventListener('pointercancel',cancel);window.removeEventListener('blur',cancel);window.removeEventListener('keydown',key)};
         try {
-            const { files, icon } = await sftpDragOut(sourceSessionId, localSessionId, paths);
+            const { files, icon } = await sftpDragOut(sourceSessionId, localSessionId, paths,controller.signal);
             toast.dismiss(DRAG_OUT_TOAST);
+            detach();
             await startNativeFileDrag(files, icon);
         }
         catch (err) {
-            toast.error(err instanceof Error ? err.message : '拖出文件准备失败', { id: DRAG_OUT_TOAST });
+            if(controller.signal.aborted)toast.dismiss(DRAG_OUT_TOAST);
+            else toast.error(err instanceof Error ? err.message : '拖出文件准备失败', { id: DRAG_OUT_TOAST });
         }
         finally {
+            detach();
             api.getState().cancelDrag();
         }
     };
@@ -271,9 +279,9 @@ export function FilePane({ pane, onPickServer }: FilePaneProps) {
         { id: 'newFile', label: '新建文件', icon: <FilePlus size={13}/>, onClick: () => store.openNewFileDialog(pane) },
         { id: 'newFolder', label: '新建文件夹', icon: <FolderPlus size={13}/>, onClick: () => store.openNewFolderDialog(pane) },
         { id: 'd1', label: '', divider: true },
-        { id: 'refresh', label: '刷新', icon: <RefreshCw size={13}/>, onClick: () => navigate(path) },
+        { id: 'refresh', label: '刷新', icon: <RefreshCw size={13}/>, onClick: () => store.refresh(pane) },
     ];
-    const handleRefresh = () => navigate(path);
+    const handleRefresh = () => store.refresh(pane);
 
 
 

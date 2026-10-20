@@ -75,7 +75,7 @@ export const foundation = {
     input: z.strictObject({ requestId: z.uuid(), accepted: z.boolean() }),
     output: ready,
   },
-  'editor.resolveClose': { input: z.strictObject({ shouldClose: z.boolean() }), output: ready },
+  'editor.resolveClose': { input: z.strictObject({ shouldClose: z.boolean(),requestId:z.uuid().optional() }), output: ready },
   'editor.resolveAppClose': {
     input: z.strictObject({ requestId: z.uuid(), shouldClose: z.boolean() }),
     output: ready,

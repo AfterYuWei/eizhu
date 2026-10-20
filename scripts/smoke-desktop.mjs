@@ -45,6 +45,8 @@ assert.equal(report.monaco.json, true)
 assert.equal(report.editor, true)
 assert.equal(report.stage2.passed, true)
 assert.equal(report.stage3.passed, true)
+if(report.stage4.unavailable)console.warn('阶段 4 协议集成待验：本机缺少 OpenSSH sftp-server')
+else assert.equal(report.stage4.passed, true)
 if (executableArg) assert.equal(report.packaged, true)
 const evidenceRoot = `artifacts/smoke/${process.platform}-${process.arch}`
 await mkdir(evidenceRoot, { recursive: true })
@@ -53,6 +55,7 @@ for (const name of ['home-light.png', 'home-dark.png', 'editor-empty.png']) {
   assert.ok(report.screenshots.includes(name), `Missing screenshot: ${name}`)
   await copyFile(join(root, name), join(evidenceRoot, name))
 }
+if(report.stage4.passed)for(const name of ['stage4-editor.png','stage4-sftp.png'])await copyFile(join(root,name),join(evidenceRoot,name))
 await writeFile(
   `artifacts/smoke/${process.platform}-${process.arch}.json`,
   JSON.stringify(report, null, 2) + '\n',

@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { sftpEventSchema,transferTaskSchema } from './sftp.ts'
 import { sshGlobalEventSchema, tunnelStatusSchema } from './ssh.ts'
 import { editorOpenSchema, workspaceSchema, foundation } from './foundation.ts'
 import type { DesktopEvents } from './index.ts'
@@ -7,13 +8,13 @@ export const eventSchemas = {
   'eizhu-workspace-changed': workspaceSchema,
   'eizhu-sync-message': z.never(),
   'eizhu-session-message': sshGlobalEventSchema,
-  'eizhu-sftp-message': z.never(),
-  'eizhu-transfer-message': z.never(),
+  'eizhu-sftp-message': sftpEventSchema,
+  'eizhu-transfer-message': transferTaskSchema,
   'eizhu-tunnel-status': z.strictObject({workspaceGeneration:z.int(),status:tunnelStatusSchema}),
   'eizhu-editor-open-file': editorOpenSchema,
   'eizhu-editor-transition': z.strictObject({ requestId: z.uuid() }),
   'eizhu-app-close-request': z.strictObject({ requestId: z.uuid() }),
-  'eizhu-window-close-request': z.undefined(),
+  'eizhu-window-close-request': z.strictObject({requestId:z.uuid()}),
   'eizhu-window-state': z.strictObject({ maximized: z.boolean() }),
   'eizhu-runtime-state': z.strictObject({
     status: z.enum(['ready', 'failed']),

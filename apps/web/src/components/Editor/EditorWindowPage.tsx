@@ -108,10 +108,10 @@ export function EditorWindowPage() {
     let disposed = false
     let unlisten: (() => void) | undefined
 
-    void listen('eizhu-window-close-request', () => {
+    void listen('eizhu-window-close-request', ({payload}) => {
       const hasDirtyTabs = useEditorStore.getState().tabs.some(isDirty)
-      if (hasDirtyTabs) setPendingClose((current) => current ?? { kind: 'window' })
-      else void bridge().editor.resolveClose({ shouldClose: true })
+      if (hasDirtyTabs) setPendingClose({ kind: 'window',requestId:payload.requestId })
+      else void bridge().editor.resolveClose({ shouldClose: true,requestId:payload.requestId })
     }).then((stopListening) => {
       if (disposed) stopListening()
       else unlisten = stopListening
@@ -125,12 +125,12 @@ export function EditorWindowPage() {
     }
   }, [])
 
-  const closeWindow = useCallback(async () => {
+  const closeWindow = useCallback(async (requestId?:string) => {
     try {
       // Confirmation has already happened in this page. destroy() avoids
       // re-entering the close-request guard after the user explicitly chose
       // to close or discard the current tabs.
-      await bridge().editor.resolveClose({ shouldClose: true })
+      await bridge().editor.resolveClose({ shouldClose: true,requestId })
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       toast.error('无法关闭编辑器窗口', { description: message })
@@ -179,7 +179,7 @@ export function EditorWindowPage() {
       void closeFileTab(request.tabId)
     } else {
       closeAll()
-      void closeWindow()
+      void closeWindow(request.requestId)
     }
   }
 
@@ -200,7 +200,7 @@ export function EditorWindowPage() {
       } else {
         setPendingClose(null)
         closeAll()
-        await closeWindow()
+        await closeWindow(request.requestId)
       }
     } finally {
       setClosingBusy(false)
@@ -216,6 +216,7 @@ export function EditorWindowPage() {
     } else if (request.kind === 'application') {
       void resolveAppClose(false, request.requestId)
     } else {
+      if(request.kind==='window'&&request.requestId)void bridge().editor.resolveClose({shouldClose:false,requestId:request.requestId}).catch(e=>toast.error(String(e)))
       setPendingClose(null)
     }
   }

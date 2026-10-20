@@ -239,6 +239,8 @@ export interface SftpTab {
 }
 
 export interface SftpStore {
+  pendingAuth:(import('@/types/sessionMessage').AuthenticationRequestPayload&{sessionId:string})|null
+  dispose:()=>Promise<void>
   leftTabs: SftpTab[]
   activeLeftTabId: string
   rightTabs: SftpTab[]
@@ -367,11 +369,15 @@ export interface SftpStoreOptions {
  * own store so multiple SFTP pages never share state.
  */
 export function createSftpStore(options: SftpStoreOptions = {}): SftpStoreApi {
+  let disposed=false
+  const connections=new Set<Promise<void>>()
+  const connect=(get:GetState,set:SetState,pane:PaneSide,id:string,server:SftpServer)=>{if(disposed||generation!==workspaceGeneration())return Promise.resolve();const task=connectAndNavigate(get,set,pane,id,server);connections.add(task);return task.finally(()=>connections.delete(task))}
   const generation = workspaceGeneration()
   const includeLocalTab = options.includeLocalTab ?? true
   const initialLocalTab = includeLocalTab ? makeTab(LOCAL_SERVER) : null
 
   const api = createStore<SftpStore>((set, get) => ({
+    dispose:async()=>{disposed=true;const sessions=[...get().leftTabs,...get().rightTabs].flatMap(t=>t.sessionId?[t.sessionId]:[]);set({leftTabs:[],rightTabs:[],pendingAuth:null,pendingHostKey:null});await Promise.all([...sessions.map(id=>sftpApi.closeSession(id)),...connections])},
     leftTabs: initialLocalTab ? [initialLocalTab] : [],
     activeLeftTabId: initialLocalTab?.id ?? '',
     rightTabs: [],
@@ -386,6 +392,7 @@ export function createSftpStore(options: SftpStoreOptions = {}): SftpStoreApi {
     externalHover: null,
     pendingDirectoryDrop: null,
     pendingHostKey: null,
+    pendingAuth:null,
 
     // Dialog states
     newFileDialog: null,
@@ -420,19 +427,20 @@ export function createSftpStore(options: SftpStoreOptions = {}): SftpStoreApi {
     },
 
     connectServer: async (pane, server) => {
+      if(disposed||generation!==workspaceGeneration())return
       const { tabs } = tabsOf(get(), pane)
       const existing = tabs.find((t) => t.server.id === server.id)
       if (existing) {
         set(setTabs(pane, tabs, existing.id))
         // If not yet connected, connect now
         if (!existing.sessionId) {
-          await connectAndNavigate(get, set, pane, existing.id, server)
-        }
+          await connect(get, set, pane, existing.id, server)
+        }else if(!existing.loading)await get().refresh(pane)
         return
       }
       const tab = makeTab(server)
       set(setTabs(pane, [...tabs, tab], tab.id))
-      await connectAndNavigate(get, set, pane, tab.id, server)
+      await connect(get, set, pane, tab.id, server)
     },
 
     navigate: async (pane, path) => {
@@ -444,9 +452,20 @@ export function createSftpStore(options: SftpStoreOptions = {}): SftpStoreApi {
     },
 
     refresh: async (pane) => {
+      if(disposed||generation!==workspaceGeneration())return
       const { tabs, activeId } = tabsOf(get(), pane)
       const tab = tabs.find((t) => t.id === activeId)
-      if (tab) await fetchEntries(get, set, pane, tab.path)
+      if(!tab||tab.loading)return
+      try{
+        const info=tab.sessionId?await sftpApi.getSession(tab.sessionId).catch(cause=>{const e=cause as {code?:string;error?:{code?:string}};if((e.code??e.error?.code)!=='NOT_FOUND')throw cause;return undefined}):undefined
+        if(!info||['error','disconnected'].includes(info.status)){
+          if(tab.sessionId)await sftpApi.closeSession(tab.sessionId)
+          set(updateTabById(get(),pane,tab.id,t=>({...t,sessionId:null,error:null})))
+          await connect(get,set,pane,tab.id,tab.server)
+          const current=tabsOf(get(),pane).tabs.find(t=>t.id===tab.id)
+          if(current?.sessionId&&!current.error&&generation===workspaceGeneration())await fetchEntries(get,set,pane,tab.path,tab.id)
+        }else await fetchEntries(get,set,pane,tab.path)
+      }catch(cause){set(updateTabById(get(),pane,tab.id,t=>({...t,error:cause instanceof Error?cause.message:'文件连接不可用，请重试'})))}
     },
 
     select: (pane, path, opts) =>
@@ -523,7 +542,7 @@ export function createSftpStore(options: SftpStoreOptions = {}): SftpStoreApi {
       const tab = activeTabOf(get(), pane)
       if (!tab?.sessionId) return
       try {
-        await sftpApi.writeFile(tab.sessionId, filePath, { content: '', expected_mod_time: '' })
+        await sftpApi.writeFile(tab.sessionId, filePath, { content: '', expected_mod_time: '',create_new:true })
         await fetchEntries(get, set, pane, tab.path)
       } catch (err) {
         console.error('createFile failed', err)
@@ -948,28 +967,34 @@ async function connectAndNavigate(
   // Mark as loading
   set(updateTabById(get(), pane, tabId, (t) => ({ ...t, loading: true, error: null })))
 
+  let ownedSession:string|undefined
   try {
     const res = await sftpApi.createSession(server.id)
 
     // If still connecting, poll for status
     const sessionId = res.session_id
+    ownedSession=sessionId
+    if(!tabsOf(get(),pane).tabs.some(t=>t.id===tabId)){await sftpApi.closeSession(sessionId);return}
+    set(updateTabById(get(),pane,tabId,t=>({...t,sessionId})))
     let status = res.status
     let homeDir = res.home_dir || '/'
 
     // Wait for connection (max 30 seconds)
-    const deadline = Date.now() + 30000
+    const deadline = Date.now() + 150000
     while (
       (status === 'connecting' || status === 'reconnecting' || status === 'hostkey_confirm')
       && Date.now() < deadline
     ) {
       await new Promise((r) => setTimeout(r, 500))
+      if(!tabsOf(get(),pane).tabs.some(t=>t.id===tabId)){await sftpApi.closeSession(sessionId);return}
       try {
         const info = await sftpApi.getSession(sessionId)
+        set({pendingAuth:info.auth_request?{...info.auth_request,sessionId}:null})
         status = info.status
         if (status === 'hostkey_confirm' && info.host_key_fingerprint) {
           set({
             pendingHostKey: {
-              sessionId,
+              sessionId:info.host_key_request_id??sessionId,
               pane,
               tabId,
               serverName: server.name,
@@ -998,10 +1023,11 @@ async function connectAndNavigate(
     set(updateTabById(get(), pane, tabId, (t) => ({ ...t, sessionId })))
 
     // Fetch home directory listing (default to / if home_dir not available)
-    await fetchEntries(get, set, pane, homeDir)
+    await fetchEntries(get, set, pane, homeDir,tabId)
   } catch (err) {
+    if(ownedSession)await sftpApi.closeSession(ownedSession).catch(()=>undefined)
     const msg = err instanceof Error ? err.message : String(err)
-    set(updateTabById(get(), pane, tabId, (t) => ({ ...t, loading: false, error: msg })))
+    set({pendingAuth:null,pendingHostKey:null,...updateTabById(get(), pane, tabId, (t) => ({ ...t, sessionId:null,loading: false, error: msg }))})
   }
 }
 
@@ -1137,33 +1163,17 @@ async function refreshTabById(
   pane: PaneSide,
   tabId: string,
 ) {
-  const { tabs, activeId } = tabsOf(get(), pane)
+  const { tabs } = tabsOf(get(), pane)
   const tab = tabs.find((item) => item.id === tabId)
   if (!tab?.sessionId) return
-  if (activeId === tabId) {
-    await fetchEntries(get, set, pane, tab.path)
-    return
-  }
-  try {
-    const res = await sftpApi.list(tab.sessionId, tab.path, tab.showHidden)
-    set(updateTabById(get(), pane, tabId, (current) => ({
-      ...current,
-      entries: res.entries,
-      path: res.path,
-      loading: false,
-      error: null,
-    })))
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err)
-    set(updateTabById(get(), pane, tabId, (current) => ({ ...current, error: message })))
-  }
+  await fetchEntries(get,set,pane,tab.path,tabId)
 }
 
 /** Fetch directory listing and update the active tab's entries. Uses a
  *  monotonic sequence counter so that if multiple requests are in flight
  *  (e.g. user clicks rapidly), only the latest response is applied. */
-async function fetchEntries(get: GetState, set: SetState, pane: PaneSide, path: string) {
-  const tab = activeTabOf(get(), pane)
+async function fetchEntries(get: GetState, set: SetState, pane: PaneSide, path: string,tabId?:string) {
+  const tab = tabId?tabsOf(get(),pane).tabs.find(t=>t.id===tabId):activeTabOf(get(), pane)
   if (!tab?.sessionId) return
 
   // Bump the sequence and capture this request's seq. Only the response
@@ -1171,7 +1181,7 @@ async function fetchEntries(get: GetState, set: SetState, pane: PaneSide, path: 
   const seq = tab.fetchSeq + 1
   // Single state update: mark loading, switch path, and clear entries so the
   // old directory's files don't briefly show in the new location.
-  set(updateActiveTab(get(), pane, (t) => ({
+  set(updateTabById(get(), pane,tab.id, (t) => ({
     ...t,
     loading: true,
     error: null,
@@ -1184,19 +1194,19 @@ async function fetchEntries(get: GetState, set: SetState, pane: PaneSide, path: 
   try {
     const res = await sftpApi.list(tab.sessionId, path, tab.showHidden)
     // Only apply if this is still the latest request
-    const current = activeTabOf(get(), pane)
-    if (!current || current.fetchSeq !== seq) return
-    set(updateActiveTab(get(), pane, (t) => ({
+    const current = tabsOf(get(),pane).tabs.find(t=>t.id===tab.id)
+    if (!current || current.sessionId!==tab.sessionId||current.fetchSeq !== seq) return
+    set(updateTabById(get(), pane,tab.id, (t) => ({
       ...t,
       entries: res.entries,
       loading: false,
       path: res.path,
     })))
   } catch (err) {
-    const current = activeTabOf(get(), pane)
-    if (!current || current.fetchSeq !== seq) return
+    const current = tabsOf(get(),pane).tabs.find(t=>t.id===tab.id)
+    if (!current || current.sessionId!==tab.sessionId||current.fetchSeq !== seq) return
     const msg = err instanceof Error ? err.message : String(err)
-    set(updateActiveTab(get(), pane, (t) => ({ ...t, loading: false, error: msg })))
+    set(updateTabById(get(), pane,tab.id, (t) => ({ ...t, loading: false, error: msg })))
   }
 }
 
@@ -1209,16 +1219,21 @@ async function setViewAndFetch(get: GetState, set: SetState, pane: PaneSide, vie
     if (!tab?.sessionId) return
     if (tab.tree) return // already cached
 
-    set(updateActiveTab(get(), pane, (t) => ({ ...t, loading: true })))
+    const seq=tab.fetchSeq+1
+    set(updateTabById(get(), pane,tab.id, (t) => ({ ...t, loading: true,fetchSeq:seq })))
     try {
       const res = await sftpApi.tree(tab.sessionId, '/', 3)
       const rootEntry: SftpEntry = { name: '/', path: '/', is_dir: true, size: 0, mod_time: '' }
       const children = res.entries.map(buildTreeNode)
       const root: TreeNode = { entry: rootEntry, children }
-      set(updateActiveTab(get(), pane, (t) => ({ ...t, tree: root, loading: false })))
+      const current=tabsOf(get(),pane).tabs.find(t=>t.id===tab.id)
+      if(current?.sessionId!==tab.sessionId||current.fetchSeq!==seq)return
+      set(updateTabById(get(), pane,tab.id, (t) => ({ ...t, tree: root, loading: false })))
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
-      set(updateActiveTab(get(), pane, (t) => ({ ...t, loading: false, error: msg })))
+      const current=tabsOf(get(),pane).tabs.find(t=>t.id===tab.id)
+      if(current?.sessionId!==tab.sessionId||current.fetchSeq!==seq)return
+      set(updateTabById(get(), pane,tab.id, (t) => ({ ...t, loading: false, error: msg })))
     }
   }
 }

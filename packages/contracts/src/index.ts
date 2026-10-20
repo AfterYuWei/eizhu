@@ -11,6 +11,7 @@ export * from './logging.ts'
 export * from './events.ts'
 export * from './local.ts'
 export * from './ssh.ts'
+export * from './sftp.ts'
 export { reservedOperations } from './domains.ts'
 export type { DomainOperations }
 
@@ -54,7 +55,7 @@ export interface DesktopEvents {
   'eizhu-editor-open-file': { sessionId: string; sessionType: 'sftp' | 'serverDetail'; path: string }
   'eizhu-editor-transition': { requestId: string }
   'eizhu-app-close-request': { requestId: string }
-  'eizhu-window-close-request': undefined
+  'eizhu-window-close-request': {requestId:string}
   'eizhu-window-state': { maximized: boolean }
   'eizhu-runtime-state': { status: 'ready' | 'failed'; message?: string }
   'eizhu-settings-changed': FoundationInput<'settings.write'>

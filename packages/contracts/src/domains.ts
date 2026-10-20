@@ -65,6 +65,9 @@ import type {
 
 /** Reserved domain contracts. Each operation is enabled with its runtime schema in its delivery stage. */
 export interface DomainOperations {
+  'sftp.startDrag':{input:{taskIds:string[]};output:void}
+  'sftp.releaseDrag':{input:{taskIds:string[]};output:void}
+  'sftp.prepareDrag':{input:{sessionId:string;paths:string[]};output:{tasks:TransferTask[]}}
   'audit.list': {
     input: { limit: number }
     output: Array<{ id: string; action: string; entity_id: string; created_at: string }>
@@ -266,10 +269,12 @@ export interface DomainOperations {
     output: {
       size: number
       last_modified?: number | null
+      prefix_hash?:string
+      prefix_bytes?:number
     }
   }
   'sftp.resumeUpload': {
-    input: { taskId: string; size: number; lastModified: number; restart: boolean }
+    input: { taskId: string; size: number; lastModified: number; restart: boolean;prefixHash?:string }
     output: SftpUploadBeginResponse
   }
   'sftp.pauseTransfer': { input: { taskId: string }; output: TransferTask }

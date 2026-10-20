@@ -2,7 +2,7 @@ import { BrowserWindow, dialog, screen } from 'electron'
 import { join } from 'node:path'
 import type { DesktopEvents, RuntimeContext } from '@eizhu/contracts'
 import { randomUUID } from 'node:crypto'
-import { eventSchemas } from '@eizhu/contracts'
+import { eventSchemas,fail } from '@eizhu/contracts'
 
 type Transition = {
   id: string
@@ -18,6 +18,8 @@ export class Windows {
   private transition?: Transition
   private closing = false
   private quitting = false
+  private editorCloseRequest?:string
+  canOpenEditor():boolean{return !this.closing&&!this.transition&&!this.editorCloseRequest}
   private directory: string
   private context: () => RuntimeContext
   private quit: () => Promise<void>
@@ -77,12 +79,13 @@ export class Windows {
       if (this.quitting) return
       event.preventDefault()
       if (kind === 'main') void this.requestQuit()
-      else this.emit(window, 'eizhu-window-close-request', undefined)
+      else {this.editorCloseRequest??=randomUUID();this.emit(window, 'eizhu-window-close-request', {requestId:this.editorCloseRequest})}
     })
     window.on('closed', () => {
       if (kind === 'editor') {
         this.editor = undefined
         this.editorReady = false
+        this.editorCloseRequest=undefined
         this.opens = []
         this.transition?.resolve(false)
         if (this.transition) clearTimeout(this.transition.timer)
@@ -172,7 +175,9 @@ export class Windows {
       this.closing = false
     }
   }
-  closeEditor(accepted: boolean): void {
+  closeEditor(accepted: boolean,requestId?:string): void {
+    if((this.editorCloseRequest&&requestId!==this.editorCloseRequest)||(requestId&&!this.editorCloseRequest))fail('REQUEST_EXPIRED','此关闭确认请求已失效')
+    this.editorCloseRequest=undefined
     if (accepted) this.editor?.destroy()
   }
 }

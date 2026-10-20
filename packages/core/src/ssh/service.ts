@@ -1,5 +1,5 @@
 /* eslint-disable no-control-regex -- Remote OSC sequences contain literal terminal control bytes. */
-import { randomUUID } from 'node:crypto'
+import { randomUUID,createHash } from 'node:crypto'
 import { StringDecoder } from 'node:string_decoder'
 import { posix } from 'node:path'
 import type { ClientChannel } from 'ssh2'
@@ -71,6 +71,18 @@ export class SshService {
   private closing?: Promise<void>
   private closed = false
   private transitions = new Map<string, Promise<unknown>>()
+  private fileOwners = new Map<string, (type:string,payload:unknown)=>void>()
+  async connectFiles(owner:string,profileId:string,connection:SshConnection,notify:(type:string,payload:unknown)=>void,disconnected:()=>void){
+    this.fileOwners.set(owner,notify)
+    const plan=await this.plan({id:profileId}),hooks=this.hooks(owner,connection,disconnected),verify=hooks.verify,fingerprints:string[]=[]
+    hooks.verify=async(hop,fingerprint)=>{const accepted=await verify(hop,fingerprint);if(accepted)fingerprints.push(fingerprint);return accepted}
+    const client=await connection.connect(plan,hooks)
+    const binding=createHash('sha256').update(JSON.stringify({route:plan.map(h=>[h.profile.host,h.profile.port,h.profile.username,h.proxy.type,h.proxy.host,h.proxy.port]),fingerprints})).digest('hex')
+    return {client,binding}
+  }
+  releaseFiles(owner:string):void{this.cancelPrompts(owner);this.fileOwners.delete(owner)}
+  fileClient(id:string){const s=this.connected(id);return {client:s.connection.client!,profileId:s.meta.profile_id}}
+  async decideFiles(requestId:string,fingerprint:string,decision:string){return this.decide(requestId,fingerprint,decision)}
   constructor(database: WorkerClient, compute: WorkerClient, context: RuntimeContext, emit: Emit) {
     this.compute = compute
     this.database = database
@@ -125,6 +137,7 @@ export class SshService {
       }
   }
   private promptClosed(owner: string, id: string): void {
+    if(this.fileOwners.has(owner)){this.fileOwners.get(owner)!('auth_closed',{request_id:id});return}
     const s = this.terminals.get(owner)
     if (s) {
       s.pending.delete(id)
@@ -182,7 +195,8 @@ export class SshService {
         s.pending.set(id, message)
         this.event(s, message)
       }
-    } else this.global(fingerprint ? 'tunnel_host_key_request' : 'tunnel_auth_request', owner, payload)
+    } else if(this.fileOwners.has(owner))this.fileOwners.get(owner)!(fingerprint?'host_key':'auth_request',payload)
+    else this.global(fingerprint ? 'tunnel_host_key_request' : 'tunnel_auth_request', owner, payload)
     const abort = () => {
       const p = this.prompts.get(id)
       if (p) {
@@ -228,6 +242,7 @@ export class SshService {
       authenticate: (hop, name, instructions, prompts) =>
         this.prompt(owner, connection, hop, name, instructions, prompts),
       stage: (stage, message) => {
+        this.fileOwners.get(owner)?.('stage',{stage,message})
         const s = this.terminals.get(owner)
         if (s) this.state(s, s.meta.status, stage, message)
       },

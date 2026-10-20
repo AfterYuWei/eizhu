@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { closeFileOwner } from '@/lib/fileOwners'
 import { sessionApi } from '@/api/session'
 import { useServerDetailStore } from '@/store/serverDetail'
 import type { SessionApiError } from '@/types/session'
@@ -125,8 +126,9 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     return tabId
   },
 
-  closeTab: (tabId) => {
+  closeTab: async (tabId) => {
     const tab = get().tabs.find((t) => t.id === tabId)
+    if(tab?.kind==='sftp')await closeFileOwner(tabId)
     if (tab?.sessionId) {
       sessionApi.close(tab.sessionId).catch(console.error)
     }

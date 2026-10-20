@@ -1,4 +1,5 @@
 import { verifyStage3 } from './stage3-smoke.ts'
+import { verifyStage4 } from './stage4-smoke.ts'
 import { app, BrowserWindow as TestWindow, screen } from 'electron'
 import type { BrowserWindow } from 'electron'
 import { join } from 'node:path'
@@ -53,6 +54,7 @@ export async function runSmoke(options: {
   root: string
   keyMode: string
   startedAt: number
+  assets:string
 }): Promise<void> {
   const { windows, root } = options,
     window = windows.main
@@ -103,6 +105,8 @@ export async function runSmoke(options: {
   const stage3Storage=await options.runtime().call<{passed:boolean}>('runtime.verifyStage3Storage')
   assert.equal(stage3Storage.passed,true)
   step('stage3-native-passed')
+  const stage4=await verifyStage4(window,options.runtime(),windows,root,options.assets)
+  step('stage4-native-passed')
   // An occluded smoke window can suspend animation frames. Keep only this test window drawing.
   // This setting is limited to this synthetic smoke window; normal application throttling is unchanged.
   window.webContents.backgroundThrottling = false
@@ -176,6 +180,10 @@ export async function runSmoke(options: {
   assert.equal(failed, 'RUNTIME_UNAVAILABLE')
   const restored = await window.webContents.executeJavaScript('window.eizhu.runtime.restart()')
   step('runtime-restarted')
+  if(stage4.passed){
+    const fileRecovery=await window.webContents.executeJavaScript(`(async()=>{const api=window.eizhu,id=${JSON.stringify(stage4.restoredTaskId)};const task=(await api.sftp.listTransfers({})).find(t=>t.id===id);if(task?.status!=='recoverable')throw new Error('Checkpoint did not recover');const local=await api.sftp.createSession({profileId:'local'});const proof=await api.sftp.uploadCheckpoint({taskId:id});const resumed=await api.sftp.resumeUpload({taskId:id,size:6,lastModified:42,restart:false,prefixHash:proof.prefix_hash});await api.sftp.uploadChunk({uploadId:resumed.upload_id,sequence:resumed.sequence,data:new TextEncoder().encode('def')});const finished=await api.sftp.uploadFinish({uploadId:resumed.upload_id});await api.sftp.closeSession({id:local.session_id});return finished.tasks[0].status==='completed'&&resumed.received===3})()`)
+    assert.equal(fileRecovery,true);step('stage4-checkpoint-restarted')
+  }
   assert.notEqual(restored.runtimeId, before.runtimeId)
   assert.equal(restored.generation, before.generation + 1)
   assert.equal(
@@ -227,6 +235,7 @@ export async function runSmoke(options: {
     stage2,
     stage3,
     stage3Storage,
+    stage4,
     localBridge,
     editor: true,
     editorGeometry,
