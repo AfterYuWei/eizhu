@@ -1,6 +1,6 @@
 //! Native AppKit buttons aligned in webview coordinates, independent of SDK metrics.
 
-use objc2::{msg_send, runtime::AnyObject};
+use objc2::{msg_send, runtime::AnyObject, sel};
 use objc2_foundation::{NSPoint, NSRect};
 use tauri::{WebviewWindow, WindowEvent};
 
@@ -60,6 +60,27 @@ unsafe fn align_buttons(window: &AnyObject, content: &AnyObject) {
     let Some(container) = container.as_ref() else {
         return;
     };
+
+    // macOS 26 can inherit compact control metrics from the window host. Ask
+    // AppKit for its standard (larger) titlebar controls before reading their
+    // native frames. Older macOS versions do not implement this selector.
+    let content_view: *mut AnyObject = msg_send![window, contentView];
+    let Some(content_view) = content_view.as_ref() else {
+        return;
+    };
+    let metrics_view: *mut AnyObject = msg_send![content_view, superview];
+    let Some(metrics_view) = metrics_view.as_ref() else {
+        return;
+    };
+    let supports_control_metrics: bool = msg_send![
+        metrics_view,
+        respondsToSelector: sel!(setPrefersCompactControlSizeMetrics:)
+    ];
+    if supports_control_metrics {
+        let _: () = msg_send![metrics_view, setPrefersCompactControlSizeMetrics: false];
+        let _: () = msg_send![metrics_view, layoutSubtreeIfNeeded];
+    }
+
     let window_frame: NSRect = msg_send![window, frame];
     let mut frame: NSRect = msg_send![container, frame];
     frame.size.height = TOOLBAR_HEIGHT;
