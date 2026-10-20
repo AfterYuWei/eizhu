@@ -1,0 +1,2 @@
+# 固定兼容证据按原始字节交换，Windows checkout 也不得转换换行。
+tests/fixtures/desktop-baseline/** -text

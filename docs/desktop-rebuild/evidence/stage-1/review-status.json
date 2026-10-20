@@ -1,10 +1,10 @@
 {
-  "recordedAt": "2026-10-20T07:04:52.322Z",
+  "recordedAt": "2026-10-20T07:15:40.641Z",
   "status": "stage-1-gate-pending",
   "sourceSnapshot": {
     "algorithm": "sha256(sorted(path + NUL + file-sha256 + LF))",
-    "sha256": "0df5829df88073719e23c234cf5c29906d550f92f961e3a2864e4a72e16e2aa5",
-    "files": 641,
+    "sha256": "6fb0ff21dc55316e9ffb183b44f347b81733bfbaadaffbfd00e597b55c58414a",
+    "files": 642,
     "includes": [
       "apps (excluding out/node_modules)",
       "packages",
@@ -15,7 +15,12 @@
       "package-lock.json",
       "tsconfig.node.json",
       "eslint.config.mjs",
-      ".prettierrc.json"
+      ".prettierrc.json",
+      ".gitattributes"
+    ],
+    "gitCommit": "2f3f1b58b8877b7a76ea3e2dbd513e158f51cac8",
+    "followupChanges": [
+      "固定样本字节保护及文档/CI状态单独跟进，不计为Windows CI修复；应用运行代码与已验本机DMG相同"
     ]
   },
   "artifacts": [
@@ -108,13 +113,20 @@
       "passed": true,
       "docsOnlyPushDoesNotRetrigger": true,
       "executedNativeCI": false
+    },
+    "fixtureCheckoutBytes": {
+      "passed": true,
+      "representatives": 4,
+      "autocrlf": true,
+      "evidence": "fixture-byte-check.txt",
+      "windowsCIFailureFixed": false
     }
   },
   "platforms": {
-    "darwin-x64": "latest-final-dmg-passed",
-    "darwin-arm64": "not-run",
-    "win32-x64": "not-run",
-    "linux-x64": "not-run"
+    "darwin-x64": "latest-local-final-dmg-passed-remote-package-failed",
+    "darwin-arm64": "ci-package-failed",
+    "win32-x64": "ci-baseline-failed",
+    "linux-x64": "ci-npm-ci-failed"
   },
   "screenshots": {
     "current": [
@@ -156,8 +168,82 @@
     "resolution": "正常 require_escalated 审批重新通过；最新 build/package/DMG smoke 均已执行成功"
   },
   "ci": {
+    "runId": 39384397849,
+    "runNumber": 51,
+    "url": "https://github.com/AfterYuWei/eizhu/actions/runs/39384397849",
+    "commit": "2f3f1b58b8877b7a76ea3e2dbd513e158f51cac8",
     "branch": "codex/electron-stage-1",
-    "userAuthorizedPush": true,
-    "status": "awaiting-push"
+    "status": "completed",
+    "conclusion": "failure",
+    "recordedAt": "2026-10-20T07:14:44.901Z",
+    "detailLogs": "awaiting-authenticated-browser-session",
+    "artifactsProduced": false,
+    "source": "GitHub Actions public run/jobs/check-runs API; GPT-6 Luna independent monitor",
+    "jobs": [
+      {
+        "target": "linux-x64",
+        "id": 118500649873,
+        "conclusion": "failure",
+        "failedStep": "npm ci",
+        "notRun": [
+          "check",
+          "foundation",
+          "baseline",
+          "build",
+          "package",
+          "smoke"
+        ]
+      },
+      {
+        "target": "win32-x64",
+        "id": 118500649882,
+        "conclusion": "failure",
+        "passed": [
+          "npm ci",
+          "check",
+          "foundation"
+        ],
+        "failedStep": "baseline:test",
+        "notRun": [
+          "build",
+          "package",
+          "smoke"
+        ]
+      },
+      {
+        "target": "darwin-arm64",
+        "id": 118500649524,
+        "conclusion": "failure",
+        "passed": [
+          "npm ci",
+          "check",
+          "foundation",
+          "baseline",
+          "build"
+        ],
+        "failedStep": "desktop:package -- --platform=darwin --arch=arm64",
+        "notRun": [
+          "smoke"
+        ]
+      },
+      {
+        "target": "darwin-x64",
+        "id": 118500649911,
+        "conclusion": "failure",
+        "passed": [
+          "npm ci",
+          "check",
+          "foundation",
+          "baseline",
+          "build"
+        ],
+        "failedStep": "desktop:package -- --platform=darwin --arch=x64",
+        "notRun": [
+          "smoke"
+        ]
+      }
+    ],
+    "evidence": "ci-run-39384397849.json",
+    "userAuthorizedPush": true
   }
 }
