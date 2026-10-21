@@ -10,6 +10,8 @@
 | `build-desktop-stable.yml` | main 推送、main 手动 | 四目标 stable 验证完成后创建 GitHub Release |
 
 打包步骤使用 `publish: never`。stable 工作流先拒绝已占用的 `v<VERSION>` 标签，要求对应中文发布说明；四目标全部通过后，独立发布任务核对版本、提交、源码指纹及 60 秒负载报告，创建草稿、上传安装包/实际报告/摘要清单，最后公开 Release。失败时不公开残缺版本，不覆盖同名资产。工作流不部署更新源；签名和人工验收边界继续见 [发布清单](../docs/RELEASE_CHECKLIST.md)。用户已于 2026-10-21 授权发布 0.5.0。
+
+仅发布脚本、发布工作流或文档的修改不自动重复 stable 原生构建。四目标已通过而发布失败时，可在 main 手动运行 stable 工作流，填写 `validated_run_id` 重试发布；必须来自同仓库 main 的 stable 工作流、四目标任务均成功、来源提交已合入当前 main，并且产物的版本及应用源码指纹与当前源码一致。标签仍指向安装包实际来源提交，发布修正不会冒充重新执行原生验收。Linux 文件架构名遵循打包格式：AppImage/rpm 使用 x86_64，deb 使用 amd64；平台构建身份仍为 linux-x64。
 `VERSION=x.y.z` 时 stable 为 `x.y.z`，test 为 `x.y.z-test.<Git提交计数>.<短SHA>`。同一提交、通道和架构必须重新构建后再打包；构建记录与打包配置不一致会拒绝。
 
 可选 Variables：`EIZHU_UPDATE_STABLE_URL`、`EIZHU_UPDATE_TEST_URL`，分别以 `/electron/stable/`、`/electron/test/` 结尾，必须是无凭据的 HTTPS URL。每个目标再追加 `win32-x64/`、`darwin-x64/`、`darwin-arm64/` 或 `linux-x64/`。缺省时只产出手动安装包，更新入口不会报“已是最新”。官方账号服务仍待开发，构建不依赖账号服务地址。

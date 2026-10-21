@@ -4,6 +4,7 @@ import { createReadStream } from 'node:fs'
 import { copyFile, mkdir, readFile, readdir, writeFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { buildSettings } from './desktop-build-settings.mjs'
 
 const targets = [
   { platform: 'win32', arch: 'x64', os: 'win', extensions: ['exe'] },
@@ -12,7 +13,31 @@ const targets = [
   { platform: 'linux', arch: 'x64', os: 'linux', extensions: ['AppImage', 'deb', 'rpm'] },
 ]
 
-export async function prepareDesktopRelease({ version, revision, inputDirectory, outputDirectory }) {
+export function validatePackagedRun(run, jobs, repository) {
+  assert.equal(run.repository?.full_name, repository, '产物必须来自当前仓库')
+  assert.equal(run.path, '.github/workflows/build-desktop-stable.yml')
+  assert.equal(run.head_branch, 'main')
+  assert.equal(run.status, 'completed')
+  assert.match(run.head_sha, /^[a-f0-9]{40}$/)
+  const packages = jobs.filter((job) => job.name.startsWith('desktop / package ('))
+  const expected = [
+    'desktop / package (windows-2022, win32, x64, *.exe)',
+    'desktop / package (macos-15-intel, darwin, x64, *.dmg)',
+    'desktop / package (macos-15, darwin, arm64, *.dmg)',
+    'desktop / package (ubuntu-22.04, linux, x64, *.AppImage)',
+  ]
+  assert.deepEqual(packages.map((job) => job.name).sort(), expected.sort(), '必须包含完整四目标')
+  for (const job of packages) assert.equal(job.conclusion, 'success', `目标未通过: ${job.name}`)
+  return run.head_sha
+}
+
+export async function prepareDesktopRelease({
+  version,
+  revision,
+  inputDirectory,
+  outputDirectory,
+  expectedSourceDigest,
+}) {
   assert.match(version, /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/)
   assert.match(revision, /^[a-f0-9]{40}$/)
   const assets = []
@@ -38,13 +63,16 @@ export async function prepareDesktopRelease({ version, revision, inputDirectory,
     assert.equal(smoke.stage3.load?.passed, true)
     assert.ok(smoke.stage3.load.elapsedMs >= 60000, `${target}: 60 秒负载未完成`)
     const files = await readdir(join(directory, 'desktop'))
+    const installerNames = []
     for (const extension of extensions) {
-      const name = `eizhu-${version}-${os}-${arch}.${extension}`
+      const fileArch = platform === 'linux' ? (extension === 'deb' ? 'amd64' : 'x86_64') : arch
+      const name = `eizhu-${version}-${os}-${fileArch}.${extension}`
       assert.ok(files.includes(name), `缺少安装资产: ${name}`)
+      installerNames.push(name)
       assets.push({ name, path: join(directory, 'desktop', name) })
     }
-    for (const name of files.filter(
-      (name) => name.startsWith(`eizhu-${version}-${os}-${arch}.`) && name.endsWith('.blockmap'),
+    for (const name of files.filter((name) =>
+      installerNames.some((installer) => name === installer + '.blockmap'),
     ))
       assets.push({ name, path: join(directory, 'desktop', name) })
     assets.push(
@@ -53,6 +81,8 @@ export async function prepareDesktopRelease({ version, revision, inputDirectory,
     )
   }
   assert.equal(digests.size, 1, '四目标源码指纹不一致')
+  if (expectedSourceDigest)
+    assert.equal([...digests][0], expectedSourceDigest, '产物与当前应用源码指纹不一致')
   assert.equal(new Set(assets.map(({ name }) => name)).size, assets.length, '发布资产名称冲突')
   await mkdir(outputDirectory, { recursive: true })
   assert.equal((await readdir(outputDirectory)).length, 0, '发布输出目录必须为空')
@@ -71,7 +101,8 @@ export async function prepareDesktopRelease({ version, revision, inputDirectory,
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const assets = await prepareDesktopRelease({
     version: process.env.RELEASE_VERSION,
-    revision: process.env.GITHUB_SHA,
+    revision: process.env.RELEASE_SOURCE_SHA ?? process.env.GITHUB_SHA,
+    expectedSourceDigest: buildSettings({ EIZHU_CHANNEL: 'stable' }).sourceDigest,
     inputDirectory: 'release-input',
     outputDirectory: 'release-output',
   })
