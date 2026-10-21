@@ -17,6 +17,7 @@
 默认 `validation=full`，执行全部回归。仅烟测工具变化、已有对应回归证据且业务/存储/兼容实现未变时，才允许 `package-only` 或提交标题 `[package-only]`；跳过的回归必须引用原证据，不能记为本轮通过。类型、lint、基线、架构、构建、打包和最终包启动仍执行。
 
 矩阵使用 windows-2022、macos-15-intel、macos-15、ubuntu-22.04；Linux 配置 Clang 15、Xvfb 和打包依赖。每个目标独立 `npm ci`、重建本机 Electron ABI，禁止跨目标复用原生模块。
+源码通过 `.gitattributes` 统一以 LF 检出，确保四目标源码指纹一致；固定兼容样本与原始烟测日志保留 `-text` 字节边界。
 NSIS 执行隔离安装/卸载；DMG 只读挂载后复制运行；AppImage 解包后在 X11 启动。deb/rpm 的系统安装、Wayland、真实系统密钥库仍需专门验收。
 
 当前 CI 为未签名测试候选配置（`CSC_IDENTITY_AUTO_DISCOVERY=false`）。不要把已归档的阶段 1 四目标结果当作阶段 6 结果。实际状态与证据见 [阶段 6 报告](../docs/desktop-rebuild/STAGE_6_REPORT.md)。
