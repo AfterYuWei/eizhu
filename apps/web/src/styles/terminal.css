@@ -157,14 +157,14 @@
   min-width: 0;
   min-height: 0;
   margin-inline: auto;
-  padding: 28px 32px 20px;
+  padding: 32px 40px 24px;
 }
 .desktop-shell .connection-picker-toolbar {
   display: flex;
   flex-shrink: 0;
   align-items: center;
   justify-content: space-between;
-  gap: 20px;
+  gap: 24px;
   margin-bottom: 24px;
 }
 .desktop-shell .connection-picker-heading { min-width: 0; }
@@ -174,12 +174,12 @@
 }
 .desktop-shell .connection-picker-heading p {
   margin-top: 6px;
-  font: 400 max(12px, calc(var(--sans-size) - 1px)) / 1.6 var(--sans);
+  font: 400 max(12px, calc(var(--sans-size) - 2px)) / 1.6 var(--sans);
   color: var(--picker-muted);
 }
 .desktop-shell .connection-picker-search {
   position: relative;
-  flex: 0 1 280px;
+  flex: 0 1 240px;
   min-width: 200px;
 }
 .desktop-shell .connection-picker-search > svg {
@@ -193,8 +193,8 @@
 }
 .desktop-shell .connection-picker-search input {
   height: auto;
-  min-height: 34px;
-  padding: 6px 10px 6px 34px;
+  min-height: 30px;
+  padding: 4px 10px 4px 34px;
   border: 1px solid var(--border);
   border-radius: var(--r-sm);
   background: var(--bg-active);
@@ -212,8 +212,8 @@
   padding: 3px;
   margin: -3px;
 }
-.desktop-shell .connection-picker-group + .connection-picker-group { margin-top: 24px; }
-.desktop-shell .connection-picker-group-title { margin: 0 0 10px; }
+.desktop-shell .connection-picker-group + .connection-picker-group { margin-top: 28px; }
+.desktop-shell .connection-picker-group-title { margin: 0 0 12px; }
 .desktop-shell .connection-picker-group-toggle {
   display: flex;
   justify-content: flex-start;
@@ -222,14 +222,14 @@
   min-width: 0;
   min-height: 36px;
   height: auto;
-  padding: 6px;
+  padding: 6px 0;
   border-radius: var(--r-sm);
   font: 500 var(--sans-size) / 1.5 var(--sans);
   color: var(--fg);
 }
 .desktop-shell .connection-picker-group-toggle:hover { background: var(--shell-hover); }
 .desktop-shell .connection-picker-group-toggle > svg { color: var(--picker-muted); }
-.desktop-shell .connection-picker-group-toggle > svg:first-child { width: 14px; height: 14px; transition: transform 120ms; }
+.desktop-shell .connection-picker-group-toggle .connection-picker-group-chevron { width: 14px; height: 14px; margin-left: auto; transition: transform 120ms; }
 .desktop-shell .connection-picker-group-toggle .is-collapsed { transform: rotate(-90deg); }
 .desktop-shell .connection-picker-group-name {
   min-width: 0;
@@ -239,60 +239,61 @@
 }
 .desktop-shell .connection-picker-count {
   flex-shrink: 0;
-  min-width: 22px;
-  padding: 1px 6px;
-  border-radius: var(--r-xs);
-  background: var(--bg-elevated);
   font: 400 max(12px, calc(var(--sans-size) - 2px)) / 1.5 var(--sans);
   font-variant-numeric: tabular-nums;
   color: var(--picker-muted);
-  text-align: center;
 }
+.desktop-shell .connection-picker-group-body { container: connection-group / inline-size; }
 .desktop-shell .connection-picker-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  overflow: hidden;
+  border: 1px solid var(--edge-soft);
+  border-radius: var(--r-lg);
+  background: var(--surface-app);
 }
 .desktop-shell .connection-picker-group.is-nested {
   margin-top: 16px;
   margin-left: 14px;
   padding-left: 14px;
-  border-left: 1px solid var(--border-subtle);
+  border-left: 1px solid var(--edge-soft);
 }
 .desktop-shell .connection-picker-server {
   display: flex;
   justify-content: flex-start;
-  gap: 10px;
+  gap: 12px;
   width: 100%;
   min-width: 0;
-  min-height: 74px;
+  min-height: 68px;
   height: auto;
-  padding: 12px;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--r-sm);
-  background: var(--surface-panel);
+  padding: 13px 16px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   text-align: left;
   font: 400 var(--sans-size) / 1.5 var(--sans);
   color: var(--fg);
-  transition: background 120ms, border-color 120ms;
+  transition: background 120ms;
 }
+.desktop-shell .connection-picker-server:nth-child(even) { border-left: 1px solid var(--edge-soft); }
+.desktop-shell .connection-picker-server:nth-child(n + 3) { border-top: 1px solid var(--edge-soft); }
+.desktop-shell .connection-picker-server:last-child:nth-child(odd) { grid-column: 1 / -1; }
 .desktop-shell .connection-picker-server:hover,
-.desktop-shell .connection-picker-server:focus-visible { background: var(--shell-hover); border-color: var(--border); }
+.desktop-shell .connection-picker-server:focus-visible { background: var(--shell-hover); }
+.desktop-shell .connection-picker-grid .connection-picker-server:focus-visible { outline-offset: -2px; }
 .desktop-shell .connection-picker-icon {
   display: grid;
   place-items: center;
   flex-shrink: 0;
-  width: 30px;
-  height: 30px;
-  border-radius: var(--r-sm);
-  background: var(--bg-elevated);
+  width: 24px;
+  height: 24px;
   color: var(--picker-muted);
 }
 .desktop-shell .connection-picker-info {
   display: flex;
   flex: 1;
   flex-direction: column;
-  gap: 5px;
+  gap: 4px;
   min-width: 0;
 }
 .desktop-shell :is(.connection-picker-name, .connection-picker-address) {
@@ -304,7 +305,7 @@
 .desktop-shell .connection-picker-name { color: var(--fg); }
 .desktop-shell .connection-picker-address {
   color: var(--picker-muted);
-  font: 400 max(12px, calc(var(--sans-size) - 1px)) / 1.5 var(--mono);
+  font: 400 max(12px, calc(var(--sans-size) - 2px)) / 1.6 var(--mono);
 }
 .desktop-shell .connection-picker-arrow { color: var(--picker-muted); }
 .desktop-shell .connection-picker-empty {
@@ -315,18 +316,22 @@
   white-space: normal;
 }
 @container connection-picker (max-width: 760px) {
-  .desktop-shell .connection-picker-content { padding: 24px 20px 16px; }
-  .desktop-shell .connection-picker-toolbar { align-items: stretch; flex-direction: column; gap: 16px; margin-bottom: 20px; }
+  .desktop-shell .connection-picker-content { padding: 28px 28px 24px; }
+  .desktop-shell .connection-picker-toolbar { align-items: stretch; flex-direction: column; gap: 16px; }
   .desktop-shell .connection-picker-search { flex: none; min-width: 0; width: 100%; }
 }
 @container connection-picker (max-width: 460px) {
-  .desktop-shell .connection-picker-content { padding: 20px 12px 12px; }
+  .desktop-shell .connection-picker-content { padding: 24px 20px 20px; }
   .desktop-shell .connection-picker-group.is-nested { margin-left: 6px; padding-left: 10px; }
+}
+@container connection-group (max-width: 600px) {
   .desktop-shell .connection-picker-grid { grid-template-columns: minmax(0, 1fr); }
+  .desktop-shell .connection-picker-server:nth-child(even) { border-left: 0; }
+  .desktop-shell .connection-picker-server + .connection-picker-server { border-top: 1px solid var(--edge-soft); }
 }
 @media (prefers-reduced-motion: reduce) {
   .desktop-shell .connection-picker-server,
-  .desktop-shell .connection-picker-group-toggle > svg:first-child { transition: none; }
+  .desktop-shell .connection-picker-group-toggle .connection-picker-group-chevron { transition: none; }
 }
 
 .term-empty-state {

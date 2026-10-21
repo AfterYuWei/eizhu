@@ -111,10 +111,10 @@ export function ConnectionPicker({ tabId, isActive = true, inputRef }: { tabId: 
           aria-label={`${folded ? '展开' : '收起'}分组 ${section.path}，${section.count} 台服务器`}
           title={section.path}
           onClick={() => setCollapsed((current) => ({ ...current, [section.id]: !current[section.id] }))}>
-          <ChevronDown size={14} className={folded ? 'is-collapsed' : ''} aria-hidden="true" />
           <Icon size={16} aria-hidden="true" />
           <span className="connection-picker-group-name">{section.name}</span>
           <span className="connection-picker-count">{query.trim() ? `${section.count} / ${section.total}` : section.total}</span>
+          <ChevronDown size={14} className={`connection-picker-group-chevron${folded ? ' is-collapsed' : ''}`} aria-hidden="true" />
         </Button>
       </Heading>
       <div id={contentId} className="connection-picker-group-body" hidden={folded}>
