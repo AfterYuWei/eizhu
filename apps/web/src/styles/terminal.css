@@ -136,118 +136,197 @@
   background: var(--accent);
 }
 
-/* Connection choices use the same quiet surfaces and icon registry as the sidebar. */
-.connection-picker {
+/* Group-first connection choices follow the actual pane width. */
+.desktop-shell .connection-picker {
   position: absolute;
   inset: 0;
   z-index: 10;
+  container: connection-picker / inline-size;
   display: flex;
   overflow: hidden;
-  padding: clamp(10px, 5%, 20px);
-  border-radius: var(--r-sm);
   background: var(--surface-panel);
   color: var(--fg);
+  --picker-muted: color-mix(in srgb, var(--fg) 62%, var(--surface-panel));
 }
-.connection-picker-content {
+.desktop-shell .connection-picker-content {
   display: flex;
+  flex: 1;
   flex-direction: column;
-  gap: 14px;
   width: 100%;
-  max-width: 360px;
-  max-height: 100%;
+  max-width: 960px;
   min-width: 0;
   min-height: 0;
-  margin: auto;
+  margin-inline: auto;
+  padding: 28px 32px 20px;
 }
-.connection-picker-heading {
+.desktop-shell .connection-picker-toolbar {
+  display: flex;
   flex-shrink: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 24px;
 }
-.connection-picker-heading h2 {
-  font: 600 14px / 1.5 var(--sans);
-  color: var(--fg-2);
+.desktop-shell .connection-picker-heading { min-width: 0; }
+.desktop-shell .connection-picker-heading h2 {
+  font: 600 max(20px, var(--sans-size)) / 1.4 var(--sans);
+  color: var(--fg);
 }
-.connection-picker-heading p {
-  margin-top: 4px;
-  font: 400 var(--sans-size) / 1.5 var(--sans);
-  color: var(--fg-3);
+.desktop-shell .connection-picker-heading p {
+  margin-top: 6px;
+  font: 400 max(12px, calc(var(--sans-size) - 1px)) / 1.6 var(--sans);
+  color: var(--picker-muted);
 }
-.connection-picker-search {
+.desktop-shell .connection-picker-search {
   position: relative;
-  flex-shrink: 0;
+  flex: 0 1 280px;
+  min-width: 200px;
 }
-.connection-picker-search > svg {
+.desktop-shell .connection-picker-search > svg {
   position: absolute;
   z-index: 1;
   left: 10px;
   top: 50%;
   transform: translateY(-50%);
-  color: var(--fg-4);
+  color: var(--picker-muted);
   pointer-events: none;
 }
-.connection-picker-search input {
-  height: 32px;
-  padding-left: 32px;
+.desktop-shell .connection-picker-search input {
+  height: auto;
+  min-height: 34px;
+  padding: 6px 10px 6px 34px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--bg-active);
+  box-shadow: none;
   font: 400 var(--sans-size) / 1.5 var(--sans);
 }
-.connection-picker-list {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+.desktop-shell .connection-picker-list {
+  flex: 1;
   min-height: 0;
   overflow-x: hidden;
   overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
   padding: 3px;
   margin: -3px;
 }
-.connection-picker-server {
+.desktop-shell .connection-picker-group + .connection-picker-group { margin-top: 24px; }
+.desktop-shell .connection-picker-group-title { margin: 0 0 10px; }
+.desktop-shell .connection-picker-group-toggle {
+  display: flex;
+  justify-content: flex-start;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  min-height: 36px;
+  height: auto;
+  padding: 6px;
+  border-radius: var(--r-sm);
+  font: 500 var(--sans-size) / 1.5 var(--sans);
+  color: var(--fg);
+}
+.desktop-shell .connection-picker-group-toggle:hover { background: var(--shell-hover); }
+.desktop-shell .connection-picker-group-toggle > svg { color: var(--picker-muted); }
+.desktop-shell .connection-picker-group-toggle > svg:first-child { width: 14px; height: 14px; transition: transform 120ms; }
+.desktop-shell .connection-picker-group-toggle .is-collapsed { transform: rotate(-90deg); }
+.desktop-shell .connection-picker-group-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.desktop-shell .connection-picker-count {
+  flex-shrink: 0;
+  min-width: 22px;
+  padding: 1px 6px;
+  border-radius: var(--r-xs);
+  background: var(--bg-elevated);
+  font: 400 max(12px, calc(var(--sans-size) - 2px)) / 1.5 var(--sans);
+  font-variant-numeric: tabular-nums;
+  color: var(--picker-muted);
+  text-align: center;
+}
+.desktop-shell .connection-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr));
+  gap: 10px;
+}
+.desktop-shell .connection-picker-group.is-nested {
+  margin-top: 16px;
+  margin-left: 14px;
+  padding-left: 14px;
+  border-left: 1px solid var(--border-subtle);
+}
+.desktop-shell .connection-picker-server {
+  display: flex;
   justify-content: flex-start;
   gap: 10px;
   width: 100%;
   min-width: 0;
+  min-height: 74px;
   height: auto;
-  padding: 10px;
+  padding: 12px;
+  border: 1px solid var(--border-subtle);
   border-radius: var(--r-sm);
+  background: var(--surface-panel);
   text-align: left;
+  font: 400 var(--sans-size) / 1.5 var(--sans);
+  color: var(--fg);
+  transition: background 120ms, border-color 120ms;
 }
-.connection-picker-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
+.desktop-shell .connection-picker-server:hover,
+.desktop-shell .connection-picker-server:focus-visible { background: var(--shell-hover); border-color: var(--border); }
+.desktop-shell .connection-picker-icon {
+  display: grid;
+  place-items: center;
   flex-shrink: 0;
   width: 30px;
   height: 30px;
   border-radius: var(--r-sm);
   background: var(--bg-elevated);
-  color: var(--fg-3);
+  color: var(--picker-muted);
 }
-.connection-picker-info {
+.desktop-shell .connection-picker-info {
   display: flex;
   flex: 1;
   flex-direction: column;
-  gap: 4px;
+  gap: 5px;
   min-width: 0;
 }
-.connection-picker-name,
-.connection-picker-address {
+.desktop-shell :is(.connection-picker-name, .connection-picker-address) {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.connection-picker-name {
-  font: 500 var(--sans-size) / 1.4 var(--sans);
-  color: var(--fg-2);
+.desktop-shell .connection-picker-name { color: var(--fg); }
+.desktop-shell .connection-picker-address {
+  color: var(--picker-muted);
+  font: 400 max(12px, calc(var(--sans-size) - 1px)) / 1.5 var(--mono);
 }
-.connection-picker-address {
-  font: 400 11px / 1.4 var(--mono);
-  color: var(--fg-3);
-}
-.connection-picker-arrow {
-  color: var(--fg-4);
-}
-.connection-picker-empty {
-  padding: 16px 0;
+.desktop-shell .connection-picker-arrow { color: var(--picker-muted); }
+.desktop-shell .connection-picker-empty {
+  padding: 36px 12px;
   font: 400 var(--sans-size) / 1.6 var(--sans);
-  color: var(--fg-3);
+  color: var(--picker-muted);
+  text-align: center;
+  white-space: normal;
+}
+@container connection-picker (max-width: 760px) {
+  .desktop-shell .connection-picker-content { padding: 24px 20px 16px; }
+  .desktop-shell .connection-picker-toolbar { align-items: stretch; flex-direction: column; gap: 16px; margin-bottom: 20px; }
+  .desktop-shell .connection-picker-search { flex: none; min-width: 0; width: 100%; }
+}
+@container connection-picker (max-width: 460px) {
+  .desktop-shell .connection-picker-content { padding: 20px 12px 12px; }
+  .desktop-shell .connection-picker-group.is-nested { margin-left: 6px; padding-left: 10px; }
+  .desktop-shell .connection-picker-grid { grid-template-columns: minmax(0, 1fr); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .desktop-shell .connection-picker-server,
+  .desktop-shell .connection-picker-group-toggle > svg:first-child { transition: none; }
 }
 
 .term-empty-state {
