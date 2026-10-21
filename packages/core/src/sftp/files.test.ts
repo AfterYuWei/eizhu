@@ -38,6 +38,9 @@ test('文本保存保留权限、换行和内容哈希，已有文件另存不�
     path = displayPath(join(root, '配置.json'))
   try {
     await writeFile(join(root, '配置.json'), '旧内容\r\n', { mode: 0o640 })
+    const originalMode = (await stat(join(root, '配置.json'))).mode & 0o777
+    // Windows exposes the writable attribute through mode, rather than POSIX group permissions.
+    if (process.platform !== 'win32') assert.equal(originalMode, 0o640)
     const opened = await readText(e, path)
     assert.equal(opened.line_ending, 'crlf')
     await writeText(e, path, {
@@ -47,7 +50,7 @@ test('文本保存保留权限、换行和内容哈希，已有文件另存不�
       line_ending: 'crlf',
     })
     assert.equal(await readFile(join(root, '配置.json'), 'utf8'), '新内容\r\n')
-    assert.equal((await stat(join(root, '配置.json'))).mode & 0o777, 0o640)
+    assert.equal((await stat(join(root, '配置.json'))).mode & 0o777, originalMode)
     await assert.rejects(
       writeText(e, path, { content: '误覆盖', expected_mod_time: '', create_new: true }),
       code('FILE_EXISTS'),
