@@ -1,0 +1,10 @@
+{
+  "base": "0.5.0",
+  "version": "0.5.0",
+  "channel": "stable",
+  "revision": "1350ddd9e4a9b304c3fcd127329634cb14362ab3",
+  "platform": "win32",
+  "arch": "x64",
+  "feeds": {},
+  "sourceDigest": "13b96af28692434fe3011c9cc55dfd2571688ffa5f709b4b48f37fd6c5de82d7"
+}
