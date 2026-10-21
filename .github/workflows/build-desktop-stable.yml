@@ -1,9 +1,59 @@
-name: Electron stable candidate packages
-on: workflow_dispatch
+name: Electron stable release
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: electron-stable-release
+  cancel-in-progress: false
 jobs:
+  version:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: version
+        shell: bash
+        run: |
+          version=$(cat VERSION)
+          [[ "$version" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]
+          test -z "$(git tag --list "v$version")"
+          test -f "docs/releases/$version.md"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
   desktop:
+    needs: version
     uses: ./.github/workflows/build-desktop.yml
     with:
       channel: stable
+      validation: full
+  release:
+    needs: [version, desktop]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: eizhu-stable-*
+          path: release-input
+      - name: Verify four targets and prepare immutable assets
+        run: node scripts/prepare-desktop-release.mjs
+      - name: Create draft and upload assets before publishing
+        shell: bash
+        run: |
+          gh release create "v$RELEASE_VERSION" --target "$GITHUB_SHA" --title "eizhu $RELEASE_VERSION" --notes-file "docs/releases/$RELEASE_VERSION.md" --draft
+          gh release upload "v$RELEASE_VERSION" release-output/*
+          gh release edit "v$RELEASE_VERSION" --draft=false --latest

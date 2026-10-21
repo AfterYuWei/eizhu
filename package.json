@@ -22,7 +22,7 @@
     "check": "tsc -p tsconfig.node.json --noEmit && npm run check --workspace @eizhu/web",
     "lint": "eslint apps/desktop packages scripts/*.mjs && npm run lint --workspace @eizhu/web",
     "test": "npm run test:foundation && npm run test:unit --workspace @eizhu/web && npm run baseline:test",
-    "test:foundation": "node --experimental-strip-types --test packages/*/src/**/*.test.ts apps/desktop/src/main/*.test.ts scripts/desktop-build-settings.test.mjs",
+    "test:foundation": "node --experimental-strip-types --test packages/*/src/**/*.test.ts apps/desktop/src/main/*.test.ts scripts/desktop-build-settings.test.mjs scripts/prepare-desktop-release.test.mjs",
     "native:rebuild": "node scripts/rebuild-native.mjs",
     "postinstall": "npm run native:rebuild",
     "desktop:smoke:package": "node scripts/smoke-package.mjs",

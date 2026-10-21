@@ -1,15 +1,15 @@
-# Electron CI 与候选包
+# Electron CI 与发布
 
 仓库只维护 Windows x64、macOS x64/arm64、Linux x64。版本源是根目录 `VERSION`，依赖以根 `package-lock.json` 为准；Node 24 LTS。
 
 | 工作流 | 入口 | 实际操作 |
 |---|---|---|
 | `quality.yml` / `quality-core.yml` | PR、dev/main 推送 | 类型、lint、回归、架构、固定兼容基线及构建 |
-| `build-desktop.yml` | 当前阶段分支推送、手动、复用调用 | 四目标原生构建、打包、最终包烟测及 60 秒合成负载 |
-| `build-desktop-test.yml` | 手动 | test 候选安装包 |
-| `build-desktop-stable.yml` | 手动 | stable 候选安装包 |
+| `build-desktop.yml` | 手动、复用调用 | 四目标原生构建、打包、最终包烟测及 60 秒合成负载 |
+| `build-desktop-test.yml` | dev 推送、手动 | test 候选安装包，仅上传 Actions artifacts |
+| `build-desktop-stable.yml` | main 推送、main 手动 | 四目标 stable 验证完成后创建 GitHub Release |
 
-这些工作流只上传 Actions artifacts，`publish: never`；不创建 GitHub Release、不部署更新源。正式发布需要完成 [发布清单](../docs/RELEASE_CHECKLIST.md) 并获用户授权。
+打包步骤使用 `publish: never`。stable 工作流先拒绝已占用的 `v<VERSION>` 标签，要求对应中文发布说明；四目标全部通过后，独立发布任务核对版本、提交、源码指纹及 60 秒负载报告，创建草稿、上传安装包/实际报告/摘要清单，最后公开 Release。失败时不公开残缺版本，不覆盖同名资产。工作流不部署更新源；签名和人工验收边界继续见 [发布清单](../docs/RELEASE_CHECKLIST.md)。用户已于 2026-10-21 授权发布 0.5.0。
 `VERSION=x.y.z` 时 stable 为 `x.y.z`，test 为 `x.y.z-test.<Git提交计数>.<短SHA>`。同一提交、通道和架构必须重新构建后再打包；构建记录与打包配置不一致会拒绝。
 
 可选 Variables：`EIZHU_UPDATE_STABLE_URL`、`EIZHU_UPDATE_TEST_URL`，分别以 `/electron/stable/`、`/electron/test/` 结尾，必须是无凭据的 HTTPS URL。每个目标再追加 `win32-x64/`、`darwin-x64/`、`darwin-arm64/` 或 `linux-x64/`。缺省时只产出手动安装包，更新入口不会报“已是最新”。官方账号服务仍待开发，构建不依赖账号服务地址。

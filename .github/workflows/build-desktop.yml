@@ -1,17 +1,5 @@
 name: Electron four-target acceptance
 on:
-  push:
-    branches: ['codex/electron-stage-2']
-    paths:
-      - 'apps/**'
-      - 'packages/**'
-      - 'scripts/**'
-      - 'tests/**'
-      - 'package*.json'
-      - '*config*.json'
-      - '*config*.mjs'
-      - 'VERSION'
-      - '.github/workflows/**'
   workflow_dispatch:
     inputs:
       channel:
@@ -81,6 +69,9 @@ jobs:
         if: runner.os == 'Linux'
         shell: bash
         run: xvfb-run -a node scripts/smoke-package.mjs artifacts/desktop/${{ matrix.installer }} --duration=60000
+      - name: Archive build provenance
+        shell: bash
+        run: cp apps/desktop/out/build-info.json artifacts/smoke/build-info-${{ matrix.platform }}-${{ matrix.arch }}.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:

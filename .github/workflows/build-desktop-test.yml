@@ -1,5 +1,8 @@
 name: Electron test packages
-on: workflow_dispatch
+on:
+  push:
+    branches: [dev]
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:
