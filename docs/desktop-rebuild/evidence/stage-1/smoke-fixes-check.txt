@@ -1,0 +1,17 @@
+阶段 1 smoke 修复验证
+日期：2026-10-20
+
+本机定向验证：
+- `npm run test:unit --workspace @eizhu/web -- src/testing/languageWorkerReady.test.ts`：通过，3 项；假时钟覆盖暂时未注册后成功、其他错误立即失败、15 秒到期拒绝并清除等待计时器。
+- `npm run check`：通过（desktop/main 与 web TypeScript）。
+- ESLint：通过；分别使用仓库根配置检查 `apps/desktop/src/main/smoke.ts`，使用 web 配置检查 `editorSmoke.ts`、`languageWorkerReady.ts` 和新增测试。
+- `.github/workflows/build-desktop.yml`：Ruby Psych YAML 解析通过。
+- `npm run desktop:build`：通过。
+- `CSC_IDENTITY_AUTO_DISCOVERY=false npm run desktop:package -- --platform=darwin --arch=x64`：通过；生成 macOS x64 DMG，未签名。
+- `npm run desktop:smoke:package -- artifacts/desktop/eizhu-0.4.4-mac-x64.dmg`：通过，EIZHU_SMOKE_OK；产物报告 `editor: true`、`monaco.typescript/json/model: true`。几何实测 requested/actual 为 1280x800，work area 1920x985，frame 0x32。
+
+跨平台证据边界：
+- Windows CI 实测工作区为 1024x728；本机不是 Windows，本文件不将本机结果当作 Windows 执行证据。
+- Linux CI 的 `clang-15` / `clang++-15` 编译仍待远端 CI 执行确认。
+
+日志：对应执行记录位于 `artifacts/logs/stage-1-smoke-fix-*.log`。普通沙箱中的 macOS `hdiutil` 创建/挂载失败（“设备未配置”）；依授权以提升权限重跑后，打包和安装包烟测均通过。最初从仓库根目录对 desktop 与 web 文件统一运行 ESLint 时，因两份 tsconfig 根目录歧义失败；按各自配置根拆分后通过。

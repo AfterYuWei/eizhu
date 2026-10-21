@@ -1,0 +1,26 @@
+
+> desktop:package
+> node scripts/package-desktop.mjs
+
+  • electron-builder  version=26.15.3 os=25.6.0
+  • detected workspace root for project using lock file  pm=npm config=undefined resolved=/Users/yuwei/Desktop/Projects/yuweinfo/XControl projectDir=/Users/yuwei/Desktop/Projects/yuweinfo/XControl
+  • executing @electron/rebuild  electronVersion=44.9.0 arch=x64 buildFromSource=false workspaceRoot=/Users/yuwei/Desktop/Projects/yuweinfo/XControl projectDir=./ appDir=apps/desktop
+  • installing native dependencies  arch=x64
+  • preparing       moduleName=argon2 arch=x64
+  • finished        moduleName=argon2 arch=x64
+  • preparing       moduleName=better-sqlite3 arch=x64
+  • finished        moduleName=better-sqlite3 arch=x64
+  • preparing       moduleName=cpu-features arch=x64
+  • finished        moduleName=cpu-features arch=x64
+  • completed installing native dependencies
+  • packaging       platform=darwin arch=x64 electron=44.9.0 appOutDir=artifacts/desktop/mac
+  • using custom unpacked Electron distribution  electronDist=node_modules/electron/dist
+  • copying unpacked Electron  source=/Users/yuwei/Desktop/Projects/yuweinfo/XControl/node_modules/electron/dist/Electron.app destination=/Users/yuwei/Desktop/Projects/yuweinfo/XControl/artifacts/desktop/mac/Electron.app
+  • searching for node modules  pm=npm searchDir=/Users/yuwei/Desktop/Projects/yuweinfo/XControl/apps/desktop
+  • skipped macOS application code signing  reason=cannot find valid "Developer ID Application" identity or custom non-Apple code signing certificate, it could cause some undefined behaviour, e.g. macOS localized description not visible, see https://electron.build/code-signing allIdentities=     0 identities found
+                                                Valid identities only
+     0 valid identities found
+  • building        target=macOS zip arch=x64 file=artifacts/desktop/eizhu-0.4.4-mac-x64.zip
+  • building        target=DMG arch=x64 file=artifacts/desktop/eizhu-0.4.4-mac-x64.dmg
+  • building block map  blockMapFile=artifacts/desktop/eizhu-0.4.4-mac-x64.dmg.blockmap
+  • building block map  blockMapFile=artifacts/desktop/eizhu-0.4.4-mac-x64.zip.blockmap

@@ -1,0 +1,106 @@
+export type SessionMessageType =
+  | 'input'
+  | 'output'
+  | 'resize'
+  | 'exit'
+  | 'error'
+  | 'ping'
+  | 'pong'
+  | 'auth'
+  | 'auth_request'
+  | 'auth_request_closed'
+  | 'metadata'
+  | 'cwd'
+  | 'complete_request'
+  | 'complete_response'
+  | 'disconnect'
+  | 'connection_state'
+  | 'detected_icon'
+
+export interface SessionMessage {
+  type: SessionMessageType
+  data?: string
+  payload?: unknown
+}
+
+export interface ResizePayload {
+  cols: number
+  rows: number
+}
+
+export interface ExitPayload {
+  code: number
+}
+
+export interface ErrorPayload {
+  code: string
+  message: string
+}
+
+export interface MetaPayload {
+  session_id: string
+  host: string
+  username: string
+  protocol: string
+}
+
+export interface CwdPayload {
+  path: string
+}
+
+export interface DetectedIconPayload {
+  icon: string
+}
+
+// 异常断连:SSH 连接死亡(远端关机/网络中断/保活超时)
+// reason: remote_shutdown | network_error | keepalive_timeout | auth_failed | unknown
+export interface DisconnectPayload {
+  reason: string
+  message: string
+}
+
+export interface ConnectionLogEntry {
+  at: number
+  level: 'info' | 'warn' | 'error' | string
+  stage: string
+  message: string
+}
+
+export interface ConnectionStatePayload {
+  session_id: string
+  status: string
+  stage: string
+  message: string
+  error?: string
+  host_key_request_id?: string
+  waiting_for_host_key?: boolean
+  host_key_fingerprint?: string
+  known_host_key_fingerprint?: string
+  retry_attempt?: number
+  next_retry_at?: number
+  logs?: ConnectionLogEntry[]
+}
+
+export interface AuthenticationRequestPayload {
+  request_id: string
+  profile_id: string
+  name: string
+  instructions: string
+  prompts: Array<{ prompt: string; echo: boolean }>
+}
+
+// 动态补全:客户端请求远端执行只读脚本
+export interface CompleteRequestPayload {
+  request_id: string
+  script: string
+  cwd?: string
+}
+
+// 动态补全:服务端返回脚本执行结果
+export interface CompleteResponsePayload {
+  request_id: string
+  candidates?: { name: string; is_dir: boolean }[]
+  output: string
+  error: string
+  exit_code: number
+}

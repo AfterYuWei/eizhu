@@ -1,0 +1,146 @@
+{
+  "runId": 39389027861,
+  "runNumber": 54,
+  "url": "https://github.com/AfterYuWei/eizhu/actions/runs/39389027861",
+  "workflow": "Electron four-target foundation",
+  "event": "push",
+  "commit": "ba34ba3ba1e589a1fec6941fbdd96ad7d2c05ebf",
+  "branch": "codex/electron-stage-1",
+  "status": "completed",
+  "conclusion": "success",
+  "startedAtDisplay": "Oct 20, 2026, 15:48 GMT+8",
+  "duration": "7m 33s",
+  "recordedAt": "2026-10-20T07:58:34Z",
+  "runAttempt": 1,
+  "rerunTriggered": false,
+  "releasePublished": false,
+  "commonChecks": {
+    "steps": {
+      "npm ci": "success",
+      "npm run check": "success",
+      "npm run test:foundation": "skipped",
+      "npm run baseline:test": "skipped",
+      "npm run desktop:build": "success"
+    },
+    "skippedReason": "The pushed commit message contains [package-only], which skips the two test steps in the workflow.",
+    "reusedPriorEvidence": {
+      "runId": 39388131148,
+      "runNumber": 53,
+      "commit": "55df5f489877063af8df76d7da5634c418663602",
+      "evidence": "docs/desktop-rebuild/evidence/stage-1/ci-third-55df5f4.json",
+      "testCounts": {
+        "foundation": { "tests": 21, "passed": 21, "failed": 0 },
+        "baseline": { "tests": 10, "passed": 10, "failed": 0 }
+      },
+      "note": "Counts are from run #53; these test suites were skipped in run #54."
+    }
+  },
+  "jobs": [
+    {
+      "target": "darwin-x64",
+      "runner": "macos-15-intel",
+      "jobId": 118515789654,
+      "url": "https://github.com/AfterYuWei/eizhu/actions/runs/39389027861/job/118515789654",
+      "conclusion": "success",
+      "packageStep": "success",
+      "installerPattern": "*.dmg",
+      "installerFilename": "eizhu-0.4.4-mac-x64.dmg",
+      "installerSizeBytes": null,
+      "installerSmoke": "success",
+      "appImageSmoke": "skipped",
+      "smokeEvidence": "docs/desktop-rebuild/evidence/stage-1/ci-smoke-darwin-x64.json",
+      "artifact": {
+        "id": 12248753004,
+        "name": "eizhu-test-darwin-x64",
+        "sizeBytes": 315111134,
+        "sha256": "1349ff465954698fb1cc26d02f1a123e111caa641ee2cbc0935ddec3885440b8",
+        "url": "https://github.com/AfterYuWei/eizhu/actions/runs/39389027861/artifacts/12248753004",
+        "sizeNote": "Uploaded artifact ZIP size and digest; the DMG itself was not downloaded."
+      }
+    },
+    {
+      "target": "darwin-arm64",
+      "runner": "macos-15",
+      "jobId": 118515789529,
+      "url": "https://github.com/AfterYuWei/eizhu/actions/runs/39389027861/job/118515789529",
+      "conclusion": "success",
+      "packageStep": "success",
+      "installerPattern": "*.dmg",
+      "installerFilename": "eizhu-0.4.4-mac-arm64.dmg",
+      "installerSizeBytes": null,
+      "installerSmoke": "success",
+      "appImageSmoke": "skipped",
+      "smokeEvidence": "docs/desktop-rebuild/evidence/stage-1/ci-smoke-darwin-arm64.json",
+      "artifact": {
+        "id": 12249150911,
+        "name": "eizhu-test-darwin-arm64",
+        "sizeBytes": 307500984,
+        "sha256": "83d322d3f49f7d094541e5fe76996523d421821ce45b4b9df6710e25a7697006",
+        "url": "https://github.com/AfterYuWei/eizhu/actions/runs/39389027861/artifacts/12249150911",
+        "sizeNote": "Uploaded artifact ZIP size and digest; the DMG itself was not downloaded."
+      }
+    },
+    {
+      "target": "win32-x64",
+      "runner": "windows-2022",
+      "jobId": 118515789661,
+      "url": "https://github.com/AfterYuWei/eizhu/actions/runs/39389027861/job/118515789661",
+      "conclusion": "success",
+      "packageStep": "success",
+      "installerPattern": "*.exe",
+      "installerFilename": "eizhu-0.4.4-win-x64.exe",
+      "installerSizeBytes": null,
+      "installerSmoke": "success",
+      "appImageSmoke": "skipped",
+      "smokeEvidence": "docs/desktop-rebuild/evidence/stage-1/ci-smoke-win32-x64.json",
+      "artifact": {
+        "id": 12248504150,
+        "name": "eizhu-test-win32-x64",
+        "sizeBytes": 133065683,
+        "sha256": "4143247f9badbeec3a2a60211cd6354b6f0ba3a78fdd2a96e29878154d46840c",
+        "url": "https://github.com/AfterYuWei/eizhu/actions/runs/39389027861/artifacts/12248504150",
+        "sizeNote": "Uploaded artifact ZIP size and digest; the EXE itself was not downloaded."
+      }
+    },
+    {
+      "target": "linux-x64",
+      "runner": "ubuntu-22.04",
+      "jobId": 118515789942,
+      "url": "https://github.com/AfterYuWei/eizhu/actions/runs/39389027861/job/118515789942",
+      "conclusion": "success",
+      "packageStep": "success",
+      "installerPattern": "*.AppImage",
+      "installerFilename": null,
+      "installerSizeBytes": null,
+      "installerSmoke": "skipped",
+      "appImageSmoke": "success",
+      "smokeEvidence": "docs/desktop-rebuild/evidence/stage-1/ci-smoke-linux-x64.json",
+      "artifact": {
+        "id": 12248064787,
+        "name": "eizhu-test-linux-x64",
+        "sizeBytes": 376772451,
+        "sha256": "fe500c471dc38fe16decb797869c3f2403b00bce0c9a86e59a99ac4086f13efa",
+        "url": "https://github.com/AfterYuWei/eizhu/actions/runs/39389027861/artifacts/12248064787",
+        "sizeNote": "Uploaded artifact ZIP size and digest; the AppImage itself was not downloaded."
+      },
+      "alsoBuiltButNotInstallTested": ["*.deb", "*.rpm"]
+    }
+  ],
+  "artifactDownload": {
+    "uploadedByCi": true,
+    "downloadedLocally": false,
+    "note": "Recorded artifact IDs, ZIP sizes, digests, and UI links from GitHub Actions. No installer archives were downloaded."
+  },
+  "warnings": [
+    "GitHub Actions warned that checkout@v4, setup-node@v4, and upload-artifact@v4 target Node.js 20 while running on Node.js 24.",
+    "GitHub Actions noted possible queue delays for macOS arm64 runners."
+  ],
+  "notValidatedByThisRun": [
+    "manual native UI acceptance",
+    "code signing and notarization",
+    "real upgrade flow",
+    "installation of the generated .deb and .rpm packages",
+    "other operating system versions",
+    "8-hour performance run"
+  ]
+}

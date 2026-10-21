@@ -1,0 +1,87 @@
+基线: 8334c5fe9e8a45ff314b6fdab2fc684d1a7b7088
+分支: codex/electron-stage-2
+未提交、未推送、未发布；.codex/ 排除并保留。
+VERSION、锁文件、DESIGN、固定样本、品牌资源无差异；39 项编号完整。
+
+ M .gitattributes
+ M .github/CI.md
+ M .github/workflows/build-desktop-stable.yml
+ M .github/workflows/build-desktop.yml
+ M AGENTS.md
+ M README.md
+ M apps/desktop/electron-builder.config.mjs
+ M apps/desktop/electron.vite.config.ts
+ M apps/desktop/src/main/index.ts
+ M apps/desktop/src/main/smoke.ts
+ M apps/desktop/src/main/stage3-smoke.ts
+ M apps/desktop/src/main/windows.ts
+ D apps/web/src/assets/react.svg
+ D apps/web/src/assets/vite.svg
+ M apps/web/src/lib/updater.ts
+ M docs/ARCHITECTURE.md
+ M docs/AUTOCOMPLETE_DESIGN.md
+ M docs/AUTOCOMPLETE_OPTIMIZATION.md
+ M docs/BACKUP.md
+ M docs/DATA_SYNC.md
+ M docs/DESKTOP_DELIVERY.md
+ M docs/DESKTOP_ROADMAP.md
+ M docs/DEVELOPMENT.md
+ M docs/SECURITY.md
+ M docs/SSH.md
+ M docs/desktop-rebuild/ARCHITECTURE.md
+ M docs/desktop-rebuild/COMPATIBILITY.md
+ M docs/desktop-rebuild/OPERATIONS.md
+ M docs/desktop-rebuild/README.md
+ M docs/desktop-rebuild/STAGE_5_REPORT.md
+ M eslint.config.mjs
+ M package.json
+ M packages/contracts/src/events.ts
+ M packages/contracts/src/foundation.ts
+ M packages/contracts/src/index.ts
+ M scripts/build-desktop.mjs
+ M scripts/package-desktop.mjs
+ M scripts/smoke-desktop.mjs
+ M scripts/smoke-package.mjs
+ M scripts/verify-desktop-architecture.mjs
+?? apps/desktop/src/main/load-smoke.ts
+?? apps/desktop/src/main/stage6-smoke.ts
+?? apps/desktop/src/main/updates.test.ts
+?? apps/desktop/src/main/updates.ts
+?? apps/web/src/lib/updater.test.ts
+?? docs/RELEASE_CHECKLIST.md
+?? docs/desktop-rebuild/ACCEPTANCE.md
+?? docs/desktop-rebuild/CLEANUP.md
+?? docs/desktop-rebuild/PERFORMANCE.md
+?? docs/desktop-rebuild/STAGE_6_REPORT.md
+?? docs/desktop-rebuild/evidence/stage-6/README.md
+?? docs/desktop-rebuild/evidence/stage-6/architecture.log
+?? docs/desktop-rebuild/evidence/stage-6/baseline.log
+?? docs/desktop-rebuild/evidence/stage-6/build-guard.log
+?? docs/desktop-rebuild/evidence/stage-6/build-smoke.log
+?? docs/desktop-rebuild/evidence/stage-6/build.log
+?? docs/desktop-rebuild/evidence/stage-6/check.log
+?? docs/desktop-rebuild/evidence/stage-6/delivery-verify.log
+?? docs/desktop-rebuild/evidence/stage-6/delivery.json
+?? docs/desktop-rebuild/evidence/stage-6/diff-check.log
+?? docs/desktop-rebuild/evidence/stage-6/documentation-links.log
+?? docs/desktop-rebuild/evidence/stage-6/evidence-manifest.json
+?? docs/desktop-rebuild/evidence/stage-6/lint.log
+?? docs/desktop-rebuild/evidence/stage-6/load-first-failure.log
+?? docs/desktop-rebuild/evidence/stage-6/mac-x64-build-smoke.json
+?? docs/desktop-rebuild/evidence/stage-6/mac-x64-build-update.png
+?? docs/desktop-rebuild/evidence/stage-6/mac-x64-package-backup.png
+?? docs/desktop-rebuild/evidence/stage-6/mac-x64-package-editor.png
+?? docs/desktop-rebuild/evidence/stage-6/mac-x64-package-home-dark.png
+?? docs/desktop-rebuild/evidence/stage-6/mac-x64-package-home-light.png
+?? docs/desktop-rebuild/evidence/stage-6/mac-x64-package-sftp.png
+?? docs/desktop-rebuild/evidence/stage-6/mac-x64-package-smoke.json
+?? docs/desktop-rebuild/evidence/stage-6/mac-x64-package-update.png
+?? docs/desktop-rebuild/evidence/stage-6/package-smoke.log
+?? docs/desktop-rebuild/evidence/stage-6/package.log
+?? docs/desktop-rebuild/evidence/stage-6/scope.log
+?? docs/desktop-rebuild/evidence/stage-6/test.log
+?? docs/desktop-rebuild/evidence/stage-6/updater-first-failure.log
+?? packages/contracts/src/update.ts
+?? scripts/desktop-build-settings.mjs
+?? scripts/desktop-build-settings.test.mjs
+?? scripts/verify-desktop-delivery.mjs

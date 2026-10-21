@@ -1,0 +1,41 @@
+import { buildSettings } from '../../scripts/desktop-build-settings.mjs'
+const { version, channel, feeds } = buildSettings()
+export default {
+  appId: 'com.yuweinfo.eizhu',
+  productName: 'eizhu',
+  executableName: 'eizhu',
+  directories: { app: 'apps/desktop', output: 'artifacts/desktop', buildResources: 'apps/desktop/resources' },
+  extraMetadata: {
+    name: 'eizhu',
+    version,
+    eizhuChannel: channel,
+    main: 'out/main/index.cjs',
+    description: 'eizhu 桌面终端与 SFTP 客户端',
+    author: 'yuweinfo',
+  },
+  files: ['out/**', 'resources/**', 'package.json'],
+  electronDist: 'node_modules/electron/dist',
+  asar: true,
+  asarUnpack: ['**/*.node', '**/argon2/**', '**/better-sqlite3/**'],
+  npmRebuild: true,
+  artifactName: 'eizhu-${version}-${os}-${arch}.${ext}',
+  mac: {
+    target: ['dmg', 'zip'],
+    icon: 'icon.icns',
+    category: 'public.app-category.developer-tools',
+    minimumSystemVersion: '13.0',
+    hardenedRuntime: true,
+    entitlements: 'apps/desktop/resources/entitlements.mac.plist',
+    entitlementsInherit: 'apps/desktop/resources/entitlements.mac.plist',
+  },
+  win: { target: ['nsis'], icon: 'icon.ico' },
+  nsis: { oneClick: false, allowToChangeInstallationDirectory: true, perMachine: false },
+  linux: {
+    target: ['AppImage', 'deb', 'rpm'],
+    icon: '256x256.png',
+    category: 'Development',
+    maintainer: 'yuweinfo',
+  },
+  protocols: [{ name: 'eizhu', schemes: ['eizhu'] }],
+  publish: feeds[channel] ? [{ provider: 'generic', url: feeds[channel], channel: 'latest' }] : null,
+}

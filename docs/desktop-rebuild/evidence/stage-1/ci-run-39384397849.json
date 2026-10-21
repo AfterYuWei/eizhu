@@ -1,0 +1,78 @@
+{
+  "runId": 39384397849,
+  "runNumber": 51,
+  "url": "https://github.com/AfterYuWei/eizhu/actions/runs/39384397849",
+  "commit": "2f3f1b58b8877b7a76ea3e2dbd513e158f51cac8",
+  "branch": "codex/electron-stage-1",
+  "status": "completed",
+  "conclusion": "failure",
+  "recordedAt": "2026-10-20T07:14:44.901Z",
+  "detailLogs": "read-through-authenticated-GitHub-raw-logs-page",
+  "artifactsProduced": false,
+  "source": "GitHub Actions public run/jobs/check-runs API; GPT-6 Luna independent monitor",
+  "jobs": [
+    {
+      "target": "linux-x64",
+      "id": 118500649873,
+      "conclusion": "failure",
+      "failedStep": "npm ci",
+      "notRun": [
+        "check",
+        "foundation",
+        "baseline",
+        "build",
+        "package",
+        "smoke"
+      ]
+    },
+    {
+      "target": "win32-x64",
+      "id": 118500649882,
+      "conclusion": "failure",
+      "passed": [
+        "npm ci",
+        "check",
+        "foundation"
+      ],
+      "failedStep": "baseline:test",
+      "notRun": [
+        "build",
+        "package",
+        "smoke"
+      ]
+    },
+    {
+      "target": "darwin-arm64",
+      "id": 118500649524,
+      "conclusion": "failure",
+      "passed": [
+        "npm ci",
+        "check",
+        "foundation",
+        "baseline",
+        "build"
+      ],
+      "failedStep": "desktop:package -- --platform=darwin --arch=arm64",
+      "notRun": [
+        "smoke"
+      ]
+    },
+    {
+      "target": "darwin-x64",
+      "id": 118500649911,
+      "conclusion": "failure",
+      "passed": [
+        "npm ci",
+        "check",
+        "foundation",
+        "baseline",
+        "build"
+      ],
+      "failedStep": "desktop:package -- --platform=darwin --arch=x64",
+      "notRun": [
+        "smoke"
+      ]
+    }
+  ],
+  "causes": "ci-first-run-causes.txt"
+}

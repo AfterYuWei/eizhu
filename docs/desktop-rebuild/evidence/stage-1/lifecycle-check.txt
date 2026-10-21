@@ -1,0 +1,13 @@
+Lifecycle shutdown validation
+Date: 2026-10-20
+
+Command: node --experimental-strip-types --test apps/desktop/src/main/process-shutdown.test.ts
+Result: 6 tests passed, 0 failed.
+
+Command: npx tsc -p tsconfig.node.json --noEmit
+Result: passed (exit 0).
+
+Command: npx eslint apps/desktop/src/main/index.ts apps/desktop/src/main/process-shutdown.ts apps/desktop/src/main/runtime-host.ts apps/desktop/src/main/windows.ts apps/desktop/src/main/process-shutdown.test.ts
+Initial result: one prefer-const finding at process-shutdown.ts:19:9; no findings in the other four files.
+After the implementation fix, command: npx eslint apps/desktop/src/main/process-shutdown.ts
+Result: passed (exit 0). Together these checks leave all five affected files lint-clean.

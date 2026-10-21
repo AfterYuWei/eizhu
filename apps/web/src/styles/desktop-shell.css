@@ -1,0 +1,263 @@
+/* Desktop main window only. Editor windows keep their own chrome. */
+.desktop-shell {
+  --shell-outer-gap: 8px;
+  --shell-top-height: 64px;
+  --shell-header-height: calc(var(--shell-top-height) - 2 * var(--shell-outer-gap));
+  --shell-header-right-pad: 12px;
+  --shell-mac-controls-space: 96px;
+  --shell-icon-size: 32px;
+  --shell-icon-gap: 4px;
+  --shell-window-button-width: 46px;
+  --shell-window-controls-width: calc(3 * var(--shell-window-button-width));
+  --surface-app: #f4f4f4;
+  --surface-sidebar: var(--surface-app);
+  --surface-workspace: var(--surface-panel);
+  --shell-workspace-border: rgba(0, 0, 0, 0.08);
+  --shell-hover: #ededed;
+  --shell-selected: #e5e5e5;
+  display: flex;
+  flex-direction: row;
+  height: 100dvh;
+  padding: var(--shell-outer-gap) var(--shell-outer-gap) var(--shell-outer-gap) 0;
+  gap: 0;
+  border: 0;
+  font: 400 var(--sans-size) / 1.5 var(--sans);
+  color: var(--fg-2);
+  position: relative;
+}
+.dark .desktop-shell {
+  --surface-app: #171717;
+  --surface-panel: #202020;
+  --surface-workspace: var(--surface-panel);
+  --shell-workspace-border: rgba(255, 255, 255, 0.10);
+  --shell-hover: #252525;
+  --shell-selected: #303030;
+}
+.desktop-shell [hidden] { display: none !important; }
+.shell-session-view { display: contents; }
+.shell-sidebar-space { position: relative; display: flex; flex-shrink: 0; height: calc(100% + 2 * var(--shell-outer-gap)); margin-block: calc(-1 * var(--shell-outer-gap)); transition: none; }
+.shell-sidebar-space.is-collapsed, .shell-sidebar-space.is-button-motion { transition: width 220ms cubic-bezier(0.4, 0, 0.2, 1); }
+.desktop-shell .shell-sidebar {
+  display: flex;
+  flex-direction: column;
+  width: var(--sidebar-w);
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: var(--surface-sidebar);
+  box-shadow: none;
+  overflow: hidden;
+  z-index: 2;
+  transition: none;
+}
+/* The slot pushes the workspace independently of the intact sliding panel.
+   Button toggles ease in both directions; pointer resizing remains immediate. */
+.desktop-shell .shell-sidebar.collapsed { opacity: 1; overflow: hidden; transform: translateX(-100%); transition: transform 220ms cubic-bezier(0.4, 0, 0.2, 1); }
+.shell-sidebar-space.is-button-motion > .shell-sidebar:not(.is-preview) { transition: transform 220ms cubic-bezier(0.4, 0, 0.2, 1), width 220ms cubic-bezier(0.4, 0, 0.2, 1), opacity 180ms ease; }
+.desktop-shell .shell-sidebar.is-preview { position: absolute; inset: 0 auto 0 0; height: 100%; margin: 0; z-index: 30; opacity: 0; transform: translateX(-24px); pointer-events: none; border-right: 1px solid var(--edge-soft); border-radius: 0 var(--r-lg) var(--r-lg) 0; box-shadow: 8px 0 24px rgba(0, 0, 0, 0.06); transition: transform 180ms cubic-bezier(0.2, 0, 0.2, 1), opacity 180ms ease; }
+.desktop-shell .shell-sidebar.is-preview-open { transform: translateX(0); opacity: 1; pointer-events: auto; }
+.desktop-shell .shell-sidebar.collapsed.is-preview-resting { transition: none; }
+.shell-top-controls-slot { flex: 0 0 calc(2 * var(--shell-icon-size) + var(--shell-icon-gap)); height: var(--shell-icon-size); }
+/* Keep these controls outside both the animated sidebar and the workspace's
+   clipping/stacking context, at the same coordinates throughout hover preview. */
+.shell-fixed-top-controls { position: absolute; left: 24px; top: calc((var(--shell-top-height) - var(--shell-icon-size)) / 2); z-index: 35; }
+.desktop-shell.is-mac .shell-fixed-top-controls { left: var(--shell-mac-controls-space); }
+.shell-sidebar-top { display: flex; align-items: center; height: var(--shell-top-height); padding: 0 16px; flex-shrink: 0; }
+.desktop-shell.is-mac .shell-sidebar-top { padding-left: var(--shell-mac-controls-space); }
+.shell-top-controls, .shell-workspace-actions { display: flex; align-items: center; gap: var(--shell-icon-gap); flex-shrink: 0; }
+.shell-icon-button { width: var(--shell-icon-size, 32px); height: var(--shell-icon-size, 32px); padding: 0; color: var(--fg-3); border-radius: var(--r-sm); transition: background 120ms, color 120ms; }
+.shell-icon-button:hover { background: var(--shell-hover, var(--bg-hover)); color: var(--fg); }
+.shell-icon-button[aria-pressed="true"] { background: var(--shell-selected, var(--bg-active)); color: var(--fg); }
+/* Entries shrink with a narrow sidebar and retain their default width when widened. */
+.shell-primary-nav, .shell-sidebar-footer { width: min(100%, var(--shell-sidebar-default-width)); align-self: flex-start; }
+.shell-primary-nav { display: flex; flex-direction: column; gap: 2px; padding: 0 var(--shell-sidebar-inset) 24px; }
+.shell-primary-nav > button { width: 100%; min-height: var(--desktop-menu-row-height, 36px); height: auto; justify-content: flex-start; gap: 8px; padding: 7px 9px; font: 400 var(--sans-size) / 1.5 var(--sans); color: var(--fg-2); }
+.shell-primary-nav > button > svg { width: 16px; height: 16px; }
+.shell-primary-nav > button:hover { background: var(--shell-hover); }
+.shell-primary-nav > button.is-active { background: var(--shell-selected); }
+.shell-primary-nav > button > span { overflow: hidden; text-overflow: ellipsis; }
+.shell-primary-nav kbd { margin-left: auto; font: 400 11px var(--sans); color: var(--fg-4); }
+.shell-lists { width: 100%; min-height: 0; flex: 1; display: flex; flex-direction: column; padding: 0 var(--shell-sidebar-inset); }
+.shell-servers, .shell-open-section { display: flex; min-height: 34px; overflow: hidden; }
+.shell-server-list, .shell-open-items { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; }
+.shell-section-heading { display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; gap: 4px; min-height: 34px; }
+.shell-section-toggle { min-width: 0; justify-content: flex-start; height: auto; min-height: 32px; gap: 5px; padding: 4px; font: 400 var(--sans-size) / 1.5 var(--sans); color: var(--fg-3); }
+.shell-section-toggle:hover { background: transparent; color: var(--fg); }
+.shell-section-toggle > svg, .grp-label-left > svg:first-child { transition: transform 120ms; }
+.shell-section-toggle .is-collapsed, .grp-label-left .is-collapsed { transform: rotate(-90deg); }
+.shell-count { color: var(--fg-4); font-size: 11px; padding-left: 3px; }
+.desktop-shell .sidebar-body { min-height: 0; overflow: auto; padding: 2px 0 4px; }
+.desktop-shell .grp-label { min-height: 32px; padding: 5px 8px; font-size: inherit; font-weight: 400; line-height: 1.5; letter-spacing: 0; cursor: pointer; border-radius: var(--r-sm); }
+.desktop-shell .grp-label:hover { background: var(--shell-hover); }
+.desktop-shell .grp-label-left { gap: 6px; }
+.shell-child-groups { padding-left: 14px; }
+.desktop-shell .grp-label-text { color: var(--fg-3); }
+.desktop-shell .grp-cnt { background: transparent; font-size: 11px; padding: 0 3px; min-width: 0; }
+.desktop-shell .srv { display: flex; gap: 8px; min-height: 32px; padding: 5px 8px 5px 30px; margin: 0; border: 0; border-radius: var(--r-sm); font-size: inherit; opacity: 1; }
+.desktop-shell .srv:hover { background: var(--shell-hover); }
+.desktop-shell .srv.active { background: var(--shell-selected); }
+.desktop-shell .srv-icon { color: var(--fg-3); opacity: 1; width: 16px; height: 18px; }
+.desktop-shell .srv-info { flex: 1; min-width: 0; display: flex; align-items: center; flex-direction: row; gap: 6px; }
+.desktop-shell .srv-nm { flex: 1; min-width: 0; font: 400 var(--sans-size) / 1.5 var(--sans); color: var(--fg-3); }
+.desktop-shell .srv.active .srv-nm { color: var(--fg-2); }
+.desktop-shell .srv-edit-btn { width: 22px; height: 22px; padding: 0; opacity: 0; }
+.desktop-shell .srv:hover .srv-edit-btn, .desktop-shell .srv:focus-within .srv-edit-btn { opacity: 1; }
+.desktop-shell .sidebar-empty { font-size: var(--sans-size); padding: 20px 8px; color: var(--fg-3); }
+.shell-open-list { min-height: 0; overflow: auto; flex: 1; padding: 2px 0 8px; }
+.desktop-shell :is(.shell-sidebar .sidebar-body, .shell-sidebar .shell-open-list, .settings-page .settings-nav) { scrollbar-width: none; }
+.desktop-shell :is(.shell-sidebar .sidebar-body, .shell-sidebar .shell-open-list, .settings-page .settings-nav)::-webkit-scrollbar { display: none; width: 0; height: 0; }
+.shell-open-item { display: flex; align-items: center; min-height: 32px; border-radius: var(--r-sm); }
+.shell-open-item:hover { background: var(--shell-hover); }
+.shell-open-item.is-active { background: var(--shell-selected); }
+.shell-open-select { flex: 1; min-width: 0; height: auto; min-height: 32px; justify-content: flex-start; padding: 5px 8px; gap: 8px; font: inherit; color: var(--fg-3); }
+.shell-open-select:hover { background: transparent; }
+.shell-open-item.is-active .shell-open-select { color: var(--fg-2); }
+.shell-open-name { min-width: 0; flex: 1; text-align: left; overflow: hidden; text-overflow: ellipsis; }
+.shell-open-close { width: 24px; height: 24px; margin-right: 3px; opacity: 0; }
+.shell-open-item:hover .shell-open-close, .shell-open-item:focus-within .shell-open-close { opacity: 1; }
+.shell-list-empty { padding: 16px 10px; color: var(--fg-3); font-size: var(--sans-size); text-align: center; }
+.shell-connection-dot { display: inline-block; flex-shrink: 0; width: 6px; height: 6px; border-radius: 50%; background: var(--fg-5); }
+.shell-connection-dot.is-connected { background: var(--green); }
+.shell-connection-dot.is-connecting, .shell-connection-dot.is-reconnecting { background: var(--yellow); }
+.shell-connection-dot.is-error { background: var(--red); }
+.shell-sidebar-footer { flex-shrink: 0; padding: 12px var(--shell-sidebar-inset); }
+.shell-account { display: flex; justify-content: flex-start; width: 100%; height: 40px; gap: 8px; padding: 4px 8px; font-size: inherit; font-weight: 400; }
+.shell-account:hover { background: var(--shell-hover); }
+.shell-avatar { display: grid; place-items: center; width: 26px; height: 26px; border-radius: var(--r-sm); background: var(--bg-active); color: var(--fg-3); flex-shrink: 0; font-weight: 500; }
+.shell-account-name { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.shell-mode { flex-shrink: 0; border-radius: var(--r-xs); padding: 1px 5px; color: var(--fg-3); background: var(--shell-selected); font-size: 10px; line-height: 1.5; }
+.shell-resizer { position: relative; flex-shrink: 0; touch-action: none; outline: none; z-index: 5; }
+.shell-resizer.is-vertical { width: 8px; cursor: col-resize; }
+.shell-resizer.is-horizontal { height: 8px; cursor: row-resize; }
+.shell-sidebar-resizer.is-collapsed { position: absolute; left: 0; top: var(--shell-outer-gap); bottom: var(--shell-outer-gap); pointer-events: none; }
+.shell-sidebar-resizer.is-collapsed::after { display: none; }
+.shell-resizer::after { content: ''; position: absolute; border-radius: var(--r-pill); background: transparent; transition: background 120ms; }
+.shell-resizer.is-vertical::after { width: 2px; height: 32px; left: 3px; top: calc(50% - 16px); }
+.shell-resizer.is-horizontal::after { height: 2px; width: 32px; top: 3px; left: calc(50% - 16px); }
+.shell-resizer:hover::after, .shell-resizer:focus-visible::after, .shell-resizer.is-dragging::after, .shell-resizer.is-collapse-pending::after { background: var(--fg-4); }
+.desktop-shell:has(.shell-resizer.is-dragging) { user-select: none; }
+.desktop-shell .shell-workspace { position: relative; display: flex; flex-direction: column; flex: 1; min-width: 0; min-height: 0; border: 0; border-radius: var(--r-xl); overflow: hidden; isolation: isolate; background: var(--surface-workspace); }
+/* Paint the frame above the header, terminal and inspector so opaque content
+   cannot cover the hairline. Keep it out of layout and pointer hit testing. */
+.desktop-shell .shell-workspace::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  border: 1px solid var(--shell-workspace-border);
+  border-radius: inherit;
+  pointer-events: none;
+}
+.desktop-shell.sidebar-is-hidden .shell-workspace { margin-left: var(--shell-outer-gap); }
+.shell-workspace-header { display: flex; align-items: center; flex-shrink: 0; gap: 12px; height: var(--shell-header-height); min-height: var(--shell-header-height); padding: 0 var(--shell-header-right-pad) 0 16px; background: var(--surface-workspace); user-select: none; }
+.desktop-shell.is-mac.sidebar-is-hidden .shell-workspace-header { padding-left: calc(var(--shell-mac-controls-space) - var(--shell-outer-gap)); }
+.shell-page-heading { display: flex; flex: 1; align-items: center; gap: 12px; min-width: 0; align-self: stretch; overflow: hidden; }
+.shell-page-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+.shell-page-status { display: flex; flex-shrink: 0; align-items: center; gap: 6px; white-space: nowrap; color: var(--fg-3); font-size: 11px; }
+/* Window buttons belong to the window corner, outside the rounded workspace's
+   clipping. macOS native controls keep their existing shared top-band layout. */
+.desktop-shell > .shell-window-controls { position: absolute; top: 0; right: 0; z-index: 40; width: var(--shell-window-controls-width); height: var(--shell-top-height); margin: 0; }
+.desktop-shell > .shell-window-controls .tb-btn { width: var(--shell-window-button-width); height: 100%; }
+/* Windows/Linux reserve a separate top row for custom window controls. The
+   workspace starts below it; macOS keeps its native controls beside the header. */
+.desktop-shell:not(.is-mac) .shell-workspace { margin-top: var(--shell-header-height); }
+.desktop-shell:not(.is-mac) > .shell-window-controls { top: var(--shell-outer-gap); height: var(--shell-header-height); }
+.desktop-shell:not(.is-mac) .shell-window-controls-space { display: none; }
+.shell-window-controls-space { flex: 0 0 calc(var(--shell-window-controls-width) - var(--shell-outer-gap) - var(--shell-header-right-pad)); align-self: stretch; }
+.shell-workspace-body { display: flex; flex: 1; min-height: 0; min-width: 0; position: relative; overflow: hidden; }
+.desktop-shell .shell-workspace-content { flex: 1; min-width: 0; min-height: 0; padding: 0; display: flex; flex-direction: column; position: relative; overflow: hidden; }
+.desktop-shell .term-wrap { margin: 0; min-width: 0; }
+.desktop-shell .term-wrap.sftp-aware { border: 0; border-radius: 0; box-shadow: none; }
+.desktop-shell .term-workspace:not(.is-split) .term-pane-card { border: 0; border-radius: 0; box-shadow: none; }
+.desktop-shell .term-workspace:not(.is-split) .term-pane-card::before { display: none; }
+.desktop-shell .term-wrap:has(.term-workspace.is-split) { margin: 0 8px 8px; }
+.desktop-shell .term-wrap.terminal-layout > .term-workspace { overflow: hidden; }
+.desktop-shell .sftp-root, .desktop-shell .vault-view { background: var(--surface-panel); }
+.desktop-shell .sftp-pane { border-radius: 0; }
+.desktop-shell .term-empty-state { margin: 0; border: 0; border-radius: 0; box-shadow: none; }
+.shell-inspector { position: relative; flex-shrink: 0; display: flex; flex-direction: column; min-width: 0; max-width: calc(100% - 24px); min-height: 0; background: var(--surface-panel); border-left: 1px solid var(--edge-soft); }
+.shell-inspector > .shell-resizer { position: absolute; left: -4px; top: 0; bottom: 0; }
+.shell-inspector.is-overlay { position: absolute; top: 0; right: 0; bottom: 0; z-index: 10; box-shadow: var(--shadow-overlay); }
+.shell-inspector-heading { display: flex; align-items: center; justify-content: space-between; min-height: 40px; padding: 4px 10px 4px 14px; font-weight: 500; }
+.shell-inspector-stack { position: relative; flex: 1; min-height: 0; }
+.shell-inspector-slot { position: absolute; inset: 0; display: flex; flex-direction: column; }
+.shell-inspector-slot > .sdetail-pane { flex: 1; min-height: 0; }
+.shell-inspector-encoding { display: flex; justify-content: space-between; padding: 8px 14px; border-top: 1px solid var(--border-subtle); font-size: 11px; color: var(--fg-3); }
+.shell-home { display: flex; align-items: center; justify-content: center; flex: 1; min-height: 0; overflow: auto; padding: 48px 40px; }
+.shell-home-content { position: relative; width: min(760px, 100%); margin-top: -72px; }
+.shell-home h1 { margin: 0 0 8px; text-align: center; font-size: 36px; font-weight: 500; line-height: 1.2; letter-spacing: -1px; }
+.shell-home-subtitle { text-align: center; font-size: 16px; color: var(--fg-3); margin: 0; }
+.shell-home-shortcuts { display: flex; justify-content: center; flex-wrap: wrap; gap: 8px; margin-top: 32px; }
+.shell-home-shortcuts button { min-height: 36px; height: auto; border-radius: var(--r); color: var(--fg-3); border-color: var(--edge-panel); font-weight: 400; font-size: inherit; background: transparent; box-shadow: none; }
+.shell-home-add { display: flex; margin: 20px auto 0; color: var(--fg-3); font-size: inherit; }
+.shell-search-group-title { padding: 12px 14px 5px; font-size: 11px; color: var(--fg-3); }
+.shell-palette .pal-results { max-height: min(440px, 60vh); }
+.shell-palette .pal-item { min-height: 42px; height: auto; }
+.shell-palette .pal-item-label { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.shell-palette .pal-item-label small { font-size: 11px; color: var(--fg-3); overflow: hidden; text-overflow: ellipsis; }
+.shell-search-hint { display: flex; gap: 16px; padding: 10px 16px; border-top: 1px solid var(--border-subtle); color: var(--fg-3); font-size: 11px; }
+.desktop-shell .shell-vault-focus { border-radius: var(--r-lg); outline: 1px solid var(--desktop-focus-border); outline-offset: 2px; }
+.desktop-shell .vault-grid > [data-vault-item] > .vault-card { height: 100%; }
+@media (max-width: 960px) {
+  .shell-home { padding: 32px 24px; }
+  .shell-home-shortcuts { gap: 6px; }
+  .shell-primary-nav kbd { display: none; }
+  .shell-page-heading { gap: 6px; }
+  .shell-workspace-header { gap: 6px; padding-left: 10px; }
+}
+@media (max-height: 640px) {
+  .shell-home { align-items: flex-start; }
+  .shell-home-content { margin-top: 0; }
+  .shell-primary-nav { padding-bottom: 8px; }
+  .shell-sidebar-footer { padding-top: 4px; padding-bottom: 4px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .desktop-shell *, .shell-palette { animation: none !important; transition: none !important; }
+}
+
+/* Radix menus render in body portals. Scope these tokens to the desktop main
+   window so editor windows retain their own sizing. */
+body:has(.desktop-shell) {
+  --desktop-menu-row-height: 36px;
+  --desktop-menu-icon-size: 16px;
+  --desktop-focus-border: color-mix(in srgb, var(--fg-3) 45%, transparent);
+}
+body:has(.desktop-shell) :is([role="menu"], [data-slot="select-content"]) {
+  font: 400 var(--sans-size) / 1.5 var(--sans);
+}
+body:has(.desktop-shell) :is([role="menu"] :is([role="menuitem"], [role="menuitemcheckbox"], [role="menuitemradio"]), [data-slot="select-item"]) {
+  min-height: var(--desktop-menu-row-height);
+  padding-block: 7px;
+  gap: 8px;
+  font: inherit;
+}
+body:has(.desktop-shell) [role="menu"] :is([role="menuitem"], [role="menuitemcheckbox"], [role="menuitemradio"]) > svg {
+  width: var(--desktop-menu-icon-size);
+  height: var(--desktop-menu-icon-size);
+  flex-shrink: 0;
+}
+
+/* Keyboard focus stays visible without the thick blue shadcn ring. This also
+   covers portals (settings selectors, dialogs and menus) in the main window. */
+body:has(.desktop-shell) :focus-visible {
+  --tw-ring-shadow: 0 0 #0000;
+  --tw-ring-color: transparent;
+}
+body:has(.desktop-shell) :focus-visible:not(:is([role="menu"], [role="listbox"], [role="dialog"], [role="alertdialog"], [role="tabpanel"])) {
+  outline: 1px solid var(--desktop-focus-border);
+  outline-offset: 1px;
+}
+body:has(.desktop-shell) :focus-visible:not(:is([aria-invalid="true"], [role="menu"], [role="listbox"], [role="dialog"], [role="alertdialog"], [role="tabpanel"])) { border-color: var(--desktop-focus-border); }
+body:has(.desktop-shell) :is(.shell-account-menu, .shell-account-submenu) {
+  border: 1px solid var(--edge-soft);
+  border-radius: var(--r-lg);
+  padding: 6px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);
+}
+body:has(.desktop-shell) .shell-account-menu {
+  min-width: 220px;
+  max-width: calc(100vw - 24px);
+}
+body:has(.desktop-shell) .shell-account-menu [role="separator"] { margin: 6px 0; background: var(--edge-soft); }

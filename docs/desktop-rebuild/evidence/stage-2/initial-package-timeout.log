@@ -1,0 +1,45 @@
+
+> desktop:smoke:package
+> node scripts/smoke-package.mjs artifacts/desktop/eizhu-0.4.4-mac-x64.dmg
+
+正在检查“Protective Master Boot Record（MBR：0）”的校验和…
+Protective Master Boot Record（MBR：0）：已验证CRC32 $FC6E5BCC
+正在检查“GPT Header（Primary GPT Header：1）”的校验和…
+    GPT Header（Primary GPT Header：1）：已验证CRC32 $4B29448B
+正在检查“GPT Partition Data（Primary GPT Table：2）”的校验和…
+GPT Partition Data（Primary GPT Table：已验证CRC32 $B69919B8
+正在检查“（Apple_Free：3）”的校验和…
+                      （Apple_Free：3）：已验证CRC32 $00000000
+正在检查“disk image（Apple_HFS：4）”的校验和…
+             disk image（Apple_HFS：4）：已验证CRC32 $F95EF2C8
+正在检查“（Apple_Free：5）”的校验和…
+                      （Apple_Free：5）：已验证CRC32 $00000000
+正在检查“GPT Partition Data（Backup GPT Table：6）”的校验和…
+GPT Partition Data（Backup GPT Table：：已验证CRC32 $B69919B8
+正在检查“GPT Header（Backup GPT Header：7）”的校验和…
+     GPT Header（Backup GPT Header：7）：已验证CRC32 $A3C4A6B2
+已验证CRC32 $9D4FA948
+/dev/disk3          	GUID_partition_scheme          	
+/dev/disk3s1        	Apple_HFS                      	<临时安装包目录>/volume
+"disk3" ejected.
+[30870:1020/195805.407940:WARNING:electron/shell/common/api/electron_api_native_image.cc:229] Argument must be a file path or a NativeImage
+file:///Users/yuwei/Desktop/Projects/yuweinfo/XControl/scripts/smoke-desktop.mjs:21
+    reject(new Error('Smoke timeout (120s)'))
+           ^
+
+Error: Smoke timeout (120s)
+    at Timeout._onTimeout (file:///Users/yuwei/Desktop/Projects/yuweinfo/XControl/scripts/smoke-desktop.mjs:21:12)
+    at listOnTimeout (node:internal/timers:685:17)
+    at process.processTimers (node:internal/timers:618:7)
+
+Node.js v24.22.0
+file:///Users/yuwei/Desktop/Projects/yuweinfo/XControl/scripts/smoke-package.mjs:20
+      else reject(new Error(`${command}: ${code}`))
+                  ^
+
+Error: /Users/yuwei/.nvm/versions/node/v24.22.0/bin/node: 1
+    at ChildProcess.<anonymous> (file:///Users/yuwei/Desktop/Projects/yuweinfo/XControl/scripts/smoke-package.mjs:20:19)
+    at ChildProcess.emit (node:events:514:28)
+    at ChildProcess._handle.onexit (node:internal/child_process:324:12)
+
+Node.js v24.22.0

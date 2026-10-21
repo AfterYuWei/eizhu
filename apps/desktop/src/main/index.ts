@@ -1,0 +1,677 @@
+import {
+  app,
+  BrowserWindow,
+  clipboard,
+  dialog,
+  ipcMain,
+  Menu,
+  MessageChannelMain,
+  net,
+  protocol,
+  safeStorage,
+  shell,
+  nativeImage,
+} from 'electron'
+import { mkdir, appendFile, writeFile, chmod, open, stat, rename } from 'node:fs/promises'
+import { join, basename, sep,posix } from 'node:path'
+import { nativePath } from '@eizhu/core/sftp/endpoint'
+import { pathToFileURL } from 'node:url'
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
+import { lstatSync, readdirSync, realpathSync, mkdirSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import {
+  archive,
+  isArchiveOperation,
+  foundation,
+  requestSchema,
+  isFoundationOperation,
+  local,
+  ssh,
+  sftp,
+  isSftpOperation,
+  isSshOperation,
+  isLocalOperation,
+  sameContext,
+  fail,
+  failureOf,
+  redactLogText,
+} from '@eizhu/contracts'
+import type { Bootstrap, PlatformCapabilities, RuntimeContext } from '@eizhu/contracts'
+import { loadDeviceKey } from '@eizhu/core/runtime/device-key'
+import { RuntimeHost } from './runtime-host.ts'
+import { Windows } from './windows.ts'
+import { assetPath, isTrustedPage } from './security.ts'
+import { DocumentGrants, saveAtomically,exportFileAtomically } from './documents.ts'
+import { SensitiveClipboard } from './sensitive-clipboard.ts'
+import updater from 'electron-updater'
+import { Updates } from './updates.ts'
+declare const __EIZHU_VERSION__: string
+declare const __EIZHU_CHANNEL__: string
+declare const __EIZHU_UPDATE_FEEDS__: Partial<Record<'stable' | 'test', string>>
+
+const smoke = process.argv.includes('--smoke-test')
+const smokeRoot = process.argv.find((value) => value.startsWith('--smoke-root='))?.slice(13)
+if (smoke && !smokeRoot) throw new Error('Smoke test requires an isolated --smoke-root')
+if (
+  smoke &&
+  (lstatSync(smokeRoot!).isSymbolicLink() ||
+    !realpathSync(smokeRoot!).startsWith(realpathSync(tmpdir()) + sep) ||
+    readdirSync(smokeRoot!).length)
+)
+  throw new Error('Smoke root must be a fresh empty temporary directory')
+if (process.platform !== 'win32') process.umask(0o077)
+const dataRoot = smoke
+  ? join(smokeRoot!, 'profile')
+  : join(app.getPath('appData'), app.isPackaged ? 'eizhu-desktop' : 'eizhu-desktop-dev')
+// Electron path overrides require existing directories, including on the first normal installation.
+mkdirSync(dataRoot, { recursive: true, mode: 0o700 })
+mkdirSync(join(dataRoot, 'chromium'), { recursive: true, mode: 0o700 })
+app.setPath('userData', dataRoot)
+app.setPath('sessionData', join(dataRoot, 'chromium'))
+app.setName('eizhu')
+if (process.platform === 'win32') app.setAppUserModelId('com.yuweinfo.eizhu')
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: 'eizhu',
+    privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true },
+  },
+])
+const devUrl = !app.isPackaged ? process.env.ELECTRON_RENDERER_URL : undefined
+let runtime: RuntimeHost
+let windows: Windows
+let settings: Bootstrap['settings'] = {}
+let keyMode: 'system' | 'restricted-file'
+let deviceKey: Buffer | undefined
+let shuttingDown = false
+let healthy = false
+let restarting: Promise<RuntimeContext> | undefined
+let updates: Updates
+const documents = new DocumentGrants()
+const sensitiveClipboard = new SensitiveClipboard(clipboard)
+const startedAt = performance.now()
+const editorGrants=new Map<string,Set<string>>()
+const editorBorrowed=new Set<string>()
+const deferredFileCloses=new Set<string>()
+function attachRuntimeEvents(host: RuntimeHost): void {
+  host.onEvent = (name, payload) => {
+    if (runtime !== host || !healthy) return
+    const window = windows.main
+    if (window && !window.isDestroyed())
+      window.webContents.send('eizhu:event', { context: host.context, name, payload })
+  }
+}
+function runtimeFailed(): void {
+  healthy = false
+  windows?.broadcast('eizhu-runtime-state', { status: 'failed', message: '业务进程已退出，未保存内容仍保留' })
+}
+async function restartRuntime(): Promise<RuntimeContext> {
+  updates?.invalidate()
+  restarting ??= (async () => {
+    windows.cancelConfirmations()
+    healthy = false
+    documents.revoke()
+    editorGrants.clear();editorBorrowed.clear();deferredFileCloses.clear()
+    await runtime.close()
+    const candidate = new RuntimeHost(
+      dataRoot,
+      __dirname,
+      runtime.context.generation + 1,
+      runtimeFailed,
+      deviceKey!,
+    )
+    let nextSettings: Bootstrap['settings']
+    try {
+      await candidate.start()
+      nextSettings = await candidate.call('settings.read')
+    } catch (cause) {
+      await candidate.close()
+      throw cause
+    }
+    runtime = candidate
+    attachRuntimeEvents(runtime)
+    settings = nextSettings
+    healthy = true
+    for (const window of [windows.main, windows.editor]) {
+      if (window && !window.isDestroyed()) window.webContents.send('eizhu:context', bootstrap(window))
+    }
+    windows.broadcast('eizhu-workspace-changed', {
+      id: runtime.context.workspaceId,
+      generation: runtime.context.generation,
+      userId: 0,
+    })
+    windows.broadcast('eizhu-runtime-state', { status: 'ready' })
+    return runtime.context
+  })().finally(() => {
+    restarting = undefined
+  })
+  return restarting
+}
+
+function capabilities(): PlatformCapabilities {
+  return {
+    platform:
+      process.platform === 'darwin'
+        ? 'macos'
+        : process.platform === 'win32'
+          ? 'windows'
+          : process.platform === 'linux'
+            ? 'linux'
+            : 'unknown',
+    runtime: 'desktop',
+    windowControls: true,
+    appUpdates: updates?.available ?? false,
+    dragOut: true,
+    nativeFilePaths: true,
+    documentPicker: true,
+    secureKeyStore: keyMode === 'system',
+    maxConcurrentTransfers: 5,
+  }
+}
+function authenticate(event: Electron.IpcMainInvokeEvent): BrowserWindow {
+  const window = BrowserWindow.fromWebContents(event.sender)
+  if (
+    !window ||
+    !windows.owns(window) ||
+    event.senderFrame !== event.sender.mainFrame ||
+    !isTrustedPage(event.senderFrame.url, devUrl)
+  )
+    fail('FORBIDDEN', '调用来源未授权')
+  return window
+}
+function bootstrap(window: BrowserWindow): Bootstrap {
+  return {
+    context: runtime.context,
+    workspace: { id: 'offline', generation: runtime.context.generation, userId: 0 },
+    platform: capabilities(),
+    window: windows.kind(window),
+    version: __EIZHU_VERSION__,
+    settings,
+  }
+}
+async function quit(install?: () => void): Promise<void> {
+  if (shuttingDown) return
+  shuttingDown = true
+  try {
+    await restarting?.catch(() => undefined)
+    if(healthy)await runtime.call('runtime.beforeQuit')
+    healthy = false
+    await runtime?.close()
+    await sensitiveClipboard.close()
+    if (install) install()
+    else {
+      for (const window of BrowserWindow.getAllWindows()) window.destroy()
+      app.quit()
+    }
+  } catch (cause) {
+    shuttingDown = false
+    if(!healthy)runtimeFailed()
+    throw cause
+  }
+}
+async function load(window: BrowserWindow): Promise<void> {
+  if(smoke)window.webContents.on('console-message',details=>{
+    if(details.level==='error')console.error('EIZHU_SMOKE_RENDERER_ERROR',details.message.slice(0,1200))
+  })
+  window.webContents.setWindowOpenHandler(({ url }) => {
+    if (/^https?:\/\//i.test(url)) void shell.openExternal(url).catch(() => undefined)
+    return { action: 'deny' }
+  })
+  window.webContents.on('will-navigate', (event) => event.preventDefault())
+  window.webContents.on('will-attach-webview', (event) => event.preventDefault())
+  const suffix = window === windows.editor ? '?window=editor' : ''
+  if (devUrl) await window.loadURL(devUrl + suffix)
+  else await window.loadURL('eizhu://app/index.html' + suffix)
+}
+async function execute(window: BrowserWindow, operation: string, input: unknown): Promise<unknown> {
+  if(isArchiveOperation(operation)){
+    if(window!==windows.main)fail('FORBIDDEN','仅主窗口可管理备份')
+    if(!healthy)fail('RUNTIME_UNAVAILABLE','业务进程不可用，请先恢复')
+    return archive[operation].output.parse(await runtime.call(operation,archive[operation].input.parse(input)))
+  }
+  if(isSftpOperation(operation)){
+    if(!healthy)fail('RUNTIME_UNAVAILABLE','业务进程不可用，未保存内容已保留')
+    const host=runtime,value=sftp[operation].input.parse(input)
+    if(window===windows.editor){
+      if(!['sftp.readFile','sftp.writeFile'].includes(operation))fail('FORBIDDEN','编辑器仅可读取和保存已授权文件')
+      const d=value as {sessionId:string;path:string;request?:{create_new?:boolean}},paths=editorGrants.get(d.sessionId),path=posix.normalize(d.path)
+      if(!paths?.has(path)&&!(d.request?.create_new&&[...paths??[]].some(p=>posix.dirname(p)===posix.dirname(path))))fail('FORBIDDEN','文件不属于当前编辑器授权')
+    }else if(window!==windows.main)fail('FORBIDDEN','文件会话未授权')
+    if(operation==='sftp.closeSession'&&editorGrants.has((value as {id:string}).id)){deferredFileCloses.add((value as {id:string}).id);return}
+    if(operation==='sftp.exportDownload'){
+      const selected=await host.call<{path:string;name:string}>('sftp.downloadPath',value)
+      const picked=await dialog.showSaveDialog(window,{defaultPath:basename(selected.name)})
+      if(runtime!==host||!healthy)fail('WORKSPACE_CHANGED','运行实例已变化')
+      if(picked.canceled||!picked.filePath)return null
+      await exportFileAtomically(nativePath(selected.path),picked.filePath);return picked.filePath
+    }
+    if(operation==='sftp.startDrag'){
+      const {taskIds}=sftp[operation].input.parse(value),files:string[]=[]
+      for(const taskId of taskIds){const selected=await host.call<{path:string;name:string}>('sftp.downloadPath',{taskId});files.push(nativePath(selected.path))}
+      if(runtime!==host||!healthy)fail('WORKSPACE_CHANGED','运行实例已变化')
+      const icon=nativeImage.createFromPath(join(__dirname,'../../resources/256x256.png'))
+      window.webContents.startDrag({files,file:files[0],icon});return
+    }
+    const result=await host.call(operation,value)
+    if(runtime!==host||!healthy)fail('WORKSPACE_CHANGED','运行实例已变化')
+    if(window===windows.editor&&operation==='sftp.writeFile')editorGrants.get((value as {sessionId:string}).sessionId)?.add(posix.normalize((value as {path:string}).path))
+    return sftp[operation].output.parse(result)
+  }
+  if (isSshOperation(operation)) {
+    if (window !== windows.main) fail('FORBIDDEN', '仅主窗口可操作 SSH 会话')
+    if (!healthy) fail('RUNTIME_UNAVAILABLE', '业务进程不可用')
+    const host = runtime
+    const value = ssh[operation].input.parse(input)
+    if (operation === 'session.subscribe') {
+      const { id, subscriptionId: requested } = ssh[operation].input.parse(value)
+      await host.call('session.attach', { id })
+      if (runtime !== host || !healthy) fail('WORKSPACE_CHANGED', '运行实例已变化')
+      const subscriptionId = requested ?? crypto.randomUUID(),
+        { port1, port2 } = new MessageChannelMain()
+      host.bindTerminal(id, subscriptionId, port1)
+      window.webContents.postMessage('eizhu:terminal-port', { context: host.context, id, subscriptionId }, [
+        port2,
+      ])
+      return subscriptionId
+    }
+    const result = await host.call(operation, value)
+    if (runtime !== host || !healthy) fail('WORKSPACE_CHANGED', '运行实例已变化')
+    return ssh[operation].output.parse(result)
+  }
+  if (isLocalOperation(operation)) {
+    if (window !== windows.main) fail('FORBIDDEN', '仅主窗口可操作本地业务与文件')
+    if (!healthy) fail('RUNTIME_UNAVAILABLE', '业务进程不可用，请恢复后重试')
+    const value = local[operation].input.parse(input)
+    const ownerContext = { ...runtime.context }
+    const ensureOwner = () => {
+      if (!healthy || !sameContext(ownerContext, runtime.context))
+        fail('WORKSPACE_CHANGED', '运行实例已变化，请重试')
+    }
+    let result: unknown
+    switch (operation) {
+      case 'backup.pickFile': {
+        const picked = await dialog.showOpenDialog(window, {
+          properties: ['openFile'],
+          filters: [{ name: 'eizhu 备份', extensions: ['eizhubackup', 'xcbackup'] }],
+        })
+        ensureOwner()
+        if (picked.canceled || !picked.filePaths[0]) return null
+        const file = await documents.add(window.id, runtime.context, picked.filePaths[0], 'backup')
+        return { name: file.name, reference: file.reference }
+      }
+      case 'document.pick': {
+        const d = local[operation].input.parse(value),
+          picked = await dialog.showOpenDialog(window, {
+            properties: d.multiple ? ['openFile', 'multiSelections'] : ['openFile'],
+          })
+        ensureOwner()
+        if (picked.canceled) return []
+        const files = []
+        try {
+          for (const path of picked.filePaths)
+            files.push(await documents.add(window.id, runtime.context, path, 'text'))
+        } catch (cause) {
+          for (const file of files) documents.release(window.id, runtime.context, file.reference)
+          throw cause
+        }
+        return files
+      }
+      case 'document.release': {
+        const d = local[operation].input.parse(value),
+          grant = documents.release(window.id, runtime.context, d.reference)
+        await runtime.call('backup.releaseSource', { path: grant.path })
+        return
+      }
+      case 'document.readText': {
+        const d = local[operation].input.parse(value),
+          grant = documents.get(window.id, runtime.context, d.reference, 'text')
+        result = await runtime.call('document.readGrantedText', {
+          path: grant.path,
+          identity: grant.identity,
+          maxBytes: d.maxBytes,
+        })
+        break
+      }
+      case 'document.exportText': {
+        const d = local[operation].input.parse(value),
+          picked = await dialog.showSaveDialog(window, { defaultPath: basename(d.suggestedName) })
+        ensureOwner()
+        if (picked.canceled || !picked.filePath) return null
+        await saveAtomically(picked.filePath, d.content)
+        return picked.filePath
+      }
+      case 'backup.export': {
+        const d = local[operation].input.parse(value),
+          picked = await dialog.showSaveDialog(window, {
+            defaultPath: `eizhu-${new Date().toISOString().slice(0, 10)}.eizhubackup`,
+            filters: [{ name: 'eizhu 备份', extensions: ['eizhubackup'] }],
+          })
+        ensureOwner()
+        if (picked.canceled || !picked.filePath) return null
+        const encoded = await runtime.call<{ bytes: Uint8Array }>('backup.exportBytes', d)
+        try {
+          await saveAtomically(picked.filePath, encoded.bytes)
+        } finally {
+          encoded.bytes.fill(0)
+        }
+        return picked.filePath
+      }
+      case 'backup.preview':
+      case 'backup.prepareRestore':
+      case 'backup.import': {
+        const d = local[operation].input.parse(value),
+          grant = documents.get(window.id, runtime.context, d.filePath, 'backup')
+        result = await runtime.call('backup.granted', {
+          operation,
+          input: { ...d, filePath: grant.path },
+          identity: grant.identity,
+        })
+        break
+      }
+      default:
+        result = await runtime.call(operation, value)
+    }
+    return local[operation].output.parse(result)
+  }
+  if (!isFoundationOperation(operation)) return fail('STAGE_NOT_READY', (operation.startsWith('account.') || operation.startsWith('sync.') || operation === 'backup.previewLegacyAccount') ? '官方账号、同步和官方备份待开发，后端部署后再接入' : '该业务能力将在后续实施阶段开放')
+  const value = foundation[operation].input.parse(input)
+  switch (operation) {
+    case 'update.check':
+    case 'update.download':
+    case 'update.install': {
+      if (window !== windows.main) fail('FORBIDDEN', '仅主窗口可管理应用更新')
+      if (shuttingDown || restarting || !healthy) fail('RUNTIME_UNAVAILABLE', '请等待业务进程就绪后重试')
+      if (operation === 'update.check') return updates.check(foundation[operation].input.parse(value).channel)
+      const { token } = foundation[operation].input.parse(value)
+      if (operation === 'update.download') return updates.download(token)
+      return updates.install(token)
+    }
+    case 'app.bootstrap':
+      return bootstrap(window)
+    case 'app.ready':
+      window.show()
+      if(smoke)console.log('EIZHU_SMOKE_APP_READY',window.id,window.isVisible())
+      return
+    case 'runtime.health':
+    case 'workspace.status':
+      return runtime.call(operation)
+    case 'runtime.restart':
+      if (window !== windows.main) fail('FORBIDDEN', '仅主窗口可恢复业务进程')
+      return restartRuntime()
+    case 'settings.write': {
+      if (window !== windows.main && window !== windows.editor) fail('FORBIDDEN', '窗口未授权')
+      const data = foundation['settings.write'].input.parse(value)
+      await runtime.call(operation, data)
+      if (data.value === null) delete settings[data.key]
+      else settings[data.key] = data.value
+      for (const other of [windows.main, windows.editor])
+        if (other && other !== window) windows.emit(other, 'eizhu-settings-changed', data)
+      return
+    }
+    case 'window.minimize':
+      window.minimize()
+      return
+    case 'window.toggleMaximize':
+      if (window.isMaximized()) window.unmaximize()
+      else window.maximize()
+      return
+    case 'window.state':
+      return { maximized: window.isMaximized() }
+    case 'window.close':
+      window.close()
+      return
+    case 'editor.open': {
+      if (window !== windows.main) fail('FORBIDDEN', '仅主窗口可打开编辑器')
+      if(!windows.canOpenEditor())fail('EDITOR_BUSY','请先完成当前关闭或切换确认')
+      const data=foundation['editor.open'].input.parse(value),host=runtime
+      const authorized=await host.call<{sessionId:string;path:string;borrowed:boolean}>('sftp.authorizeEditor',data)
+      if(runtime!==host||!healthy)fail('WORKSPACE_CHANGED','运行实例已变化')
+      if(!windows.canOpenEditor())fail('EDITOR_BUSY','请先完成当前关闭或切换确认')
+      let grants=editorGrants.get(authorized.sessionId);if(!grants)editorGrants.set(authorized.sessionId,grants=new Set());grants.add(authorized.path)
+      if(authorized.borrowed)editorBorrowed.add(authorized.sessionId)
+      const open={...data,sessionId:authorized.sessionId,path:authorized.path}
+      if(!windows.editor){const editor=windows.create('editor');editor.once('closed',()=>{editorGrants.clear();for(const id of new Set([...deferredFileCloses,...editorBorrowed]))void runtime.call('sftp.closeSession',{id}).catch(()=>undefined);deferredFileCloses.clear();editorBorrowed.clear()});windows.enqueueOpen(open);await load(editor)}else{windows.enqueueOpen(open);windows.editor.show();windows.editor.focus()}
+      return
+    }
+    case 'editor.ready':
+      if (window !== windows.editor) fail('FORBIDDEN', '仅编辑器可确认就绪')
+      windows.readyEditor()
+      return
+    case 'editor.show':
+      if (window !== windows.editor) fail('FORBIDDEN', '仅编辑器可显示')
+      window.show()
+      return
+    case 'editor.confirmTransition':
+      if (window !== windows.main) fail('FORBIDDEN', '仅主窗口可请求切换')
+      return windows.confirmTransition()
+    case 'editor.resolveTransition': {
+      if (window !== windows.editor) fail('FORBIDDEN', '仅编辑器可确认切换')
+      const data = foundation['editor.resolveTransition'].input.parse(value)
+      if (!windows.resolveTransition(data.requestId, data.accepted))
+        fail('REQUEST_EXPIRED', '此确认请求已失效，请重试')
+      return
+    }
+    case 'editor.resolveClose': {
+      if (window !== windows.editor) fail('FORBIDDEN', '仅编辑器可确认关闭')
+      const data=foundation['editor.resolveClose'].input.parse(value)
+      windows.closeEditor(data.shouldClose,data.requestId)
+      return
+    }
+    case 'editor.resolveAppClose': {
+      if (window !== windows.editor) fail('FORBIDDEN', '仅编辑器可确认退出')
+      const data = foundation['editor.resolveAppClose'].input.parse(value)
+      if (!windows.resolveApplicationClose(data.requestId, data.shouldClose))
+        fail('REQUEST_EXPIRED', '此退出请求已失效，请重试')
+      return
+    }
+    case 'clipboard.read':
+      return clipboard.readText()
+    case 'clipboard.write':
+      await clipboard.writeText(foundation['clipboard.write'].input.parse(value).text)
+      return
+    case 'clipboard.writeSensitive': {
+      const data = foundation[operation].input.parse(value)
+      await sensitiveClipboard.write(data.text, data.clearAfterSeconds)
+      return
+    }
+    case 'system.openExternal':
+      await shell.openExternal(foundation['system.openExternal'].input.parse(value).url)
+      return
+    case 'system.saveText': {
+      const data = foundation['system.saveText'].input.parse(value)
+      const ownerContext = { ...runtime.context }
+      const result = await dialog.showSaveDialog(window, { defaultPath: basename(data.suggestedName) })
+      if (!sameContext(ownerContext, runtime.context)) fail('WORKSPACE_CHANGED', '运行实例已变化，请重试')
+      if (result.canceled || !result.filePath) return null
+      await saveAtomically(result.filePath, data.content)
+      return result.filePath
+    }
+    case 'diagnostics.read': {
+      const { kind } = foundation['diagnostics.read'].input.parse(value)
+      const path = join(dataRoot, `${kind}.log`)
+      try {
+        const handle = await open(path, 'r')
+        try {
+          const size = (await handle.stat()).size,
+            buffer = Buffer.alloc(Math.min(262144, size))
+          await handle.read(buffer, 0, buffer.length, Math.max(0, size - buffer.length))
+          return { kind, path, content: buffer.toString('utf8') }
+        } finally {
+          await handle.close()
+        }
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === 'ENOENT') return { kind, path, content: '' }
+        throw error
+      }
+    }
+    case 'diagnostics.clear': {
+      const { kind } = foundation['diagnostics.clear'].input.parse(value)
+      await writeFile(join(dataRoot, `${kind}.log`), '', { mode: 0o600 })
+      return
+    }
+    case 'diagnostics.append': {
+      const data = foundation['diagnostics.append'].input.parse(value)
+      // Only test builds retain frontend diagnostics. Structured secrets are redacted again in main.
+      if (__EIZHU_CHANNEL__ === 'test') {
+        const lines = data.lines.map(redactLogText)
+        const path = join(dataRoot, 'frontend.log')
+        if (
+          await stat(path).then(
+            (info) => info.size > 2 * 1024 * 1024,
+            () => false,
+          )
+        )
+          await rename(path, `${path}.previous`)
+        await appendFile(path, lines.join('\n') + '\n', { mode: 0o600 })
+      }
+      return
+    }
+  }
+}
+
+app.on('before-quit', (event) => {
+  if (!shuttingDown) {
+    event.preventDefault()
+    void windows?.requestQuit()
+  }
+})
+app.on('will-quit', () => deviceKey?.fill(0))
+app.on('window-all-closed', () => {
+  if (!shuttingDown) void quit()
+})
+app.on('second-instance', () => {
+  windows?.main?.show()
+  windows?.main?.focus()
+})
+app.on('activate', () => {
+  if (windows?.main && !windows.main.isDestroyed()) {
+    windows.main.show()
+    windows.main.focus()
+  }
+})
+// Third-party desktop OAuth uses an ephemeral PKCE loopback callback; unsolicited deep links stay inactive.
+app.on('open-url', (event) => event.preventDefault())
+
+async function start(): Promise<void> {
+  if (!smoke && !app.requestSingleInstanceLock()) {
+    app.exit(0)
+    return
+  }
+  await app.whenReady()
+  await mkdir(dataRoot, { recursive: true, mode: 0o700 })
+  await chmod(dataRoot, 0o700)
+  const key = await loadDeviceKey(dataRoot, {
+    available: () =>
+      !smoke &&
+      safeStorage.isEncryptionAvailable() &&
+      (process.platform !== 'linux' || safeStorage.getSelectedStorageBackend() !== 'basic_text'),
+    wrap: (value) => safeStorage.encryptString(value),
+    unwrap: (value) => safeStorage.decryptString(value),
+    restrict: async (path) => {
+      if (process.platform === 'win32')
+        await promisify(execFile)(
+          'icacls.exe',
+          [path, '/inheritance:r', '/grant:r', `${process.env.USERDOMAIN}\\${process.env.USERNAME}:F`],
+          { windowsHide: true },
+        )
+      else await chmod(path, 0o600)
+    },
+  })
+  keyMode = key.mode
+  deviceKey = key.key
+  runtime = new RuntimeHost(dataRoot, __dirname, 1, runtimeFailed, deviceKey)
+  await runtime.start()
+  healthy = true
+  settings = await runtime.call('settings.read')
+  windows = new Windows(__dirname, () => runtime.context, () => quit())
+  updates = new Updates({
+    driver: updater.autoUpdater,
+    feeds: smoke ? {} : __EIZHU_UPDATE_FEEDS__,
+    supported: app.isPackaged && (process.platform !== 'linux' || Boolean(process.env.APPIMAGE)),
+    progress: (progress) => windows.emit(windows.main, 'eizhu-update-progress', progress),
+    install: (action) => windows.runConfirmedQuit(() => quit(action)),
+  })
+  Menu.setApplicationMenu(
+    Menu.buildFromTemplate(
+      process.platform === 'darwin'
+        ? [
+            {
+              label: 'eizhu',
+              submenu: [
+                { role: 'about' },
+                { type: 'separator' },
+                { role: 'hide' },
+                { role: 'hideOthers' },
+                { type: 'separator' },
+                { role: 'quit' },
+              ],
+            },
+            { role: 'editMenu' },
+            { role: 'windowMenu' },
+          ]
+        : [],
+    ),
+  )
+  const renderer = join(__dirname, '../renderer')
+  protocol.handle('eizhu', async (request) => {
+    try {
+      const path = assetPath(renderer, request.url)
+      if (!path) return new Response('Forbidden', { status: 403 })
+      const response = await net.fetch(pathToFileURL(path).href)
+      const headers = new Headers(response.headers)
+      headers.set(
+        'Content-Security-Policy',
+        "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; worker-src 'self' blob:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-src 'none'",
+      )
+      return new Response(response.body, { status: response.status, headers })
+    } catch {
+      return new Response('Not found', { status: 404 })
+    }
+  })
+  app.on('web-contents-created', (_event, contents) => {
+    contents.session.setPermissionRequestHandler((_contents, _permission, callback) => callback(false))
+    contents.session.setPermissionCheckHandler(() => false)
+  })
+  attachRuntimeEvents(runtime)
+  ipcMain.handle('eizhu:bootstrap', (event) => bootstrap(authenticate(event)))
+  ipcMain.handle('eizhu:request', async (event, raw) => {
+    let context: RuntimeContext | undefined
+    let id: string | undefined
+    try {
+      const window = authenticate(event),
+        request = requestSchema.parse(raw)
+      context = request.context
+      id = request.id
+      if (!healthy && ['runtime.health', 'workspace.status', 'settings.write'].includes(request.operation))
+        fail('RUNTIME_UNAVAILABLE', '业务进程不可用，未保存内容仍保留')
+      if (!sameContext(request.context, runtime.context)) fail('WORKSPACE_CHANGED', '数据空间已变化，请重试')
+      const value = await execute(window, request.operation, request.input)
+      return { id, context, value }
+    } catch (cause) {
+      return { id, context, error: failureOf(cause) }
+    }
+  })
+  const window = windows.create('main')
+  await load(window)
+  if (smoke) {
+    const { runSmoke } = await import('./smoke.ts')
+    await runSmoke({ windows, runtime: () => runtime, load, root: dataRoot, keyMode, startedAt,assets:join(__dirname,'../renderer/assets') })
+    await quit()
+  }
+}
+void start().catch(async (cause) => {
+  console.error('eizhu initialization failed; existing data retained')
+  if (smoke) console.error(cause)
+  await runtime?.close().catch(() => undefined)
+  deviceKey?.fill(0)
+  if (!smoke) {
+    const failure = failureOf(cause)
+    await appendFile(
+      join(dataRoot, 'backend.log'),
+      JSON.stringify({ code: failure.code, message: failure.message }) + '\n',
+      { mode: 0o600 },
+    ).catch(() => undefined)
+    dialog.showErrorBox('eizhu 运行失败', `${failure.message}\n原数据已保留，请修复问题后重试。`)
+  }
+  app.exit(1)
+})

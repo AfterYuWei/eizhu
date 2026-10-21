@@ -1,0 +1,18 @@
+{
+  "keyPassphrase": "fixture-only-私钥口令",
+  "synthetic": true,
+  "vectors": [
+    {
+      "derivedKeyHex": "d6541299b6b6e1000d0831a11843d698c639407ed0c56ad23826fafda2aee325",
+      "file": "eizhu-encrypted.eizhubackup",
+      "password": "fixture-only-备份密码🔐",
+      "plaintextSha256": "5e2ae17bbbb4f402c38b75fc598bae2c45d415251d30f6fc2c6ae3f2d932b03c"
+    },
+    {
+      "derivedKeyHex": "d6541299b6b6e1000d0831a11843d698c639407ed0c56ad23826fafda2aee325",
+      "file": "xcontrol-encrypted.xcbackup",
+      "password": "fixture-only-备份密码🔐",
+      "plaintextSha256": "5e2ae17bbbb4f402c38b75fc598bae2c45d415251d30f6fc2c6ae3f2d932b03c"
+    }
+  ]
+}

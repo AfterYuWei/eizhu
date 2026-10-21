@@ -1,0 +1,377 @@
+{
+  "recordedAt": "2026-10-20T12:58:29.994878+00:00",
+  "stage": 3,
+  "status": "ready-for-user-review",
+  "gitBranch": "codex/electron-stage-2",
+  "baseCommit": "8d9b7475ce9f5a7b1d2e6697f12949b0ffd5dc0d",
+  "previousStageManifest": "docs/desktop-rebuild/evidence/stage-2/delivery.json",
+  "preexistingStage2ChangesPreserved": true,
+  "committed": false,
+  "pushed": false,
+  "version": "0.4.4",
+  "checks": {
+    "typecheck": true,
+    "lint": true,
+    "foundationTests": 33,
+    "frontendTests": 201,
+    "fixedBaselineTests": 10,
+    "totalTests": 244,
+    "baselineReadOnly": true,
+    "architecture": true,
+    "diffCheck": true,
+    "buildSmoke": true,
+    "dmgSmoke": true,
+    "packagedBuildMatches": true,
+    "packagedBuildFileCount": 267
+  },
+  "executedTargets": [
+    "darwin-x64"
+  ],
+  "signing": "unsigned test package; no notarization or publication",
+  "pending": [
+    "macOS arm64 / Windows x64 / Linux x64 execution",
+    "real Agent/Pageant and MFA providers",
+    "native terminal/IME/TUI/split-pane interactions",
+    "real remote IPv6 and multi-hop fault matrix",
+    "changed-key full dialog and confirmation expiry",
+    "remote forwarding refusal",
+    "Linux distribution metric scripts",
+    "system key store / signing / updates / long-load performance"
+  ],
+  "sources": [
+    {
+      "path": "AGENTS.md",
+      "bytes": 6326,
+      "sha256": "15a4de4c221fec7b14ec33382eb0b9b7bbbe5f07a92019fbbdd4233532af21e5"
+    },
+    {
+      "path": "README.md",
+      "bytes": 1902,
+      "sha256": "ac0558156cea4516db65d083c5236d73865a4f205b9db396bc5fb6b6d14b8d58"
+    },
+    {
+      "path": "apps/desktop/electron.vite.config.ts",
+      "bytes": 2535,
+      "sha256": "76be92c1e177c32da34406812861375cbff83a1009c5ce7ef33d511ec2d498c1"
+    },
+    {
+      "path": "apps/desktop/src/main/index.ts",
+      "bytes": 22572,
+      "sha256": "67300b25e5edd35655278d903f3f1f09d9f25b942a2f187161aca72cccce02b5"
+    },
+    {
+      "path": "apps/desktop/src/main/runtime-host.ts",
+      "bytes": 5032,
+      "sha256": "61a22e82c39759470808e1904c1eafbf837b6001856d5064783f5947fa107416"
+    },
+    {
+      "path": "apps/desktop/src/main/smoke.ts",
+      "bytes": 12253,
+      "sha256": "e5d232fee76f8825d9063d22f1a536d034bc4a2411b98ee0d7a57f7a4098b9e9"
+    },
+    {
+      "path": "apps/desktop/src/main/stage3-smoke.ts",
+      "bytes": 27213,
+      "sha256": "333817edc732c10071f7b1c18c02cdfcc7d828aff8d0cbdb8b813a9e8993e242"
+    },
+    {
+      "path": "apps/desktop/src/preload/index.ts",
+      "bytes": 9125,
+      "sha256": "17f7596de9770834ec8a61fb8b97ffb07d0a4a4159fe6c9785209c30076045af"
+    },
+    {
+      "path": "apps/desktop/src/runtime/index.ts",
+      "bytes": 2605,
+      "sha256": "6408696bda7bcb917faeac78e63813a7dd596eaaade19fc03b89d434288904d1"
+    },
+    {
+      "path": "apps/web/src/api/serverDetail.ts",
+      "bytes": 1515,
+      "sha256": "453eb6f72e30c8a242d0267158915f8fc71faa5133ac8ae3eb6be93b15d1b471"
+    },
+    {
+      "path": "apps/web/src/api/session.ts",
+      "bytes": 1679,
+      "sha256": "5d4bf7cff97d01191811f63fbb198d6ba073bf98bf70a8524a9db030df7e30e6"
+    },
+    {
+      "path": "apps/web/src/components/Terminal/TerminalPane.tsx",
+      "bytes": 26183,
+      "sha256": "de3471623b6bc738a8fde78e34208b46fd08534c7c14a604b160eb78651ac3ff"
+    },
+    {
+      "path": "apps/web/src/hooks/useSessionChannel.ts",
+      "bytes": 3878,
+      "sha256": "4de12fb52e282efae24f7a78ec37b11eaa6537e37cc113b5f7fe0aa8b1563646"
+    },
+    {
+      "path": "apps/web/src/hooks/useTerminal.ts",
+      "bytes": 20046,
+      "sha256": "8d9fb4d03d3ddc863a8f299d5aa87ad5fb434fe13eda4555490752b9a9c55d2d"
+    },
+    {
+      "path": "docs/ARCHITECTURE.md",
+      "bytes": 2516,
+      "sha256": "48ea75c09e4d174d647aebcad7416aa603457478f5f33d4d5d18ed02b5bdb75d"
+    },
+    {
+      "path": "docs/DEVELOPMENT.md",
+      "bytes": 3130,
+      "sha256": "db882698ab8a420bad8c716defe9cebbb2faeaca7133a4d29a15b2596858081b"
+    },
+    {
+      "path": "docs/SECURITY.md",
+      "bytes": 1913,
+      "sha256": "87c5ceffa4117722ca0af875f618fb1766351bea7663d328a7cb43f6233d8cf7"
+    },
+    {
+      "path": "docs/SSH.md",
+      "bytes": 4587,
+      "sha256": "6071806ba70c6334d4d19bd4f62d9989194b12b175e6814b6df9aaef465274bd"
+    },
+    {
+      "path": "docs/desktop-rebuild/ARCHITECTURE.md",
+      "bytes": 7081,
+      "sha256": "6f2307d0224313b1e8f120edf8e31697164d72b98bd30d78b523d05299de6f83"
+    },
+    {
+      "path": "docs/desktop-rebuild/README.md",
+      "bytes": 5347,
+      "sha256": "d76c8bef4968a235e117f4abdbbdcbb46cd991597032b27168050a7bdd757324"
+    },
+    {
+      "path": "docs/desktop-rebuild/STAGE_2_REPORT.md",
+      "bytes": 8220,
+      "sha256": "5098a5b5e1b45e1b442381212805d06166b8df6dd354724771c7276cba97a64a"
+    },
+    {
+      "path": "docs/desktop-rebuild/STAGE_3_REPORT.md",
+      "bytes": 6645,
+      "sha256": "4dee7552cf2cdd7edb380bcc92cf3c9731493d0f44a47e2571211f0a942ee5ea"
+    },
+    {
+      "path": "packages/contracts/src/domains.ts",
+      "bytes": 17343,
+      "sha256": "b9d434e7de0783175aa51c389cc5b3aa9ea2ada6f9cf812f901ea7db196b52f6"
+    },
+    {
+      "path": "packages/contracts/src/events.ts",
+      "bytes": 1314,
+      "sha256": "85788c9c69c553ffcb51372f84a459f86952dfe2c6ff61bed7071168c9ebd007"
+    },
+    {
+      "path": "packages/contracts/src/index.ts",
+      "bytes": 3141,
+      "sha256": "8646fe19ba8817043ac5c98d0bbdc70d73639e64e7f27583b69651f2b6d840a0"
+    },
+    {
+      "path": "packages/contracts/src/models/sessionMessage.ts",
+      "bytes": 2073,
+      "sha256": "f773d19dded491423f28cb96cfbc37311031666a7485d6cf3144df173a7c2efb"
+    },
+    {
+      "path": "packages/contracts/src/ssh.ts",
+      "bytes": 10797,
+      "sha256": "acf927696708c90a50f28402651df97d42c2b8e759ed2d1ed2206135052bf7db"
+    },
+    {
+      "path": "packages/contracts/src/testing/ssh.test.ts",
+      "bytes": 1021,
+      "sha256": "9e4f15d451dd3f36e879066aea8b7377d0fee6979345dcd448b9e8a55c48b60e"
+    },
+    {
+      "path": "packages/core/src/database/local-store.ts",
+      "bytes": 31253,
+      "sha256": "31413c182ea7f8e9816e1e70fc9c2cff58faa3b11ea4a83bf6d6dae0ed814593"
+    },
+    {
+      "path": "packages/core/src/database/stage3-smoke.ts",
+      "bytes": 4367,
+      "sha256": "8ad0133ac195ef994cfd09f739548e8d8a68c13d123088665c6af4c5af948786"
+    },
+    {
+      "path": "packages/core/src/database/worker.ts",
+      "bytes": 2232,
+      "sha256": "a79f1629ea5eddbc25dde094f4972183e4f81f24183d7d0284850549a3a57150"
+    },
+    {
+      "path": "packages/core/src/local/keys.ts",
+      "bytes": 3907,
+      "sha256": "eddbe45bac78053ee40772612ab60f9e874fbd597eef253529894b7c8917be7a"
+    },
+    {
+      "path": "packages/core/src/runtime/service.ts",
+      "bytes": 9946,
+      "sha256": "0f54ab7f93e75c76d45263eb5272b48c2567643303a8908acde75ab036e3ac84"
+    },
+    {
+      "path": "packages/core/src/ssh/completion.test.ts",
+      "bytes": 1319,
+      "sha256": "7645585ca5031744fb89a72e51b3dfdf5b4d0833d0ffe067279363da6eac10cc"
+    },
+    {
+      "path": "packages/core/src/ssh/completion.ts",
+      "bytes": 5714,
+      "sha256": "973a860381fc38e5a785a1d254f1b63c24787311fc7e2d607e8a2e17be2180e8"
+    },
+    {
+      "path": "packages/core/src/ssh/connection.ts",
+      "bytes": 9841,
+      "sha256": "e38df65b1df7c4c842014e40033b1ecd6cd0282f7cc1056963ffd3b9856c3b20"
+    },
+    {
+      "path": "packages/core/src/ssh/metrics.ts",
+      "bytes": 8053,
+      "sha256": "2bf1c9cc5754c40a4b79228b531f828f038e7a241cffc0372437a7e5a28fb982"
+    },
+    {
+      "path": "packages/core/src/ssh/network.test.ts",
+      "bytes": 647,
+      "sha256": "b0be57bd98eb6578161a3acf2885efc557b66b57ad755a80f93d52f31c7437d8"
+    },
+    {
+      "path": "packages/core/src/ssh/network.ts",
+      "bytes": 6397,
+      "sha256": "0ba7c5350896c5670842ede68885c1b22a3d87381831b5f6a56273a17229c184"
+    },
+    {
+      "path": "packages/core/src/ssh/plan.test.ts",
+      "bytes": 1855,
+      "sha256": "4e1e72afeba686a122c335ab909c1de01ed8280702f9e3651b27853397f9139f"
+    },
+    {
+      "path": "packages/core/src/ssh/plan.ts",
+      "bytes": 3800,
+      "sha256": "c5c1642fa21ce8fce1c0f2ab2dcde9b9fbf754586641cafca2e55bbcc69da3d2"
+    },
+    {
+      "path": "packages/core/src/ssh/service.ts",
+      "bytes": 32583,
+      "sha256": "08d1cf3e0c28051c6ad480bd8d7f1904571bd51fcdd2741f7047352c339ec45b"
+    },
+    {
+      "path": "packages/core/src/ssh/stream.test.ts",
+      "bytes": 1873,
+      "sha256": "76abb024f52e9516a880719ca4a418439b37fe36d28935f385dd3376bacade11"
+    },
+    {
+      "path": "packages/core/src/ssh/stream.ts",
+      "bytes": 3830,
+      "sha256": "620c79ff2bb42fa52edf2d20d20cb3cee0aff6dbfe5c2f506e2d885401b6cb22"
+    },
+    {
+      "path": "packages/core/src/ssh/tunnel.ts",
+      "bytes": 6403,
+      "sha256": "91ec8d4179bbd574851660599a638aa539fbe50264bb06898e8e44e11ec519ca"
+    },
+    {
+      "path": "packages/core/src/workers/compute.ts",
+      "bytes": 3746,
+      "sha256": "16cf105952068a1d0ef102de4cd904c6052dfd46e3f50022198ed2e867357229"
+    },
+    {
+      "path": "scripts/smoke-desktop.mjs",
+      "bytes": 2726,
+      "sha256": "ec8df11394e96d54df3fe1d21738911273a14196d06b445fb7263fda613c125c"
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "artifacts/desktop/stage-3/eizhu-0.4.4-mac-x64.dmg",
+      "bytes": 157981117,
+      "sha256": "77b71cf6911037c69a9d146349fc7bbc8d71068dfb91539861891a62fd50d894"
+    },
+    {
+      "path": "artifacts/desktop/stage-3/eizhu-0.4.4-mac-x64.zip",
+      "bytes": 157330517,
+      "sha256": "cd803cd618e1901b05e91dbf538c32b055a0b73179d56da6bba49c75f0db5dd3"
+    }
+  ],
+  "evidence": [
+    {
+      "path": "docs/desktop-rebuild/evidence/stage-3/README.md",
+      "bytes": 1392,
+      "sha256": "0f93bff3fa4d3a021d9c15b098dd0ac64d54fe3ffd8c34c1ae5b9de5fc9fc5a0"
+    },
+    {
+      "path": "docs/desktop-rebuild/evidence/stage-3/architecture.log",
+      "bytes": 266,
+      "sha256": "facaf1426ede7e9677566f25b4411fd90321dddc90ecc253e540d6042e477ea6"
+    },
+    {
+      "path": "docs/desktop-rebuild/evidence/stage-3/baseline.log",
+      "bytes": 372,
+      "sha256": "bab791cc02b3fa01cdc5025f67961227f94b65b33abcd634a7111420008cda34"
+    },
+    {
+      "path": "docs/desktop-rebuild/evidence/stage-3/build-smoke.log",
+      "bytes": 6344,
+      "sha256": "6e576438229e2d098e20763633445f287deb798df0293952faa52535a72657a6"
+    },
+    {
+      "path": "docs/desktop-rebuild/evidence/stage-3/build.log",
+      "bytes": 12809,
+      "sha256": "f712e70d3e0e5bb0d1d5934094797797258649ae76dfbdf544af5da82b4c6781"
+    },
+    {
+      "path": "docs/desktop-rebuild/evidence/stage-3/bundle-verification.json",
+      "bytes": 42068,
+      "sha256": "3df4c805a46108606928638895bebedcbc07a69698a12bcc5b9ade002c1f86da"
+    },
+    {
+      "path": "docs/desktop-rebuild/evidence/stage-3/check.log",
+      "bytes": 106,
+      "sha256": "413abc9fc7800b09a9e840345d722f31553400744faae680422296445a0e5ec1"
+    },
+    {
+      "path": "docs/desktop-rebuild/evidence/stage-3/diff-check.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/desktop-rebuild/evidence/stage-3/lint.log",
+      "bytes": 113,
+      "sha256": "ba02043fd9d32d1fd5c35de1b8a1115f694e06060ff47d9a258aa41d42dc183a"
+    },
+    {
+      "path": "docs/desktop-rebuild/evidence/stage-3/mac-x64-build-smoke.json",
+      "bytes": 6625,
+      "sha256": "9f7ed795984165cc3f969001bb736e4ae2c7cdc2b21c6d6eff56a11cc8e1c295"
+    },
+    {
+      "path": "docs/desktop-rebuild/evidence/stage-3/mac-x64-editor-empty.png",
+      "bytes": 11716,
+      "sha256": "20f49752bee95f566d302cd24dad132cc1332b759dd7ad6e55336021f34fcbb7"
+    },
+    {
+      "path": "docs/desktop-rebuild/evidence/stage-3/mac-x64-home-dark.png",
+      "bytes": 34934,
+      "sha256": "345fdb7bd6d608a5afc2c0dd52c9a2a0d8253a3b6589eaf9167663218d1185bd"
+    },
+    {
+      "path": "docs/desktop-rebuild/evidence/stage-3/mac-x64-home-light.png",
+      "bytes": 37564,
+      "sha256": "5c5f16db2a4551ba7fd50ac597074379119cbeebf571b86e70d4fa360bc86d9a"
+    },
+    {
+      "path": "docs/desktop-rebuild/evidence/stage-3/mac-x64-package-smoke.json",
+      "bytes": 6624,
+      "sha256": "1663810ef252fcbdbb1e58666e820c1025b5908ca2022521e99f96fff008a31d"
+    },
+    {
+      "path": "docs/desktop-rebuild/evidence/stage-3/package-smoke.log",
+      "bytes": 7736,
+      "sha256": "8ab71e5a6c690803e87c63d04b75853aa083a6d4da3093b7e59d90aa136bbacd"
+    },
+    {
+      "path": "docs/desktop-rebuild/evidence/stage-3/package.log",
+      "bytes": 2208,
+      "sha256": "c9e4dfc008ffc575a093e9b39819709da39b83245f3800a135c8be47bfe5be1f"
+    },
+    {
+      "path": "docs/desktop-rebuild/evidence/stage-3/test.log",
+      "bytes": 5130,
+      "sha256": "a6033b2d91bb3c3b82e72e368bc0719f15c094ff9c29573c782344a55995dd79"
+    }
+  ]
+}

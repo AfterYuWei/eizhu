@@ -1,0 +1,169 @@
+{
+  "schemaVersion": 1,
+  "runtime": "browser-preview",
+  "url": "http://127.0.0.1:5173/",
+  "source": "Unmodified current React renderer through its normal UI; no mocked native APIs or real user data.",
+  "limitations": "The browser has no Tauri IPC. Native window chrome, connected terminals, populated SFTP, authenticated cloud state and the independent editor window are not represented. Browser-unavailable messages are evidence of this environment, not intended Electron behavior.",
+  "captured": [
+    {
+      "file": "screenshots/home-light.jpg",
+      "runtime": "browser-preview",
+      "width": 1280,
+      "height": 720,
+      "theme": "light",
+      "scene": "欢迎页与展开侧栏",
+      "caseIds": [
+        "SHELL-01",
+        "SHELL-02"
+      ],
+      "steps": "打开前端，空数据，界面14px、侧栏300px。"
+    },
+    {
+      "file": "screenshots/home-collapsed.jpg",
+      "runtime": "browser-preview",
+      "width": 1280,
+      "height": 720,
+      "theme": "light",
+      "scene": "欢迎页与收起侧栏",
+      "caseIds": [
+        "SHELL-02"
+      ],
+      "steps": "从展开侧栏点击折叠。"
+    },
+    {
+      "file": "screenshots/search-empty.jpg",
+      "runtime": "browser-preview",
+      "width": 1280,
+      "height": 720,
+      "theme": "light",
+      "scene": "全局搜索",
+      "caseIds": [
+        "SHELL-03"
+      ],
+      "steps": "点击搜索；命令列表来自现有动作注册，密钥搜索提示IPC不可用。"
+    },
+    {
+      "file": "screenshots/profile-create.jpg",
+      "runtime": "browser-preview",
+      "width": 1280,
+      "height": 720,
+      "theme": "light",
+      "scene": "新建连接表单",
+      "caseIds": [
+        "PROFILE-01"
+      ],
+      "steps": "展开侧栏，点击新增第一台服务器；不填写或提交任何数据。"
+    },
+    {
+      "file": "screenshots/account-menu.jpg",
+      "runtime": "browser-preview",
+      "width": 1280,
+      "height": 720,
+      "theme": "light",
+      "scene": "本地用户菜单",
+      "caseIds": [
+        "SHELL-03",
+        "ACCOUNT-01"
+      ],
+      "steps": "点击本地用户头像；账号入口保持现有开发中标识。"
+    },
+    {
+      "file": "screenshots/settings-appearance-light.jpg",
+      "runtime": "browser-preview",
+      "width": 1280,
+      "height": 720,
+      "theme": "light",
+      "scene": "完整窗口外观设置",
+      "caseIds": [
+        "SHELL-01"
+      ],
+      "steps": "头像菜单→设置→外观。"
+    },
+    {
+      "file": "screenshots/settings-appearance-dark.jpg",
+      "runtime": "browser-preview",
+      "width": 1280,
+      "height": 720,
+      "theme": "dark",
+      "scene": "深色外观设置",
+      "caseIds": [
+        "SHELL-01"
+      ],
+      "steps": "在临时浏览器页将主题切为深色。"
+    },
+    {
+      "file": "screenshots/home-dark.jpg",
+      "runtime": "browser-preview",
+      "width": 1280,
+      "height": 720,
+      "theme": "dark",
+      "scene": "深色欢迎页",
+      "caseIds": [
+        "SHELL-01"
+      ],
+      "steps": "外观设置→返回应用。"
+    },
+    {
+      "file": "screenshots/vault-browser-unavailable.jpg",
+      "runtime": "browser-preview",
+      "width": 1280,
+      "height": 720,
+      "theme": "dark",
+      "scene": "浏览器环境的凭据加载失败状态",
+      "caseIds": [
+        "VAULT-01"
+      ],
+      "steps": "点击密钥管理；明确记录缺少原生IPC的失败状态，不计为凭据业务验证。"
+    },
+    {
+      "file": "screenshots/vault-keygen.jpg",
+      "runtime": "browser-preview",
+      "width": 1280,
+      "height": 720,
+      "theme": "dark",
+      "scene": "密钥生成初始表单",
+      "caseIds": [
+        "VAULT-02"
+      ],
+      "steps": "密钥管理→生成密钥对；不执行生成。"
+    }
+  ],
+  "pending": [
+    {
+      "caseIds": [
+        "SHELL-04"
+      ],
+      "reason": "macOS/Windows/Linux原生窗口按钮、拖动、全屏、缩放与系统集成需分别实测。"
+    },
+    {
+      "caseIds": [
+        "TERM-01",
+        "TERM-02",
+        "TERM-03",
+        "SFTP-01",
+        "SFTP-02",
+        "SFTP-03",
+        "METRICS-01"
+      ],
+      "reason": "连接后的布局、输出、文件列表和任务状态需使用隔离的真实SSH/SFTP测试环境补充。"
+    },
+    {
+      "caseIds": [
+        "EDITOR-01",
+        "EDITOR-02",
+        "EDITOR-03"
+      ],
+      "reason": "独立编辑器、保存冲突与脏标签关闭需原生窗口和测试文件。"
+    },
+    {
+      "caseIds": [
+        "ACCOUNT-02",
+        "SYNC-01",
+        "SYNC-02",
+        "ARCHIVE-02",
+        "UPDATE-01"
+      ],
+      "reason": "真实双客户端、云目标、OAuth与签名更新不在浏览器空数据截图中冒充通过。"
+    }
+  ]
+}

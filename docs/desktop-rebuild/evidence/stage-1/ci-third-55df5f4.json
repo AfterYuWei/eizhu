@@ -1,0 +1,121 @@
+{
+  "runId": 39388131148,
+  "runNumber": 53,
+  "url": "https://github.com/AfterYuWei/eizhu/actions/runs/39388131148",
+  "workflow": "Electron four-target foundation",
+  "event": "push",
+  "commit": "55df5f489877063af8df76d7da5634c418663602",
+  "branch": "codex/electron-stage-1",
+  "status": "completed",
+  "conclusion": "failure",
+  "startedAt": "2026-10-20T07:41:03Z",
+  "completedAt": "2026-10-20T07:46:54Z",
+  "recordedAt": "2026-10-20T07:48:25Z",
+  "source": "GitHub public Actions run/jobs/artifacts API and authenticated job log UI",
+  "runAttempt": 1,
+  "rerunTriggered": false,
+  "releasePublished": false,
+  "commonChecks": {
+    "steps": {
+      "npm ci": "success",
+      "npm run check": "success",
+      "npm run test:foundation": "success",
+      "npm run baseline:test": "success",
+      "npm run desktop:build": "success"
+    },
+    "testCounts": {
+      "observedOnJobId": 118512856982,
+      "foundation": { "tests": 21, "passed": 21, "failed": 0 },
+      "baseline": { "tests": 10, "passed": 10, "failed": 0 },
+      "note": "Counts are copied from the macOS x64 job's raw test output. All four jobs report successful foundation and baseline steps in the public jobs API."
+    }
+  },
+  "jobs": [
+    {
+      "target": "darwin-x64",
+      "runner": "macos-15-intel",
+      "jobId": 118512856982,
+      "url": "https://github.com/AfterYuWei/eizhu/actions/runs/39388131148/job/118512856982",
+      "conclusion": "success",
+      "packageStep": "success",
+      "installerPattern": "*.dmg",
+      "installerSmoke": "success",
+      "appImageSmoke": "skipped",
+      "artifact": {
+        "id": 12248671356,
+        "name": "eizhu-test-darwin-x64",
+        "sizeBytes": 315113868,
+        "sha256": "3d7f95d831d0e54242d26000eab95d77a57e6cfbffd7929cbf911414b0418874",
+        "url": "https://github.com/AfterYuWei/eizhu/actions/runs/39388131148/artifacts/12248671356"
+      }
+    },
+    {
+      "target": "darwin-arm64",
+      "runner": "macos-15",
+      "jobId": 118512857294,
+      "url": "https://github.com/AfterYuWei/eizhu/actions/runs/39388131148/job/118512857294",
+      "conclusion": "failure",
+      "packageStep": "success",
+      "installerPattern": "*.dmg",
+      "installerSmoke": "failure",
+      "failedStep": "Smoke final installer contents (macOS / Windows)",
+      "cause": "The installed app reported actual window bounds [1280, 800], while the smoke assertion expected [1024, 656]; scripts/smoke-desktop.mjs exited with code 1.",
+      "appImageSmoke": "skipped",
+      "failureLogExcerpt": "artifacts/ci/third-55df5f4/macos-arm64-smoke-failure.txt",
+      "artifact": {
+        "id": 12248168353,
+        "name": "eizhu-test-darwin-arm64",
+        "sizeBytes": 307428695,
+        "sha256": "6e2e8c9f7743051e2976d0ab71b580035c67a53a223e18d0def77cb319116655",
+        "url": "https://github.com/AfterYuWei/eizhu/actions/runs/39388131148/artifacts/12248168353"
+      }
+    },
+    {
+      "target": "win32-x64",
+      "runner": "windows-2022",
+      "jobId": 118512857347,
+      "url": "https://github.com/AfterYuWei/eizhu/actions/runs/39388131148/job/118512857347",
+      "conclusion": "success",
+      "packageStep": "success",
+      "installerPattern": "*.exe",
+      "installerSmoke": "success",
+      "appImageSmoke": "skipped",
+      "artifact": {
+        "id": 12248407602,
+        "name": "eizhu-test-win32-x64",
+        "sizeBytes": 133065455,
+        "sha256": "2c156e77557bdc7bf762c246ab948b4175cfb996634fec8be0050883dcd300de",
+        "url": "https://github.com/AfterYuWei/eizhu/actions/runs/39388131148/artifacts/12248407602"
+      }
+    },
+    {
+      "target": "linux-x64",
+      "runner": "ubuntu-22.04",
+      "jobId": 118512857322,
+      "url": "https://github.com/AfterYuWei/eizhu/actions/runs/39388131148/job/118512857322",
+      "conclusion": "success",
+      "packageStep": "success",
+      "installerPattern": "*.AppImage",
+      "installerSmoke": "skipped",
+      "appImageSmoke": "success",
+      "artifact": {
+        "id": 12248771481,
+        "name": "eizhu-test-linux-x64",
+        "sizeBytes": 376785493,
+        "sha256": "06aae602b32e4ff8c1a12ad7a47ebd9735e8a72a0ef859221196ccddee70e924",
+        "url": "https://github.com/AfterYuWei/eizhu/actions/runs/39388131148/artifacts/12248771481"
+      }
+    }
+  ],
+  "artifactDownload": {
+    "uploadedByCi": true,
+    "downloadedLocally": false,
+    "note": "The overall run failed, so the conditional download of the passing matrix artifacts was not performed. Artifact metadata was recorded from the public API; no installer archives were downloaded."
+  },
+  "notValidatedByThisRun": [
+    "manual native UI acceptance",
+    "code signing and notarization",
+    "real upgrade flow",
+    "8-hour performance run"
+  ]
+}

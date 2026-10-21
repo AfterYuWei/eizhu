@@ -1,0 +1,14 @@
+{
+  "credential_mode": "encrypted",
+  "exported_at": "2026-10-20T00:00:00Z",
+  "format": "xcontrol-backup",
+  "kdf": {
+    "algo": "argon2id",
+    "memory": 65536,
+    "salt": "AAECAwQFBgcICQoLDA0ODw==",
+    "threads": 2,
+    "time": 3
+  },
+  "payload": "oKGio6Slpqeoqaqr/5RhcBAxn6573Mt1ALrP+eBQaMiyP6akIvf0uu2nhlQEWMzq2uGXuaN4m96U4fmus8neeWDoJRipvaOWkgfJWCXp654=",
+  "version": 1
+}

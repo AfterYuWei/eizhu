@@ -1,0 +1,34 @@
+
+> desktop:smoke:package
+> node scripts/smoke-package.mjs artifacts/desktop/eizhu-0.4.4-mac-x64.dmg
+
+预计CRC32 $D9DC017F
+/dev/disk3          	GUID_partition_scheme          	
+/dev/disk3s1        	Apple_HFS                      	<临时安装包目录>/volume
+"disk3" ejected.
+[31601:1020/200346.283069:WARNING:electron/shell/common/api/electron_api_native_image.cc:229] Argument must be a file path or a NativeImage
+EIZHU_SMOKE_STEP waiting-renderer
+EIZHU_SMOKE_STEP renderer-ready
+EIZHU_SMOKE_STEP foundation-bridge-passed
+EIZHU_SMOKE_STEP local-bridge-passed
+EIZHU_SMOKE_STEP stage2-native-passed
+file:///Users/yuwei/Desktop/Projects/yuweinfo/XControl/scripts/smoke-desktop.mjs:21
+    reject(new Error('Smoke timeout (120s)'))
+           ^
+
+Error: Smoke timeout (120s)
+    at Timeout._onTimeout (file:///Users/yuwei/Desktop/Projects/yuweinfo/XControl/scripts/smoke-desktop.mjs:21:12)
+    at listOnTimeout (node:internal/timers:685:17)
+    at process.processTimers (node:internal/timers:618:7)
+
+Node.js v24.22.0
+file:///Users/yuwei/Desktop/Projects/yuweinfo/XControl/scripts/smoke-package.mjs:20
+      else reject(new Error(`${command}: ${code}`))
+                  ^
+
+Error: /Users/yuwei/.nvm/versions/node/v24.22.0/bin/node: 1
+    at ChildProcess.<anonymous> (file:///Users/yuwei/Desktop/Projects/yuweinfo/XControl/scripts/smoke-package.mjs:20:19)
+    at ChildProcess.emit (node:events:514:28)
+    at ChildProcess._handle.onexit (node:internal/child_process:324:12)
+
+Node.js v24.22.0

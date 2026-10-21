@@ -1,0 +1,184 @@
+{
+  "platform": "win32",
+  "arch": "x64",
+  "versions": {
+    "node": "24.22.0",
+    "acorn": "8.18.0",
+    "ada": "4.0.0",
+    "amaro": "1.1.11",
+    "ares": "1.34.8",
+    "brotli": "1.2.0",
+    "cldr": "48.0",
+    "icu": "78.2",
+    "llhttp": "9.4.3",
+    "merve": "1.2.2",
+    "modules": "149",
+    "napi": "10",
+    "nbytes": "0.1.4",
+    "ncrypto": "0.0.1",
+    "nghttp2": "1.70.0",
+    "nghttp3": "",
+    "ngtcp2": "",
+    "openssl": "0.0.0",
+    "simdjson": "4.6.11",
+    "simdutf": "7.7.0",
+    "sqlite": "3.53.4",
+    "tz": "2026d",
+    "undici": "7.29.1",
+    "unicode": "17.0",
+    "uv": "1.52.1",
+    "uvwasi": "0.0.23",
+    "v8": "15.2.124.43-electron.0",
+    "zlib": "1.3.2.1-motley",
+    "zstd": "1.6.0",
+    "electron": "44.9.0",
+    "chrome": "152.0.7977.167"
+  },
+  "packaged": true,
+  "keyMode": "restricted-file",
+  "health": {
+    "context": {
+      "runtimeId": "914cbf7c-cf73-49f3-b3d3-719250736726",
+      "workspaceId": "offline",
+      "generation": 1
+    },
+    "schema": 1,
+    "workers": 2
+  },
+  "crypto": {
+    "kdf": true,
+    "crypto": true,
+    "ssh2": true
+  },
+  "renderer": {
+    "node": "undefined",
+    "require": "undefined",
+    "bridge": "function",
+    "health": {
+      "context": {
+        "runtimeId": "914cbf7c-cf73-49f3-b3d3-719250736726",
+        "workspaceId": "offline",
+        "generation": 1
+      },
+      "schema": 1,
+      "workers": 2
+    },
+    "text": true,
+    "reserved": "STAGE_NOT_READY",
+    "inputValidation": "BAD_REQUEST"
+  },
+  "editor": true,
+  "editorGeometry": {
+    "requested": [1280, 800],
+    "actual": [1024, 728],
+    "workArea": [1024, 728],
+    "frame": [0, 0]
+  },
+  "recovery": {
+    "failed": "RUNTIME_UNAVAILABLE",
+    "generation": 2,
+    "retainedEditorMemory": true,
+    "persistedSettings": true
+  },
+  "updaterModule": true,
+  "monaco": {
+    "typescript": true,
+    "json": true,
+    "model": true
+  },
+  "firstWindowMs": 1340.6976,
+  "processMetrics": [
+    {
+      "type": "Browser",
+      "memory": {
+        "workingSetSize": 134104,
+        "peakWorkingSetSize": 177820,
+        "privateBytes": 109584
+      },
+      "cpu": {
+        "cumulativeCPUUsage": 1.073084,
+        "percentCPUUsage": 0,
+        "idleWakeupsPerSecond": 0
+      }
+    },
+    {
+      "type": "GPU",
+      "memory": {
+        "workingSetSize": 75136,
+        "peakWorkingSetSize": 94456,
+        "privateBytes": 18048
+      },
+      "cpu": {
+        "cumulativeCPUUsage": 0.222777,
+        "percentCPUUsage": 0,
+        "idleWakeupsPerSecond": 0
+      }
+    },
+    {
+      "type": "Utility",
+      "memory": {
+        "workingSetSize": 42052,
+        "peakWorkingSetSize": 42052,
+        "privateBytes": 11920
+      },
+      "cpu": {
+        "cumulativeCPUUsage": 0.057091,
+        "percentCPUUsage": 0,
+        "idleWakeupsPerSecond": 0
+      }
+    },
+    {
+      "type": "Tab",
+      "memory": {
+        "workingSetSize": 135444,
+        "peakWorkingSetSize": 149876,
+        "privateBytes": 77284
+      },
+      "cpu": {
+        "cumulativeCPUUsage": 0.670952,
+        "percentCPUUsage": 0,
+        "idleWakeupsPerSecond": 0
+      }
+    },
+    {
+      "type": "Tab",
+      "memory": {
+        "workingSetSize": 155100,
+        "peakWorkingSetSize": 155100,
+        "privateBytes": 85020
+      },
+      "cpu": {
+        "cumulativeCPUUsage": 0.640177,
+        "percentCPUUsage": 0,
+        "idleWakeupsPerSecond": 0
+      }
+    },
+    {
+      "type": "Utility",
+      "memory": {
+        "workingSetSize": 125088,
+        "peakWorkingSetSize": 125088,
+        "privateBytes": 89508
+      },
+      "cpu": {
+        "cumulativeCPUUsage": 0.242095,
+        "percentCPUUsage": 0,
+        "idleWakeupsPerSecond": 0
+      }
+    },
+    {
+      "type": "Tab",
+      "memory": {
+        "workingSetSize": 264244,
+        "peakWorkingSetSize": 266392,
+        "privateBytes": 204360
+      },
+      "cpu": {
+        "cumulativeCPUUsage": 1.724359,
+        "percentCPUUsage": 0,
+        "idleWakeupsPerSecond": 0
+      }
+    }
+  ],
+  "screenshots": ["home-light.png", "home-dark.png", "editor-empty.png"]
+}

@@ -1,0 +1,334 @@
+{
+  "date": "2026-10-21",
+  "branch": "codex/electron-stage-2",
+  "baseRevision": "61c0a4c998c62ceb49c412715e500e67e1086458",
+  "version": "0.4.4",
+  "committed": false,
+  "pushed": false,
+  "published": false,
+  "checks": {
+    "typecheck": true,
+    "lint": true,
+    "foundationTests": 55,
+    "webTests": 205,
+    "fixedBaselineTests": 10,
+    "totalTests": 270,
+    "baselineReadOnly": true,
+    "architecture": true,
+    "diffWhitespace": true,
+    "macX64BuildSmoke": true,
+    "macX64FinalDmgSmoke": true,
+    "packagedOutputFilesIdentical": 267
+  },
+  "officialServices": "STAGE_NOT_READY; deferred until backend deployment",
+  "unexecutedTargets": [
+    "macOS arm64",
+    "Windows x64",
+    "Linux x64"
+  ],
+  "pending": [
+    "Real cloud accounts and OAuth consent/refresh at provider endpoints",
+    "Real proxy authentication and external TLS/limits",
+    "Signing, notarization, actual updates and performance",
+    "Legacy latest conflict policy and mirror_local cloud deletion remain explicitly unsupported"
+  ],
+  "files": [
+    {
+      "path": ".gitattributes",
+      "bytes": 422,
+      "sha256": "bd78d5b46b802858f5281725a0e410505e8dbfc1af423e0119ca7ef99cac1552"
+    },
+    {
+      "path": "AGENTS.md",
+      "bytes": 6432,
+      "sha256": "73dfb93a817a57890486de598d20159fe4cc0a7d1ee59d0b22bcbd61949ff6dd"
+    },
+    {
+      "path": "README.md",
+      "bytes": 2158,
+      "sha256": "6e479d1dd35d831e08a568d0a88732565bb97a204629bd563dc08f0499da0733"
+    },
+    {
+      "path": "apps/desktop/src/main/cloud-network.ts",
+      "bytes": 1970,
+      "sha256": "d0f01fb10f8cce0f0a5ff8e7a8b979675f048059bcd8c5cd5ebb9ecde2859b7b"
+    },
+    {
+      "path": "apps/desktop/src/main/index.ts",
+      "bytes": 27166,
+      "sha256": "bbbc4f39e87f99ab6fe4391afae64cf2a34620fbf849f57397b0b051286cf96b"
+    },
+    {
+      "path": "apps/desktop/src/main/runtime-host.ts",
+      "bytes": 6344,
+      "sha256": "dc685a8af6bd32b6705cd8cffb5033511e43cb32874d5b4d314e41a860cbdc50"
+    },
+    {
+      "path": "apps/desktop/src/main/smoke.ts",
+      "bytes": 14161,
+      "sha256": "90bcfd3bf1f3f67db917962a3827c6c08eeb7a0651f28384d2a8ee595a2ff12f"
+    },
+    {
+      "path": "apps/desktop/src/main/stage4-smoke.ts",
+      "bytes": 23264,
+      "sha256": "e5fe2c4e6f372607dfea4e90fc934b2dce65cc2903c4a97845f9b02c34cddb9f"
+    },
+    {
+      "path": "apps/desktop/src/main/stage5-smoke.ts",
+      "bytes": 14520,
+      "sha256": "9296759ba293f36f375d988ac9242ef28cb7f61f751cd2f599b35b76cc456db2"
+    },
+    {
+      "path": "apps/desktop/src/main/windows.ts",
+      "bytes": 7173,
+      "sha256": "167072640b40e726a15be4fa580dd6b13c518522438ae2d750d2ba454dea9cef"
+    },
+    {
+      "path": "apps/desktop/src/preload/index.ts",
+      "bytes": 9804,
+      "sha256": "b44765fafcdf2c2030c2bb4ec7f089569086126ed554bc2670e91e084c5ab88f"
+    },
+    {
+      "path": "apps/desktop/src/runtime/index.ts",
+      "bytes": 3896,
+      "sha256": "7ea1eb2150d29a0383381a0711ba59dde5f0989ad72b793616437a4e6c1b9c45"
+    },
+    {
+      "path": "apps/web/src/components/MainWindowReady.tsx",
+      "bytes": 360,
+      "sha256": "0a682123713f534a4d095fc77e87d88f84fe3166c442974eb47fcb42b5d8ffc5"
+    },
+    {
+      "path": "apps/web/src/components/SettingsDialog/AccountPanel.tsx",
+      "bytes": 654,
+      "sha256": "28848278668202d0eb2f0ae205e4d78854c11c8ec577a4735944ec9e8d0f4dbb"
+    },
+    {
+      "path": "apps/web/src/components/SettingsDialog/ArchivePanel.tsx",
+      "bytes": 13364,
+      "sha256": "2886ce6227b120d471e0dc304f663e666e28bb9df2c1fdd67467a9e3a98b27aa"
+    },
+    {
+      "path": "apps/web/src/components/SettingsDialog/ProviderForm.tsx",
+      "bytes": 14472,
+      "sha256": "6d3f75bbcb9d7f892e53593aeb5d5e422e0e4089b037ada0c0cb48489a49a78f"
+    },
+    {
+      "path": "apps/web/src/components/SettingsDialog/SyncPanel.tsx",
+      "bytes": 9818,
+      "sha256": "784db1e96d5ea2e75294fbb911e4d3f8ab943e4cbaa192afecbbf67f4662ed07"
+    },
+    {
+      "path": "apps/web/src/main.tsx",
+      "bytes": 2552,
+      "sha256": "4e526b11b6dfd114f3d1353eca06b637ec072a0e42b3794fac8a7c66f4390212"
+    },
+    {
+      "path": "docs/BACKUP_CLOUD.md",
+      "bytes": 5427,
+      "sha256": "b75cf8ecf70d3b1e8a1f1e8c0e3815a2c2d3dd935e44ccf38d2111c76e80fb41"
+    },
+    {
+      "path": "docs/DEVELOPMENT.md",
+      "bytes": 4167,
+      "sha256": "31037a6bc2dcbf906e881ef5a5f33b9fbd3eef651259bd8036d9e2b7b9877859"
+    },
+    {
+      "path": "docs/SECURITY.md",
+      "bytes": 2353,
+      "sha256": "a117d5b22d9ec30c85bda97fd3c387f7e99fa2cc607733a98f6552630f3e569a"
+    },
+    {
+      "path": "docs/desktop-rebuild/ARCHITECTURE.md",
+      "bytes": 7715,
+      "sha256": "3cda5e5a52ac75b11b833a12d3acc6665ac58497724286ed3ddfde9f1a140d5d"
+    },
+    {
+      "path": "docs/desktop-rebuild/README.md",
+      "bytes": 5667,
+      "sha256": "db4fc1a25a789a1ce9455cdbbbc1edce53b94ba420892506b126eca29e1ae30d"
+    },
+    {
+      "path": "docs/desktop-rebuild/STAGE_5_REPORT.md",
+      "bytes": 9082,
+      "sha256": "1fc3ec78c6c3b166e98bae20593345a33d814475dc209707ad828335c734facd"
+    },
+    {
+      "path": "docs/desktop-rebuild/evidence/stage-5/README.md",
+      "bytes": 1658,
+      "sha256": "f13b4219b5240d65590f72579df39c89f94170fde248a4809d9c93704d376b7a"
+    },
+    {
+      "path": "docs/desktop-rebuild/evidence/stage-5/architecture.log",
+      "bytes": 266,
+      "sha256": "17afa834ec5832b9cdad34a40f98c7f48afbb0ddd4d960b33a7138ca1dad3f8d"
+    },
+    {
+      "path": "docs/desktop-rebuild/evidence/stage-5/baseline.log",
+      "bytes": 372,
+      "sha256": "bab791cc02b3fa01cdc5025f67961227f94b65b33abcd634a7111420008cda34"
+    },
+    {
+      "path": "docs/desktop-rebuild/evidence/stage-5/build.log",
+      "bytes": 12683,
+      "sha256": "c9b5f59d581536695b557ac5f3646c51ecf1eb61d39f8aeda3d82379d2417ffc"
+    },
+    {
+      "path": "docs/desktop-rebuild/evidence/stage-5/check.log",
+      "bytes": 106,
+      "sha256": "413abc9fc7800b09a9e840345d722f31553400744faae680422296445a0e5ec1"
+    },
+    {
+      "path": "docs/desktop-rebuild/evidence/stage-5/lint.log",
+      "bytes": 113,
+      "sha256": "ba02043fd9d32d1fd5c35de1b8a1115f694e06060ff47d9a258aa41d42dc183a"
+    },
+    {
+      "path": "docs/desktop-rebuild/evidence/stage-5/mac-x64-build-backup.png",
+      "bytes": 87237,
+      "sha256": "fdfa5e278c2d95ac2dba1ee7ac2d97a613139b7edc3faf5dfaa2a2d38b4a1574"
+    },
+    {
+      "path": "docs/desktop-rebuild/evidence/stage-5/mac-x64-build-smoke.json",
+      "bytes": 7728,
+      "sha256": "50f0f5d9451377be28fa9ab7ec6bb1fb3cacede06b1e56f4350503d404fa93ed"
+    },
+    {
+      "path": "docs/desktop-rebuild/evidence/stage-5/mac-x64-build-smoke.log",
+      "bytes": 7935,
+      "sha256": "477b8ed5974da7eb2da6ec1285eced83a042becf21cbac1543bfd6a549019ec9"
+    },
+    {
+      "path": "docs/desktop-rebuild/evidence/stage-5/mac-x64-package-backup.png",
+      "bytes": 87053,
+      "sha256": "3cef1b2aa26bc689f845a7ce8fee896fad17d93a22c0d918aaac586e22484886"
+    },
+    {
+      "path": "docs/desktop-rebuild/evidence/stage-5/mac-x64-package-files.json",
+      "bytes": 47667,
+      "sha256": "98e0df07daaa37a18ae1ab05c96ec904586112155b4b996803e4a965bb6013ce"
+    },
+    {
+      "path": "docs/desktop-rebuild/evidence/stage-5/mac-x64-package-smoke.json",
+      "bytes": 7734,
+      "sha256": "f1bfff33af8eaa080ec47aba5d791802864af1c18922c306b29a9aad0f39b93c"
+    },
+    {
+      "path": "docs/desktop-rebuild/evidence/stage-5/mac-x64-package-smoke.log",
+      "bytes": 9334,
+      "sha256": "48f283b872cdf46c329cce9af17cf390546a29e69f59aac3fb4f40d7622f1c3f"
+    },
+    {
+      "path": "docs/desktop-rebuild/evidence/stage-5/package.log",
+      "bytes": 1919,
+      "sha256": "2aa51674a3463bc07dfe03f9e9f97af13c2bc51259190aac0e0d851cd0a275f4"
+    },
+    {
+      "path": "docs/desktop-rebuild/evidence/stage-5/test.log",
+      "bytes": 7228,
+      "sha256": "05440fd7cda837acd3f785598b5417dd2786c14a1e2491a9c41f1e65ee77f1d2"
+    },
+    {
+      "path": "packages/contracts/src/archive.ts",
+      "bytes": 6821,
+      "sha256": "3ef1b14b10d2c2b1e923d1a0e8ae3ffb8c66531f766946e98159eb99afd2c9a7"
+    },
+    {
+      "path": "packages/contracts/src/index.ts",
+      "bytes": 3403,
+      "sha256": "4fbdb0d54f2e0d1c8a6f446672fef3d6aa53f4a822f24290ffcd80d03c1b7e7d"
+    },
+    {
+      "path": "packages/contracts/src/local.ts",
+      "bytes": 10383,
+      "sha256": "c5237742589fcb70b8580d7b659b49d206bcb2c5fe1b767f38ef888acba5a752"
+    },
+    {
+      "path": "packages/core/src/archive/network.ts",
+      "bytes": 1306,
+      "sha256": "5a2e550f1b4a514f99bf567096d8330b9da47ea5a81abeac1993f1e52fcf6a40"
+    },
+    {
+      "path": "packages/core/src/archive/oauth.test.ts",
+      "bytes": 3236,
+      "sha256": "561a5afdae2e0503f78592b91f9aa2c34e1a9b5ea961cbc38e4dc301ebd76859"
+    },
+    {
+      "path": "packages/core/src/archive/oauth.ts",
+      "bytes": 7754,
+      "sha256": "96a183f7abe5a297c0bbaf622d5fd615e69514babc576fb4f30c4f8d99a85971"
+    },
+    {
+      "path": "packages/core/src/archive/providers.test.ts",
+      "bytes": 5984,
+      "sha256": "85c51af514edc32a840c0075e519800601cb36a342b44135e6c50a2499a58cf0"
+    },
+    {
+      "path": "packages/core/src/archive/providers.ts",
+      "bytes": 12085,
+      "sha256": "9dc460c844b4aebdb9dc5a028644d5eff27636b7585fcfce5ea378bf82846bed"
+    },
+    {
+      "path": "packages/core/src/archive/repository.ts",
+      "bytes": 11817,
+      "sha256": "3c6f7e69954750f947787b1c23c1519fa45dbd891a6348d562a5e40d276c2ecc"
+    },
+    {
+      "path": "packages/core/src/archive/schedule.test.ts",
+      "bytes": 925,
+      "sha256": "0ca26308e314acd45aa2ad7d98c57cb495eb5549f74a855fddca826b8cdac645"
+    },
+    {
+      "path": "packages/core/src/archive/schedule.ts",
+      "bytes": 716,
+      "sha256": "034cfaf0965b5e121ada22f9326b23f5c4f08f1a405cae9b4899d8c84f52ea01"
+    },
+    {
+      "path": "packages/core/src/archive/service.ts",
+      "bytes": 16694,
+      "sha256": "4f42bb2647b3ae02723d4cb02d0c469814334ff2c54f9d7aca98db0e654b87b6"
+    },
+    {
+      "path": "packages/core/src/database/local-store.ts",
+      "bytes": 32445,
+      "sha256": "599adc9cc32c519e604296a0d52bf25bc0255282d8041a4661cb75cc296080c1"
+    },
+    {
+      "path": "packages/core/src/database/worker.ts",
+      "bytes": 2753,
+      "sha256": "b1ed86ca5405ec019add06aec96a175475c6c00aa57f5c94192cd7cec985c2c9"
+    },
+    {
+      "path": "packages/core/src/local/backup.ts",
+      "bytes": 7483,
+      "sha256": "c5d325bb79dd35722300f57fd267492376e539cec69ac49157292fb0f0de81fc"
+    },
+    {
+      "path": "packages/core/src/runtime/service.ts",
+      "bytes": 11382,
+      "sha256": "69792411c9daf22df5334576784cc086e370b806e9dcf206a04abf5788f29df4"
+    },
+    {
+      "path": "packages/core/src/workers/compute.ts",
+      "bytes": 3953,
+      "sha256": "2b32ff3af5e26939720793d21f20d6224b5d37c50ee0959dca541e92366170d8"
+    },
+    {
+      "path": "scripts/smoke-desktop.mjs",
+      "bytes": 3168,
+      "sha256": "1d1918b8c7919afbdfa43d1c576bfc5992d5e5292fa93415cb4e2fe8d30783ae"
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "artifacts/desktop/stage-5/eizhu-0.4.4-mac-x64.dmg",
+      "bytes": 158050862,
+      "sha256": "165bad17cedebcf8570e75cf79390dcf6028d1ba3a788b7c4e447fd39057234d"
+    },
+    {
+      "path": "artifacts/desktop/stage-5/eizhu-0.4.4-mac-x64.zip",
+      "bytes": 157381514,
+      "sha256": "256998416f9c814d2053457a798c7e050d1372b79039d878b669e982d9d13d3d"
+    }
+  ]
+}

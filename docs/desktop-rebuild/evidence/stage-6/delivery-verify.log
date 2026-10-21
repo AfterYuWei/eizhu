@@ -1,0 +1,30 @@
+
+> desktop:delivery:verify
+> node scripts/verify-desktop-delivery.mjs --directory=artifacts/desktop/stage-6 --asar=artifacts/desktop/mac/eizhu.app/Contents/Resources/app.asar --report=docs/desktop-rebuild/evidence/stage-6/delivery.json
+
+{
+  "artifacts": [
+    {
+      "path": "artifacts/desktop/stage-6/eizhu-0.4.4-test.309.8334c5fe-mac-x64.dmg",
+      "bytes": 158052361,
+      "sha256": "6331d09b22e6d51799bede4aec20eb12675cc22a8bb86c245c0fe24d0400b596"
+    },
+    {
+      "path": "artifacts/desktop/stage-6/eizhu-0.4.4-test.309.8334c5fe-mac-x64.dmg.blockmap",
+      "bytes": 165933,
+      "sha256": "a2c3fc7dca514a62e204a0abe59780e87d3a8f9fd272e47414034bba037fea84"
+    },
+    {
+      "path": "artifacts/desktop/stage-6/eizhu-0.4.4-test.309.8334c5fe-mac-x64.zip",
+      "bytes": 157387296,
+      "sha256": "5ed6d82c7d902cbdf9475e29a9bf0d700a07b62efe2f58157f348a16e0e07035"
+    },
+    {
+      "path": "artifacts/desktop/stage-6/eizhu-0.4.4-test.309.8334c5fe-mac-x64.zip.blockmap",
+      "bytes": 164895,
+      "sha256": "2e9314c02f297d7ffdcbd6efc45a36594f70c34dedf3289d11bc59cc996ce89f"
+    }
+  ],
+  "verifiedPackageFiles": 269,
+  "sourceFiles": 559
+}

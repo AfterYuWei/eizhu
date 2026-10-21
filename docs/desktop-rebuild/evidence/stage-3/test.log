@@ -1,0 +1,87 @@
+
+> test
+> npm run test:foundation && npm run test:unit --workspace @eizhu/web && npm run baseline:test
+
+
+> test:foundation
+> node --experimental-strip-types --test packages/*/src/**/*.test.ts apps/desktop/src/main/*.test.ts
+
+✔ file grants reject arbitrary paths, wrong windows, contexts, kinds and released references (14.210479ms)
+✔ shutdown message leaves stop pending until the real exit event and then removes its listener (10.950652ms)
+✔ graceful deadline kills the child but still waits for its exit event (21.725425ms)
+✔ failed kill rejects and removes the exit listener (7.41488ms)
+✔ successful forced kill still rejects at its deadline if no exit arrives and cleans up (12.894504ms)
+✔ postMessage failure switches directly to force kill and still waits for exit (0.980998ms)
+✔ missing pid is a no-op (0.280154ms)
+✔ asset protocol rejects another host, scheme, encoded traversal and path separators (3.138619ms)
+✔ page authorization checks exact origin instead of URL prefix matching (0.548267ms)
+✔ main clears an unchanged secret after 30 seconds and preserves later user copies (8.26898ms)
+✔ scope rejects stale instances, workspaces and generations independently (6.586988ms)
+✔ only exact request envelopes, bounded settings and http(s) external links are accepted (10.080944ms)
+✔ errors never serialize raw third-party details and preserve intentional structured context (2.025404ms)
+✔ stage 2 exposes local domains while SSH, accounts and cloud remain reserved (11.841141ms)
+✔ list output schemas reject leaked credentials and invalid restore sources (2.795818ms)
+✔ redacts multiline keys, quoted passwords, bearer tokens, query tokens and URL credentials (3.797404ms)
+✔ SSH contract rejects arbitrary completion programs, unsafe listeners and invalid input (18.616432ms)
+✔ fresh restricted key persists privately and is reused; never reads an old app directory (20.631607ms)
+✔ locked system key is preserved, never falls back or generates a new key (15.040344ms)
+✔ existing data without device key cannot initialize a replacement key (3.460712ms)
+✔ close aborts first, waits all owned resources in reverse order, is idempotent (4.006956ms)
+✔ fixed generators quote path and namespace operands and never run package scripts (1.021964ms)
+✔ metrics preserve CPU, memory, disk and network delta semantics (1.283434ms)
+✔ SOCKS destination encoding preserves IPv4, IPv6, mapped IPv4 and remote DNS (9.882642ms)
+✔ route resolves vault username and credentials, orders multiple jumps and omits unrelated records (5.799564ms)
+✔ test connection patch cannot retain password when auth changes to key or alter the stored profile (2.815564ms)
+✔ binary terminal waits for real byte acknowledgements and keeps replay bounded (161.364507ms)
+✔ replacing a terminal port cannot retain an old consumer (1.088449ms)
+✔ worker queue is bounded; closing drains accepted jobs and rejects new work (122.08021ms)
+✔ worker crash rejects active and queued jobs without replay or orphan promises (55.100384ms)
+✔ queued cancellation frees capacity and removes its abort listener (106.692406ms)
+✔ active cancellation waits for worker completion and leaves the caller buffer owned by the caller (120.909006ms)
+✔ unserializable input rejects immediately without poisoning the worker or leaking timers (49.530259ms)
+ℹ tests 33
+ℹ suites 0
+ℹ pass 33
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1241.17441
+
+> test:unit
+> vitest run
+
+
+ RUN  v5.0.5 /Users/yuwei/Desktop/Projects/yuweinfo/XControl/apps/web
+
+
+ Test Files  52 passed (52)
+      Tests  201 passed (201)
+   Start at  20:57:26
+   Duration  7.03s (environment 55%, import 24%, tests 16%, transform 3%, worker 1%)
+
+    Isolate  52 workers spawned · ~1.10s startup each (spawn + environment, per file)
+             at least ~2.72s faster with isolate: false — reuses workers across files instead of one per file
+
+
+> baseline:test
+> node --test scripts/desktop-baseline.test.mjs
+
+✔ frozen source, UI assets and original Rust backup/sync vectors verify independently in Node (423.251873ms)
+✔ wrong password, format AAD and modified authentication tags reject original exporter ciphertext (168.704016ms)
+✔ sync ciphertext is bound to user, type, ID, revision, epoch, key version and deletion (1.195168ms)
+✔ encrypted OpenSSH specimen contains a real password-protected private key and dependency graph (0.991297ms)
+✔ none specimens never retain vault bodies, references or proxy/inline secrets (0.76858ms)
+✔ a changed frozen fixture is rejected before any cryptographic or UI comparison (35.31368ms)
+✔ adding an unreviewed file cannot silently expand the frozen evidence set (31.919402ms)
+✔ acceptance coverage rejects orphan mappings and duplicate interfaces (3.579906ms)
+✔ fixture lookup rejects paths outside the evidence directory (0.465953ms)
+✔ legacy interfaces can be reconstructed from the frozen Git source after deleting the old runtime (2847.373493ms)
+ℹ tests 10
+ℹ suites 0
+ℹ pass 10
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 3606.854328

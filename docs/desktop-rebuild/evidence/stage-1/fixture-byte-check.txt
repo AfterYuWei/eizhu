@@ -1,0 +1,12 @@
+# 固定基线样本字节保护核验
+
+只读命令：对下列每个样本执行 `git -c core.autocrlf=true cat-file --filters --path=<path> HEAD:<path>`，将 stdout bytes 与同路径工作区文件 bytes 比较；再执行 `git check-attr text -- <四个路径>`。
+
+| 样本 | 比较 | bytes | SHA-256 |
+| --- | --- | ---: | --- |
+| `tests/fixtures/desktop-baseline/payload-plain.json` | MATCH | 4813 | `5e2ae17bbbb4f402c38b75fc598bae2c45d415251d30f6fc2c6ae3f2d932b03c` |
+| `tests/fixtures/desktop-baseline/eizhu-none.eizhubackup` | MATCH | 4698 | `be05e36e9a201215ba706639877726ac2ddd7267a3f14d3f98a18b3e02b40c16` |
+| `tests/fixtures/desktop-baseline/xcontrol-none.xcbackup` | MATCH | 4701 | `7c0177c1734729d9f546298e6918294fe13ec9cad5eaa1284006b7eedad61198` |
+| `tests/fixtures/desktop-baseline/screenshots/home-dark.jpg` | MATCH | 22323 | `f6419e8589e4f8ec94010a6131d721cacdd6c4deb8c2e5800d39b7c8f9160810` |
+
+四个样本的 `text` 属性均为 `unset`。本记录只证明当前工作区属性下这四类样本在 `core.autocrlf=true` 时与 HEAD 样本逐字节一致；未验证 Windows CI，本结果不能证明或宣称其 `baseline:test` 失败已修复。
