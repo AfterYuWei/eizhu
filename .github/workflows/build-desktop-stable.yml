@@ -1,4 +1,4 @@
-name: Electron stable test packages
+name: Electron stable candidate packages
 on: workflow_dispatch
 permissions:
   contents: read

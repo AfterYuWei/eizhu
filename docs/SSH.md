@@ -1,6 +1,6 @@
 # SSH、终端与隧道
 
-阶段 3 使用 `ssh2`，连接位于 Electron utilityProcess 的 `packages/core/src/ssh/`，不建立本地 HTTP/WebSocket 网关。前端继续使用原 xterm、分屏、搜索、片段和补全组件。SFTP 文件操作与编辑器保存仍属于阶段 4；阶段 3 的详情文件树只开放有界目录读取。
+阶段 3 使用 `ssh2`，连接位于 Electron utilityProcess 的 `packages/core/src/ssh/`，不建立本地 HTTP/WebSocket 网关。前端继续使用原 xterm、分屏、搜索、片段和补全组件。SFTP 文件操作与编辑器保存见 [阶段 4 报告](desktop-rebuild/STAGE_4_REPORT.md)；阶段 3 的详情文件树只开放有界目录读取。
 
 ## 认证与路由
 

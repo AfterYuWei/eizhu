@@ -9,6 +9,7 @@ export * from './foundation.ts'
 export * from './errors.ts'
 export * from './logging.ts'
 export * from './events.ts'
+export * from './update.ts'
 export * from './local.ts'
 export * from './ssh.ts'
 export * from './sftp.ts'
@@ -37,6 +38,7 @@ type FoundationClient = {
   }
 }
 export interface DesktopEvents {
+  'eizhu-update-progress': import('./update.ts').UpdateProgress
   'eizhu-workspace-changed': WorkspaceStatus
   'eizhu-sync-message': { workspaceGeneration: number; status: SyncStatus }
   'eizhu-session-message': (

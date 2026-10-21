@@ -1,5 +1,5 @@
-import { readFileSync } from 'node:fs'
-const version = readFileSync(new URL('../../VERSION', import.meta.url), 'utf8').trim()
+import { buildSettings } from '../../scripts/desktop-build-settings.mjs'
+const { version, channel, feeds } = buildSettings()
 export default {
   appId: 'com.yuweinfo.eizhu',
   productName: 'eizhu',
@@ -8,6 +8,7 @@ export default {
   extraMetadata: {
     name: 'eizhu',
     version,
+    eizhuChannel: channel,
     main: 'out/main/index.cjs',
     description: 'eizhu 桌面终端与 SFTP 客户端',
     author: 'yuweinfo',
@@ -36,5 +37,5 @@ export default {
     maintainer: 'yuweinfo',
   },
   protocols: [{ name: 'eizhu', schemes: ['eizhu'] }],
-  publish: null,
+  publish: feeds[channel] ? [{ provider: 'generic', url: feeds[channel], channel: 'latest' }] : null,
 }

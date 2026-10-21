@@ -1,0 +1,71 @@
+
+> desktop:smoke
+> node scripts/smoke-desktop.mjs
+
+[62479:1021/123329.501630:WARNING:electron/shell/common/api/electron_api_native_image.cc:229] Argument must be a file path or a NativeImage
+EIZHU_SMOKE_STEP waiting-renderer
+EIZHU_SMOKE_APP_READY 1 true
+EIZHU_SMOKE_STEP renderer-ready
+EIZHU_SMOKE_STEP foundation-bridge-passed
+EIZHU_SMOKE_STEP local-bridge-passed
+EIZHU_SMOKE_STEP stage2-native-passed
+EIZHU_STAGE3_STEP peers-listening
+EIZHU_STAGE3_STEP host-key-and-utf8-passed
+EIZHU_STAGE3_STEP binary-completion-passed
+EIZHU_STAGE3_STEP details-path-completion-passed
+EIZHU_STAGE3_STEP route-key
+EIZHU_STAGE3_STEP route-keyboard-interactive
+EIZHU_STAGE3_STEP route-http
+EIZHU_STAGE3_STEP route-socks5
+EIZHU_STAGE3_STEP route-jump
+EIZHU_STAGE3_STEP tunnel-local
+EIZHU_STAGE3_STEP tunnel-dynamic
+EIZHU_STAGE3_STEP tunnel-remote
+EIZHU_STAGE3_STEP fault-injection
+EIZHU_STAGE3_STEP mfa-cancel-passed
+EIZHU_STAGE3_STEP host-reject-cancel-passed
+EIZHU_STAGE3_STEP handshake-stop-passed
+EIZHU_STAGE3_STEP proxy-rejection-passed
+EIZHU_STAGE3_STEP port-occupied-passed
+EIZHU_LOAD_PROGRESS 9 3000
+EIZHU_STAGE3_STEP cleanup
+EIZHU_SMOKE_STEP stage3-native-passed
+EIZHU_STAGE4_STEP openssh-connected
+EIZHU_STAGE4_STEP safe-save-and-file-operations
+EIZHU_STAGE4_STEP streaming-relay-archives
+[62479:1021/123342.023468:WARNING:electron/shell/common/api/electron_api_native_image.cc:229] Argument must be a file path or a NativeImage
+EIZHU_STAGE4_STEP editor-ownership-and-dirty-close
+EIZHU_STAGE4_STEP sftp-ui-captured
+EIZHU_SMOKE_STEP stage4-native-passed
+EIZHU_STAGE5_STEP password-ready
+EIZHU_STAGE5_STEP dedup-passed
+EIZHU_STAGE5_STEP submit-latest
+EIZHU_STAGE5_STEP submit-latest
+EIZHU_STAGE5_STEP submit-latest
+EIZHU_STAGE5_STEP submit-latest
+EIZHU_STAGE5_STEP submit-latest
+EIZHU_SMOKE_STEP stage5-native-passed
+eizhu initialization failed; existing data retained
+DesktopError: 检查更新失败，请检查更新源和网络后重试
+    at Object.fail (/Users/yuwei/Desktop/Projects/yuweinfo/XControl/apps/desktop/out/main/chunks/src-DH1LMuG1.cjs:4364:8)
+    at Updates.check (/Users/yuwei/Desktop/Projects/yuweinfo/XControl/apps/desktop/out/main/index.cjs:750:16)
+    at async verifyStage6 (/Users/yuwei/Desktop/Projects/yuweinfo/XControl/apps/desktop/out/main/chunks/smoke-D7EPxLQG.cjs:1098:22)
+    at async runSmoke (/Users/yuwei/Desktop/Projects/yuweinfo/XControl/apps/desktop/out/main/chunks/smoke-D7EPxLQG.cjs:1639:17)
+    at async start (/Users/yuwei/Desktop/Projects/yuweinfo/XControl/apps/desktop/out/main/index.cjs:1421:3) {
+  error: { code: 'UPDATE_CHECK_FAILED', message: '检查更新失败，请检查更新源和网络后重试' },
+  retryable: false,
+  details: undefined,
+  sessionId: undefined,
+  stage: undefined,
+  references: undefined
+}
+file:///Users/yuwei/Desktop/Projects/yuweinfo/XControl/scripts/smoke-desktop.mjs:40
+    else reject(new Error(`Smoke exit ${code}`))
+                ^
+
+Error: Smoke exit 1
+    at ChildProcess.<anonymous> (file:///Users/yuwei/Desktop/Projects/yuweinfo/XControl/scripts/smoke-desktop.mjs:40:17)
+    at ChildProcess.emit (node:events:514:28)
+    at ChildProcess._handle.onexit (node:internal/child_process:324:12)
+
+Node.js v24.22.0

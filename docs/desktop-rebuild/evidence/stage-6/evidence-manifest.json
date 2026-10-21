@@ -1,0 +1,142 @@
+{
+  "files": [
+    {
+      "path": "README.md",
+      "bytes": 2248,
+      "sha256": "7596d37f62756732f5a0c1d396d308b481a5d6dc3b8e89ea8ba5c036bf6a7df9"
+    },
+    {
+      "path": "architecture.log",
+      "bytes": 328,
+      "sha256": "429f730348a32b61c0fcbdc1829dcc0053a7a69fe88c18b15382306c5231395e"
+    },
+    {
+      "path": "baseline.log",
+      "bytes": 372,
+      "sha256": "bab791cc02b3fa01cdc5025f67961227f94b65b33abcd634a7111420008cda34"
+    },
+    {
+      "path": "build-guard.log",
+      "bytes": 96,
+      "sha256": "6fca58e6be51681954c3d9388023736506fb52845587afc9276e1d84dc655cbb"
+    },
+    {
+      "path": "build-smoke.log",
+      "bytes": 9203,
+      "sha256": "91515a05a8f927212f16940e3cee78b6f219e1db348e5905b986b447542a2aea"
+    },
+    {
+      "path": "build.log",
+      "bytes": 12879,
+      "sha256": "52b01d6603e1e4b9fb231d8eda9a91f8c6ef65dd91ca70ef70839068bdb507c3"
+    },
+    {
+      "path": "check.log",
+      "bytes": 106,
+      "sha256": "413abc9fc7800b09a9e840345d722f31553400744faae680422296445a0e5ec1"
+    },
+    {
+      "path": "delivery-verify.log",
+      "bytes": 1154,
+      "sha256": "cfe37f397b1e58280f2e6419e1f5d5861919813b996bf6c506679fcdce6cb7f6"
+    },
+    {
+      "path": "delivery.json",
+      "bytes": 147498,
+      "sha256": "4e3d5e85fa36d8be2f45fc4ae10795ac7f00037d0ff47c71448cecf458e59ac6"
+    },
+    {
+      "path": "diff-check.log",
+      "bytes": 25,
+      "sha256": "f15e272db1df9395716cc6c9451d6ec887a90f7264f91b639e60886b3df17b56"
+    },
+    {
+      "path": "documentation-links.log",
+      "bytes": 55,
+      "sha256": "20e53d3cbda46a0d88d9331f9e5eb9f107e6b272024907991b8d7d68e4526210"
+    },
+    {
+      "path": "lint.log",
+      "bytes": 113,
+      "sha256": "ba02043fd9d32d1fd5c35de1b8a1115f694e06060ff47d9a258aa41d42dc183a"
+    },
+    {
+      "path": "load-first-failure.log",
+      "bytes": 3362,
+      "sha256": "76668c37c86be58fc0fa115b48972516a2b25cc3819785c8034324fe1237890b"
+    },
+    {
+      "path": "mac-x64-build-smoke.json",
+      "bytes": 8918,
+      "sha256": "3d2459e6b495b36039142dae2dd4c0dd96373f670771e265e2753e34d8d13e63"
+    },
+    {
+      "path": "mac-x64-build-update.png",
+      "bytes": 55238,
+      "sha256": "2971864c583e2d7e272b5e0fd355ca67498ddc10d5a59ce230dfee0c11a4a65e"
+    },
+    {
+      "path": "mac-x64-package-backup.png",
+      "bytes": 87198,
+      "sha256": "83f13ac4bdd38e06e1a1b433d56588d8d7957f5adfbc4eaa7c1e0df0c9d10178"
+    },
+    {
+      "path": "mac-x64-package-editor.png",
+      "bytes": 11618,
+      "sha256": "c3d2d22eb7138f2c2d9ee8343cc6956e2a1d797d91f06cd54d77283ca93c0612"
+    },
+    {
+      "path": "mac-x64-package-home-dark.png",
+      "bytes": 35378,
+      "sha256": "9a1ce27545693ae90eedbda21ed62d589759fdb32f2d036e9ea78979c9f6291f"
+    },
+    {
+      "path": "mac-x64-package-home-light.png",
+      "bytes": 38003,
+      "sha256": "91debbc28357728ab477e3e2c3bbfb8437665d9e6aa10bf86e78b68607ddc3c9"
+    },
+    {
+      "path": "mac-x64-package-sftp.png",
+      "bytes": 63524,
+      "sha256": "777427162e7e06a577e6084df7ab13f1dab574789dd37371ee588cf54d623906"
+    },
+    {
+      "path": "mac-x64-package-smoke.json",
+      "bytes": 9134,
+      "sha256": "a7346dfaf10d6f8f4cc89237df2f19c70003b06f965552dfc53d47a77ad538c6"
+    },
+    {
+      "path": "mac-x64-package-update.png",
+      "bytes": 55157,
+      "sha256": "367cb78995ace0931ff2dece8ab2b4af8d7577f8f4a267f24bdcc10248ae4cd4"
+    },
+    {
+      "path": "package-smoke.log",
+      "bytes": 10535,
+      "sha256": "f20230fa5c516376e449abb61d9308d3bd492701809ec9bcefc5b6dc4084a5e3"
+    },
+    {
+      "path": "package.log",
+      "bytes": 2280,
+      "sha256": "b318422ab4b78a2cd7cf51eb2b333828ef3397740864ff9bfe46d6446cec1f24"
+    },
+    {
+      "path": "scope.log",
+      "bytes": 3674,
+      "sha256": "12c6868835ca77b048a48443f7fc1c6a70534e50df19c9c2b34ab43646b1724f"
+    },
+    {
+      "path": "test.log",
+      "bytes": 7868,
+      "sha256": "3ef1a30f6623eae4ea1efc8f05b744b27927d36cd25491e3f56b9d87f3b69245"
+    },
+    {
+      "path": "updater-first-failure.log",
+      "bytes": 3187,
+      "sha256": "2ce72230827914cc00efc76df515ff63133e233c42250dd06f3f1a1f18e7423a"
+    }
+  ],
+  "excludes": [
+    "evidence-manifest.json"
+  ]
+}

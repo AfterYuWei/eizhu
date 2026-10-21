@@ -1,5 +1,6 @@
 import { verifyStage3 } from './stage3-smoke.ts'
 import { verifyStage5 } from './stage5-smoke.ts'
+import { verifyStage6 } from './stage6-smoke.ts'
 import { verifyStage4 } from './stage4-smoke.ts'
 import { app, BrowserWindow as TestWindow, screen } from 'electron'
 import type { BrowserWindow } from 'electron'
@@ -85,6 +86,8 @@ export async function runSmoke(options: {
   assert.deepEqual(renderer.local, [])
   assert.equal(renderer.arbitraryPath, 'FORBIDDEN')
   step('foundation-bridge-passed')
+  const stage6 = await verifyStage6(window, root)
+  step('stage6-updater-passed')
   const localBridge = await window.webContents.executeJavaScript(`(async () => {
     const api=window.eizhu;
     const group=await api.group.create({request:{name:'阶段 2 合成分组'}});
@@ -105,7 +108,7 @@ export async function runSmoke(options: {
     .call<{ passed: boolean }>('runtime.verifyStage2', { fixtures: process.env.EIZHU_SMOKE_FIXTURES })
   assert.equal(stage2.passed, true)
   step('stage2-native-passed')
-  const stage3=await verifyStage3(window,options.runtime())
+  const stage3=await verifyStage3(window,options.runtime(),root)
   const stage3Storage=await options.runtime().call<{passed:boolean}>('runtime.verifyStage3Storage')
   assert.equal(stage3Storage.passed,true)
   step('stage3-native-passed')
@@ -245,6 +248,7 @@ export async function runSmoke(options: {
     stage3Storage,
     stage4,
     stage5,
+    stage6,
     localBridge,
     editor: true,
     editorGeometry,

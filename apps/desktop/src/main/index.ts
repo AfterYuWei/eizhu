@@ -44,8 +44,11 @@ import { Windows } from './windows.ts'
 import { assetPath, isTrustedPage } from './security.ts'
 import { DocumentGrants, saveAtomically,exportFileAtomically } from './documents.ts'
 import { SensitiveClipboard } from './sensitive-clipboard.ts'
+import updater from 'electron-updater'
+import { Updates } from './updates.ts'
 declare const __EIZHU_VERSION__: string
 declare const __EIZHU_CHANNEL__: string
+declare const __EIZHU_UPDATE_FEEDS__: Partial<Record<'stable' | 'test', string>>
 
 const smoke = process.argv.includes('--smoke-test')
 const smokeRoot = process.argv.find((value) => value.startsWith('--smoke-root='))?.slice(13)
@@ -83,6 +86,7 @@ let deviceKey: Buffer | undefined
 let shuttingDown = false
 let healthy = false
 let restarting: Promise<RuntimeContext> | undefined
+let updates: Updates
 const documents = new DocumentGrants()
 const sensitiveClipboard = new SensitiveClipboard(clipboard)
 const startedAt = performance.now()
@@ -102,6 +106,7 @@ function runtimeFailed(): void {
   windows?.broadcast('eizhu-runtime-state', { status: 'failed', message: '业务进程已退出，未保存内容仍保留' })
 }
 async function restartRuntime(): Promise<RuntimeContext> {
+  updates?.invalidate()
   restarting ??= (async () => {
     windows.cancelConfirmations()
     healthy = false
@@ -155,7 +160,7 @@ function capabilities(): PlatformCapabilities {
             : 'unknown',
     runtime: 'desktop',
     windowControls: true,
-    appUpdates: false,
+    appUpdates: updates?.available ?? false,
     dragOut: true,
     nativeFilePaths: true,
     documentPicker: true,
@@ -184,7 +189,7 @@ function bootstrap(window: BrowserWindow): Bootstrap {
     settings,
   }
 }
-async function quit(): Promise<void> {
+async function quit(install?: () => void): Promise<void> {
   if (shuttingDown) return
   shuttingDown = true
   try {
@@ -193,9 +198,11 @@ async function quit(): Promise<void> {
     healthy = false
     await runtime?.close()
     await sensitiveClipboard.close()
-    deviceKey?.fill(0)
-    for (const window of BrowserWindow.getAllWindows()) window.destroy()
-    app.quit()
+    if (install) install()
+    else {
+      for (const window of BrowserWindow.getAllWindows()) window.destroy()
+      app.quit()
+    }
   } catch (cause) {
     shuttingDown = false
     if(!healthy)runtimeFailed()
@@ -369,6 +376,16 @@ async function execute(window: BrowserWindow, operation: string, input: unknown)
   if (!isFoundationOperation(operation)) return fail('STAGE_NOT_READY', (operation.startsWith('account.') || operation.startsWith('sync.') || operation === 'backup.previewLegacyAccount') ? '官方账号、同步和官方备份待开发，后端部署后再接入' : '该业务能力将在后续实施阶段开放')
   const value = foundation[operation].input.parse(input)
   switch (operation) {
+    case 'update.check':
+    case 'update.download':
+    case 'update.install': {
+      if (window !== windows.main) fail('FORBIDDEN', '仅主窗口可管理应用更新')
+      if (shuttingDown || restarting || !healthy) fail('RUNTIME_UNAVAILABLE', '请等待业务进程就绪后重试')
+      if (operation === 'update.check') return updates.check(foundation[operation].input.parse(value).channel)
+      const { token } = foundation[operation].input.parse(value)
+      if (operation === 'update.download') return updates.download(token)
+      return updates.install(token)
+    }
     case 'app.bootstrap':
       return bootstrap(window)
     case 'app.ready':
@@ -518,6 +535,7 @@ app.on('before-quit', (event) => {
     void windows?.requestQuit()
   }
 })
+app.on('will-quit', () => deviceKey?.fill(0))
 app.on('window-all-closed', () => {
   if (!shuttingDown) void quit()
 })
@@ -565,7 +583,14 @@ async function start(): Promise<void> {
   await runtime.start()
   healthy = true
   settings = await runtime.call('settings.read')
-  windows = new Windows(__dirname, () => runtime.context, quit)
+  windows = new Windows(__dirname, () => runtime.context, () => quit())
+  updates = new Updates({
+    driver: updater.autoUpdater,
+    feeds: smoke ? {} : __EIZHU_UPDATE_FEEDS__,
+    supported: app.isPackaged && (process.platform !== 'linux' || Boolean(process.env.APPIMAGE)),
+    progress: (progress) => windows.emit(windows.main, 'eizhu-update-progress', progress),
+    install: (action) => windows.runConfirmedQuit(() => quit(action)),
+  })
   Menu.setApplicationMenu(
     Menu.buildFromTemplate(
       process.platform === 'darwin'

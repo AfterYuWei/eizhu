@@ -161,16 +161,24 @@ export class Windows {
     this.transition = undefined
   }
   async requestQuit(): Promise<void> {
-    if (this.closing) return
+    try { await this.runConfirmedQuit(this.quit) }
+    catch (cause) {
+      dialog.showErrorBox('无法退出 eizhu', failureOf(cause).message + '。窗口和未保存内容已保留，请重试关闭应用。')
+    }
+  }
+  async runConfirmedQuit(action: () => Promise<void>): Promise<boolean> {
+    if (this.closing) return false
     this.closing = true
     try {
       if (await this.confirmApplicationClose()) {
         this.quitting = true
-        await this.quit()
+        await action()
+        return true
       }
+      return false
     } catch (cause) {
       this.quitting = false
-      dialog.showErrorBox('无法退出 eizhu', failureOf(cause).message + '。窗口和未保存内容已保留，请重试关闭应用。')
+      throw cause
     } finally {
       this.closing = false
     }

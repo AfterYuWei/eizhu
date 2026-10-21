@@ -3,8 +3,10 @@ import { sftpEventSchema,transferTaskSchema } from './sftp.ts'
 import { sshGlobalEventSchema, tunnelStatusSchema } from './ssh.ts'
 import { editorOpenSchema, workspaceSchema, foundation } from './foundation.ts'
 import type { DesktopEvents } from './index.ts'
+import { updateProgressSchema } from './update.ts'
 /** Reserved event types cannot be emitted until their business stage supplies a payload schema. */
 export const eventSchemas = {
+  'eizhu-update-progress': updateProgressSchema,
   'eizhu-workspace-changed': workspaceSchema,
   'eizhu-sync-message': z.never(),
   'eizhu-session-message': sshGlobalEventSchema,

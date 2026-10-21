@@ -18,15 +18,17 @@
     "desktop:build": "node scripts/build-desktop.mjs",
     "desktop:package": "node scripts/package-desktop.mjs",
     "desktop:smoke": "node scripts/smoke-desktop.mjs",
+    "desktop:stress": "node scripts/smoke-desktop.mjs --duration=60000",
     "check": "tsc -p tsconfig.node.json --noEmit && npm run check --workspace @eizhu/web",
     "lint": "eslint apps/desktop packages scripts/*.mjs && npm run lint --workspace @eizhu/web",
     "test": "npm run test:foundation && npm run test:unit --workspace @eizhu/web && npm run baseline:test",
-    "test:foundation": "node --experimental-strip-types --test packages/*/src/**/*.test.ts apps/desktop/src/main/*.test.ts",
+    "test:foundation": "node --experimental-strip-types --test packages/*/src/**/*.test.ts apps/desktop/src/main/*.test.ts scripts/desktop-build-settings.test.mjs",
     "native:rebuild": "node scripts/rebuild-native.mjs",
     "postinstall": "npm run native:rebuild",
     "desktop:smoke:package": "node scripts/smoke-package.mjs",
     "format": "prettier --write apps/desktop/src packages apps/web/src/api apps/web/src/lib/bridge.ts apps/web/src/lib/platform.ts apps/web/src/lib/settingsStorage.ts scripts/{build-desktop,package-desktop,smoke-desktop,smoke-package}.mjs",
-    "architecture:verify": "node scripts/verify-desktop-architecture.mjs"
+    "architecture:verify": "node scripts/verify-desktop-architecture.mjs",
+    "desktop:delivery:verify": "node scripts/verify-desktop-delivery.mjs"
   },
   "dependencies": {
     "argon2": "0.45.1",

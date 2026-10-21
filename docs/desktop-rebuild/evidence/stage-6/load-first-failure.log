@@ -1,0 +1,76 @@
+
+> desktop:smoke
+> node scripts/smoke-desktop.mjs
+
+[61760:1021/122936.303206:WARNING:electron/shell/common/api/electron_api_native_image.cc:229] Argument must be a file path or a NativeImage
+EIZHU_SMOKE_STEP waiting-renderer
+EIZHU_SMOKE_APP_READY 1 true
+EIZHU_SMOKE_STEP renderer-ready
+EIZHU_SMOKE_STEP foundation-bridge-passed
+EIZHU_SMOKE_STEP local-bridge-passed
+EIZHU_SMOKE_STEP stage2-native-passed
+EIZHU_STAGE3_STEP peers-listening
+EIZHU_STAGE3_STEP host-key-and-utf8-passed
+EIZHU_STAGE3_STEP binary-completion-passed
+EIZHU_STAGE3_STEP details-path-completion-passed
+EIZHU_STAGE3_STEP route-key
+EIZHU_STAGE3_STEP route-keyboard-interactive
+EIZHU_STAGE3_STEP route-http
+EIZHU_STAGE3_STEP route-socks5
+EIZHU_STAGE3_STEP route-jump
+EIZHU_STAGE3_STEP tunnel-local
+EIZHU_STAGE3_STEP tunnel-dynamic
+EIZHU_STAGE3_STEP tunnel-remote
+EIZHU_STAGE3_STEP fault-injection
+EIZHU_STAGE3_STEP mfa-cancel-passed
+EIZHU_STAGE3_STEP host-reject-cancel-passed
+EIZHU_STAGE3_STEP handshake-stop-passed
+EIZHU_STAGE3_STEP proxy-rejection-passed
+EIZHU_STAGE3_STEP port-occupied-passed
+EIZHU_LOAD_PROGRESS 7 3000
+EIZHU_STAGE3_FAILED AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+
+1 !== 5
+
+    at transfer (/Users/yuwei/Desktop/Projects/yuweinfo/XControl/apps/desktop/out/main/chunks/smoke-B3cffA-S.cjs:50:32)
+    at async Promise.allSettled (index 0)
+    at async measureDesktopLoad (/Users/yuwei/Desktop/Projects/yuweinfo/XControl/apps/desktop/out/main/chunks/smoke-B3cffA-S.cjs:86:20)
+    at async verifyStage3 (/Users/yuwei/Desktop/Projects/yuweinfo/XControl/apps/desktop/out/main/chunks/smoke-B3cffA-S.cjs:665:16)
+    at async runSmoke (/Users/yuwei/Desktop/Projects/yuweinfo/XControl/apps/desktop/out/main/chunks/smoke-B3cffA-S.cjs:1626:17)
+    at async start (/Users/yuwei/Desktop/Projects/yuweinfo/XControl/apps/desktop/out/main/index.cjs:1421:3) {
+  generatedMessage: true,
+  code: 'ERR_ASSERTION',
+  actual: 1,
+  expected: 5,
+  operator: 'strictEqual',
+  diff: 'simple'
+}
+EIZHU_STAGE3_STEP cleanup
+eizhu initialization failed; existing data retained
+AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+
+1 !== 5
+
+    at transfer (/Users/yuwei/Desktop/Projects/yuweinfo/XControl/apps/desktop/out/main/chunks/smoke-B3cffA-S.cjs:50:32)
+    at async Promise.allSettled (index 0)
+    at async measureDesktopLoad (/Users/yuwei/Desktop/Projects/yuweinfo/XControl/apps/desktop/out/main/chunks/smoke-B3cffA-S.cjs:86:20)
+    at async verifyStage3 (/Users/yuwei/Desktop/Projects/yuweinfo/XControl/apps/desktop/out/main/chunks/smoke-B3cffA-S.cjs:665:16)
+    at async runSmoke (/Users/yuwei/Desktop/Projects/yuweinfo/XControl/apps/desktop/out/main/chunks/smoke-B3cffA-S.cjs:1626:17)
+    at async start (/Users/yuwei/Desktop/Projects/yuweinfo/XControl/apps/desktop/out/main/index.cjs:1421:3) {
+  generatedMessage: true,
+  code: 'ERR_ASSERTION',
+  actual: 1,
+  expected: 5,
+  operator: 'strictEqual',
+  diff: 'simple'
+}
+file:///Users/yuwei/Desktop/Projects/yuweinfo/XControl/scripts/smoke-desktop.mjs:40
+    else reject(new Error(`Smoke exit ${code}`))
+                ^
+
+Error: Smoke exit 1
+    at ChildProcess.<anonymous> (file:///Users/yuwei/Desktop/Projects/yuweinfo/XControl/scripts/smoke-desktop.mjs:40:17)
+    at ChildProcess.emit (node:events:514:28)
+    at ChildProcess._handle.onexit (node:internal/child_process:324:12)
+
+Node.js v24.22.0

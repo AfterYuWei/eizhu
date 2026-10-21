@@ -3,18 +3,22 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { fileURLToPath } from 'node:url'
 import { resolve, dirname } from 'node:path'
-import { readFileSync } from 'node:fs'
+// @ts-expect-error Build-only ESM settings shared with electron-builder.
+import { buildSettings } from '../../scripts/desktop-build-settings.mjs'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
 const desktop = resolve(root, 'apps/desktop')
 const web = resolve(root, 'apps/web')
 const internal = { '@eizhu/contracts': resolve(root, 'packages/contracts/src/index.ts') }
 const external = ['electron', 'better-sqlite3', 'argon2', 'electron-updater', 'ssh2']
-const version = readFileSync(resolve(root, 'VERSION'), 'utf8').trim()
-const channel = process.env.EIZHU_CHANNEL === 'stable' ? 'stable' : 'test'
+const { version, channel, feeds } = buildSettings()
 export default defineConfig({
   main: {
-    define: { __EIZHU_VERSION__: JSON.stringify(version), __EIZHU_CHANNEL__: JSON.stringify(channel) },
+    define: {
+      __EIZHU_VERSION__: JSON.stringify(version),
+      __EIZHU_CHANNEL__: JSON.stringify(channel),
+      __EIZHU_UPDATE_FEEDS__: JSON.stringify(feeds),
+    },
     resolve: { alias: internal },
     build: {
       outDir: resolve(desktop, 'out/main'),

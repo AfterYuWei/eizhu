@@ -74,4 +74,21 @@ const report = {
   lockFiles: 1,
   originalIconsVerified: icons.length,
 }
+const activeEntryFiles = [
+  'package.json',
+  'Makefile',
+  '.github/CI.md',
+  ...(await files(join(root, '.github/workflows'))).map((path) => relative(root, path)),
+]
+for (const name of activeEntryFiles) {
+  const content = await readFile(join(root, name), 'utf8')
+  assert.ok(
+    !/VERSION_MOBILE|run-tauri|cargo (?:test|build|check)|tauri (?:build|dev|android|ios)|TAURI_SIGNING_PRIVATE_KEY/.test(
+      content,
+    ),
+    `Retired build/release entry: ${name}`,
+  )
+}
+report.activeBuildAndCiFiles = activeEntryFiles.length
+report.retiredBuildEntrypoints = 0
 console.log(JSON.stringify(report, null, 2))

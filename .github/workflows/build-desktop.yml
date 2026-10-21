@@ -1,7 +1,7 @@
-name: Electron four-target foundation
+name: Electron four-target acceptance
 on:
   push:
-    branches: ['codex/electron-stage-1']
+    branches: ['codex/electron-stage-2']
     paths:
       - 'apps/**'
       - 'packages/**'
@@ -48,6 +48,8 @@ jobs:
       CSC_IDENTITY_AUTO_DISCOVERY: 'false'
       EIZHU_CHANNEL: ${{ inputs.channel || 'test' }}
       VITE_EIZHU_CHANNEL: ${{ inputs.channel || 'test' }}
+      EIZHU_UPDATE_STABLE_URL: ${{ vars.EIZHU_UPDATE_STABLE_URL }}
+      EIZHU_UPDATE_TEST_URL: ${{ vars.EIZHU_UPDATE_TEST_URL }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -64,20 +66,21 @@ jobs:
           echo 'CXX=clang++-15' >> "$GITHUB_ENV"
       - run: npm ci
       - run: npm run check
+      - run: npm run lint
       - if: inputs.validation != 'package-only' && !contains(github.event.head_commit.message, '[package-only]')
-        run: npm run test:foundation
-      - if: inputs.validation != 'package-only' && !contains(github.event.head_commit.message, '[package-only]')
-        run: npm run baseline:test
+        run: npm test
+      - run: npm run baseline:verify
+      - run: npm run architecture:verify
       - run: npm run desktop:build
       - run: npm run desktop:package -- --platform=${{ matrix.platform }} --arch=${{ matrix.arch }}
       - name: Smoke final installer contents (macOS / Windows)
         if: runner.os != 'Linux'
         shell: bash
-        run: node scripts/smoke-package.mjs artifacts/desktop/${{ matrix.installer }}
+        run: node scripts/smoke-package.mjs artifacts/desktop/${{ matrix.installer }} --duration=60000
       - name: Smoke final AppImage contents under X11
         if: runner.os == 'Linux'
         shell: bash
-        run: xvfb-run -a node scripts/smoke-package.mjs artifacts/desktop/${{ matrix.installer }}
+        run: xvfb-run -a node scripts/smoke-package.mjs artifacts/desktop/${{ matrix.installer }} --duration=60000
       - uses: actions/upload-artifact@v4
         if: always()
         with:

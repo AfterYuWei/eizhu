@@ -10,16 +10,26 @@ const executable = executableArg ? resolve(executableArg) : electron
 const container = await mkdtemp(join(tmpdir(), 'eizhu-desktop-smoke-'))
 const root = join(container, 'profile')
 const args = [...(executableArg ? [] : ['.']), '--smoke-test', `--smoke-root=${container}`]
+const duration = Number(process.argv.findLast((arg) => arg.startsWith('--duration='))?.split('=')[1] ?? 3000)
+assert.ok(
+  Number.isSafeInteger(duration) && duration >= 1000 && duration <= 8 * 60 * 60 * 1000,
+  'duration must be 1000..28800000 ms',
+)
+args.push(`--load-duration=${duration}`)
 // Linux CI needs a real X server (xvfb-run); it never disables Chromium sandboxing here.
 await new Promise((accept, reject) => {
   const child = spawn(executable, args, {
     stdio: 'inherit',
-    env: { ...process.env, ELECTRON_ENABLE_LOGGING: '1', EIZHU_SMOKE_FIXTURES: resolve('tests/fixtures/desktop-baseline') },
+    env: {
+      ...process.env,
+      ELECTRON_ENABLE_LOGGING: '1',
+      EIZHU_SMOKE_FIXTURES: resolve('tests/fixtures/desktop-baseline'),
+    },
   })
   const timer = setTimeout(() => {
     child.kill()
-    reject(new Error('Smoke timeout (120s)'))
-  }, 120_000)
+    reject(new Error('Smoke timeout'))
+  }, 180_000 + duration)
   child.on('error', (error) => {
     clearTimeout(timer)
     reject(error)
@@ -45,9 +55,11 @@ assert.equal(report.monaco.json, true)
 assert.equal(report.editor, true)
 assert.equal(report.stage2.passed, true)
 assert.equal(report.stage3.passed, true)
-if(report.stage4.unavailable)console.warn('阶段 4 协议集成待验：本机缺少 OpenSSH sftp-server')
+assert.equal(report.stage3.load.passed, true)
+if (report.stage4.unavailable) console.warn('阶段 4 协议集成待验：本机缺少 OpenSSH sftp-server')
 else assert.equal(report.stage4.passed, true)
-assert.equal(report.stage5.passed,true)
+assert.equal(report.stage5.passed, true)
+assert.equal(report.stage6.passed, true)
 if (executableArg) assert.equal(report.packaged, true)
 const evidenceRoot = `artifacts/smoke/${process.platform}-${process.arch}`
 await mkdir(evidenceRoot, { recursive: true })
@@ -56,8 +68,12 @@ for (const name of ['home-light.png', 'home-dark.png', 'editor-empty.png']) {
   assert.ok(report.screenshots.includes(name), `Missing screenshot: ${name}`)
   await copyFile(join(root, name), join(evidenceRoot, name))
 }
-if(report.stage5.passed)await copyFile(join(root,'stage5-backup.png'),join(evidenceRoot,'stage5-backup.png'))
-if(report.stage4.passed)for(const name of ['stage4-editor.png','stage4-sftp.png'])await copyFile(join(root,name),join(evidenceRoot,name))
+if (report.stage5.passed)
+  await copyFile(join(root, 'stage5-backup.png'), join(evidenceRoot, 'stage5-backup.png'))
+await copyFile(join(root, 'stage6-update.png'), join(evidenceRoot, 'stage6-update.png'))
+if (report.stage4.passed)
+  for (const name of ['stage4-editor.png', 'stage4-sftp.png'])
+    await copyFile(join(root, name), join(evidenceRoot, name))
 await writeFile(
   `artifacts/smoke/${process.platform}-${process.arch}.json`,
   JSON.stringify(report, null, 2) + '\n',

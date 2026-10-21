@@ -5,9 +5,10 @@ import type { Connection, ServerChannel } from 'ssh2'
 import type { BrowserWindow } from 'electron'
 import type { RuntimeHost } from './runtime-host.ts'
 import { SocketReader, proxyHandshake } from '@eizhu/core/ssh/network'
+import { measureDesktopLoad } from './load-smoke.ts'
 
 /** Synthetic loopback peers only. Runs in the actual packaged Electron process tree. */
-export async function verifyStage3(window: BrowserWindow, runtime: RuntimeHost) {
+export async function verifyStage3(window: BrowserWindow, runtime: RuntimeHost, root: string) {
   const step = (name: string) => console.log('EIZHU_STAGE3_STEP', name)
   const host = utils.generateKeyPairSync('ed25519'),
     clients = new Set<Connection>(),
@@ -18,6 +19,7 @@ export async function verifyStage3(window: BrowserWindow, runtime: RuntimeHost) 
     shells = new Set<ServerChannel>(),
     commands: string[] = [],
     sizes: number[] = []
+  let loadInProgress = false
   const fixtureInfo =
     '===HOSTNAME===\nstage3-synthetic\n===OS===\nDebian GNU/Linux\n===OS_ID===\ndebian\n===KERNEL===\n6.1\n===ARCH===\nx86_64\n===CPUS===\n2\n===CPUMHZ===\n2400\n'
   const fixtureMetrics =
@@ -75,12 +77,14 @@ export async function verifyStage3(window: BrowserWindow, runtime: RuntimeHost) 
           setTimeout(() => stream.write(greeting.subarray(9)), 80)
           stream.on('data', (b: Buffer) => {
             inputs.push(b.toString('utf8'))
+            if (loadInProgress && inputs.length > 1000) inputs.splice(0, inputs.length - 1000)
             if (b.toString() === 'burst') stream.write('B'.repeat(262144) + '\r\nEND_BURST\r\n')
             else stream.write(b)
           })
         })
         session.on('exec', (accept, _reject, info) => {
           commands.push(info.command)
+          if (loadInProgress && commands.length > 1000) commands.splice(0, commands.length - 1000)
           const stream = accept()
           stream.on('error', () => undefined)
           stream.write(
@@ -256,7 +260,7 @@ export async function verifyStage3(window: BrowserWindow, runtime: RuntimeHost) 
       sessionIds.push(created.session_id)
       await js(
         `const api=window.eizhu;const state=window.__stage3;return api.session.subscribe({id:d.id},async message=>{
-        state.messages.push(message);if(message.type==='output'){state.output+=message.data;await new Promise(r=>setTimeout(r,2))}
+        state.messages.push(message);if(state.load&&state.messages.length>256)state.messages.splice(0,state.messages.length-256);if(message.type==='output'){state.output+=message.data;if(state.load)state.output=state.output.slice(-8192);await new Promise(r=>setTimeout(r,2))}
         if(message.type==='connection_state'){state.states.push(message.payload);if(message.payload.waiting_for_host_key){const p=message.payload;state.wrong=await api.session.decide({requestId:p.host_key_request_id,fingerprint:'SHA256:wrong',decision:'trust_once'}).then(()=>false,e=>e.code==='STALE_CONFIRMATION');await api.session.decide({requestId:p.host_key_request_id,fingerprint:p.host_key_fingerprint,decision:d.decision})}}
         if(message.type==='auth_request')await api.session.authRespond({requestId:message.payload.request_id,responses:['123456']});
       });`,
@@ -612,10 +616,14 @@ export async function verifyStage3(window: BrowserWindow, runtime: RuntimeHost) 
       (rows) => rows.some((r) => r.id === id && r.status === 'connected'),
     )
     assert.equal(inputs.length, beforeInput)
+    loadInProgress = true
+    await js('window.__stage3.load=true;')
+    const load = await measureDesktopLoad(window, root, id, () => open(direct), detail.session_id)
     await call('serverDetail.close', { sessionId: detail.session_id })
     await call('session.close', { id })
     assert.equal((await call<unknown[]>('session.list')).length, 0)
     return {
+      load,
       passed: true,
       authentication: ['password', 'encrypted-private-key', 'keyboard-interactive'],
       routes: ['direct', 'http-connect', 'socks5', 'jump'],

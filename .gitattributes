@@ -5,3 +5,4 @@ tests/fixtures/desktop-baseline/** -text
 docs/desktop-rebuild/evidence/stage-2/*.log -text -whitespace
 docs/desktop-rebuild/evidence/stage-3/*.log -text -whitespace
 docs/desktop-rebuild/evidence/stage-5/*.log -text -whitespace
+docs/desktop-rebuild/evidence/stage-6/*.log -text -whitespace

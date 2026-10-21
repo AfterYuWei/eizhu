@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { updates } from './update.ts'
 
 export const contextSchema = z.strictObject({
   runtimeId: z.uuid(),
@@ -45,6 +46,7 @@ export type Bootstrap = z.infer<typeof bootstrapSchema>
 
 /** Only enabled operations can cross the IPC boundary. Add schemas before enabling a domain method. */
 export const foundation = {
+  ...updates,
   'app.bootstrap': { input: empty, output: bootstrapSchema },
   'app.ready': { input: empty, output: ready },
   'runtime.health': {

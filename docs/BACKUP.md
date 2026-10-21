@@ -1,6 +1,6 @@
 # 备份与恢复契约
 
-阶段 2 已提供生产文件导入/导出、完整恢复及加密安全快照；云目标、自动调度和完整版本管理在阶段 5 实现。
+阶段 2 已提供生产文件导入/导出、完整恢复及加密安全快照；云目标、自动调度和完整版本管理已在阶段 5 接通，见 [第三方云备份](BACKUP_CLOUD.md)。
 固定旧实现样本及独立 Node 字节校验已保留，见 [精确格式与来源](desktop-rebuild/COMPATIBILITY.md)。
 
 继续导出 `.eizhubackup` v1，接受 `.eizhubackup` 与 `.xcbackup`，保留 none/plain/encrypted、Argon2id 参数、UTF-8 密码、AES-256-GCM、AAD、Base64 与 nonce/ciphertext/tag 顺序。

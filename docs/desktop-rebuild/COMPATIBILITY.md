@@ -50,7 +50,7 @@
 
 主要端点：认证 `/api/auth/*`；同步 `/api/sync/v2/{capabilities,devices,keys,snapshots,changes,requests,push,events}`；官方完整备份 `/api/backup/v1/{objects,indices}`；旧官方快照从 `/api/store/objects/*` 只读导入。精确请求方法、路径参数与错误契约以冻结源码为准，不改服务端来适配客户端误差。
 
-密码学一致不等于同步语义一致。阶段5另行验证：本地事务/outbox原子性、冻结请求幂等、结果未知查询、CAS、代次、SSE重放、依赖顺序、冲突、旧确认保留新修改和首次接入保护。
+密码学一致不等于同步语义一致。官方同步延后至后端部署后单独验证：本地事务/outbox原子性、冻结请求幂等、结果未知查询、CAS、代次、SSE重放、依赖顺序、冲突、旧确认保留新修改和首次接入保护。
 
 ## 冻结证据的使用方式
 

@@ -6,10 +6,13 @@ import { spawn } from 'node:child_process'
 function run(command, args, cwd) {
   return new Promise((accept, reject) => {
     const child = spawn(command, args, { cwd, stdio: 'inherit' })
-    const timer = setTimeout(() => {
-      child.kill()
-      reject(new Error('Package operation timeout'))
-    }, 180000)
+    const timer = setTimeout(
+      () => {
+        child.kill()
+        reject(new Error('Package operation timeout'))
+      },
+      180000 + Number(process.argv.findLast((arg) => arg.startsWith('--duration='))?.split('=')[1] ?? 3000),
+    )
     child.on('error', (error) => {
       clearTimeout(timer)
       reject(error)
@@ -52,7 +55,11 @@ try {
     await run(artifact, ['--appimage-extract'], root)
     executable = join(root, 'squashfs-root/AppRun')
   }
-  await run(process.execPath, ['scripts/smoke-desktop.mjs', `--executable=${executable}`])
+  await run(process.execPath, [
+    'scripts/smoke-desktop.mjs',
+    `--executable=${executable}`,
+    ...process.argv.slice(3),
+  ])
 } finally {
   // Windows installer cleanup remains owned by its uninstaller to release registry/file associations.
   if (process.platform === 'win32') {
