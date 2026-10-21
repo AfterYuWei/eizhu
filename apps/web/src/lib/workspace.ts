@@ -2,6 +2,7 @@ import { resetTerminalLayout,restoreTerminalLayout } from '@/store/terminalLayou
 import { bridge } from './bridge'
 import { useProfileStore } from '@/store/profile'
 import { useVaultStore } from '@/store/vault'
+import { resetWorkspaceView } from '@/store/workspaceView'
 import { useSessionStore } from '@/store/session'
 import { useEditorStore } from '@/store/editor'
 import { useServerDetailStore } from '@/store/serverDetail'
@@ -14,6 +15,7 @@ export interface WorkspaceStatus { id: string; generation: number; userId: numbe
 export { workspaceGeneration } from './workspaceScope'
 export function applyWorkspace(workspace: WorkspaceStatus) {
   if (workspaceGeneration() === workspace.generation) return
+  void resetWorkspaceView().catch((error: unknown) => console.error('释放旧工作空间文件资源失败', error))
   resetTerminalLayout()
   setWorkspaceGeneration(workspace.generation)
   useProfileStore.setState(useProfileStore.getInitialState(), true)

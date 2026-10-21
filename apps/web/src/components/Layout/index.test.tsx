@@ -9,6 +9,7 @@ const { windowControls, settings } = vi.hoisted(() => ({
 }))
 
 vi.mock('@/components/Sidebar', () => ({ Sidebar: ({ visible }: { visible: boolean }) => <div data-sidebar-visible={String(visible)} /> }))
+vi.mock('@/components/Vault/VaultView', () => ({ VaultView: () => <input aria-label="密钥管理状态" /> }))
 vi.mock('@/components/Terminal', () => ({ TerminalView: () => <main>终端工作区</main> }))
 vi.mock('@/components/Terminal/SplitControls', () => ({ TerminalSplitMenu: () => null }))
 vi.mock('@/components/Terminal/TunnelDialog', () => ({ TunnelDialog: () => null, TunnelPrompts: () => null }))
@@ -30,6 +31,7 @@ import { Layout } from './index'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useDesktopShellStore } from '@/store/desktopShell'
 import { executeDesktopAction } from '@/lib/desktopActions'
+import { resetWorkspaceView, useWorkspaceViewStore } from '@/store/workspaceView'
 import { useSessionStore } from '@/store/session'
 import { useProfileStore } from '@/store/profile'
 import { resetTerminalLayout, useTerminalLayoutStore } from '@/store/terminalLayout'
@@ -38,7 +40,8 @@ import { SIDEBAR_COLLAPSE_DELAY_MS, SIDEBAR_PREVIEW_ANIMATION_MS, SIDEBAR_PREVIE
 let host: HTMLDivElement
 let root: Root
 
-beforeEach(() => {
+beforeEach(async () => {
+  await resetWorkspaceView()
   ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
   vi.stubGlobal('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} })
   Object.assign(windowControls, { desktop: false, mac: false, showControls: false, maximized: false })
@@ -49,7 +52,7 @@ beforeEach(() => {
   resetTerminalLayout()
   useSessionStore.setState(useSessionStore.getInitialState(), true)
   useProfileStore.setState({ fetchProfiles: async () => {}, fetchGroups: async () => {} })
-  useSessionStore.setState({ tabs: [{ id: 'a', kind: 'terminal', profileId: 'p', profileName: '服务器', status: 'disconnected', sessionId: null }], activeTabId: 'a' })
+  useSessionStore.setState({ tabs: [{ id: 'a', profileId: 'p', profileName: '服务器', status: 'disconnected', sessionId: null }], activeTabId: 'a' })
   host = document.createElement('div')
   document.body.append(host)
   root = createRoot(host)
@@ -99,7 +102,7 @@ it('悬停临时展开可操作导航，离开后淡出且保留原宽度和收�
   vi.useFakeTimers()
   settings.sidebarWidth = 420
   await render()
-  const terminal = host.querySelector('.shell-workspace-content > main')!
+  const terminal = host.querySelector('.shell-workspace-content main')!
   await act(async () => executeDesktopAction('sidebar'))
   await hover(toggle())
   // Entering the newly appeared sidebar must not cancel its entrance frame.
@@ -111,9 +114,10 @@ it('悬停临时展开可操作导航，离开后淡出且保留原宽度和收�
   expect(host.querySelector('.desktop-shell.sidebar-is-hidden')).not.toBeNull()
   expect(host.querySelector('.shell-top-controls-slot button')).toBeNull()
   expect(host.querySelector('.shell-fixed-top-controls')?.closest('[inert]')).toBeNull()
-  expect(host.querySelector('.shell-workspace-content > main')).toBe(terminal)
+  expect(host.querySelector('.shell-workspace-content main')).toBe(terminal)
   await act(async () => host.querySelectorAll<HTMLButtonElement>('.shell-primary-nav > button')[2].click())
-  expect(useSessionStore.getState().tabs.some((tab) => tab.kind === 'vault')).toBe(true)
+  expect(useWorkspaceViewStore.getState().activePage).toBe('vault')
+  expect(useSessionStore.getState().tabs).toHaveLength(1)
   host.querySelectorAll<HTMLButtonElement>('.shell-primary-nav > button')[2].focus()
   await hover(sidebar(), 'pointerout')
   await act(async () => vi.advanceTimersByTime(SIDEBAR_PREVIEW_CLOSE_DELAY_MS))
@@ -220,7 +224,7 @@ it('移入侧栏弹出菜单保持预览，菜单关闭且鼠标已离开时再�
 it('阈值停顿后收起，向右拉回默认宽度并等鼠标追上边缘再调整，终端保持挂载', async () => {
   vi.useFakeTimers()
   await render()
-  const terminal = host.querySelector('.shell-workspace-content > main')!
+  const terminal = host.querySelector('.shell-workspace-content main')!
   const handle = host.querySelector<HTMLElement>('[aria-label="调整侧栏宽度"]')!
   handle.setPointerCapture = vi.fn()
   handle.hasPointerCapture = vi.fn(() => true)
@@ -272,7 +276,7 @@ it('阈值停顿后收起，向右拉回默认宽度并等鼠标追上边缘再�
   await act(async () => toggle().click())
   expect(sidebar().style.width).toBe('300px')
   expect(sidebar().classList.contains('collapsed')).toBe(false)
-  expect(host.querySelector('.shell-workspace-content > main')).toBe(terminal)
+  expect(host.querySelector('.shell-workspace-content main')).toBe(terminal)
 })
 
 it('手动展开重置旧宽度，分屏自动恢复保留较宽侧栏', async () => {
@@ -290,7 +294,7 @@ it('手动展开重置旧宽度，分屏自动恢复保留较宽侧栏', async (
 it('点击展开和收起均推动占位，拖拽能从动画当前宽度接手且终端不重建', async () => {
   settings.sidebarWidth = 420
   await render()
-  const terminal = host.querySelector('.shell-workspace-content > main')!
+  const terminal = host.querySelector('.shell-workspace-content main')!
   const space = host.querySelector<HTMLElement>('.shell-sidebar-space')!
   await act(async () => toggle().click())
   expect(space.classList.contains('is-button-motion')).toBe(true)
@@ -310,7 +314,7 @@ it('点击展开和收起均推动占位，拖拽能从动画当前宽度接手�
   await pointer(handle, 'pointermove', 300)
   await render()
   expect(space.style.width).toBe('296px')
-  expect(host.querySelector('.shell-workspace-content > main')).toBe(terminal)
+  expect(host.querySelector('.shell-workspace-content main')).toBe(terminal)
   await pointer(handle, 'pointerup', 300)
 })
 
@@ -410,7 +414,7 @@ it('关闭最后一个页面后显示连接首页', async () => {
 it('设置整页覆盖时保留终端节点、阻止后台快捷键，返回后恢复焦点', async () => {
   await import('@/components/SettingsDialog')
   await render()
-  const terminal = host.querySelector('.shell-workspace-content > main')!
+  const terminal = host.querySelector('.shell-workspace-content main')!
   const account = host.querySelector<HTMLButtonElement>('.shell-account')!
   account.focus()
   await act(async () => executeDesktopAction('account-settings'))
@@ -422,7 +426,7 @@ it('设置整页覆盖时保留终端节点、阻止后台快捷键，返回后�
   expect(useSessionStore.getState().tabs).toHaveLength(1)
   await act(async () => host.querySelector<HTMLButtonElement>('.settings-page-back')!.click())
   expect(host.querySelector('.settings-page')).toBeNull()
-  expect(host.querySelector('.shell-workspace-content > main')).toBe(terminal)
+  expect(host.querySelector('.shell-workspace-content main')).toBe(terminal)
   expect(host.querySelector('.shell-session-view')?.hasAttribute('inert')).toBe(false)
   expect(document.activeElement).toBe(account)
 })

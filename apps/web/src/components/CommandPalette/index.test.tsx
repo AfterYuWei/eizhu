@@ -4,6 +4,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { beforeEach, afterEach, expect, it, vi } from 'vitest'
 import { CommandPalette } from './index'
 import { useProfileStore } from '@/store/profile'
+import { resetWorkspaceView, useWorkspaceViewStore } from '@/store/workspaceView'
 import { useSessionStore } from '@/store/session'
 import { useVaultStore } from '@/store/vault'
 import { vaultApi } from '@/api/vault'
@@ -18,7 +19,8 @@ let host: HTMLDivElement
 let root: Root
 const close = vi.fn()
 
-beforeEach(() => {
+beforeEach(async () => {
+  await resetWorkspaceView()
   ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
   vi.resetAllMocks()
   useProfileStore.setState({ profiles: [profile] })
@@ -40,7 +42,7 @@ async function query(value: string) {
 
 it('统一显示服务器、密钥、命令，选择服务器复用已有会话', async () => {
   const open = vi.fn()
-  useSessionStore.setState({ tabs: [{ id: 'existing', kind: 'terminal', profileId: 'p', profileName: profile.name, status: 'disconnected', sessionId: null }], activeTabId: null, openTab: open })
+  useSessionStore.setState({ tabs: [{ id: 'existing', profileId: 'p', profileName: profile.name, status: 'disconnected', sessionId: null }], activeTabId: null, openTab: open })
   await render()
   expect(document.querySelector('[role="group"][aria-label="服务器"]')).not.toBeNull()
   expect(document.querySelector('[role="group"][aria-label="密钥"]')).not.toBeNull()
@@ -56,7 +58,8 @@ it('密钥搜索定位确切条目，并清除此前的类型筛选', async () =
   await render()
   await act(async () => (document.querySelector('[role="group"][aria-label="密钥"] button') as HTMLButtonElement).click())
   expect(useVaultStore.getState()).toMatchObject({ filterType: 'all', searchQuery: vault.name, focusedItemId: vault.id })
-  expect(useSessionStore.getState().tabs[0].kind).toBe('vault')
+  expect(useWorkspaceViewStore.getState().activePage).toBe('vault')
+  expect(useSessionStore.getState().tabs).toHaveLength(0)
 })
 
 it('快速换词与工作区切换后忽略旧密钥响应', async () => {

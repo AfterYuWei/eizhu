@@ -1,6 +1,7 @@
 import { useRef,useState,type PointerEvent,type RefObject } from 'react'
 import { ArrowLeft,ArrowRight,ChevronDown,Columns2,Maximize2,Minimize2,PanelsTopLeft,Rows2,X } from 'lucide-react'
 import { useTerminalLayoutStore } from '@/store/terminalLayout'
+import { useWorkspaceViewStore } from '@/store/workspaceView'
 import { useSessionStore } from '@/store/session'
 import { leaves,type SplitHandle } from '@/lib/terminalLayout'
 import { Button } from '@/components/ui/button'
@@ -23,7 +24,8 @@ export function TerminalSplitMenu({ iconOnly = false }: { iconOnly?: boolean }) 
   const pendingAction = useRef<DesktopActionId | null>(null)
   const shortcut = (key: string) => getPlatformCapabilities().platform === 'macos' ? `⇧⌘${key}` : `Ctrl+Shift+${key}`
 
-  if (activeTab?.kind !== 'terminal') return null
+  const activePage = useWorkspaceViewStore((state) => state.activePage)
+  if (activePage !== 'terminal' || !activeTab) return null
 
   return (
     <DropdownMenu>

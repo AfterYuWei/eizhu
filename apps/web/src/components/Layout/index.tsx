@@ -6,7 +6,6 @@ import { workspaceGeneration } from '@/lib/workspaceScope'
 import { registerDesktopAction,runDesktopAction,shortcutAction } from '@/lib/desktopActions'
 import { DEFAULT_DESKTOP_SIDEBAR_WIDTH,MIN_DESKTOP_SIDEBAR_WIDTH,MAX_DESKTOP_SIDEBAR_WIDTH,DESKTOP_SIDEBAR_INSET } from '@/lib/desktopSidebar'
 import { Sidebar } from '@/components/Sidebar'
-import { TerminalView } from '@/components/Terminal'
 import { TerminalSplitMenu } from '@/components/Terminal/SplitControls'
 import { CommandPalette } from '@/components/CommandPalette'
 import { Toaster } from '@/components/ui/sonner'
@@ -26,7 +25,8 @@ import { ShellIconButton } from './ShellControls'
 import { SidebarResizeHandle } from './SidebarResizeHandle'
 import { AccountMenu } from './AccountMenu'
 import { WorkspaceTabs } from './WorkspaceTabs'
-import { ConnectionHome } from './ConnectionHome'
+import { WorkspaceContent } from './WorkspaceContent'
+import { useWorkspaceViewStore } from '@/store/workspaceView'
 import { ServerInspector } from './ServerInspector'
 import { WorkspaceActions } from './WorkspaceActions'
 
@@ -34,7 +34,8 @@ const SettingsPage = lazy(() => import('@/components/SettingsDialog').then((m) =
 const SnippetDialog = lazy(() => import('@/components/Snippets/SnippetDialog').then((m) => ({ default: m.SnippetDialog })))
 
 export function Layout() {
-  const { tabs, activeTabId, openVaultTab } = useSessionStore()
+  const { tabs, activeTabId } = useSessionStore()
+  const { activePage, openSftp, openVault } = useWorkspaceViewStore()
   const { sidebarWidth, setSidebarWidth } = useSettingsStore()
   const theme = useResolvedTheme()
   const splitActive = useTerminalLayoutStore((s) => s.tree?.type === 'split')
@@ -78,7 +79,7 @@ export function Layout() {
   const visibleSidebarWidth = Math.max(MIN_DESKTOP_SIDEBAR_WIDTH, Math.min(MAX_DESKTOP_SIDEBAR_WIDTH, sidebarWidth))
   const { fetchProfiles, fetchGroups } = useProfileStore()
   const activeTab = tabs.find((tab) => tab.id === activeTabId)
-  const terminal = activeTab?.kind === 'terminal' && Boolean(activeTab.profileId)
+  const terminal = activePage === 'terminal' && Boolean(activeTab?.profileId)
 
   const openSettings = useCallback((tab: SettingsTab) => {
     const focused = document.activeElement
@@ -157,9 +158,9 @@ export function Layout() {
       <aside ref={sidebar} id="desktop-main-sidebar" className={`eizhu-sidebar shell-sidebar ${sidebarHidden && !preview.present ? 'collapsed' : ''} ${preview.present ? 'is-preview' : ''} ${preview.open ? 'is-preview-open' : ''} ${preview.instantCollapse ? 'is-preview-resting' : ''}`} style={{ width: preview.present ? DEFAULT_DESKTOP_SIDEBAR_WIDTH : visibleSidebarWidth }} aria-label="主导航" aria-hidden={!sidebarInteractive} inert={!sidebarInteractive} onPointerEnter={preview.enter} onPointerLeave={preview.leave}>
         <div className="shell-sidebar-top" data-eizhu-drag-region={desktop || undefined}>{!sidebarHidden && topControls}</div>
         <nav className="shell-primary-nav" aria-label="功能导航">
-          <Button variant="ghost" className={!tabs.length || activeTab?.kind === 'terminal' && !activeTab.profileId ? 'is-active' : ''} onClick={() => runDesktopAction('new')}><Plus size={16} /><span>新建连接</span><kbd>{mac ? '⇧⌘T' : 'Ctrl+Shift+T'}</kbd></Button>
-          <Button variant="ghost" className={activeTab?.kind === 'sftp' ? 'is-active' : ''} onClick={() => runDesktopAction('sftp')}><FolderUp size={16} /><span>SFTP 文件</span></Button>
-          <Button variant="ghost" className={activeTab?.kind === 'vault' ? 'is-active' : ''} onClick={() => openVaultTab()}><KeyRound size={16} /><span>密钥管理</span></Button>
+          <Button variant="ghost" className={activePage === 'terminal' && (!tabs.length || !activeTab?.profileId) ? 'is-active' : ''} onClick={() => runDesktopAction('new')}><Plus size={16} /><span>新建连接</span><kbd>{mac ? '⇧⌘T' : 'Ctrl+Shift+T'}</kbd></Button>
+          <Button variant="ghost" className={activePage === 'sftp' ? 'is-active' : ''} aria-current={activePage === 'sftp' ? 'page' : undefined} aria-controls="workspace-sftp" onClick={() => void openSftp()}><FolderUp size={16} /><span>SFTP 文件</span></Button>
+          <Button variant="ghost" className={activePage === 'vault' ? 'is-active' : ''} aria-current={activePage === 'vault' ? 'page' : undefined} aria-controls="workspace-vault" onClick={openVault}><KeyRound size={16} /><span>密钥管理</span></Button>
           <Button variant="ghost" onClick={() => runDesktopAction('snippets')}><SquareTerminal size={16} /><span>命令片段</span></Button>
         </nav>
         <div className="shell-lists">
@@ -183,12 +184,12 @@ export function Layout() {
           <div className="shell-workspace-actions" data-eizhu-drag-region={desktop || undefined}>
             <TerminalSplitMenu iconOnly />
             {terminal && <ShellIconButton label="服务器详情" aria-pressed={inspectorOpen} onClick={() => setInspectorOpen((v) => !v)}><PanelRight size={16} /></ShellIconButton>}
-            {activeTab && <WorkspaceActions terminal={terminal} />}
+            {activePage === 'terminal' && activeTab && <WorkspaceActions terminal={terminal} />}
           </div>
           {showControls && <div className="shell-window-controls-space" aria-hidden="true" />}
         </header>
         <div className="shell-workspace-body" ref={workspace}>
-          <div className="cnt-wrap shell-workspace-content">{tabs.length ? <TerminalView /> : <ConnectionHome onAddServer={() => setProfileFormOpen(true)} />}</div>
+          <div className="cnt-wrap shell-workspace-content"><WorkspaceContent onAddServer={() => setProfileFormOpen(true)} /></div>
           <ServerInspector open={inspectorOpen && !settingsOpen} overlay={workspaceWidth < inspectorWidth + 480} onClose={() => setInspectorOpen(false)} />
         </div>
       </main>

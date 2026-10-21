@@ -6,6 +6,7 @@ import { useCallback,useEffect,useMemo,useRef,useState,type CSSProperties } from
 import { useTerminal } from '@/hooks/useTerminal';
 import { useSessionChannel } from '@/hooks/useSessionChannel';
 import { useSessionStore } from '@/store/session';
+import { useWorkspaceViewStore } from '@/store/workspaceView';
 import { useProfileStore } from '@/store/profile';
 import { useHistoryStore } from '@/store/history';
 import { DEFAULT_DESKTOP_TERMINAL_FONT_SIZE,useSettingsStore,useResolvedTheme,} from '@/store/settings';
@@ -145,7 +146,7 @@ export function TerminalPane({ tab, isActive, isVisible = isActive }: TerminalPa
         fontFamilyCN,
         terminalTheme: effectiveTerminalTheme,
         onData: (data) => {
-            if (useSessionStore.getState().activeTabId !== tab.id || !tab.sessionId)
+            if (useWorkspaceViewStore.getState().activePage !== 'terminal' || useSessionStore.getState().activeTabId !== tab.id || !tab.sessionId)
                 return;
             if (tab.sessionId && tab.status === 'connected' && channelStatusRef.current === 'connected') {
                 const consumed = handleDataRef.current(data);

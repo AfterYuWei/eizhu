@@ -1,5 +1,6 @@
 import { lazy,Suspense,useEffect,useState } from 'react'
 import { X } from 'lucide-react'
+import { useWorkspaceViewStore } from '@/store/workspaceView'
 import { useSessionStore } from '@/store/session'
 import { useDesktopShellStore } from '@/store/desktopShell'
 import { ShellIconButton,ShellResizeHandle } from './ShellControls'
@@ -11,7 +12,8 @@ export function ServerInspector({ open, overlay, onClose }: { open: boolean; ove
   const { inspectorWidth, setInspectorWidth } = useDesktopShellStore()
   const [visited, setVisited] = useState<string[]>([])
   const activeTab = tabs.find((tab) => tab.id === activeTabId)
-  const visible = open && activeTab?.kind === 'terminal' && Boolean(activeTab.profileId)
+  const activePage = useWorkspaceViewStore((state) => state.activePage)
+  const visible = open && activePage === 'terminal' && Boolean(activeTab?.profileId)
   useEffect(() => {
     setVisited((previous) => {
       const live = previous.filter((id) => tabs.some((tab) => tab.id === id))
@@ -23,7 +25,7 @@ export function ServerInspector({ open, overlay, onClose }: { open: boolean; ove
     <ShellResizeHandle label="调整服务器详情宽度" value={inspectorWidth} min={280} max={480} onChange={setInspectorWidth} reverse />
     <div className="shell-inspector-heading"><span>服务器详情</span><ShellIconButton label="关闭服务器详情" onClick={onClose}><X size={15} /></ShellIconButton></div>
     <div className="shell-inspector-stack">
-      {tabs.filter((tab) => visited.includes(tab.id) && tab.kind === 'terminal' && tab.profileId).map((tab) => <div key={tab.id} className="shell-inspector-slot" hidden={tab.id !== activeTabId}>
+      {tabs.filter((tab) => visited.includes(tab.id) && tab.profileId).map((tab) => <div key={tab.id} className="shell-inspector-slot" hidden={tab.id !== activeTabId}>
         <Suspense fallback={<p className="shell-list-empty">加载详情…</p>}>
           <ServerDetail tabId={tab.id} profileId={tab.profileId} profileName={tab.profileName} host={tab.host || '未知'} port={tab.port || 22} username={tab.username || 'root'} active={visible && tab.id === activeTabId} />
         </Suspense>

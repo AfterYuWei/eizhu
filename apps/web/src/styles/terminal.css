@@ -24,7 +24,7 @@
   border: 1px solid var(--term-border);
   box-shadow: var(--term-shadow);
 }
-.term-wrap:not(.sftp-aware)::before {
+.term-wrap::before {
   content: '';
   position: absolute;
   z-index: 5;

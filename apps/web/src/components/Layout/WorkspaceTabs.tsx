@@ -1,18 +1,17 @@
 import { useEffect, useLayoutEffect, useRef } from 'react'
-import { FolderUp, KeyRound, Plus, SquareTerminal, X } from 'lucide-react'
+import { Plus, SquareTerminal, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useSessionStore, type SessionTab } from '@/store/session'
+import { useWorkspaceViewStore } from '@/store/workspaceView'
 import { useProfileStore } from '@/store/profile'
 import { focusActiveTerminal, runDesktopAction } from '@/lib/desktopActions'
 import { cn } from '@/lib/utils'
 import { resolveServerIcon } from '@/lib/serverIcons'
 import { ShellIconButton } from './ShellControls'
 
-const baseName = (tab: SessionTab) => tab.kind === 'vault' ? '密钥管理' : tab.kind === 'sftp' ? 'SFTP' : tab.profileName
-
 function connectionStatus(tab: SessionTab): string {
-  if (tab.kind !== 'terminal' || !tab.profileId) return ''
+  if (!tab.profileId) return ''
   switch (tab.status) {
     case 'connected': return tab.latency != null ? `${tab.latency} ms` : '已连接'
     case 'connecting': return '连接中…'
@@ -24,6 +23,7 @@ function connectionStatus(tab: SessionTab): string {
 
 export function WorkspaceTabs() {
   const { tabs, activeTabId, setActiveTab } = useSessionStore()
+  const activePage = useWorkspaceViewStore((state) => state.activePage)
   const profiles = useProfileStore((state) => state.profiles)
   const scroll = useRef<HTMLDivElement>(null)
   const add = useRef<HTMLButtonElement>(null)
@@ -52,31 +52,31 @@ export function WorkspaceTabs() {
     }
     host.addEventListener('wheel', wheel, { passive: false })
     return () => { observer.disconnect(); host.removeEventListener('wheel', wheel) }
-  }, [activeTabId, tabs.length])
+  }, [activePage, activeTabId, tabs.length])
 
   return <div className="shell-workspace-tabs">
     <div className="shell-tab-scroll" ref={scroll}>
       <div className="shell-tab-list" role="tablist" aria-label="已打开页面" aria-orientation="horizontal">
         {tabs.map((tab, index) => {
-          const name = baseName(tab)
-          const sameName = (item: SessionTab) => item.kind === tab.kind && baseName(item) === name
+          const name = tab.profileName
+          const sameName = (item: SessionTab) => item.profileName === name
           const ordinal = tabs.slice(0, index + 1).filter(sameName).length
           const profile = profiles.find((item) => item.id === tab.profileId)
-          const label = `${name}${tab.kind === 'sftp' && profile ? ` · ${profile.name}` : ''}${tabs.filter(sameName).length > 1 ? ` (${ordinal})` : ''}`
+          const label = `${name}${tabs.filter(sameName).length > 1 ? ` (${ordinal})` : ''}`
           const status = connectionStatus(tab)
           const address = tab.host ? `${tab.username || 'root'}@${tab.host}:${tab.port || 22}` : profile ? `${profile.username}@${profile.host}:${profile.port}` : ''
           const description = [label, address, status, tab.cwd, tab.errorMessage].filter(Boolean).join(' · ')
-          const Icon = tab.kind === 'vault' ? KeyRound : tab.kind === 'sftp' ? FolderUp : tab.profileId ? resolveServerIcon(profile?.icon) : SquareTerminal
-          const active = tab.id === activeTabId
+          const Icon = tab.profileId ? resolveServerIcon(profile?.icon) : SquareTerminal
+          const active = activePage === 'terminal' && tab.id === activeTabId
           return <div key={tab.id} role="presentation" className={cn('shell-tab', active && 'is-active')}>
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button type="button" variant="ghost" role="tab" className="shell-tab-select"
                   id={`workspace-tab-${tab.id}`} aria-controls={`workspace-panel-${tab.id}`}
-                  aria-selected={active} aria-label={[label, status].filter(Boolean).join(' · ')} tabIndex={active ? 0 : -1}
+                  aria-selected={active} aria-label={[label, status].filter(Boolean).join(' · ')} tabIndex={active || (activePage !== 'terminal' && tab.id === (activeTabId ?? tabs[0]?.id)) ? 0 : -1}
                   onClick={(event) => {
                     setActiveTab(tab.id)
-                    if (event.detail > 0 && tab.kind === 'terminal') requestAnimationFrame(() => {
+                    if (event.detail > 0) requestAnimationFrame(() => {
                       if (useSessionStore.getState().activeTabId === tab.id) focusActiveTerminal()
                     })
                   }}

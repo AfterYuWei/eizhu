@@ -7,6 +7,7 @@ import { WorkspaceTabs } from './WorkspaceTabs'
 import { ServerInspector } from './ServerInspector'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useProfileStore } from '@/store/profile'
+import { resetWorkspaceView, useWorkspaceViewStore } from '@/store/workspaceView'
 import { useSessionStore } from '@/store/session'
 import { useDesktopShellStore } from '@/store/desktopShell'
 import type { Profile } from '@/types/profile'
@@ -17,7 +18,8 @@ vi.mock('@/components/ServerDetail', () => ({ ServerDetail: ({ tabId, active }: 
 const profile: Profile = { id: 'p', name: '生产环境', host: 'example.test', port: 2200, username: 'root', auth_type: 'agent', proxy: { type: 'direct' }, group_id: 'child', tags: [], options: '{}', note: '', sort_order: 0, created_at: '', updated_at: '' }
 let host: HTMLDivElement
 let root: Root
-beforeEach(() => {
+beforeEach(async () => {
+  await resetWorkspaceView()
   ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
   vi.stubGlobal('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} })
   useSessionStore.setState(useSessionStore.getInitialState(), true)
@@ -29,7 +31,7 @@ afterEach(async () => { await act(async () => root.unmount()); host.remove(); vi
 
 it('分组可折叠，服务器单击不连接，双击复用当前连接草稿', async () => {
   const open = vi.fn()
-  useSessionStore.setState({ tabs: [{ id: 'draft', kind: 'terminal', profileId: '', profileName: '新连接', status: 'disconnected', sessionId: null }], activeTabId: 'draft', openTab: open })
+  useSessionStore.setState({ tabs: [{ id: 'draft', profileId: '', profileName: '新连接', status: 'disconnected', sessionId: null }], activeTabId: 'draft', openTab: open })
   await act(async () => root.render(<TooltipProvider><Sidebar /></TooltipProvider>))
   expect(host.querySelector('.shell-child-groups .srv')).not.toBeNull()
   const row = host.querySelector<HTMLElement>('.srv')!
@@ -43,25 +45,24 @@ it('分组可折叠，服务器单击不连接，双击复用当前连接草稿'
   expect(host.querySelector('.grp-label')!.getAttribute('aria-expanded')).toBe('false')
 })
 
-it('全部打开项可以区分同名会话、切换 SFTP 并关闭密钥页', async () => {
+it('终端标签区分同名会话，工具页面不进入标签列表', async () => {
   useSessionStore.setState({ tabs: [
-    { id: 'a', kind: 'terminal', profileId: 'p', profileName: '生产环境', status: 'disconnected', sessionId: null },
-    { id: 'b', kind: 'terminal', profileId: 'p', profileName: '生产环境', status: 'disconnected', sessionId: null },
-    { id: 'sftp', kind: 'sftp', profileId: 'p', profileName: 'SFTP', status: 'disconnected', sessionId: null },
-    { id: 'vault', kind: 'vault', profileId: '', profileName: 'Vaults', status: 'connected', sessionId: null },
+    { id: 'a', profileId: 'p', profileName: '生产环境', status: 'disconnected', sessionId: null },
+    { id: 'b', profileId: 'p', profileName: '生产环境', status: 'disconnected', sessionId: null },
   ], activeTabId: 'a' })
   await act(async () => root.render(<TooltipProvider><WorkspaceTabs /></TooltipProvider>))
   expect(host.textContent).toContain('生产环境 (1)')
   expect(host.textContent).toContain('生产环境 (2)')
-  const sftp = [...host.querySelectorAll<HTMLButtonElement>('[role="tab"]')].find((b) => b.textContent?.includes('SFTP'))!
-  await act(async () => sftp.click())
-  expect(useSessionStore.getState().activeTabId).toBe('sftp')
-  await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="关闭 密钥管理"]')!.click())
-  expect(useSessionStore.getState().tabs.some((tab) => tab.kind === 'vault')).toBe(false)
+  await act(async () => useWorkspaceViewStore.getState().openVault())
+  expect(host.querySelectorAll('[role="tab"]')).toHaveLength(2)
+  expect(host.querySelector('[aria-selected="true"]')).toBeNull()
+  await act(async () => host.querySelector<HTMLButtonElement>('[role="tab"]')!.click())
+  expect(useWorkspaceViewStore.getState().activePage).toBe('terminal')
+  expect(useSessionStore.getState().activeTabId).toBe('a')
 })
 
 it('详情仅按需挂载，切换后保留 DOM 状态，隐藏时停止激活', async () => {
-  useSessionStore.setState({ tabs: [{ id: 'a', kind: 'terminal', profileId: 'p', profileName: '生产环境', status: 'disconnected', sessionId: null }], activeTabId: 'a' })
+  useSessionStore.setState({ tabs: [{ id: 'a', profileId: 'p', profileName: '生产环境', status: 'disconnected', sessionId: null }], activeTabId: 'a' })
   const render = async (open: boolean) => act(async () => root.render(<TooltipProvider><ServerInspector open={open} overlay={false} onClose={() => {}} /></TooltipProvider>))
   await render(false)
   expect(host.querySelector('[data-detail-tab]')).toBeNull()

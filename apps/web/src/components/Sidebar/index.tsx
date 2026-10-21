@@ -107,7 +107,7 @@ export function Sidebar({ collapsed = false, onToggle, onAddServer }: {
         return tab?.profileId;
     }, [tabs, activeTabId]);
     const handleConnect = (profile: Profile) => {
-        const shouldReuseActiveDraft = activeTab?.kind === 'terminal' &&
+        const shouldReuseActiveDraft = activeTab &&
             !activeTab.profileId &&
             !activeTab.sessionId;
         openTab(profile.id, profile.name, profile.host, profile.port, profile.username, shouldReuseActiveDraft ? activeTab.id : undefined);
@@ -218,7 +218,7 @@ export function Sidebar({ collapsed = false, onToggle, onAddServer }: {
     const renderServerRow = (profile: Profile) => {
         const isSelected = profile.id === selectedProfileId;
         const isActive = profile.id === activeProfileId;
-        const tab = tabs.find((t) => t.kind === 'terminal' && t.profileId === profile.id && t.status === 'connected') ?? tabs.find((t) => t.kind === 'terminal' && t.profileId === profile.id);
+        const tab = tabs.find((t) => t.profileId === profile.id && t.status === 'connected') ?? tabs.find((t) => t.profileId === profile.id);
         const status = tab?.status ?? 'disconnected';
         const Icon = resolveServerIcon(profile.icon);
         const meta = profile.port && profile.port !== 22

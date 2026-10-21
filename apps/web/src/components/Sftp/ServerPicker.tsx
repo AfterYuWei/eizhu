@@ -22,6 +22,7 @@ interface ServerPickerProps {
 export function ServerPicker({ open, pane, onClose }: ServerPickerProps) {
     const { tabs, activeTabId } = useSessionStore();
     const servers = useSftpStore((s) => s.servers);
+    const loadServers = useSftpStore((s) => s.loadServers);
     const connectServer = useSftpStore((s) => s.connectServer);
     const [selectedId, setSelectedId] = useState<string | null>(null);
     const [groups, setGroups] = useState<Group[]>([]);
@@ -29,6 +30,7 @@ export function ServerPicker({ open, pane, onClose }: ServerPickerProps) {
     useEffect(() => {
         if (!open)
             return;
+        void loadServers();
         let cancelled = false;
         groupApi.list().then((list) => {
             if (!cancelled)
@@ -37,9 +39,9 @@ export function ServerPicker({ open, pane, onClose }: ServerPickerProps) {
         return () => {
             cancelled = true;
         };
-    }, [open]);
+    }, [open, loadServers]);
     // Resolve the active terminal tab's host as the "recommended" server.
-    const activeTab = tabs.find((t) => t.id === activeTabId && t.kind === 'terminal');
+    const activeTab = tabs.find((t) => t.id === activeTabId);
     const recommendedId = activeTab?.host ? `${activeTab.host}:${activeTab.port ?? 22}` : null;
     // Group servers like the sidebar: grouped servers under their group,
     // loose (no group / stale group id) servers rendered last.

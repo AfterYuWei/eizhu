@@ -8,50 +8,18 @@ import { DeleteConfirmDialog } from './DeleteConfirmDialog';
 import { DirectoryTransferDialog } from './DirectoryTransferDialog';
 import { EditorDialog } from '@/components/Editor/EditorDialog';
 import { SftpStoreContext,useSftpStore } from './storeContext';
-import { createSftpStore,type SftpStoreApi,type PaneSide,parentPath } from '@/store/sftp';
+import { type SftpStoreApi,type PaneSide,parentPath } from '@/store/sftp';
 import { useSftpTransfer } from '@/hooks/useSftpTransfer';
 import { useExternalDrop } from '@/hooks/useExternalDrop';
 import { sftpApi } from '@/api/sftp';
 import { HostKeyDialog } from './HostKeyDialog';
 import { isDesktopRuntime } from '@/lib/platform';
-import { registerFileOwner } from '@/lib/fileOwners';
 import { AuthPromptDialog } from '@/components/Terminal/AuthPromptDialog';
 import { bridge } from '@/lib/bridge';
 import { toast } from 'sonner';
-/** SFTP file manager — symmetric dual-pane layout. Both panes are identical
- *  multi-server tab strips; the left pane starts connected to the local
- *  machine, the right pane starts empty. A bottom transfer queue shows
- *  cross-pane drag-drop transfers. Follows the global theme.
- *
- *  Each SftpView mount creates its OWN store instance (via createSftpStore)
- *  and provides it through context, so opening multiple SFTP tabs yields
- *  fully independent state & rendering. */
-export function SftpView({ initialProfileId, initialPath,ownerId }: {
-    ownerId?:string;
-    initialProfileId?: string;
-    initialPath?: string;
-} = {}) {
-
-    // One store per SftpView instance, created once via the lazy useState
-    // initializer so it survives re-renders but is never recreated.
-    const [store] = useState<SftpStoreApi>(() => createSftpStore({ includeLocalTab: true }));
+/** 当前工作空间唯一的 SFTP 页面，内部双栏各自保留服务器连接。 */
+export function SftpView({ store }: { store: SftpStoreApi }) {
     const [pickerPane, setPickerPane] = useState<PaneSide | null>(null);
-    useEffect(()=>ownerId?registerFileOwner(ownerId,()=>store.getState().dispose()):undefined,[ownerId,store]);
-    // Load available servers (profiles) on mount
-    useEffect(() => {
-        let active = true;
-        void store.getState().loadServers().then(async () => {
-            if (!active || !initialProfileId)
-                return;
-            const server = store.getState().servers.find((s) => s.id === initialProfileId);
-            if (!server)
-                return;
-            await store.getState().connectServer('right', server);
-            if (active && initialPath)
-                await store.getState().navigate('right', initialPath);
-        });
-        return () => { active = false; };
-    }, [store, initialProfileId, initialPath]);
     // 桌面端外部文件拖入（原生文件拖放 → OS 真实路径导入；浏览器走 HTML5）
     useExternalDrop(store);
     // Auto-connect the local server on mount (left pane default)

@@ -6,7 +6,7 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { useSessionStore, type SessionTab } from '@/store/session'
 import { useProfileStore } from '@/store/profile'
 import { resetTerminalLayout, useTerminalLayoutStore } from '@/store/terminalLayout'
-import { registerFileOwner } from '@/lib/fileOwners'
+import { resetWorkspaceView, useWorkspaceViewStore } from '@/store/workspaceView'
 import { WorkspaceTabs } from './WorkspaceTabs'
 import { ConnectionPicker } from '@/components/Terminal/ConnectionPicker'
 
@@ -14,12 +14,13 @@ vi.mock('@/api/session', () => ({ sessionApi: { close: vi.fn().mockResolvedValue
 const { reportError } = vi.hoisted(() => ({ reportError: vi.fn() }))
 vi.mock('sonner', () => ({ toast: { error: reportError } }))
 
-const terminal = (id: string, extra: Partial<SessionTab> = {}): SessionTab => ({ id, kind: 'terminal', profileId: 'p', profileName: 'Aliyun', sessionId: null, status: 'connected', ...extra })
+const terminal = (id: string, extra: Partial<SessionTab> = {}): SessionTab => ({ id, profileId: 'p', profileName: 'Aliyun', sessionId: null, status: 'connected', ...extra })
 let host: HTMLDivElement
 let root: Root
 let resized: () => void
 const scrollIntoView = vi.fn()
-beforeEach(() => {
+beforeEach(async () => {
+  await resetWorkspaceView()
   ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
   vi.stubGlobal('ResizeObserver', class {
     constructor(callback: () => void) { resized = callback }
@@ -49,7 +50,7 @@ const render = async (tabs: SessionTab[], activeTabId = tabs[0]?.id ?? null) => 
 const buttons = () => [...host.querySelectorAll<HTMLButtonElement>('[role="tab"]')]
 const key = async (button: HTMLElement, value: string) => act(async () => button.dispatchEvent(new KeyboardEvent('keydown', { key: value, bubbles: true, cancelable: true })))
 
-it('每个 SSH 标签独立显示延迟，生命周期状态优先于旧测量值，草稿和工具页不显示连接信息', async () => {
+it('每个 SSH 标签独立显示延迟，生命周期状态优先于旧测量值，草稿不显示连接信息', async () => {
   await render([
     terminal('a', { latency: 32 }), terminal('b', { latency: 0 }), terminal('c'),
     terminal('d', { status: 'connecting', latency: 88 }),
@@ -57,11 +58,9 @@ it('每个 SSH 标签独立显示延迟，生命周期状态优先于旧测量�
     terminal('f', { status: 'disconnected', latency: 88 }),
     terminal('g', { status: 'error', latency: 88, errorMessage: '认证失败' }),
     terminal('draft', { profileId: '', profileName: '新连接', status: 'disconnected' }),
-    terminal('sftp', { kind: 'sftp', profileName: 'SFTP', latency: 99 }),
-    terminal('vault', { kind: 'vault', profileName: 'Vaults', latency: 99 }),
   ])
   expect(buttons().map((button) => button.querySelector('.shell-tab-status')?.textContent ?? '')).toEqual([
-    '32 ms', '0 ms', '已连接', '连接中…', '重连中 (2)', '已断开', '连接失败', '', '', '',
+    '32 ms', '0 ms', '已连接', '连接中…', '重连中 (2)', '已断开', '连接失败', '',
   ])
   const first = buttons()[0]
   await act(async () => useSessionStore.getState().updateTabLatency('a', 123))
@@ -72,13 +71,13 @@ it('每个 SSH 标签独立显示延迟，生命周期状态优先于旧测量�
 })
 
 it('左右及 Home/End 自动切换并移动焦点，同名标签保留编号，分屏焦点与选中态同步', async () => {
-  await render([terminal('a'), terminal('b'), terminal('sftp', { kind: 'sftp' })])
+  await render([terminal('a'), terminal('b'), terminal('c')])
   expect(buttons()[0].textContent).toContain('Aliyun (1)')
   expect(buttons()[1].textContent).toContain('Aliyun (2)')
   expect(buttons().map((button) => button.tabIndex)).toEqual([0, -1, -1])
   await key(buttons()[0], 'ArrowLeft')
   expect(document.activeElement).toBe(buttons()[2])
-  expect(useSessionStore.getState().activeTabId).toBe('sftp')
+  expect(useSessionStore.getState().activeTabId).toBe('c')
   await key(buttons()[2], 'ArrowRight')
   expect(document.activeElement).toBe(buttons()[0])
   await key(buttons()[0], 'End')
@@ -109,22 +108,20 @@ it('关闭后台标签不激活它，关闭当前标签沿用现有选择规则�
   expect(buttons()[0].textContent).toBe('新连接')
 })
 
-it('SFTP 关闭等待原有所有者释放；取消或失败时保留页面并显示错误', async () => {
-  await render([terminal('sftp', { kind: 'sftp' })])
-  let release!: () => void
-  const unregister = registerFileOwner('sftp', () => new Promise<void>((resolve) => { release = resolve }))
-  await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="关闭 SFTP"]')!.click())
-  expect(buttons()).toHaveLength(1)
-  await act(async () => release())
-  expect(buttons()).toHaveLength(0)
-  unregister()
-
-  await render([terminal('cancelled', { kind: 'sftp' })])
-  const unregisterCancelled = registerFileOwner('cancelled', async () => { throw new Error('已取消关闭') })
-  await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="关闭 SFTP"]')!.click())
-  expect(buttons()).toHaveLength(1)
-  expect(reportError).toHaveBeenCalledWith('已取消关闭')
-  unregisterCancelled()
+it('工具页不进入标签栏且不选中后台终端，键盘或点击可返回已有终端', async () => {
+  await render([terminal('a'), terminal('b')])
+  await act(async () => useWorkspaceViewStore.getState().openVault())
+  expect(buttons()).toHaveLength(2)
+  expect(host.textContent).not.toContain('密钥管理')
+  expect(buttons().every((button) => button.getAttribute('aria-selected') === 'false')).toBe(true)
+  expect(buttons()[0].tabIndex).toBe(0)
+  await key(buttons()[0], 'ArrowRight')
+  expect(useWorkspaceViewStore.getState().activePage).toBe('terminal')
+  expect(buttons()[1].getAttribute('aria-selected')).toBe('true')
+  await act(async () => useWorkspaceViewStore.getState().openVault())
+  await act(async () => buttons()[0].click())
+  expect(useSessionStore.getState().activeTabId).toBe('a')
+  expect(useWorkspaceViewStore.getState().activePage).toBe('terminal')
 })
 
 it('溢出时滚轮横向滚动，横向触控板与缩放保持原生行为；尺寸变化露出当前标签', async () => {

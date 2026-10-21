@@ -3,12 +3,11 @@ import { useTerminalLayoutStore } from '@/store/terminalLayout';
 import { SplitResizeHandle } from './SplitControls';
 import { cn } from '@/lib/utils';
 import { lazy,Suspense,useRef,type CSSProperties } from 'react';
+import { useWorkspaceViewStore } from '@/store/workspaceView';
 import { useSessionStore } from '@/store/session';
 import { useSettingsStore,useResolvedTheme } from '@/store/settings';
 import { getTerminalThemeMeta,resolveTerminalThemeId } from '@/lib/terminalThemes';
 const TerminalPane = lazy(() => import('./TerminalPane').then((module) => ({ default: module.TerminalPane })));
-const SftpView = lazy(() => import('@/components/Sftp/SftpView').then((module) => ({ default: module.SftpView })));
-const VaultView = lazy(() => import('@/components/Vault/VaultView').then((module) => ({ default: module.VaultView })));
 /** Keep an 8px workspace gap between independent terminal cards. */
 function paneStyle(rectangle: PaneRect, split: boolean): CSSProperties {
     const left = split && rectangle.x > 0 ? 4 : 0;
@@ -22,7 +21,7 @@ function paneStyle(rectangle: PaneRect, split: boolean): CSSProperties {
         height: `calc(${rectangle.height}% - ${top + bottom}px)`,
     };
 }
-/** Content router: renders SftpView for sftp-kind tabs, VaultView for vault-kind, TerminalPane otherwise. */
+/** 终端标签与分屏布局；工具页面由外层工作区管理。 */
 export function TerminalView() {
     const { tabs, activeTabId } = useSessionStore();
     const host = useRef<HTMLDivElement>(null);
@@ -30,9 +29,8 @@ export function TerminalView() {
     const layout = geometry(tree);
     const splitEnabled = activeTabId !== null;
     const { terminalTheme } = useSettingsStore();
-    const activeTab = tabs.find((t) => t.id === activeTabId);
-    const isWide = activeTab?.kind === 'sftp' || activeTab?.kind === 'vault';
-    const split = splitEnabled && !isWide && !maximizedId && layout.panes.length > 1;
+    const visiblePage = useWorkspaceViewStore((state) => state.activePage === 'terminal');
+    const split = splitEnabled && visiblePage && !maximizedId && layout.panes.length > 1;
     // 与 TerminalPane 相同的解析：'default' 主题跟随应用深浅色
     const resolvedAppTheme = useResolvedTheme();
     const themeMeta = getTerminalThemeMeta(resolveTerminalThemeId(terminalTheme, resolvedAppTheme));
@@ -40,29 +38,15 @@ export function TerminalView() {
     // The outer boundary follows the application chrome rather than the terminal
     // palette, so light terminal themes remain distinct from the surrounding UI.
     const termBorder = 'var(--surface-border)';
-    return (<div className={cn('term-wrap', isWide ? 'sftp-aware' : 'terminal-layout')} style={{
+    return (<div className={cn('term-wrap', 'terminal-layout')} style={{
             '--term-bg': termBg,
             '--term-border': termBorder,
         } as CSSProperties}>
       <div ref={host} className={cn('term-workspace', split && 'is-split')}>
         {tabs.map((tab) => {
-            const active = tab.id === activeTabId;
-            if (tab.kind === 'sftp') {
-                return (<div key={tab.id} id={`workspace-panel-${tab.id}`} role="tabpanel" aria-labelledby={`workspace-tab-${tab.id}`} className={`absolute inset-0 ${active ? 'block' : 'hidden'}`}>
-                <Suspense fallback={<div className="h-full bg-[var(--bg)]"/>}>
-                  <SftpView ownerId={tab.id} initialProfileId={tab.profileId || undefined} initialPath={tab.cwd}/>
-                </Suspense>
-              </div>);
-            }
-            if (tab.kind === 'vault') {
-                return (<div key={tab.id} id={`workspace-panel-${tab.id}`} role="tabpanel" aria-labelledby={`workspace-tab-${tab.id}`} className={`absolute inset-0 ${active ? 'block' : 'hidden'}`}>
-                <Suspense fallback={<div className="h-full bg-[var(--bg)]"/>}>
-                  <VaultView />
-                </Suspense>
-              </div>);
-            }
-            const rectangle = splitEnabled && !isWide ? layout.panes.find((pane) => pane.tabId === tab.id) : undefined;
-            const visible = !isWide && (splitEnabled ? (maximizedId ? tab.id === maximizedId : Boolean(rectangle) || (!tree && active)) : active);
+            const active = visiblePage && tab.id === activeTabId;
+            const rectangle = splitEnabled && visiblePage ? layout.panes.find((pane) => pane.tabId === tab.id) : undefined;
+            const visible = visiblePage && (splitEnabled ? (maximizedId ? tab.id === maximizedId : Boolean(rectangle) || (!tree && active)) : active);
             const style: CSSProperties = rectangle && !maximizedId
                 ? paneStyle(rectangle, Boolean(split))
                 : { inset: 0 };
@@ -73,7 +57,7 @@ export function TerminalView() {
               </Suspense></div>
             </div>);
         })}
-        {splitEnabled && !isWide && !maximizedId && layout.handles.map((handle) => <SplitResizeHandle key={handle.id} handle={handle} host={host}/>)}
+        {splitEnabled && visiblePage && !maximizedId && layout.handles.map((handle) => <SplitResizeHandle key={handle.id} handle={handle} host={host}/>)}
       </div>
     </div>);
 }

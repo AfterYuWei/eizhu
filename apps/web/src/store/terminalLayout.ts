@@ -27,7 +27,7 @@ export const useTerminalLayoutStore = create<LayoutState>((set, get) => ({
         syncTerminalLayout();
         const { tree, focusedId } = get();
         const active = useSessionStore.getState().tabs.find((tab) => tab.id === focusedId);
-        if (!tree || !active || active.kind !== 'terminal')
+        if (!tree || !active)
             throw new Error('请先选择一个终端标签');
         if (leaves(tree).length >= 4)
             throw new Error('每个布局最多四个窗格');
@@ -55,8 +55,8 @@ function syncTerminalLayout() {
     if (mutating)
         return;
     const sessions = useSessionStore.getState(), layout = useTerminalLayoutStore.getState();
-    const active = sessions.tabs.find((tab) => tab.id === sessions.activeTabId && tab.kind === 'terminal');
-    const allowed = new Set(sessions.tabs.filter((tab) => tab.kind === 'terminal').map((tab) => tab.id));
+    const active = sessions.tabs.find((tab) => tab.id === sessions.activeTabId);
+    const allowed = new Set(sessions.tabs.map((tab) => tab.id));
     let tree = pruneTree(layout.tree, allowed);
     if (active && !leaves(tree).includes(active.id)) {
         tree = tree && layout.focusedId && leaves(tree).includes(layout.focusedId)
@@ -78,7 +78,7 @@ function scheduleSave() {
             return;
         const { tree, focusedId } = useTerminalLayoutStore.getState();
         // Drafts have no restorable server reference and cannot pass the saved-layout schema.
-        const sessions = useSessionStore.getState().tabs.filter((tab) => tab.kind === 'terminal' && tab.profileId);
+        const sessions = useSessionStore.getState().tabs.filter((tab) => tab.profileId);
         const visible = new Set(leaves(tree));
         const tabs = [...sessions.filter((tab) => visible.has(tab.id)), ...sessions.filter((tab) => !visible.has(tab.id))].slice(0, 128).map(({ id, profileId }) => ({ id, profileId }));
         const savedIds = new Set(tabs.map((tab) => tab.id));
@@ -131,7 +131,7 @@ export async function restoreTerminalLayout() {
                     return [];
                 seen.add(reference.id);
                 const profile = profiles.find((profile) => profile.id === reference.profileId);
-                return [{ id: reference.id, kind: 'terminal', profileId: profile?.id ?? '', profileName: profile?.name ?? '选择服务器', host: profile?.host, port: profile?.port, username: profile?.username, status: 'disconnected', sessionId: null, manualConnect: true }];
+                return [{ id: reference.id, profileId: profile?.id ?? '', profileName: profile?.name ?? '选择服务器', host: profile?.host, port: profile?.port, username: profile?.username, status: 'disconnected', sessionId: null, manualConnect: true }];
             });
             const tree = parseSplitTree(snapshot.tree, new Set(tabs.map((tab) => tab.id)));
             const focusedId = leaves(tree).includes(snapshot.focusedId ?? '') ? snapshot.focusedId! : leaves(tree)[0] ?? tabs[0]?.id ?? null;

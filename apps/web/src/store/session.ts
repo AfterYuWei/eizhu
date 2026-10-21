@@ -1,15 +1,13 @@
 import { create } from 'zustand'
-import { closeFileOwner } from '@/lib/fileOwners'
+import { useWorkspaceViewStore } from './workspaceView'
 import { sessionApi } from '@/api/session'
 import { useServerDetailStore } from '@/store/serverDetail'
 import type { SessionApiError } from '@/types/session'
 
-export type TabKind = 'terminal' | 'sftp' | 'vault'
 export type TabStatus = 'connecting' | 'connected' | 'disconnected' | 'error' | 'reconnecting'
 
 export interface SessionTab {
   id: string
-  kind: TabKind
   profileId: string
   profileName: string
   sessionId: string | null
@@ -42,8 +40,6 @@ interface SessionStore {
     targetTabId?: string,
   ) => Promise<string>
   openDraftTab: () => string
-  openSftpTab: (profileId?: string, cwd?: string) => string
-  openVaultTab: () => string
   closeTab: (tabId: string) => Promise<void>
   setActiveTab: (tabId: string) => void
   updateTabStatus: (tabId: string, status: TabStatus, sessionId?: string) => void
@@ -67,11 +63,11 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   loading: false,
 
   openTab: async (profileId, profileName, host, port, username, targetTabId) => {
-    const existingTab = targetTabId ? get().tabs.find((tab) => tab.id === targetTabId && tab.kind === 'terminal') : null
+    useWorkspaceViewStore.getState().showTerminal()
+    const existingTab = targetTabId ? get().tabs.find((tab) => tab.id === targetTabId) : null
     const tabId = existingTab?.id ?? `tab-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
     const newTab: SessionTab = {
       id: tabId,
-      kind: 'terminal',
       profileId,
       profileName,
       sessionId: null,
@@ -108,10 +104,10 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   },
 
   openDraftTab: () => {
+    useWorkspaceViewStore.getState().showTerminal()
     const tabId = `draft-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
     const newTab: SessionTab = {
       id: tabId,
-      kind: 'terminal',
       profileId: '',
       profileName: '新连接',
       sessionId: null,
@@ -128,7 +124,6 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
 
   closeTab: async (tabId) => {
     const tab = get().tabs.find((t) => t.id === tabId)
-    if(tab?.kind==='sftp')await closeFileOwner(tabId)
     if (tab?.sessionId) {
       sessionApi.close(tab.sessionId).catch(console.error)
     }
@@ -145,6 +140,8 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   },
 
   setActiveTab: (tabId) => {
+    if (!get().tabs.some((tab) => tab.id === tabId)) return
+    useWorkspaceViewStore.getState().showTerminal()
     set({ activeTabId: tabId })
   },
 
@@ -174,7 +171,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
                 ...(sessionId ? { sessionId, cwd: undefined } : {}),
               }
 
-              if (status === 'connected' && tab.kind === 'terminal' && !!tab.profileId && !tab.detailAttached) {
+              if (status === 'connected' && !!tab.profileId && !tab.detailAttached) {
                 shouldAttach = true
                 attachProfileId = tab.profileId
                 nextTab.detailAttached = true
@@ -203,46 +200,6 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     } catch (err) {
       console.error('Failed to fetch sessions:', err)
     }
-  },
-
-  openSftpTab: (profileId, cwd) => {
-    const tabId = `sftp-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
-    const newTab: SessionTab = {
-      id: tabId,
-      kind: 'sftp',
-      profileId: profileId ?? '',
-      cwd,
-      profileName: 'SFTP',
-      sessionId: null,
-      status: 'disconnected',
-    }
-    set((state) => ({
-      tabs: [...state.tabs, newTab],
-      activeTabId: tabId,
-    }))
-    return tabId
-  },
-
-  openVaultTab: () => {
-    const existing = get().tabs.find((t) => t.kind === 'vault')
-    if (existing) {
-      set({ activeTabId: existing.id })
-      return existing.id
-    }
-    const tabId = `vault-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
-    const newTab: SessionTab = {
-      id: tabId,
-      kind: 'vault',
-      profileId: '',
-      profileName: 'Vaults',
-      sessionId: null,
-      status: 'connected',
-    }
-    set((state) => ({
-      tabs: [...state.tabs, newTab],
-      activeTabId: tabId,
-    }))
-    return tabId
   },
 
   markTabError: (tabId, reason, message) => {

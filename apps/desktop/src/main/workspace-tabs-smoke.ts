@@ -18,6 +18,18 @@ export async function verifyWorkspaceTabs(window: BrowserWindow, root: string) {
   const original = await js<{ theme: string; font: string }>(`({theme:document.documentElement.className,font:document.documentElement.style.getPropertyValue('--sans-size')})`)
   const tabCount = `document.querySelectorAll('.shell-tab-list [role="tab"]').length`
   assert.equal(await js(tabCount), 0, 'Workspace tabs smoke starts with an empty workspace')
+
+  const screenshots: string[] = []
+  const capture = async (name: string, theme: 'light' | 'dark') => {
+    await js(`(async()=>{
+      document.activeElement?.blur();
+      document.documentElement.classList.remove('light','dark');document.documentElement.classList.add('${theme}');
+      await document.fonts.ready;
+      await new Promise(resolve=>setTimeout(resolve,250));
+    })()`)
+    await writeFile(join(root, name), (await window.webContents.capturePage(undefined, { stayAwake: true })).toPNG())
+    screenshots.push(name)
+  }
   try {
     window.setContentSize(1280, 720)
     for (let count = 1; count <= 12; count++) {
@@ -40,7 +52,17 @@ export async function verifyWorkspaceTabs(window: BrowserWindow, root: string) {
     await js(`document.activeElement.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true,cancelable:true}))`)
     await wait(`document.activeElement===document.querySelector('.shell-tab-list [role="tab"]')`)
     await js(`document.querySelectorAll('.shell-primary-nav > button')[2].click()`)
-    await wait(`!!document.querySelector('.vault-view')&&${tabCount}===13`)
+    await wait(`!!document.querySelector('.vault-view')&&${tabCount}===12`)
+    assert.equal(await js(`document.querySelectorAll('.shell-tab-list [aria-selected="true"]').length`), 0)
+    await js(`window.__tabsSmokeVault=document.querySelector('.vault-view');document.querySelectorAll('.shell-primary-nav > button')[2].click()`)
+    assert.equal(await js(`document.querySelectorAll('.vault-view').length===1&&document.querySelector('.vault-view')===window.__tabsSmokeVault`), true)
+    await js(`document.dispatchEvent(new KeyboardEvent('keydown',{key:'w',ctrlKey:true,shiftKey:true,bubbles:true,cancelable:true}))`)
+    assert.equal(await js(tabCount), 12, 'Closing a tool page must not close a background terminal')
+    assert.equal(await js(`!!document.querySelector('.shell-primary-nav [aria-current="page"]')&&!document.querySelector('.shell-workspace-actions button')`), true)
+    await capture('workspace-vault-light.png', 'light')
+    await capture('workspace-vault-dark.png', 'dark')
+    await js(`document.querySelectorAll('.shell-tab-list [role="tab"]')[11].click()`)
+    await wait(`document.querySelectorAll('.shell-tab-list [aria-selected="true"]').length===1`)
     assert.equal(await js(`document.querySelector('[role="tabpanel"]')===window.__tabsSmokePanel`), true)
 
     const geometry = async () => {
@@ -53,17 +75,6 @@ export async function verifyWorkspaceTabs(window: BrowserWindow, root: string) {
           noDrag:getComputedStyle(scroll).webkitAppRegion==='no-drag'&&getComputedStyle(add).webkitAppRegion==='no-drag'&&getComputedStyle(header).webkitAppRegion==='drag',
           oldListRemoved:!document.querySelector('.shell-open-section')&&!document.querySelector('[aria-label="调整服务器和已打开区域比例"]')};
       })()`)
-    }
-    const screenshots: string[] = []
-    const capture = async (name: string, theme: 'light' | 'dark') => {
-      await js(`(async()=>{
-        document.activeElement?.blur();
-        document.documentElement.classList.remove('light','dark');document.documentElement.classList.add('${theme}');
-        await document.fonts.ready;
-        await new Promise(resolve=>setTimeout(resolve,250));
-      })()`)
-      await writeFile(join(root, name), (await window.webContents.capturePage(undefined, { stayAwake: true })).toPNG())
-      screenshots.push(name)
     }
     const wide = await geometry()
     assert.ok(wide.headerHeight >= 48 && wide.overflow && wide.buttonsFit && wide.noDrag && wide.oldListRemoved)
@@ -82,10 +93,10 @@ export async function verifyWorkspaceTabs(window: BrowserWindow, root: string) {
     assert.equal(await js(`document.body.innerText.includes('终端布局保存失败')`), false, 'Draft tabs must not break layout persistence')
     // Close through the same button path, checking the restored keyboard focus.
     await js(`(()=>{const close=document.querySelector('.shell-tab.is-active .shell-tab-close');close.focus();close.click()})()`)
-    await wait(`${tabCount}===12&&document.activeElement===document.querySelector('.shell-tab-list [aria-selected="true"]')`)
-    return { passed: true, synthetic: true, keyboard: true, mountedContentRetained: true, closeFocus: true, wide, narrow, enlarged, screenshots }
+    await wait(`${tabCount}===11&&document.activeElement===document.querySelector('.shell-tab-list [aria-selected="true"]')`)
+    return { passed: true, synthetic: true, keyboard: true, mountedContentRetained: true, singletonTools: true, toolShortcutIsolation: true, closeFocus: true, wide, narrow, enlarged, screenshots }
   } finally {
-    await js(`document.documentElement.className=${JSON.stringify(original.theme)};document.documentElement.style.setProperty('--sans-size',${JSON.stringify(original.font)});delete window.__tabsSmokePanel`)
+    await js(`document.documentElement.className=${JSON.stringify(original.theme)};document.documentElement.style.setProperty('--sans-size',${JSON.stringify(original.font)});delete window.__tabsSmokePanel;delete window.__tabsSmokeVault`)
     await js(`(()=>{if(document.querySelector('.desktop-shell.sidebar-is-hidden'))document.dispatchEvent(new KeyboardEvent('keydown',{key:'b',ctrlKey:true,shiftKey:true,bubbles:true,cancelable:true}))})()`)
     for (let count = await js<number>(tabCount); count > 0; count--) {
       await js(`document.querySelector('.shell-tab-close').click()`)

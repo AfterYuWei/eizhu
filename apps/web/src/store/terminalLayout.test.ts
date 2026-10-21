@@ -17,7 +17,7 @@ beforeEach(() => {
 })
 afterEach(() => { resetTerminalLayout(); vi.useRealTimers() })
 it('四窗格上限、比例、焦点与合并保持连接，关闭仅关闭所属会话', () => {
-  useSessionStore.setState({ tabs: [{ id: 'a', profileId: 'p', profileName: 'p', kind: 'terminal', status: 'connected', sessionId: 'ssh-one' }], activeTabId: 'a' })
+  useSessionStore.setState({ tabs: [{ id: 'a', profileId: 'p', profileName: 'p', status: 'connected', sessionId: 'ssh-one' }], activeTabId: 'a' })
   for (const axis of ['horizontal', 'vertical', 'horizontal'] as const) useTerminalLayoutStore.getState().split(axis)
   const state = useTerminalLayoutStore.getState()
   expect(leaves(state.tree)).toHaveLength(4)
@@ -62,7 +62,7 @@ it('拒绝重复叶、非法比例与深层损坏布局', () => {
 it('新建与分屏草稿保持在窗口中，恢复快照仅保存有效服务器引用并通过生产契约', async () => {
   vi.useFakeTimers()
   vi.mocked(localStateApi.write).mockResolvedValue(undefined)
-  useSessionStore.setState({ tabs: [{ id: 'a', profileId: 'p', profileName: '服务器', kind: 'terminal', status: 'connected', sessionId: 'ssh' }], activeTabId: 'a' })
+  useSessionStore.setState({ tabs: [{ id: 'a', profileId: 'p', profileName: '服务器', status: 'connected', sessionId: 'ssh' }], activeTabId: 'a' })
   useTerminalLayoutStore.setState({ ready: true })
   useTerminalLayoutStore.getState().split('horizontal')
   await vi.advanceTimersByTimeAsync(300)

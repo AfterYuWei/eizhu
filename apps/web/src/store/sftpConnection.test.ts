@@ -13,3 +13,37 @@ it('切换标签后旧目录响应只更新所属标签',async()=>{
 it('旧空间的视图不能发起新连接',async()=>{
  const store=createSftpStore();setWorkspaceGeneration(2);await store.getState().connectServer('left',store.getState().leftTabs[0].server);await store.getState().refresh('left');expect(api.createSession).not.toHaveBeenCalled();expect(api.getSession).not.toHaveBeenCalled()
 })
+
+it('同一个内部标签连接中重复打开只创建一次会话', async () => {
+  const store = createSftpStore()
+  const server = store.getState().leftTabs[0].server
+  let resolve!: (value: { session_id: string; status: string; home_dir: string }) => void
+  api.createSession.mockReturnValue(new Promise((done) => { resolve = done }))
+  const first = store.getState().connectServer('left', server)
+  const second = store.getState().connectServer('left', server)
+  expect(api.createSession).toHaveBeenCalledTimes(1)
+  resolve({ session_id: 'single', status: 'connected', home_dir: '/home' })
+  await Promise.all([first, second])
+  expect(store.getState().leftTabs).toHaveLength(1)
+  expect(store.getState().leftTabs[0].sessionId).toBe('single')
+})
+
+it('释放幂等且等待尚未返回的会话创建完成后关闭，禁止再连接', async () => {
+  const store = createSftpStore()
+  const server = store.getState().leftTabs[0].server
+  let resolve!: (value: { session_id: string; status: string; home_dir: string }) => void
+  api.createSession.mockReturnValue(new Promise((done) => { resolve = done }))
+  const pending = store.getState().connectServer('left', server)
+  const disposal = store.getState().dispose()
+  expect(store.getState().dispose()).toBe(disposal)
+  let finished = false
+  void disposal.then(() => { finished = true })
+  await Promise.resolve()
+  expect(finished).toBe(false)
+  resolve({ session_id: 'late', status: 'connected', home_dir: '/home' })
+  await Promise.all([pending, disposal])
+  expect(api.closeSession).toHaveBeenCalledExactlyOnceWith('late')
+  expect(api.list).not.toHaveBeenCalled()
+  await store.getState().connectServer('left', server)
+  expect(api.createSession).toHaveBeenCalledTimes(1)
+})

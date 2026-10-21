@@ -101,7 +101,6 @@
   --popover-foreground: var(--fg);
   --sidebar-w: 240px;
   --tabbar-h: 40px;
-  --statusbar-h: 24px;
   color-scheme: light;
 
   /* A+C boundary system — chromeless tonal planes with one active light seam. */
@@ -360,8 +359,6 @@
   .eizhu-sidebar *,
   .tabbar,
   .tabbar *,
-  .statusbar,
-  .statusbar *,
   .pal,
   .pal *,
   .expand-btn,
@@ -394,7 +391,6 @@
 @import "./styles/app-shell.css";
 @import "./styles/tabbar.css";
 @import "./styles/terminal.css";
-@import "./styles/statusbar.css";
 @import "./styles/profile-form.css";
 @import "./styles/server-detail.css";
 @import "./styles/command-palette.css";

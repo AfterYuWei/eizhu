@@ -1,11 +1,13 @@
+import { useWorkspaceViewStore } from '@/store/workspaceView';
 import { useSessionStore } from '@/store/session';
 import { workspaceGeneration } from './workspaceScope';
 import { terminalActions } from './terminalActions';
 
 export interface SnippetTarget { tabId: string; sessionId: string; generation?: number }
 export function snippetTarget(): SnippetTarget | null {
+  if (useWorkspaceViewStore.getState().activePage !== 'terminal') return null
   const store = useSessionStore.getState()
-  const tab = store.tabs.find((t) => t.id === store.activeTabId && t.kind === 'terminal' && t.status === 'connected')
+  const tab = store.tabs.find((t) => t.id === store.activeTabId && t.status === 'connected')
   return tab?.sessionId ? { tabId: tab.id, sessionId: tab.sessionId, generation: workspaceGeneration() } : null
 }
 export function multilineSnippet(content: string) { return /[\r\n]/.test(content) }

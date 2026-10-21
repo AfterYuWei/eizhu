@@ -1,6 +1,7 @@
 import { useState,useRef,useEffect,useMemo } from 'react'
 import { Search,Server,Command,KeyRound } from 'lucide-react'
 import { useProfileStore } from '@/store/profile'
+import { useWorkspaceViewStore } from '@/store/workspaceView'
 import { useSessionStore } from '@/store/session'
 import { useVaultStore } from '@/store/vault'
 import { vaultApi } from '@/api/vault'
@@ -29,10 +30,10 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
         id: profile.id, type: 'server' as const, label: profile.name,
         detail: `${profile.username}@${profile.host}:${profile.port}`, shortcut: '', run: () => {
           const store = useSessionStore.getState()
-          const existing = store.tabs.find((t) => t.kind === 'terminal' && t.profileId === profile.id)
+          const existing = store.tabs.find((t) => t.profileId === profile.id)
           if (existing) store.setActiveTab(existing.id)
           else {
-            const draft = store.tabs.find((t) => t.id === store.activeTabId && t.kind === 'terminal' && !t.profileId && !t.sessionId)
+            const draft = store.tabs.find((t) => t.id === store.activeTabId && !t.profileId && !t.sessionId)
             void store.openTab(profile.id, profile.name, profile.host, profile.port, profile.username, draft?.id)
           }
         },
@@ -40,7 +41,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
       ...vaults.map((item) => ({ id: item.id, type: 'vault' as const, label: item.name,
         detail: item.type === 'private_key' ? '私钥' : `密码 · ${item.username || '未设置用户名'}`, shortcut: '', run: () => {
           useVaultStore.setState({ filterType: 'all', searchQuery: item.name, focusedItemId: item.id })
-          useSessionStore.getState().openVaultTab()
+          useWorkspaceViewStore.getState().openVault()
           void useVaultStore.getState().fetchList()
         },
       })),
@@ -87,7 +88,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
         e.preventDefault()
         if (executing.current) return
         const active = useSessionStore.getState().tabs.find((tab) => tab.id === useSessionStore.getState().activeTabId)
-        if (active?.kind === 'terminal' && active.profileId) focusActiveTerminal()
+        if (useWorkspaceViewStore.getState().activePage === 'terminal' && active?.profileId) focusActiveTerminal()
         else if (returnFocus.current?.isConnected) returnFocus.current.focus()
       }}>
       <DialogTitle className="sr-only">搜索服务器、密钥或命令</DialogTitle>

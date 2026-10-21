@@ -5,7 +5,7 @@ import { registerTerminalActions } from './terminalActions'
 import { snippetTarget, insertSnippet } from './snippetInsertion'
 beforeEach(() => {
   setWorkspaceGeneration(1)
-  useSessionStore.setState({ activeTabId: 't', tabs: [{ id: 't', kind: 'terminal', profileId: 'p', profileName: 'p', sessionId: 's', status: 'connected' }] })
+  useSessionStore.setState({ activeTabId: 't', tabs: [{ id: 't', profileId: 'p', profileName: 'p', sessionId: 's', status: 'connected' }] })
 })
 it('single lines insert without executing and multiline requires a safe paste mode', () => {
   const insert = vi.fn()

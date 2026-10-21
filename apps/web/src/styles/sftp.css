@@ -10,15 +10,6 @@
   background: var(--bg);
   overflow: hidden;
 }
-/* SFTP occupies the same workspace frame as a terminal, but without the
-   active terminal light seam. */
-.term-wrap.sftp-aware {
-  background: var(--surface-panel);
-  border-color: var(--edge-panel);
-  box-shadow: var(--shadow-workspace);
-  padding: 0;
-}
-
 /* ===== PANE ACTIONS (breadcrumb-right buttons) ===== */
 .sftp-actions {
   display: flex;
@@ -1197,12 +1188,4 @@ body.ptr-dragging * {
   background: var(--bg-hover);
   color: var(--fg-2);
   border-color: transparent;
-}
-
-/* SFTP chip in the status bar */
-.sb-tab.is-sftp .sb-dot-icon {
-  color: var(--accent);
-}
-.sb-tab.is-sftp.active .sb-dot-icon {
-  color: var(--accent-hi);
 }

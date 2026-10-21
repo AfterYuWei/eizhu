@@ -365,19 +365,43 @@ export interface SftpStoreOptions {
 }
 
 /**
- * Create a fresh, INDEPENDENT SFTP store instance. Each SFTP tab gets its
- * own store so multiple SFTP pages never share state.
+ * 创建当前工作空间的 SFTP 状态；由工作空间页面控制器持有并显式释放。
  */
 export function createSftpStore(options: SftpStoreOptions = {}): SftpStoreApi {
   let disposed=false
-  const connections=new Set<Promise<void>>()
-  const connect=(get:GetState,set:SetState,pane:PaneSide,id:string,server:SftpServer)=>{if(disposed||generation!==workspaceGeneration())return Promise.resolve();const task=connectAndNavigate(get,set,pane,id,server);connections.add(task);return task.finally(()=>connections.delete(task))}
+  let disposal: Promise<void> | undefined
+  const connections = new Map<string, Promise<void>>()
+  const connect = (get: GetState, set: SetState, pane: PaneSide, id: string, server: SftpServer) => {
+    if (disposed || generation !== workspaceGeneration()) return Promise.resolve()
+    const pending = connections.get(id)
+    if (pending) return pending
+    const task = connectAndNavigate(get, set, pane, id, server).finally(() => connections.delete(id))
+    connections.set(id, task)
+    return task
+  }
   const generation = workspaceGeneration()
   const includeLocalTab = options.includeLocalTab ?? true
   const initialLocalTab = includeLocalTab ? makeTab(LOCAL_SERVER) : null
 
   const api = createStore<SftpStore>((set, get) => ({
-    dispose:async()=>{disposed=true;const sessions=[...get().leftTabs,...get().rightTabs].flatMap(t=>t.sessionId?[t.sessionId]:[]);set({leftTabs:[],rightTabs:[],pendingAuth:null,pendingHostKey:null});await Promise.all([...sessions.map(id=>sftpApi.closeSession(id)),...connections])},
+    dispose: () => {
+      if (disposal) return disposal
+      disposed = true
+      const sessions = new Set([...get().leftTabs, ...get().rightTabs].flatMap((tab) => tab.sessionId ? [tab.sessionId] : []))
+      set({ leftTabs: [], rightTabs: [], activeLeftTabId: '', activeRightTabId: '', pendingAuth: null, pendingHostKey: null })
+      disposal = Promise.allSettled([
+        ...[...sessions].map((id) => sftpApi.closeSession(id).catch((cause: unknown) => {
+          const error = cause as { code?: string; error?: { code?: string } }
+          // 切换通知到达时，业务进程可能已经释放了整个旧空间。
+          if (!['NOT_FOUND', 'WORKSPACE_CHANGED'].includes(error?.code ?? error?.error?.code ?? '')) throw cause
+        })),
+        ...connections.values(),
+      ]).then((results) => {
+        const errors = results.filter((result) => result.status === 'rejected').map((result) => result.reason)
+        if (errors.length) throw new AggregateError(errors, 'SFTP 资源释放失败')
+      })
+      return disposal
+    },
     leftTabs: initialLocalTab ? [initialLocalTab] : [],
     activeLeftTabId: initialLocalTab?.id ?? '',
     rightTabs: [],
