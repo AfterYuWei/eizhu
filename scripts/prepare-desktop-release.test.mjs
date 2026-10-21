@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto'
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { prepareDesktopRelease } from './prepare-desktop-release.mjs'
+import { prepareDesktopRelease, validatePackagedRun } from './prepare-desktop-release.mjs'
 
 async function fixture(t) {
   const root = await mkdtemp(join(tmpdir(), 'eizhu-release-test-'))
@@ -12,6 +12,7 @@ async function fixture(t) {
   const options = {
     version: '0.5.0',
     revision: 'a'.repeat(40),
+    expectedSourceDigest: 'b'.repeat(64),
     inputDirectory: join(root, 'input'),
     outputDirectory: join(root, 'output'),
   }
@@ -24,11 +25,13 @@ async function fixture(t) {
     const directory = join(options.inputDirectory, `eizhu-stable-${platform}-${arch}`)
     await mkdir(join(directory, 'desktop'), { recursive: true })
     await mkdir(join(directory, 'smoke'), { recursive: true })
-    for (const extension of extensions)
+    for (const extension of extensions) {
+      const fileArch = platform === 'linux' ? (extension === 'deb' ? 'amd64' : 'x86_64') : arch
       await writeFile(
-        join(directory, 'desktop', `eizhu-0.5.0-${os}-${arch}.${extension}`),
+        join(directory, 'desktop', `eizhu-0.5.0-${os}-${fileArch}.${extension}`),
         `asset ${platform} ${arch} ${extension}`,
       )
+    }
     await writeFile(
       join(directory, 'smoke', `build-info-${platform}-${arch}.json`),
       JSON.stringify({
@@ -80,7 +83,7 @@ test('release rejects a missing target or installer', async (t) => {
     options.inputDirectory,
     'eizhu-stable-linux-x64',
     'desktop',
-    'eizhu-0.5.0-linux-x64.rpm',
+    'eizhu-0.5.0-linux-x86_64.rpm',
   )
   await rm(installer)
   await assert.rejects(prepareDesktopRelease(options), /缺少安装资产/)
@@ -90,6 +93,10 @@ test('release rejects a missing target or installer', async (t) => {
 
 test('release rejects mismatched provenance, failed smoke and incomplete load', async (t) => {
   const options = await fixture(t)
+  await assert.rejects(
+    prepareDesktopRelease({ ...options, expectedSourceDigest: 'c'.repeat(64) }),
+    /当前应用源码指纹不一致/,
+  )
   await assert.rejects(prepareDesktopRelease({ ...options, revision: 'c'.repeat(40) }), /构建来源不匹配/)
   const directory = join(options.inputDirectory, 'eizhu-stable-linux-x64', 'smoke')
   const infoPath = join(directory, 'build-info-linux-x64.json')
@@ -104,4 +111,34 @@ test('release rejects mismatched provenance, failed smoke and incomplete load', 
   smoke.stage3.load.elapsedMs = 3000
   await writeFile(smokePath, JSON.stringify(smoke))
   await assert.rejects(prepareDesktopRelease(options), /60 秒负载未完成/)
+})
+
+test('publication retry requires this repository, main, the stable workflow and four successful package jobs', () => {
+  const run = {
+    repository: { full_name: 'owner/repo' },
+    path: '.github/workflows/build-desktop-stable.yml',
+    head_branch: 'main',
+    status: 'completed',
+    head_sha: 'a'.repeat(40),
+  }
+  const jobs = [
+    'desktop / package (windows-2022, win32, x64, *.exe)',
+    'desktop / package (macos-15-intel, darwin, x64, *.dmg)',
+    'desktop / package (macos-15, darwin, arm64, *.dmg)',
+    'desktop / package (ubuntu-22.04, linux, x64, *.AppImage)',
+  ].map((name) => ({ name, conclusion: 'success' }))
+  assert.equal(validatePackagedRun(run, jobs, 'owner/repo'), run.head_sha)
+  assert.throws(() => validatePackagedRun(run, jobs, 'other/repo'))
+  assert.throws(() => validatePackagedRun({ ...run, head_branch: 'dev' }, jobs, 'owner/repo'))
+  assert.throws(() =>
+    validatePackagedRun({ ...run, path: '.github/workflows/other.yml' }, jobs, 'owner/repo'),
+  )
+  assert.throws(() => validatePackagedRun(run, jobs.slice(1), 'owner/repo'))
+  assert.throws(() =>
+    validatePackagedRun(
+      run,
+      jobs.map((job, i) => (i ? job : { ...job, conclusion: 'failure' })),
+      'owner/repo',
+    ),
+  )
 })

@@ -2,7 +2,17 @@ name: Electron stable release
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - '.github/CI.md'
+      - '.github/workflows/build-desktop-stable.yml'
+      - 'scripts/prepare-desktop-release*'
   workflow_dispatch:
+    inputs:
+      validated_run_id:
+        description: '仅重试发布：复用已完成四目标验证的运行编号；留空重新构建'
+        type: string
+        default: ''
 permissions:
   contents: read
 concurrency:
@@ -14,32 +24,58 @@ jobs:
     runs-on: ubuntu-24.04
     outputs:
       version: ${{ steps.version.outputs.version }}
+      source_sha: ${{ steps.version.outputs.source_sha }}
+      artifact_run_id: ${{ steps.version.outputs.artifact_run_id }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
       - id: version
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VALIDATED_RUN_ID: ${{ inputs.validated_run_id }}
         run: |
           version=$(cat VERSION)
           [[ "$version" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]
           test -z "$(git tag --list "v$version")"
           test -f "docs/releases/$version.md"
           echo "version=$version" >> "$GITHUB_OUTPUT"
+          if [[ -n "$VALIDATED_RUN_ID" ]]; then
+            [[ "$VALIDATED_RUN_ID" =~ ^[1-9][0-9]*$ ]]
+            gh api "repos/$GITHUB_REPOSITORY/actions/runs/$VALIDATED_RUN_ID" > /tmp/packaged-run.json
+            gh api "repos/$GITHUB_REPOSITORY/actions/runs/$VALIDATED_RUN_ID/jobs?per_page=100" > /tmp/packaged-jobs.json
+            node --input-type=module <<'NODE'
+          import { readFileSync, appendFileSync } from 'node:fs'
+          import { execFileSync } from 'node:child_process'
+          import { validatePackagedRun } from './scripts/prepare-desktop-release.mjs'
+          const run = JSON.parse(readFileSync('/tmp/packaged-run.json'))
+          const { jobs } = JSON.parse(readFileSync('/tmp/packaged-jobs.json'))
+          const revision = validatePackagedRun(run, jobs, process.env.GITHUB_REPOSITORY)
+          execFileSync('git', ['merge-base', '--is-ancestor', revision, 'HEAD'])
+          appendFileSync(process.env.GITHUB_OUTPUT, `source_sha=${revision}\nartifact_run_id=${run.id}\n`)
+          NODE
+          else
+            echo "source_sha=$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+            echo "artifact_run_id=$GITHUB_RUN_ID" >> "$GITHUB_OUTPUT"
+          fi
   desktop:
     needs: version
+    if: ${{ !inputs.validated_run_id }}
     uses: ./.github/workflows/build-desktop.yml
     with:
       channel: stable
       validation: full
   release:
     needs: [version, desktop]
+    if: ${{ always() && !cancelled() && needs.version.result == 'success' && (needs.desktop.result == 'success' || (needs.desktop.result == 'skipped' && inputs.validated_run_id != '')) }}
     runs-on: ubuntu-24.04
     permissions:
       contents: write
     env:
       GH_TOKEN: ${{ github.token }}
       RELEASE_VERSION: ${{ needs.version.outputs.version }}
+      RELEASE_SOURCE_SHA: ${{ needs.version.outputs.source_sha }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -49,11 +85,13 @@ jobs:
         with:
           pattern: eizhu-stable-*
           path: release-input
+          github-token: ${{ github.token }}
+          run-id: ${{ needs.version.outputs.artifact_run_id }}
       - name: Verify four targets and prepare immutable assets
         run: node scripts/prepare-desktop-release.mjs
       - name: Create draft and upload assets before publishing
         shell: bash
         run: |
-          gh release create "v$RELEASE_VERSION" --target "$GITHUB_SHA" --title "eizhu $RELEASE_VERSION" --notes-file "docs/releases/$RELEASE_VERSION.md" --draft
+          gh release create "v$RELEASE_VERSION" --target "$RELEASE_SOURCE_SHA" --title "eizhu $RELEASE_VERSION" --notes-file "docs/releases/$RELEASE_VERSION.md" --draft
           gh release upload "v$RELEASE_VERSION" release-output/*
           gh release edit "v$RELEASE_VERSION" --draft=false --latest
