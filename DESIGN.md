@@ -470,7 +470,7 @@ Cards are rectangles at 12–16px radius; marketing buttons and category tabs ar
 ## eizhu 桌面主窗口布局（TRAE 风格）
 
 桌面主窗口采用贯穿窗口的左侧导航，以及上、右、下留白 8px 的圆角工作区。
-移动端和独立编辑器窗口继续使用各自外壳；新增桌面样式必须限定在 `.desktop-shell`。
+独立编辑器窗口继续使用自己的外壳；新增桌面样式必须限定在 `.desktop-shell`。
 
 ### 区域与尺寸
 
@@ -513,7 +513,7 @@ Cards are rectangles at 12–16px radius; marketing buttons and category tabs ar
 
 - Dialog、AlertDialog、编辑器弹窗、SFTP 选择器与搜索面板继续使用 `--surface-overlay`、`--edge-panel-strong`、`--r-xl` 和 `--shadow-overlay`。
 - 新增弹窗从共享 DialogContent/AlertDialogContent 继承外框，保留 1rem 视口安全边距。
-- 新桌面环境默认界面字号 14px，移动端保留原默认值；不能通过修改共享根尺寸改变移动端布局。
+- 新桌面环境默认界面字号 14px，保持现有桌面组件比例。
 - 本地/云端标识来自现有登录态，不表示网络在线状态。本轮账号入口标记开发中，不新增登录注册界面。
 - 账号工作区切换必须清理详情缓存、搜索结果与账号相关临时界面状态，布局几何偏好可跨工作区保留。
 - 桌面设置使用完整窗口覆盖页，不使用 Dialog、遮罩或居中卡片。左侧 275px 浅灰导航包含返回应用、用户信息和分类，右侧为标题与独立滚动内容；窄窗口缩小侧栏。已有终端与 SFTP 保持挂载，返回后恢复焦点。
@@ -522,6 +522,6 @@ Cards are rectangles at 12–16px radius; marketing buttons and category tabs ar
 
 ### 原生窗口按钮校验
 
-- macOS 使用 `infrastructure/platform/desktop/macos_chrome.rs` 测量真实 WKWebView 坐标并定位原生按钮，避免将 Tao 的 `trafficLightPosition.y` 误作按钮中心。macOS 26 使用 AppKit 标准控件尺寸，避免紧凑指标令按钮偏小；按钮中心与 WebView 顶部 32pt 处的工具图标共线，保留原生尺寸、圆形绘制和行为。缩放、恢复与聚焦后重新定位，全屏由系统管理。
+- macOS 使用 Electron 原生交通灯，通过 `apps/desktop/src/main/windows.ts` 定位；目标按钮中心与内容区顶部 32pt 的工具图标共线，保持系统尺寸与全屏行为，需在最终安装包实测。
 - Windows/Linux 在 SSH 工作区上方保留独立窗口栏，工作区整体下移一行，自绘控制按钮不覆盖 SSH 内容；macOS 原生窗口按钮与工具栏共用原布局。
-- 在 macOS 执行 `swift scripts/verify-macos-window-chrome.swift`，使用不可见 AppKit 窗口检查正常与紧凑两套原生尺寸、三种窗口尺寸及重复布局后的中心线、点击区与预留区域。该检查不替代 Tauri 编译及实机窗口拖动、全屏验收。
+- 旧 AppKit 参考证据保存在阶段 0 报告；新容器的尺寸、按钮点击区、拖动、全屏与恢复由 Electron 安装产物截图和平台实测验收。

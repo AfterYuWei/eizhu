@@ -1,66 +1,59 @@
-name: Build Desktop Stable
-
+name: Electron stable release
 on:
   push:
     branches: [main]
   workflow_dispatch:
-
 permissions:
-  contents: write
-
+  contents: read
+concurrency:
+  group: electron-stable-release
+  cancel-in-progress: false
 jobs:
-  quality:
+  version:
     if: github.ref == 'refs/heads/main'
-    uses: ./.github/workflows/quality-core.yml
-    permissions:
-      contents: read
-
-  metadata:
-    if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
-      version: ${{ steps.meta.outputs.version }}
-      tag: ${{ steps.meta.outputs.tag }}
-      release_name: ${{ steps.meta.outputs.release_name }}
+      version: ${{ steps.version.outputs.version }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - id: meta
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: version
         shell: bash
         run: |
-          VERSION="$(tr -d '[:space:]' < VERSION)"
-          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "VERSION 必须是稳定版 SemVer（x.y.z），当前值: $VERSION" >&2
-            exit 1
-          fi
-          TAG="v${VERSION}"
-
-          # main 上的每个合并都是一次正式发版；必须先提升 VERSION，
-          # 防止不同提交复用同一应用版本或覆盖已有 Release。
-          set +e
-          git ls-remote --exit-code --tags origin "refs/tags/${TAG}" >/dev/null
-          STATUS=$?
-          set -e
-          if [ "$STATUS" -eq 0 ]; then
-            echo "正式版 ${VERSION} 已存在；合并到 main 前请先提升 VERSION" >&2
-            exit 1
-          elif [ "$STATUS" -ne 2 ]; then
-            echo "无法检查远端版本标记（git ls-remote 退出码 $STATUS）" >&2
-            exit "$STATUS"
-          fi
-
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-          echo "release_name=eizhu $VERSION" >> "$GITHUB_OUTPUT"
-
-  build:
-    if: github.ref == 'refs/heads/main'
-    needs: [metadata, quality]
+          version=$(cat VERSION)
+          [[ "$version" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]
+          test -z "$(git tag --list "v$version")"
+          test -f "docs/releases/$version.md"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+  desktop:
+    needs: version
     uses: ./.github/workflows/build-desktop.yml
     with:
       channel: stable
-      version: ${{ needs.metadata.outputs.version }}
-      tag: ${{ needs.metadata.outputs.tag }}
-      release_name: ${{ needs.metadata.outputs.release_name }}
-    secrets: inherit
+      validation: full
+  release:
+    needs: [version, desktop]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: eizhu-stable-*
+          path: release-input
+      - name: Verify four targets and prepare immutable assets
+        run: node scripts/prepare-desktop-release.mjs
+      - name: Create draft and upload assets before publishing
+        shell: bash
+        run: |
+          gh release create "v$RELEASE_VERSION" --target "$GITHUB_SHA" --title "eizhu $RELEASE_VERSION" --notes-file "docs/releases/$RELEASE_VERSION.md" --draft
+          gh release upload "v$RELEASE_VERSION" release-output/*
+          gh release edit "v$RELEASE_VERSION" --draft=false --latest

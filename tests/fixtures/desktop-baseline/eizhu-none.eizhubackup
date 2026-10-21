@@ -1,0 +1,163 @@
+{
+  "format": "eizhu-backup",
+  "version": 1,
+  "exported_at": "2026-10-20T02:22:13.182033Z",
+  "credential_mode": "none",
+  "groups": [
+    {
+      "id": "group-root",
+      "name": "合成父分组",
+      "icon": "folder",
+      "sort_order": 0,
+      "created_at": "2026-10-20T00:00:00Z"
+    },
+    {
+      "id": "group-child",
+      "name": "合成子分组",
+      "parent_id": "group-root",
+      "icon": "folder",
+      "sort_order": 1,
+      "created_at": "2026-10-20T00:00:00Z"
+    }
+  ],
+  "profiles": [
+    {
+      "id": "profile-agent",
+      "name": "合成服务器 profile-agent",
+      "host": "profile-agent.example.invalid",
+      "port": 22,
+      "username": "deploy",
+      "auth_type": "agent",
+      "icon": "linux",
+      "group_id": "group-child",
+      "tags": [
+        "合成",
+        "stage-0"
+      ],
+      "options": "{}",
+      "note": "测试专用，不连接真实服务器",
+      "sort_order": 0,
+      "created_at": "2026-10-20T00:00:00Z",
+      "updated_at": "2026-10-20T00:00:00Z"
+    },
+    {
+      "id": "profile-http",
+      "name": "合成服务器 profile-http",
+      "host": "profile-http.example.invalid",
+      "port": 22,
+      "username": "deploy",
+      "auth_type": "password",
+      "icon": "linux",
+      "group_id": "group-child",
+      "tags": [
+        "合成",
+        "stage-0"
+      ],
+      "options": "{\"proxy\":{\"host\":\"http.example.invalid\",\"port\":8080,\"type\":\"http\",\"username\":\"fixture\"}}",
+      "note": "测试专用，不连接真实服务器",
+      "sort_order": 0,
+      "created_at": "2026-10-20T00:00:00Z",
+      "updated_at": "2026-10-20T00:00:00Z"
+    },
+    {
+      "id": "profile-inline",
+      "name": "合成服务器 profile-inline",
+      "host": "profile-inline.example.invalid",
+      "port": 22,
+      "username": "deploy",
+      "auth_type": "password",
+      "icon": "linux",
+      "group_id": "group-child",
+      "tags": [
+        "合成",
+        "stage-0"
+      ],
+      "options": "{\"host_key_fingerprint\":\"SHA256:wJMYRqkYl7Nk9gxCFd5CW9OgzsxHpurJeDYygvDgsF4\",\"unknown_option\":{\"中文\":true}}",
+      "note": "测试专用，不连接真实服务器",
+      "sort_order": 0,
+      "created_at": "2026-10-20T00:00:00Z",
+      "updated_at": "2026-10-20T00:00:00Z"
+    },
+    {
+      "id": "profile-jump",
+      "name": "合成服务器 profile-jump",
+      "host": "profile-jump.example.invalid",
+      "port": 22,
+      "username": "deploy",
+      "auth_type": "none",
+      "icon": "linux",
+      "group_id": "group-child",
+      "tags": [
+        "合成",
+        "stage-0"
+      ],
+      "options": "{\"custom\":\"preserve-me\",\"proxy\":{\"jump_profile_id\":\"profile-inline\",\"type\":\"jump\"}}",
+      "note": "测试专用，不连接真实服务器",
+      "sort_order": 0,
+      "created_at": "2026-10-20T00:00:00Z",
+      "updated_at": "2026-10-20T00:00:00Z"
+    },
+    {
+      "id": "profile-socks",
+      "name": "合成服务器 profile-socks",
+      "host": "profile-socks.example.invalid",
+      "port": 22,
+      "username": "deploy",
+      "auth_type": "password",
+      "icon": "linux",
+      "group_id": "group-child",
+      "tags": [
+        "合成",
+        "stage-0"
+      ],
+      "options": "{\"proxy\":{\"host\":\"socks.example.invalid\",\"port\":1080,\"type\":\"socks5\",\"username\":\"fixture\"}}",
+      "note": "测试专用，不连接真实服务器",
+      "sort_order": 0,
+      "created_at": "2026-10-20T00:00:00Z",
+      "updated_at": "2026-10-20T00:00:00Z"
+    },
+    {
+      "id": "profile-vault",
+      "name": "合成服务器 profile-vault",
+      "host": "profile-vault.example.invalid",
+      "port": 22,
+      "username": "deploy",
+      "auth_type": "none",
+      "icon": "linux",
+      "group_id": "group-child",
+      "tags": [
+        "合成",
+        "stage-0"
+      ],
+      "options": "{}",
+      "note": "测试专用，不连接真实服务器",
+      "sort_order": 0,
+      "created_at": "2026-10-20T00:00:00Z",
+      "updated_at": "2026-10-20T00:00:00Z"
+    }
+  ],
+  "snippets": [
+    {
+      "id": "snippet-multiline",
+      "name": "中文与引号",
+      "content": "printf '%s\\n' '合成内容'\nprintf '%s\\n' \"quote\\\"\"",
+      "description": "合成多行，不自动执行",
+      "tags": [],
+      "is_global": false,
+      "created_at": "2026-10-20T00:00:00Z",
+      "updated_at": "2026-10-20T00:00:00Z"
+    },
+    {
+      "id": "snippet-global",
+      "name": "磁盘检查",
+      "content": "df -h",
+      "description": "合成单行",
+      "tags": [
+        "检查"
+      ],
+      "is_global": true,
+      "created_at": "2026-10-20T00:00:00Z",
+      "updated_at": "2026-10-20T00:00:00Z"
+    }
+  ]
+}

@@ -1,0 +1,61 @@
+
+> desktop:smoke
+> node scripts/smoke-desktop.mjs
+
+[91768:1021/124844.254130:WARNING:electron/shell/common/api/electron_api_native_image.cc:229] Argument must be a file path or a NativeImage
+EIZHU_SMOKE_STEP waiting-renderer
+EIZHU_SMOKE_APP_READY 1 true
+EIZHU_SMOKE_STEP renderer-ready
+EIZHU_SMOKE_STEP foundation-bridge-passed
+EIZHU_SMOKE_STEP stage6-updater-passed
+EIZHU_SMOKE_STEP local-bridge-passed
+EIZHU_SMOKE_STEP stage2-native-passed
+EIZHU_STAGE3_STEP peers-listening
+EIZHU_STAGE3_STEP host-key-and-utf8-passed
+EIZHU_STAGE3_STEP binary-completion-passed
+EIZHU_STAGE3_STEP details-path-completion-passed
+EIZHU_STAGE3_STEP route-key
+EIZHU_STAGE3_STEP route-keyboard-interactive
+EIZHU_STAGE3_STEP route-http
+EIZHU_STAGE3_STEP route-socks5
+EIZHU_STAGE3_STEP route-jump
+EIZHU_STAGE3_STEP tunnel-local
+EIZHU_STAGE3_STEP tunnel-dynamic
+EIZHU_STAGE3_STEP tunnel-remote
+EIZHU_STAGE3_STEP fault-injection
+EIZHU_STAGE3_STEP mfa-cancel-passed
+EIZHU_STAGE3_STEP host-reject-cancel-passed
+EIZHU_STAGE3_STEP handshake-stop-passed
+EIZHU_STAGE3_STEP proxy-rejection-passed
+EIZHU_STAGE3_STEP port-occupied-passed
+EIZHU_LOAD_PROGRESS 9 3000
+EIZHU_STAGE3_STEP cleanup
+EIZHU_SMOKE_STEP stage3-native-passed
+EIZHU_STAGE4_STEP openssh-connected
+EIZHU_STAGE4_STEP safe-save-and-file-operations
+EIZHU_STAGE4_STEP streaming-relay-archives
+[91768:1021/124857.553140:WARNING:electron/shell/common/api/electron_api_native_image.cc:229] Argument must be a file path or a NativeImage
+EIZHU_STAGE4_STEP editor-ownership-and-dirty-close
+EIZHU_STAGE4_STEP sftp-ui-captured
+EIZHU_SMOKE_STEP stage4-native-passed
+EIZHU_STAGE5_STEP password-ready
+EIZHU_STAGE5_STEP dedup-passed
+EIZHU_STAGE5_STEP submit-latest
+EIZHU_STAGE5_STEP submit-latest
+EIZHU_STAGE5_STEP submit-latest
+EIZHU_STAGE5_STEP submit-latest
+EIZHU_STAGE5_STEP submit-latest
+EIZHU_SMOKE_STEP stage5-native-passed
+EIZHU_SMOKE_STEP light-capture-ready
+EIZHU_SMOKE_STEP light-captured
+EIZHU_SMOKE_STEP dark-captured
+[91768:1021/124933.846300:WARNING:electron/shell/common/api/electron_api_native_image.cc:229] Argument must be a file path or a NativeImage
+EIZHU_SMOKE_STEP editor-ready
+EIZHU_SMOKE_STEP runtime-restarted
+EIZHU_SMOKE_STEP stage4-checkpoint-restarted
+EIZHU_SMOKE_STEP local-persistence-passed
+EIZHU_SMOKE_STEP monaco-passed
+EIZHU_SMOKE_OK {"platform":"darwin","arch":"x64","versions":{"node":"24.22.0","acorn":"8.18.0","ada":"4.0.0","amaro":"1.1.11","ares":"1.34.8","brotli":"1.2.0","cldr":"48.0","icu":"78.2","llhttp":"9.4.3","merve":"1.2.2","modules":"149","napi":"10","nbytes":"0.1.4","ncrypto":"0.0.1","nghttp2":"1.70.0","nghttp3":"","ngtcp2":"","openssl":"0.0.0","simdjson":"4.6.11","simdutf":"7.7.0","sqlite":"3.53.4","tz":"2026d","undici":"7.29.1","unicode":"17.0","uv":"1.52.1","uvwasi":"0.0.23","v8":"15.2.124.43-electron.0","zlib":"1.3.2.1-motley","zstd":"1.6.0","electron":"44.9.0","chrome":"152.0.7977.167"},"packaged":false,"dataRoot":"/var/folders/6s/4k01y34s1gv53tkfyndzyldw0000gn/T/eizhu-desktop-smoke-zumQkU/profile","keyMode":"restricted-file","health":{"context":{"runtimeId":"0f5895fa-4d34-4a0c-abca-fd647c1cdc7f","workspaceId":"offline","generation":1},"schema":2,"workers":2},"crypto":{"kdf":true,"crypto":true,"ssh2":true},"renderer":{"node":"undefined","require":"undefined","bridge":"function","health":{"context":{"runtimeId":"0f5895fa-4d34-4a0c-abca-fd647c1cdc7f","workspaceId":"offline","generation":1},"schema":2,"workers":2},"text":true,"reserved":"STAGE_NOT_READY","local":[],"arbitraryPath":"FORBIDDEN","inputValidation":"BAD_REQUEST"},"stage2":{"passed":true,"checks":["本地 CRUD、查询、默认名称、引用保护、用户名联动、循环拒绝与脱敏列表","真实 SQLite 中途失败：业务、审计、outbox、安全快照与预览消费整体回滚","七个固定旧备份：两种格式、三种凭据模式、历史 Go 密文及精确 payload 字节","十个固定反例：生产预览/导入错误码及完整数据保留","生产导出往返、加密前 hash、中文/emoji/首尾空白密码及 50 MiB 上限","skip/overwrite/regenerate、分组/凭据/跳板 ID 重映射、merge/replace、过期/编辑失效与安全快照恢复","ED25519/RSA2048/RSA4096 OpenSSH 加密私钥、注释与错误口令拒绝","SQLite 无明文凭据、正确密钥重启持久化、错误密钥拒绝并保留原数据"],"fixedBackups":7,"invalidCases":10,"nativeDatabase":true,"keyAlgorithms":3},"stage3":{"load":{"passed":true,"synthetic":true,"requestedMs":3000,"elapsedMs":3073.587040999999,"sshConnections":20,"activeBinaryTerminals":4,"localTransferTasksPerBatch":5,"transferBatches":35,"bytesVerifiedPerBatch":10485760,"rounds":120,"ipcSamples":120,"ipcP50Ms":0.2999999998137355,"ipcP95Ms":0.39999999944120646,"ipcMaxMs":0.599999999627471,"memory":[{"elapsedMs":8.683106000000407,"workingSetKiB":637304,"processes":5}],"fullAcceptance":false,"pending":["真实远端五路网络传输","完整备份与编辑器混合负载","P95 交互 100ms","8 小时稳定性"]},"passed":true,"authentication":["password","encrypted-private-key","keyboard-interactive"],"routes":["direct","http-connect","socks5","jump"],"binary":{"utf8":true,"consumedBytes":262144,"replayedInput":false},"hostKey":{"wrongRejected":true,"staleRejected":true,"permanent":true},"completion":true,"historyPrivacy":true,"details":true,"tunnels":["local","remote","dynamic"],"portsReleased":true,"tunnelReconnect":true,"faults":{"hostRejectBeforeAuthentication":true,"hostCancel":true,"mfaCancel":true,"handshakeStop":true,"proxyRejected":true,"portOccupied":true,"halfPacketStop":true,"tunnelLimit32":true},"agent":"待目标平台 Agent 实测"},"stage3Storage":{"passed":true,"retention":"500/30d","disabled":true,"encrypted":true,"persisted":true,"excludedFromBackup":true,"tunnelReferenceProtected":true},"stage4":{"passed":true,"unavailable":false,"restoredTaskId":"e5ddce21-fc1e-402b-b409-254a904a0caf","subsystem":"OpenSSH sftp-server","hostKeyConfirmation":true,"streaming":true,"resume":true,"relay":true,"tarGz":true,"zip":true,"archiveTools":{"tar":true,"unzip":true},"safeSave":true,"unsupportedAtomicReplacePreservesOriginal":true,"editorOwnership":true,"dirtyCloseCancelled":true,"staleWindowCloseRejected":true,"encryptedCheckpoints":true},"stage5":{"passed":true,"localVersions":true,"dedup":true,"encryptedStorage":true,"webdav":true,"s3SigV4":true,"independentTargets":true,"conditionalIndex":true,"unknownResultManualRecovery":true,"cloudPreview":true,"stalePreviewRejected":true,"passwordRotation":true,"changeScheduler":true,"shutdownBarrier":true,"oauthPkceCallback":true,"officialDeferred":true,"persistedVersionId":"e72dc5ce-5888-45a6-9270-348cfb4cb534"},"stage6":{"passed":true,"ipcValidation":true,"uiUnconfiguredFeedback":true,"realUpdaterMetadata":true,"sha512MismatchRejected":true,"noRecheckDuringDownload":true,"cacheIsolated":true,"realSignedUpgrade":false,"transport":"electron-updater shared HTTP downloader through NsisUpdater"},"localBridge":{"crud":true,"computeWorker":true,"revealed":true,"protectedDelete":true,"redacted":true,"audit":true,"profileId":"2bcd2617-3be9-4d8a-91dc-5ff9c16d654a","vaultId":"1ddb521b-f372-4969-bf48-90446cc45741","groupId":"5a0549fc-357b-4d5d-8cbf-7fbe280471f8"},"editor":true,"editorGeometry":{"requested":[1280,800],"actual":[1280,800],"workArea":[1920,985],"frame":[0,32]},"recovery":{"failed":"RUNTIME_UNAVAILABLE","generation":2,"retainedEditorMemory":true,"persistedSettings":true},"updaterModule":true,"monaco":{"typescript":true,"json":true,"model":true},"firstWindowMs":694.2204459999999,"processMetrics":[{"type":"Browser","memory":{"workingSetSize":220824,"peakWorkingSetSize":243728},"cpu":{"cumulativeCPUUsage":3.490102,"percentCPUUsage":0.3563664078205108,"idleWakeupsPerSecond":33}},{"type":"GPU","memory":{"workingSetSize":72188,"peakWorkingSetSize":75608},"cpu":{"cumulativeCPUUsage":0.931135,"percentCPUUsage":0.07732546032448388,"idleWakeupsPerSecond":17}},{"type":"Utility","memory":{"workingSetSize":31944,"peakWorkingSetSize":31944},"cpu":{"cumulativeCPUUsage":0.136816,"percentCPUUsage":0.0042811025059064705,"idleWakeupsPerSecond":0}},{"type":"Tab","memory":{"workingSetSize":242216,"peakWorkingSetSize":251288},"cpu":{"cumulativeCPUUsage":2.341309,"percentCPUUsage":0.23260159180215131,"idleWakeupsPerSecond":9}},{"type":"Tab","memory":{"workingSetSize":177872,"peakWorkingSetSize":177872},"cpu":{"cumulativeCPUUsage":0.670706,"percentCPUUsage":0,"idleWakeupsPerSecond":0}},{"type":"Utility","memory":{"workingSetSize":123480,"peakWorkingSetSize":123480},"cpu":{"cumulativeCPUUsage":0.445257,"percentCPUUsage":0,"idleWakeupsPerSecond":0}},{"type":"Tab","memory":{"workingSetSize":269276,"peakWorkingSetSize":271208},"cpu":{"cumulativeCPUUsage":1.428605,"percentCPUUsage":0,"idleWakeupsPerSecond":0}}],"screenshots":["home-light.png","home-dark.png","editor-empty.png"],"screenshotContrast":{"light":244,"dark":24}}
+[91768:1021/124935.657852:ERROR:base/process/process_mac.cc:53] task_policy_set TASK_CATEGORY_POLICY: (os/kern) invalid argument (4)
+[91768:1021/124935.657920:ERROR:base/process/process_mac.cc:98] task_policy_set TASK_SUPPRESSION_POLICY: (os/kern) invalid argument (4)
+烟测通过：darwin/x64；证据 artifacts/smoke/darwin-x64.json

@@ -1,0 +1,133 @@
+import { useRef,useCallback,useLayoutEffect } from 'react'
+import { loader, type EditorReady } from '@/lib/monaco'
+import MonacoEditor from '@monaco-editor/react'
+import { useSettingsStore } from '@/store/settings'
+
+// Define custom themes once when the module loads.
+loader.init().then((monaco) => {
+  monaco.editor.defineTheme('eizhu-dark', {
+    base: 'vs-dark',
+    inherit: true,
+    rules: [],
+    colors: {
+      'editor.background': '#0A0A0A',
+      'editor.foreground': '#E5E5E5',
+      'editorLineNumber.foreground': '#525252',
+      'editorLineNumber.activeForeground': '#A3A3A3',
+      'editor.lineHighlightBackground': '#171717',
+      'editor.lineHighlightBorder': '#00000000',
+      'editorCursor.foreground': '#E5E5E5',
+      'editor.selectionBackground': '#264F78AA',
+      'editor.inactiveSelectionBackground': '#3A3D41AA',
+      'editorWidget.background': '#0F0F0F',
+      'editorWidget.border': '#262626',
+      'editorSuggestWidget.background': '#0F0F0F',
+      'editorSuggestWidget.border': '#262626',
+      'editorSuggestWidget.selectedBackground': '#264F78',
+      'input.background': '#0F0F0F',
+      'input.border': '#262626',
+      'editorGutter.background': '#0A0A0A',
+      'scrollbarSlider.background': '#40404080',
+      'scrollbarSlider.hoverBackground': '#52525280',
+      'scrollbarSlider.activeBackground': '#525252AA',
+    },
+  })
+  monaco.editor.defineTheme('eizhu-light', {
+    base: 'vs',
+    inherit: true,
+    rules: [],
+    colors: {
+      'editor.background': '#FFFFFF',
+      'editor.foreground': '#171717',
+      'editorLineNumber.foreground': '#A3A3A3',
+      'editorLineNumber.activeForeground': '#404040',
+      'editor.lineHighlightBackground': '#F5F5F5',
+      'editor.lineHighlightBorder': '#00000000',
+      'editorCursor.foreground': '#171717',
+      'editor.selectionBackground': '#ADD6FF',
+      'editor.inactiveSelectionBackground': '#CCE5FF99',
+      'editorWidget.background': '#FAFAFA',
+      'editorWidget.border': '#E5E5E5',
+      'editorGutter.background': '#FFFFFF',
+      'scrollbarSlider.background': '#D4D4D480',
+      'scrollbarSlider.hoverBackground': '#A3A3A380',
+      'scrollbarSlider.activeBackground': '#A3A3A3AA',
+    },
+  })
+})
+
+interface CodeEditorProps {
+  content: string
+  language: string
+  readOnly: boolean
+  loading: boolean
+  onChange: (value: string) => void
+  onSave: () => void
+}
+
+/** Monaco editor wrapper for file editing.
+ *
+ *  Uses @monaco-editor/react with bundled local Monaco and workers.
+ *  Ctrl/Cmd+S → onSave(); intercepts browser default. */
+export function CodeEditor({
+  content,
+  language,
+  readOnly,
+  loading,
+  onChange,
+  onSave,
+}: CodeEditorProps) {
+  const onSaveRef = useRef(onSave)
+  useLayoutEffect(() => {
+    onSaveRef.current = onSave
+  }, [onSave])
+
+  const theme = useSettingsStore((s) => s.theme)
+  const systemRevision = useSettingsStore((s) => s.systemRevision)
+  void systemRevision
+  const resolvedTheme: 'light' | 'dark' =
+    theme === 'system'
+      ? window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+      : theme
+
+  const handleMount: EditorReady = useCallback((inst, monaco) => {
+    // @monaco-editor/react owns the model change subscription and suppresses
+    // callbacks for controlled value updates. A second subscription here sees
+    // tab switches as edits and captures the first tab's onChange callback.
+    inst.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
+      onSaveRef.current()
+    })
+  }, [])
+
+  return (
+    <MonacoEditor
+      height="100%"
+      language={language}
+      theme={resolvedTheme === 'dark' ? 'eizhu-dark' : 'eizhu-light'}
+      value={content}
+      onChange={(value: string | undefined) => onChange(value ?? '')}
+      onMount={handleMount}
+      loading={
+        <div className="editor-monaco-loading">
+          <div className="editor-monaco-spinner" />
+          <span>编辑器加载中…</span>
+        </div>
+      }
+      options={{
+        fontSize: 13,
+        fontFamily: "'JetBrains Mono', 'Fira Code', ui-monospace, monospace",
+        minimap: { enabled: content.length > 100_000 },
+        scrollBeyondLastLine: false,
+        tabSize: 2,
+        wordWrap: content.length > 500_000 ? 'on' : 'off',
+        readOnly: readOnly || loading,
+        lineNumbers: 'on',
+        renderWhitespace: 'selection',
+        bracketPairColorization: { enabled: true },
+        smoothScrolling: true,
+        cursorBlinking: 'smooth',
+        automaticLayout: true,
+      }}
+    />
+  )
+}

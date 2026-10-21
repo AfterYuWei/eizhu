@@ -1,0 +1,12 @@
+2026-10-20 本地构建准备验证
+
+通过：
+- node --check scripts/rebuild-native.mjs、scripts/native-toolchain.mjs、scripts/package-desktop.mjs
+- npx eslint scripts/rebuild-native.mjs scripts/native-toolchain.mjs scripts/package-desktop.mjs
+- Ruby YAML parser 解析 .github/workflows/build-desktop.yml
+- npm run native:rebuild；Electron 44.9.0 下 argon2、better-sqlite3、cpu-features 均完成
+- CSC_IDENTITY_AUTO_DISCOVERY=false npm run desktop:package -- --platform=darwin --arch=x64
+- npm run desktop:smoke:package -- artifacts/desktop/eizhu-0.4.4-mac-x64.dmg；EIZHU_SMOKE_OK，darwin/x64，Electron 44.9.0
+
+日志：artifacts/logs/stage-1-setup-*.log
+本机复用已有 Electron 分发缓存的成功结果不能证明 CI 冷安装通过；Linux 上 Clang 原生编译仍需由四目标 CI 实际验证。

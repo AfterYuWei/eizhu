@@ -1,0 +1,109 @@
+
+> test
+> npm run test:foundation && npm run test:unit --workspace @eizhu/web && npm run baseline:test
+
+
+> test:foundation
+> node --experimental-strip-types --test packages/*/src/**/*.test.ts apps/desktop/src/main/*.test.ts
+
+✔ file grants reject arbitrary paths, wrong windows, contexts, kinds and released references (21.34459ms)
+✔ shutdown message leaves stop pending until the real exit event and then removes its listener (10.411867ms)
+✔ graceful deadline kills the child but still waits for its exit event (20.748753ms)
+✔ failed kill rejects and removes the exit listener (6.058387ms)
+✔ successful forced kill still rejects at its deadline if no exit arrives and cleans up (11.460393ms)
+✔ postMessage failure switches directly to force kill and still waits for exit (0.795381ms)
+✔ missing pid is a no-op (0.287508ms)
+✔ asset protocol rejects another host, scheme, encoded traversal and path separators (2.025296ms)
+✔ page authorization checks exact origin instead of URL prefix matching (0.532448ms)
+✔ main clears an unchanged secret after 30 seconds and preserves later user copies (18.427742ms)
+✔ scope rejects stale instances, workspaces and generations independently (1.607733ms)
+✔ only exact request envelopes, bounded settings and http(s) external links are accepted (12.903998ms)
+✔ errors never serialize raw third-party details and preserve intentional structured context (2.151272ms)
+✔ stage 2 exposes local domains while SSH, accounts and cloud remain reserved (15.725407ms)
+✔ list output schemas reject leaked credentials and invalid restore sources (2.2514ms)
+✔ redacts multiline keys, quoted passwords, bearer tokens, query tokens and URL credentials (6.157141ms)
+✔ 文件 IPC 拒绝越界分块、NUL、遍历文件名及伪造事件 (12.331154ms)
+✔ SSH contract rejects arbitrary completion programs, unsafe listeners and invalid input (20.524723ms)
+✔ desktop OAuth binds single-use state, PKCE, loopback path and provider revision (84.159254ms)
+✔ editing a target invalidates its outstanding OAuth callback before token exchange (17.853947ms)
+✔ cloud contracts reject path traversal, embedded credentials, unsafe counts, corrupt indices and official targets (14.61754ms)
+✔ WebDAV creates only its namespaced collection, sends conditional writes and never follows redirects (7.265269ms)
+✔ malformed index, foreign namespace, duplicate versions and HTTP failures cannot become an empty cloud (1.887929ms)
+✔ S3 SigV4 matches the AWS documented GET test vector (6.231261ms)
+✔ OneDrive download uses metadata ETag and never forwards bearer tokens to the download host (5.863811ms)
+✔ Drive refuses ambiguous same-name folders instead of choosing an arbitrary destination (2.16554ms)
+✔ daily schedules use local time, run once after missed time and combine with interval schedules (4.239036ms)
+✔ fresh restricted key persists privately and is reused; never reads an old app directory (29.183584ms)
+✔ locked system key is preserved, never falls back or generates a new key (11.040966ms)
+✔ existing data without device key cannot initialize a replacement key (4.504954ms)
+✔ close aborts first, waits all owned resources in reverse order, is idempotent (4.334565ms)
+✔ 本机文件领域不能读取、列出或重命名应用私有目录及其别名 (20.770334ms)
+✔ 文本保存保留权限、换行和内容哈希，已有文件另存不覆盖 (36.865263ms)
+✔ 相同 mtime 的远端变化仍以内容哈希拒绝覆盖 (14.582565ms)
+✔ 编辑器拒绝非法 UTF-8、二进制和超大文本 (39.762012ms)
+✔ 符号链接及链接目录不能用于修改、读取或归档 (9.828103ms)
+✔ 目录 tar.gz 与 ZIP 流携带真实字节、空目录及中文路径 (33.307805ms)
+✔ 上传按序确认，暂停保留检查点，重启手动恢复并校验原文件 (35.394826ms)
+✔ 上传仅在校验与提交后替换目标；目标变化和取消均保留原文件 (11.762589ms)
+✔ 五路传输上限与取消释放通道 (9.541866ms)
+✔ 并发发起上传仍严格限制五路，篡改暂存文件禁止拼接 (11.227205ms)
+✔ 重名目录整体重命名，保留原目标并拒绝同一文件系统的自身复制 (17.774818ms)
+✔ 源文件在排队期间变化，恢复后拒绝提交目标 (14.284526ms)
+✔ fixed generators quote path and namespace operands and never run package scripts (1.13621ms)
+✔ metrics preserve CPU, memory, disk and network delta semantics (1.417246ms)
+✔ SOCKS destination encoding preserves IPv4, IPv6, mapped IPv4 and remote DNS (11.911398ms)
+✔ route resolves vault username and credentials, orders multiple jumps and omits unrelated records (6.122676ms)
+✔ test connection patch cannot retain password when auth changes to key or alter the stored profile (2.828141ms)
+✔ binary terminal waits for real byte acknowledgements and keeps replay bounded (125.730198ms)
+✔ replacing a terminal port cannot retain an old consumer (0.387947ms)
+✔ worker queue is bounded; closing drains accepted jobs and rejects new work (103.594234ms)
+✔ worker crash rejects active and queued jobs without replay or orphan promises (41.747945ms)
+✔ queued cancellation frees capacity and removes its abort listener (90.359817ms)
+✔ active cancellation waits for worker completion and leaves the caller buffer owned by the caller (91.130301ms)
+✔ unserializable input rejects immediately without poisoning the worker or leaking timers (39.167859ms)
+ℹ tests 55
+ℹ suites 0
+ℹ pass 55
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1391.965479
+
+> test:unit
+> vitest run
+
+
+ RUN  v5.0.5 /Users/yuwei/Desktop/Projects/yuweinfo/XControl/apps/web
+
+
+ Test Files  54 passed (54)
+      Tests  205 passed (205)
+   Start at  12:13:34
+   Duration  5.22s (environment 54%, import 26%, tests 16%, transform 3%, worker 1%)
+
+    Isolate  54 workers spawned · ~790ms startup each (spawn + environment, per file)
+             at least ~2.05s faster with isolate: false — reuses workers across files instead of one per file
+
+
+> baseline:test
+> node --test scripts/desktop-baseline.test.mjs
+
+✔ frozen source, UI assets and original Rust backup/sync vectors verify independently in Node (370.689627ms)
+✔ wrong password, format AAD and modified authentication tags reject original exporter ciphertext (158.075067ms)
+✔ sync ciphertext is bound to user, type, ID, revision, epoch, key version and deletion (1.332839ms)
+✔ encrypted OpenSSH specimen contains a real password-protected private key and dependency graph (0.887534ms)
+✔ none specimens never retain vault bodies, references or proxy/inline secrets (0.676779ms)
+✔ a changed frozen fixture is rejected before any cryptographic or UI comparison (30.559783ms)
+✔ adding an unreviewed file cannot silently expand the frozen evidence set (23.145015ms)
+✔ acceptance coverage rejects orphan mappings and duplicate interfaces (2.901008ms)
+✔ fixture lookup rejects paths outside the evidence directory (0.389881ms)
+✔ legacy interfaces can be reconstructed from the frozen Git source after deleting the old runtime (2260.967669ms)
+ℹ tests 10
+ℹ suites 0
+ℹ pass 10
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 2938.200803

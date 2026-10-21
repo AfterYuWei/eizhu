@@ -1,0 +1,13 @@
+
+> architecture:verify
+> node scripts/verify-desktop-architecture.mjs
+
+{
+  "sourceFiles": 320,
+  "oldRuntimeAbsent": true,
+  "oldMobileEntrypointsAbsent": true,
+  "rendererNodeImports": 0,
+  "coreElectronImports": 0,
+  "lockFiles": 1,
+  "originalIconsVerified": 4
+}

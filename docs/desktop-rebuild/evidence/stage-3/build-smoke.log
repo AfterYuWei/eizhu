@@ -1,0 +1,40 @@
+
+> desktop:smoke
+> node scripts/smoke-desktop.mjs
+
+[47539:1020/205521.576068:WARNING:electron/shell/common/api/electron_api_native_image.cc:229] Argument must be a file path or a NativeImage
+EIZHU_SMOKE_STEP waiting-renderer
+EIZHU_SMOKE_STEP renderer-ready
+EIZHU_SMOKE_STEP foundation-bridge-passed
+EIZHU_SMOKE_STEP local-bridge-passed
+EIZHU_SMOKE_STEP stage2-native-passed
+EIZHU_STAGE3_STEP peers-listening
+EIZHU_STAGE3_STEP host-key-and-utf8-passed
+EIZHU_STAGE3_STEP binary-completion-passed
+EIZHU_STAGE3_STEP details-path-completion-passed
+EIZHU_STAGE3_STEP route-key
+EIZHU_STAGE3_STEP route-keyboard-interactive
+EIZHU_STAGE3_STEP route-http
+EIZHU_STAGE3_STEP route-socks5
+EIZHU_STAGE3_STEP route-jump
+EIZHU_STAGE3_STEP tunnel-local
+EIZHU_STAGE3_STEP tunnel-dynamic
+EIZHU_STAGE3_STEP tunnel-remote
+EIZHU_STAGE3_STEP fault-injection
+EIZHU_STAGE3_STEP mfa-cancel-passed
+EIZHU_STAGE3_STEP host-reject-cancel-passed
+EIZHU_STAGE3_STEP handshake-stop-passed
+EIZHU_STAGE3_STEP proxy-rejection-passed
+EIZHU_STAGE3_STEP port-occupied-passed
+EIZHU_STAGE3_STEP cleanup
+EIZHU_SMOKE_STEP stage3-native-passed
+EIZHU_SMOKE_STEP light-capture-ready
+EIZHU_SMOKE_STEP light-captured
+EIZHU_SMOKE_STEP dark-captured
+[47539:1020/205534.376606:WARNING:electron/shell/common/api/electron_api_native_image.cc:229] Argument must be a file path or a NativeImage
+EIZHU_SMOKE_STEP editor-ready
+EIZHU_SMOKE_STEP runtime-restarted
+EIZHU_SMOKE_STEP local-persistence-passed
+EIZHU_SMOKE_STEP monaco-passed
+EIZHU_SMOKE_OK {"platform":"darwin","arch":"x64","versions":{"node":"24.22.0","acorn":"8.18.0","ada":"4.0.0","amaro":"1.1.11","ares":"1.34.8","brotli":"1.2.0","cldr":"48.0","icu":"78.2","llhttp":"9.4.3","merve":"1.2.2","modules":"149","napi":"10","nbytes":"0.1.4","ncrypto":"0.0.1","nghttp2":"1.70.0","nghttp3":"","ngtcp2":"","openssl":"0.0.0","simdjson":"4.6.11","simdutf":"7.7.0","sqlite":"3.53.4","tz":"2026d","undici":"7.29.1","unicode":"17.0","uv":"1.52.1","uvwasi":"0.0.23","v8":"15.2.124.43-electron.0","zlib":"1.3.2.1-motley","zstd":"1.6.0","electron":"44.9.0","chrome":"152.0.7977.167"},"packaged":false,"dataRoot":"/var/folders/6s/4k01y34s1gv53tkfyndzyldw0000gn/T/eizhu-desktop-smoke-4ks6Jf/profile","keyMode":"restricted-file","health":{"context":{"runtimeId":"53282e63-6be7-40b5-9572-6b15e513efc2","workspaceId":"offline","generation":1},"schema":2,"workers":2},"crypto":{"kdf":true,"crypto":true,"ssh2":true},"renderer":{"node":"undefined","require":"undefined","bridge":"function","health":{"context":{"runtimeId":"53282e63-6be7-40b5-9572-6b15e513efc2","workspaceId":"offline","generation":1},"schema":2,"workers":2},"text":true,"reserved":"STAGE_NOT_READY","local":[],"arbitraryPath":"FORBIDDEN","inputValidation":"BAD_REQUEST"},"stage2":{"passed":true,"checks":["本地 CRUD、查询、默认名称、引用保护、用户名联动、循环拒绝与脱敏列表","真实 SQLite 中途失败：业务、审计、outbox、安全快照与预览消费整体回滚","七个固定旧备份：两种格式、三种凭据模式、历史 Go 密文及精确 payload 字节","十个固定反例：生产预览/导入错误码及完整数据保留","生产导出往返、加密前 hash、中文/emoji/首尾空白密码及 50 MiB 上限","skip/overwrite/regenerate、分组/凭据/跳板 ID 重映射、merge/replace、过期/编辑失效与安全快照恢复","ED25519/RSA2048/RSA4096 OpenSSH 加密私钥、注释与错误口令拒绝","SQLite 无明文凭据、正确密钥重启持久化、错误密钥拒绝并保留原数据"],"fixedBackups":7,"invalidCases":10,"nativeDatabase":true,"keyAlgorithms":3},"stage3":{"passed":true,"authentication":["password","encrypted-private-key","keyboard-interactive"],"routes":["direct","http-connect","socks5","jump"],"binary":{"utf8":true,"consumedBytes":262144,"replayedInput":false},"hostKey":{"wrongRejected":true,"staleRejected":true,"permanent":true},"completion":true,"historyPrivacy":true,"details":true,"tunnels":["local","remote","dynamic"],"portsReleased":true,"tunnelReconnect":true,"faults":{"hostRejectBeforeAuthentication":true,"hostCancel":true,"mfaCancel":true,"handshakeStop":true,"proxyRejected":true,"portOccupied":true,"halfPacketStop":true,"tunnelLimit32":true},"agent":"待目标平台 Agent 实测"},"stage3Storage":{"passed":true,"retention":"500/30d","disabled":true,"encrypted":true,"persisted":true,"excludedFromBackup":true,"tunnelReferenceProtected":true},"localBridge":{"crud":true,"computeWorker":true,"revealed":true,"protectedDelete":true,"redacted":true,"audit":true,"profileId":"fb016f7e-9c96-4b66-93cc-91ea6d89ee26","vaultId":"db0edb76-d99f-4444-ac8e-a77413239c60","groupId":"7cc71539-1521-423a-8979-edc11dc54049"},"editor":true,"editorGeometry":{"requested":[1280,800],"actual":[1280,800],"workArea":[1920,985],"frame":[0,32]},"recovery":{"failed":"RUNTIME_UNAVAILABLE","generation":2,"retainedEditorMemory":true,"persistedSettings":true},"updaterModule":true,"monaco":{"typescript":true,"json":true,"model":true},"firstWindowMs":816.3577859999999,"processMetrics":[{"type":"Browser","memory":{"workingSetSize":201880,"peakWorkingSetSize":226244},"cpu":{"cumulativeCPUUsage":1.853767,"percentCPUUsage":0,"idleWakeupsPerSecond":0}},{"type":"GPU","memory":{"workingSetSize":69288,"peakWorkingSetSize":70820},"cpu":{"cumulativeCPUUsage":0.824952,"percentCPUUsage":0,"idleWakeupsPerSecond":0}},{"type":"Utility","memory":{"workingSetSize":29832,"peakWorkingSetSize":29832},"cpu":{"cumulativeCPUUsage":0.148257,"percentCPUUsage":0,"idleWakeupsPerSecond":0}},{"type":"Tab","memory":{"workingSetSize":176900,"peakWorkingSetSize":176900},"cpu":{"cumulativeCPUUsage":1.024529,"percentCPUUsage":0,"idleWakeupsPerSecond":0}},{"type":"Tab","memory":{"workingSetSize":171324,"peakWorkingSetSize":171392},"cpu":{"cumulativeCPUUsage":0.669577,"percentCPUUsage":0,"idleWakeupsPerSecond":0}},{"type":"Utility","memory":{"workingSetSize":113364,"peakWorkingSetSize":113364},"cpu":{"cumulativeCPUUsage":0.42015,"percentCPUUsage":0,"idleWakeupsPerSecond":0}},{"type":"Tab","memory":{"workingSetSize":269088,"peakWorkingSetSize":271040},"cpu":{"cumulativeCPUUsage":1.509855,"percentCPUUsage":0,"idleWakeupsPerSecond":0}}],"screenshots":["home-light.png","home-dark.png","editor-empty.png"],"screenshotContrast":{"light":244,"dark":24}}
+烟测通过：darwin/x64；证据 artifacts/smoke/darwin-x64.json

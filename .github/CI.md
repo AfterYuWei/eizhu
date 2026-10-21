@@ -1,113 +1,22 @@
-# GitHub Actions 发版流程
+# Electron CI 与发布
 
-eizhu 采用 `dev` / `main` 双分支晋级模型：日常开发提交到 `dev`，`dev` 对接测试版通道；
-`main` 只接收经过验证的发布版本，并对接正式版通道。桌面和移动端发版只由这两个
-分支的推送触发，不再通过人工创建 tag 触发。
+仓库只维护 Windows x64、macOS x64/arm64、Linux x64。版本源是根目录 `VERSION`，依赖以根 `package-lock.json` 为准；Node 24 LTS。
 
-> GitHub Release 底层必须关联 tag。工作流会在发布时自动创建 tag，
-> 它是 Release 的不可变标识，不是发版入口，无需人工维护。
+| 工作流 | 入口 | 实际操作 |
+|---|---|---|
+| `quality.yml` / `quality-core.yml` | PR、dev/main 推送 | 类型、lint、回归、架构、固定兼容基线及构建 |
+| `build-desktop.yml` | 手动、复用调用 | 四目标原生构建、打包、最终包烟测及 60 秒合成负载 |
+| `build-desktop-test.yml` | dev 推送、手动 | test 候选安装包，仅上传 Actions artifacts |
+| `build-desktop-stable.yml` | main 推送、main 手动 | 四目标 stable 验证完成后创建 GitHub Release |
 
-## 分支与通道
+打包步骤使用 `publish: never`。stable 工作流先拒绝已占用的 `v<VERSION>` 标签，要求对应中文发布说明；四目标全部通过后，独立发布任务核对版本、提交、源码指纹及 60 秒负载报告，创建草稿、上传安装包/实际报告/摘要清单，最后公开 Release。失败时不公开残缺版本，不覆盖同名资产。工作流不部署更新源；签名和人工验收边界继续见 [发布清单](../docs/RELEASE_CHECKLIST.md)。用户已于 2026-10-21 授权发布 0.5.0。
+`VERSION=x.y.z` 时 stable 为 `x.y.z`，test 为 `x.y.z-test.<Git提交计数>.<短SHA>`。同一提交、通道和架构必须重新构建后再打包；构建记录与打包配置不一致会拒绝。
 
-| 推送分支 | 类型 | 版本号 | GitHub Release |
-|----------|------|--------|----------------|
-| `dev`（桌面） | 测试版 | `<VERSION>-test.<提交计数>.<短SHA>` | Prerelease（`test-v*`，全平台共用） |
-| `main`（桌面） | 正式版 | `<VERSION>` | 正式 Release（`v*`，全平台共用） |
-| `dev`（移动端） | 测试版 | `<VERSION_MOBILE>-test.<提交计数>.<短SHA>` | 同上（资产文件名带移动端版本） |
-| `main`（移动端） | 正式版 | `<VERSION_MOBILE>` | 同上（资产文件名带移动端版本） |
+可选 Variables：`EIZHU_UPDATE_STABLE_URL`、`EIZHU_UPDATE_TEST_URL`，分别以 `/electron/stable/`、`/electron/test/` 结尾，必须是无凭据的 HTTPS URL。每个目标再追加 `win32-x64/`、`darwin-x64/`、`darwin-arm64/` 或 `linux-x64/`。缺省时只产出手动安装包，更新入口不会报“已是最新”。官方账号服务仍待开发，构建不依赖账号服务地址。
 
-**一次提交一个 Release**：Release 标签跟随桌面端 `VERSION`（`test-v<…>` / `v<…>`），
-桌面与移动端流水线把各自产物上传到同一个 Release；资产文件名携带各端版本号
-（移动端使用 `VERSION_MOBILE`），两条版本线各自独立管理。
+默认 `validation=full`，执行全部回归。仅烟测工具变化、已有对应回归证据且业务/存储/兼容实现未变时，才允许 `package-only` 或提交标题 `[package-only]`；跳过的回归必须引用原证据，不能记为本轮通过。类型、lint、基线、架构、构建、打包和最终包启动仍执行。
 
-桌面端与移动端版本分开管理：`VERSION` 是桌面端发版版本源，`VERSION_MOBILE` 是移动端
-（Android / iOS）版本源，格式都必须为 `x.y.z`。两个私有 npm 包与
-`tauri.conf.json` 不再保存重复版本；本地与 CI 构建都会在运行时把对应版本注入 Tauri
-（`scripts/run-tauri.mjs` 按命令选择版本文件，可用 `EIZHU_APP_VERSION` /
-`EIZHU_MOBILE_VERSION` 覆盖）。
-Cargo manifest 受格式约束必须声明版本，`build.rs` 会读取 `VERSION` 并强制校验两者一致。
-正式版已存在同名资产时，对应发布工作流会拒绝复用该版本号。
+矩阵使用 windows-2022、macos-15-intel、macos-15、ubuntu-22.04；Linux 配置 Clang 15、Xvfb 和打包依赖。每个目标独立 `npm ci`、重建本机 Electron ABI，禁止跨目标复用原生模块。
+NSIS 执行隔离安装/卸载；DMG 只读挂载后复制运行；AppImage 解包后在 X11 启动。deb/rpm 的系统安装、Wayland、真实系统密钥库仍需专门验收。
 
-test 版本号由「提交计数 + 短 SHA」组成（如 `0.4.2-test.486.1a2b3c4`）：提交计数用
-`git rev-list --count HEAD` 计算（同一提交两条流水线得到相同数值），随提交历史单调
-递增，保证 Windows NSIS 与应用内更新始终把新测试包判定为“升级”，避免因旧
-`-test.<sha>` 字典序回退导致覆盖安装被强制要求先卸载；短 SHA 提供构建可追溯性，
-同一提交重跑时版本不变、资产覆盖到同一个 test Release。
-
-## 账号服务地址与质量门禁
-
-配置仓库 Variables `EIZHU_ACCOUNT_SERVER_TEST` 与 `EIZHU_ACCOUNT_SERVER_STABLE` 为实际 HTTPS 账号服务地址。
-
-测试服务尚未确定时，`dev` 通道在变量未配置或为空时暂用 `https://account.eizhu.invalid/`，允许先出测试包；此时账号登录和同步功能暂不可用，配置真实地址后重新构建即可启用。两个通道严格独立，正式通道仍要求真实地址，不会回退测试服务或占位地址。
-
-打包入口继续拒绝其他占位域名和携带认证信息的地址。本地 `desktop:build` 需要环境变量 `EIZHU_ACCOUNT_SERVER`，使用上述临时地址时还需设置 `EIZHU_BUILD_CHANNEL=test`；普通开发与单元测试不需要。
-
-桌面发布构建依赖同一提交的 `quality-core.yml`：前端测试、lint、构建，Rust 检查及桌面烟测全部通过才继续。Quality 产物与安装包产物分开筛选，前端静态文件不会混入 Release。
-
-## 推荐发版流程
-
-1. 日常开发在 `dev` 分支进行；需要多人协作时，也可通过 PR 合入 `dev`。
-2. `dev` 每次推送自动运行质量门禁，并发布三平台测试版。
-3. 进入发布候选阶段时，按 SemVer 提升 `VERSION` 与 `VERSION_MOBILE`，完成回归后由
-   `dev` 提 PR 到 `main`。
-4. `main` 只通过该发布 PR 更新；合并后自动发布同版本正式版。
-5. 发布后将 `main` 同步回 `dev`，并将 `VERSION` / `VERSION_MOBILE` 提升到下一个计划
-   版本，使后续测试版在 SemVer 上高于已发布的稳定版。
-
-建议在 GitHub 为 `main` 开启分支保护：禁止直接推送，要求 PR、`Quality` 全部通过
-且至少一人审批。`dev` 至少要求 `Quality` 通过。
-
-## 产物
-
-| 平台 | 格式 | 应用内更新 |
-|------|------|-----------|
-| Windows (x64) | NSIS 安装程序 `.exe` | ✅ |
-| macOS (Apple Silicon) | DMG 镜像 + `.app.tar.gz` | ✅ |
-| macOS (Intel x64) | DMG 镜像 + `.app.tar.gz` | ✅ |
-| Linux (Debian/Ubuntu) | `.deb` | ❌（手动覆盖安装） |
-| Linux (Fedora/RHEL) | `.rpm` | ❌（手动覆盖安装） |
-| Linux (通用) | `.AppImage` | ✅ |
-| Android (arm64) | `.apk`（测试版为 debug 优化构建） | ❌（手动下载安装，见下方签名说明） |
-| iOS (arm64) | 未签名 `.ipa`（侧载用） | ❌（当前不包含 App Store 上架流程） |
-
-稳定版与测试版的 updater 清单分别为 `latest-stable-*` 和 `latest-test-*`，
-由固定的 `tauri-update-channel` Release 保存最新指针。
-macOS 分别在 Apple Silicon 与 `macos-15-intel` runner 上构建
-`aarch64-apple-darwin` 和 `x86_64-apple-darwin`，两者都执行 bundle 烟测和二进制架构检查。
-DMG 分别以 `_aarch64.dmg` 和 `_x64.dmg` 结尾；签名后的更新归档统一为
-`eizhu_<版本>_<aarch64|x64>.app.tar.gz`，避免合并产物时同名覆盖。
-客户端通过 Rust updater 返回的编译目标选择 `darwin-aarch64` 或 `darwin-x86_64` 清单。
-
-移动端产物（APK / IPA）上传到与桌面相同的版本 Release，资产文件名以
-`eizhu-<VERSION_MOBILE>…` 标识移动端版本；iOS 测试 IPA 通过
-`tauri ios build --no-sign` 产出，正式与测试分支均不读取 App Store Connect 密钥，
-需自行签名后侧载。
-
-## Secrets（可选）
-
-| Secret | 说明 |
-|--------|------|
-| `TAURI_SIGNING_PRIVATE_KEY` | updater 签名私钥；未配置时仅应用内更新不可用 |
-| `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | 私钥密码（空密码留空） |
-| `APPLE_CERTIFICATE` / `APPLE_CERTIFICATE_PASSWORD` / `APPLE_SIGNING_IDENTITY` | macOS 签名 |
-| `APPLE_ID` / `APPLE_PASSWORD` / `APPLE_TEAM_ID` | macOS 公证 |
-| `ANDROID_KEY_BASE64` / `ANDROID_KEY_ALIAS` / `ANDROID_KEY_PASSWORD` | Android 上传密钥；未配置时 APK 使用 runner 随机 debug 签名，无法覆盖安装（配置方法见 `docs/ANDROID_APK_GITHUB.md`） |
-
-Windows 覆盖安装说明：`tauri.conf.json` 已启用 `bundle.windows.allowDowngrades`，
-安装器在检测到“降级”（例如从正式版切回测试版）时也允许直接覆盖安装而不强制卸载；
-应用数据在卸载时也可选择保留。
-
-## 本地验证
-
-```bash
-npm run desktop:build
-npm run desktop:smoke
-```
-
-在 macOS 上可显式选择打包架构（账号服务地址要求同上）：
-
-```bash
-rustup target add x86_64-apple-darwin aarch64-apple-darwin
-npm run desktop:build -- --target x86_64-apple-darwin
-npm run desktop:build -- --target aarch64-apple-darwin
-```
+当前 CI 为未签名测试候选配置（`CSC_IDENTITY_AUTO_DISCOVERY=false`）。不要把已归档的阶段 1 四目标结果当作阶段 6 结果。实际状态与证据见 [阶段 6 报告](../docs/desktop-rebuild/STAGE_6_REPORT.md)。

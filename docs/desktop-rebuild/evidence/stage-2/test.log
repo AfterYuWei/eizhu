@@ -1,0 +1,79 @@
+
+> test
+> npm run test:foundation && npm run test:unit --workspace @eizhu/web && npm run baseline:test
+
+
+> test:foundation
+> node --experimental-strip-types --test packages/*/src/**/*.test.ts apps/desktop/src/main/*.test.ts
+
+✔ file grants reject arbitrary paths, wrong windows, contexts, kinds and released references (32.404169ms)
+✔ shutdown message leaves stop pending until the real exit event and then removes its listener (13.891802ms)
+✔ graceful deadline kills the child but still waits for its exit event (32.654218ms)
+✔ failed kill rejects and removes the exit listener (6.322664ms)
+✔ successful forced kill still rejects at its deadline if no exit arrives and cleans up (12.160359ms)
+✔ postMessage failure switches directly to force kill and still waits for exit (1.406475ms)
+✔ missing pid is a no-op (0.407343ms)
+✔ asset protocol rejects another host, scheme, encoded traversal and path separators (3.241242ms)
+✔ page authorization checks exact origin instead of URL prefix matching (1.242899ms)
+✔ main clears an unchanged secret after 30 seconds and preserves later user copies (8.244624ms)
+✔ scope rejects stale instances, workspaces and generations independently (2.070298ms)
+✔ only exact request envelopes, bounded settings and http(s) external links are accepted (9.39004ms)
+✔ errors never serialize raw third-party details and preserve intentional structured context (9.348782ms)
+✔ stage 2 exposes local domains while SSH, accounts and cloud remain reserved (28.43249ms)
+✔ list output schemas reject leaked credentials and invalid restore sources (2.59438ms)
+✔ redacts multiline keys, quoted passwords, bearer tokens, query tokens and URL credentials (5.127615ms)
+✔ fresh restricted key persists privately and is reused; never reads an old app directory (42.871207ms)
+✔ locked system key is preserved, never falls back or generates a new key (11.169763ms)
+✔ existing data without device key cannot initialize a replacement key (4.333007ms)
+✔ close aborts first, waits all owned resources in reverse order, is idempotent (4.266552ms)
+✔ worker queue is bounded; closing drains accepted jobs and rejects new work (195.307118ms)
+✔ worker crash rejects active and queued jobs without replay or orphan promises (158.707039ms)
+✔ queued cancellation frees capacity and removes its abort listener (167.310676ms)
+✔ active cancellation waits for worker completion and leaves the caller buffer owned by the caller (130.556628ms)
+✔ unserializable input rejects immediately without poisoning the worker or leaking timers (79.262033ms)
+ℹ tests 25
+ℹ suites 0
+ℹ pass 25
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1573.261324
+
+> test:unit
+> vitest run
+
+
+ RUN  v5.0.5 /Users/yuwei/Desktop/Projects/yuweinfo/XControl/apps/web
+
+
+ Test Files  52 passed (52)
+      Tests  201 passed (201)
+   Start at  16:31:44
+   Duration  11.06s (environment 56%, import 21%, tests 17%, transform 6%, worker 1%)
+
+    Isolate  52 workers spawned · ~1.55s startup each (spawn + environment, per file)
+             at least ~3.82s faster with isolate: false — reuses workers across files instead of one per file
+
+
+> baseline:test
+> node --test scripts/desktop-baseline.test.mjs
+
+✔ frozen source, UI assets and original Rust backup/sync vectors verify independently in Node (630.975289ms)
+✔ wrong password, format AAD and modified authentication tags reject original exporter ciphertext (224.097378ms)
+✔ sync ciphertext is bound to user, type, ID, revision, epoch, key version and deletion (2.058646ms)
+✔ encrypted OpenSSH specimen contains a real password-protected private key and dependency graph (1.571343ms)
+✔ none specimens never retain vault bodies, references or proxy/inline secrets (0.917368ms)
+✔ a changed frozen fixture is rejected before any cryptographic or UI comparison (49.165988ms)
+✔ adding an unreviewed file cannot silently expand the frozen evidence set (37.618337ms)
+✔ acceptance coverage rejects orphan mappings and duplicate interfaces (4.103176ms)
+✔ fixture lookup rejects paths outside the evidence directory (0.574767ms)
+✔ legacy interfaces can be reconstructed from the frozen Git source after deleting the old runtime (3127.739043ms)
+ℹ tests 10
+ℹ suites 0
+ℹ pass 10
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 4207.522135

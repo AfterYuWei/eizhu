@@ -1,0 +1,1 @@
+PASS: 最终 test 构建不能在 stable 环境打包；在调用 electron-builder 前拒绝。

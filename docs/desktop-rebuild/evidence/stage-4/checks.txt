@@ -1,0 +1,156 @@
+$ npm run check
+exit_code: 0
+> check
+> tsc -p tsconfig.node.json --noEmit && npm run check --workspace @eizhu/web
+
+
+> check
+> tsc -b
+
+$ npm run lint
+exit_code: 0
+> lint
+> eslint apps/desktop packages scripts/*.mjs && npm run lint --workspace @eizhu/web
+
+
+> lint
+> eslint .
+
+$ npm test
+exit_code: 0
+> test
+> npm run test:foundation && npm run test:unit --workspace @eizhu/web && npm run baseline:test
+
+
+> test:foundation
+> node --experimental-strip-types --test packages/*/src/**/*.test.ts apps/desktop/src/main/*.test.ts
+
+✔ file grants reject arbitrary paths, wrong windows, contexts, kinds and released references (17.243823ms)
+✔ shutdown message leaves stop pending until the real exit event and then removes its listener (9.659246ms)
+✔ graceful deadline kills the child but still waits for its exit event (21.236798ms)
+✔ failed kill rejects and removes the exit listener (5.665691ms)
+✔ successful forced kill still rejects at its deadline if no exit arrives and cleans up (10.581094ms)
+✔ postMessage failure switches directly to force kill and still waits for exit (0.800721ms)
+✔ missing pid is a no-op (0.323897ms)
+✔ asset protocol rejects another host, scheme, encoded traversal and path separators (1.917144ms)
+✔ page authorization checks exact origin instead of URL prefix matching (0.563917ms)
+✔ main clears an unchanged secret after 30 seconds and preserves later user copies (9.333966ms)
+✔ scope rejects stale instances, workspaces and generations independently (1.960034ms)
+✔ only exact request envelopes, bounded settings and http(s) external links are accepted (5.481064ms)
+✔ errors never serialize raw third-party details and preserve intentional structured context (2.045515ms)
+✔ stage 2 exposes local domains while SSH, accounts and cloud remain reserved (12.608805ms)
+✔ list output schemas reject leaked credentials and invalid restore sources (2.315169ms)
+✔ redacts multiline keys, quoted passwords, bearer tokens, query tokens and URL credentials (2.206837ms)
+✔ 文件 IPC 拒绝越界分块、NUL、遍历文件名及伪造事件 (33.263101ms)
+✔ SSH contract rejects arbitrary completion programs, unsafe listeners and invalid input (18.696486ms)
+✔ fresh restricted key persists privately and is reused; never reads an old app directory (24.59349ms)
+✔ locked system key is preserved, never falls back or generates a new key (10.13071ms)
+✔ existing data without device key cannot initialize a replacement key (3.873982ms)
+✔ close aborts first, waits all owned resources in reverse order, is idempotent (4.742319ms)
+✔ 本机文件领域不能读取、列出或重命名应用私有目录及其别名 (26.079144ms)
+✔ 文本保存保留权限、换行和内容哈希，已有文件另存不覆盖 (31.967291ms)
+✔ 相同 mtime 的远端变化仍以内容哈希拒绝覆盖 (8.326728ms)
+✔ 编辑器拒绝非法 UTF-8、二进制和超大文本 (28.883382ms)
+✔ 符号链接及链接目录不能用于修改、读取或归档 (6.933587ms)
+✔ 目录 tar.gz 与 ZIP 流携带真实字节、空目录及中文路径 (23.661793ms)
+✔ 上传按序确认，暂停保留检查点，重启手动恢复并校验原文件 (41.411364ms)
+✔ 上传仅在校验与提交后替换目标；目标变化和取消均保留原文件 (13.320078ms)
+✔ 五路传输上限与取消释放通道 (10.239093ms)
+✔ 并发发起上传仍严格限制五路，篡改暂存文件禁止拼接 (12.281011ms)
+✔ 重名目录整体重命名，保留原目标并拒绝同一文件系统的自身复制 (17.965906ms)
+✔ 源文件在排队期间变化，恢复后拒绝提交目标 (16.186962ms)
+✔ fixed generators quote path and namespace operands and never run package scripts (1.683676ms)
+✔ metrics preserve CPU, memory, disk and network delta semantics (2.196658ms)
+✔ SOCKS destination encoding preserves IPv4, IPv6, mapped IPv4 and remote DNS (8.330095ms)
+✔ route resolves vault username and credentials, orders multiple jumps and omits unrelated records (5.197472ms)
+✔ test connection patch cannot retain password when auth changes to key or alter the stored profile (2.762118ms)
+✔ binary terminal waits for real byte acknowledgements and keeps replay bounded (131.410155ms)
+✔ replacing a terminal port cannot retain an old consumer (0.684323ms)
+✔ worker queue is bounded; closing drains accepted jobs and rejects new work (160.481227ms)
+✔ worker crash rejects active and queued jobs without replay or orphan promises (68.601582ms)
+✔ queued cancellation frees capacity and removes its abort listener (101.732435ms)
+✔ active cancellation waits for worker completion and leaves the caller buffer owned by the caller (93.433538ms)
+✔ unserializable input rejects immediately without poisoning the worker or leaking timers (42.56152ms)
+ℹ tests 46
+ℹ suites 0
+ℹ pass 46
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1335.900828
+
+> test:unit
+> vitest run
+
+
+ RUN  v5.0.5 /Users/yuwei/Desktop/Projects/yuweinfo/XControl/apps/web
+
+
+ Test Files  54 passed (54)
+      Tests  205 passed (205)
+   Start at  07:42:16
+   Duration  6.50s (environment 56%, import 23%, tests 16%, transform 3%, worker 1%)
+
+    Isolate  54 workers spawned · ~969ms startup each (spawn + environment, per file)
+             at least ~2.52s faster with isolate: false — reuses workers across files instead of one per file
+
+
+> baseline:test
+> node --test scripts/desktop-baseline.test.mjs
+
+✔ frozen source, UI assets and original Rust backup/sync vectors verify independently in Node (377.189601ms)
+✔ wrong password, format AAD and modified authentication tags reject original exporter ciphertext (171.785837ms)
+✔ sync ciphertext is bound to user, type, ID, revision, epoch, key version and deletion (1.134657ms)
+✔ encrypted OpenSSH specimen contains a real password-protected private key and dependency graph (0.944361ms)
+✔ none specimens never retain vault bodies, references or proxy/inline secrets (0.867906ms)
+✔ a changed frozen fixture is rejected before any cryptographic or UI comparison (32.383613ms)
+✔ adding an unreviewed file cannot silently expand the frozen evidence set (25.62839ms)
+✔ acceptance coverage rejects orphan mappings and duplicate interfaces (3.016775ms)
+✔ fixture lookup rejects paths outside the evidence directory (0.403286ms)
+✔ legacy interfaces can be reconstructed from the frozen Git source after deleting the old runtime (2435.390019ms)
+ℹ tests 10
+ℹ suites 0
+ℹ pass 10
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 3142.446986
+
+$ npm run baseline:verify
+exit_code: 0
+> baseline:verify
+> node scripts/verify-desktop-baseline.mjs --check-source
+
+{
+  "sourceCommit": "d8a20e0f77ab04af4a4a729f94884a68c4022a5f",
+  "cases": 39,
+  "commands": 183,
+  "events": 7,
+  "assets": 37,
+  "backupFiles": 7,
+  "rejectedBackupFiles": 10,
+  "syncItems": 2,
+  "browserScreenshots": 10,
+  "nativeEvidence": "pending",
+  "userApprovalAtCapture": "pending"
+}
+
+$ npm run architecture:verify
+exit_code: 0
+> architecture:verify
+> node scripts/verify-desktop-architecture.mjs
+
+{
+  "sourceFiles": 349,
+  "oldRuntimeAbsent": true,
+  "oldMobileEntrypointsAbsent": true,
+  "rendererNodeImports": 0,
+  "coreElectronImports": 0,
+  "lockFiles": 1,
+  "originalIconsVerified": 4
+}
+
+$ git diff --check
+exit_code: 0

@@ -1,0 +1,42 @@
+{
+  "dataKeyHex": "0909090909090909090909090909090909090909090909090909090909090909",
+  "envelope": {
+    "memory": 65536,
+    "revision": 4,
+    "salt": "mPBtRgpjUnNs5IZUxOo4lQ==",
+    "threads": 2,
+    "time": 3,
+    "version": 1,
+    "wrappedKey": "s7J+eJYmyGMGMGwi5gOO9XPMxpHvbTaAnFt6DzJeoN4d50s5R2l8CZN+gIr4UOMnnY2Uo3E+2gmak4wX"
+  },
+  "items": [
+    {
+      "aadUtf8": "[\"eizhu:item\",2,42,\"profile\",\"profile-中文\",7,3,1,false]",
+      "ciphertext": "m57GYgESgZvnhKTDExlq3cBTVrOpjT7VUOQkJhl+dj2FDHrhzyYEIVkyMT8EpU09zSN5ksEOJjlrdpMovDySSjlOzK57C99ksD48BUNzR1uHxdzN8xuIyJO0G20Sr0kRaHluG9D5zzWDJcdpc/jwvw==",
+      "deleted": false,
+      "epoch": 3,
+      "itemId": "profile-中文",
+      "itemType": "profile",
+      "plaintextUtf8": "{\"host\":\"profile.example.invalid\",\"name\":\"合成服务器\",\"tags\":[\"中文\",\"🔐\"]}",
+      "pushUtf8": "{\"requestId\":\"fixture-request-1\",\"deviceId\":\"fixture-device\",\"epoch\":3,\"replace\":false,\"expectedSeq\":null,\"items\":[{\"itemType\":\"profile\",\"itemId\":\"profile-中文\",\"baseRevision\":6,\"revision\":7,\"generation\":11,\"deleted\":false,\"payload\":\"m57GYgESgZvnhKTDExlq3cBTVrOpjT7VUOQkJhl+dj2FDHrhzyYEIVkyMT8EpU09zSN5ksEOJjlrdpMovDySSjlOzK57C99ksD48BUNzR1uHxdzN8xuIyJO0G20Sr0kRaHluG9D5zzWDJcdpc/jwvw==\",\"keyVersion\":1,\"epoch\":3}]}",
+      "revision": 7,
+      "userId": 42
+    },
+    {
+      "aadUtf8": "[\"eizhu:item\",2,42,\"profile\",\"profile-中文\",7,3,1,true]",
+      "ciphertext": "O+GSPtcq2iklmYA8eH7cqPGP8dImANXgeT0FqzlD0Tw=",
+      "deleted": true,
+      "epoch": 3,
+      "itemId": "profile-中文",
+      "itemType": "profile",
+      "plaintextUtf8": "null",
+      "pushUtf8": "{\"requestId\":\"fixture-request-1\",\"deviceId\":\"fixture-device\",\"epoch\":3,\"replace\":false,\"expectedSeq\":null,\"items\":[{\"itemType\":\"profile\",\"itemId\":\"profile-中文\",\"baseRevision\":6,\"revision\":7,\"generation\":11,\"deleted\":true,\"payload\":\"O+GSPtcq2iklmYA8eH7cqPGP8dImANXgeT0FqzlD0Tw=\",\"keyVersion\":1,\"epoch\":3}]}",
+      "revision": 7,
+      "userId": 42
+    }
+  ],
+  "keyAadUtf8": "eizhu:key:2:42:1",
+  "password": "fixture-only-同步密码🔐",
+  "synthetic": true,
+  "userId": 42
+}

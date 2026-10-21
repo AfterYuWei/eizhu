@@ -1,0 +1,177 @@
+{
+  "platform": "linux",
+  "arch": "x64",
+  "versions": {
+    "node": "24.22.0",
+    "acorn": "8.18.0",
+    "ada": "4.0.0",
+    "amaro": "1.1.11",
+    "ares": "1.34.8",
+    "brotli": "1.2.0",
+    "cldr": "48.0",
+    "icu": "78.2",
+    "llhttp": "9.4.3",
+    "merve": "1.2.2",
+    "modules": "149",
+    "napi": "10",
+    "nbytes": "0.1.4",
+    "ncrypto": "0.0.1",
+    "nghttp2": "1.70.0",
+    "nghttp3": "",
+    "ngtcp2": "",
+    "openssl": "0.0.0",
+    "simdjson": "4.6.11",
+    "simdutf": "7.7.0",
+    "sqlite": "3.53.4",
+    "tz": "2026d",
+    "undici": "7.29.1",
+    "unicode": "17.0",
+    "uv": "1.52.1",
+    "uvwasi": "0.0.23",
+    "v8": "15.2.124.43-electron.0",
+    "zlib": "1.3.2.1-motley",
+    "zstd": "1.6.0",
+    "electron": "44.9.0",
+    "chrome": "152.0.7977.167"
+  },
+  "packaged": true,
+  "keyMode": "restricted-file",
+  "health": {
+    "context": {
+      "runtimeId": "fc35c320-b0ac-4100-bf1e-b07b9adf585d",
+      "workspaceId": "offline",
+      "generation": 1
+    },
+    "schema": 1,
+    "workers": 2
+  },
+  "crypto": {
+    "kdf": true,
+    "crypto": true,
+    "ssh2": true
+  },
+  "renderer": {
+    "node": "undefined",
+    "require": "undefined",
+    "bridge": "function",
+    "health": {
+      "context": {
+        "runtimeId": "fc35c320-b0ac-4100-bf1e-b07b9adf585d",
+        "workspaceId": "offline",
+        "generation": 1
+      },
+      "schema": 1,
+      "workers": 2
+    },
+    "text": true,
+    "reserved": "STAGE_NOT_READY",
+    "inputValidation": "BAD_REQUEST"
+  },
+  "editor": true,
+  "editorGeometry": {
+    "requested": [1280, 800],
+    "actual": [1280, 800],
+    "workArea": [1280, 1024],
+    "frame": [0, 0]
+  },
+  "recovery": {
+    "failed": "RUNTIME_UNAVAILABLE",
+    "generation": 2,
+    "retainedEditorMemory": true,
+    "persistedSettings": true
+  },
+  "updaterModule": true,
+  "monaco": {
+    "typescript": true,
+    "json": true,
+    "model": true
+  },
+  "firstWindowMs": 595.595522,
+  "processMetrics": [
+    {
+      "type": "Browser",
+      "memory": {
+        "workingSetSize": 218224,
+        "peakWorkingSetSize": 260784
+      },
+      "cpu": {
+        "cumulativeCPUUsage": 0.99,
+        "percentCPUUsage": 0,
+        "idleWakeupsPerSecond": 0
+      }
+    },
+    {
+      "type": "GPU",
+      "memory": {
+        "workingSetSize": 155028,
+        "peakWorkingSetSize": 161196
+      },
+      "cpu": {
+        "cumulativeCPUUsage": 0.31,
+        "percentCPUUsage": 0,
+        "idleWakeupsPerSecond": 0
+      }
+    },
+    {
+      "type": "Utility",
+      "memory": {
+        "workingSetSize": 88888,
+        "peakWorkingSetSize": 88888
+      },
+      "cpu": {
+        "cumulativeCPUUsage": 0.06,
+        "percentCPUUsage": 0,
+        "idleWakeupsPerSecond": 0
+      }
+    },
+    {
+      "type": "Tab",
+      "memory": {
+        "workingSetSize": 182548,
+        "peakWorkingSetSize": 182548
+      },
+      "cpu": {
+        "cumulativeCPUUsage": 0.99,
+        "percentCPUUsage": 0,
+        "idleWakeupsPerSecond": 0
+      }
+    },
+    {
+      "type": "Tab",
+      "memory": {
+        "workingSetSize": 167708,
+        "peakWorkingSetSize": 167708
+      },
+      "cpu": {
+        "cumulativeCPUUsage": 0.64,
+        "percentCPUUsage": 0,
+        "idleWakeupsPerSecond": 0
+      }
+    },
+    {
+      "type": "Utility",
+      "memory": {
+        "workingSetSize": 149028,
+        "peakWorkingSetSize": 149028
+      },
+      "cpu": {
+        "cumulativeCPUUsage": 0.27,
+        "percentCPUUsage": 0,
+        "idleWakeupsPerSecond": 0
+      }
+    },
+    {
+      "type": "Tab",
+      "memory": {
+        "workingSetSize": 269500,
+        "peakWorkingSetSize": 271384
+      },
+      "cpu": {
+        "cumulativeCPUUsage": 1.98,
+        "percentCPUUsage": 0,
+        "idleWakeupsPerSecond": 0
+      }
+    }
+  ],
+  "screenshots": ["home-light.png", "home-dark.png", "editor-empty.png"]
+}

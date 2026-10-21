@@ -1,0 +1,206 @@
+{
+  "credential_mode": "plain",
+  "exported_at": "2026-10-20T02:22:13.186205Z",
+  "format": "eizhu-backup",
+  "groups": [
+    {
+      "created_at": "2026-10-20T00:00:00Z",
+      "icon": "folder",
+      "id": "group-root",
+      "name": "合成父分组",
+      "sort_order": 0
+    },
+    {
+      "created_at": "2026-10-20T00:00:00Z",
+      "icon": "folder",
+      "id": "group-child",
+      "name": "合成子分组",
+      "parent_id": "group-root",
+      "sort_order": 1
+    }
+  ],
+  "profiles": [
+    {
+      "auth_type": "agent",
+      "created_at": "2026-10-20T00:00:00Z",
+      "group_id": "group-child",
+      "host": "profile-agent.example.invalid",
+      "icon": "linux",
+      "id": "profile-agent",
+      "name": "合成服务器 profile-agent",
+      "note": "测试专用，不连接真实服务器",
+      "options": "{}",
+      "port": 22,
+      "sort_order": 0,
+      "tags": [
+        "合成",
+        "stage-0"
+      ],
+      "updated_at": "2026-10-20T00:00:00Z",
+      "username": "deploy"
+    },
+    {
+      "auth_type": "password",
+      "created_at": "2026-10-20T00:00:00Z",
+      "group_id": "group-child",
+      "host": "profile-http.example.invalid",
+      "icon": "linux",
+      "id": "profile-http",
+      "inline_credential": {
+        "password": "fixture-only-http-login"
+      },
+      "name": "合成服务器 profile-http",
+      "note": "测试专用，不连接真实服务器",
+      "options": "{\"proxy\":{\"host\":\"http.example.invalid\",\"port\":8080,\"type\":\"http\",\"username\":\"fixture\"}}",
+      "port": 22,
+      "proxy_password": "fixture-only-http-proxy",
+      "sort_order": 0,
+      "tags": [
+        "合成",
+        "stage-0"
+      ],
+      "updated_at": "2026-10-20T00:00:00Z",
+      "username": "deploy"
+    },
+    {
+      "auth_type": "password",
+      "created_at": "2026-10-20T00:00:00Z",
+      "group_id": "group-child",
+      "host": "profile-inline.example.invalid",
+      "icon": "linux",
+      "id": "profile-inline",
+      "inline_credential": {
+        "password": "fixture-only-内联密码"
+      },
+      "name": "合成服务器 profile-inline",
+      "note": "测试专用，不连接真实服务器",
+      "options": "{\"host_key_fingerprint\":\"SHA256:wJMYRqkYl7Nk9gxCFd5CW9OgzsxHpurJeDYygvDgsF4\",\"unknown_option\":{\"中文\":true}}",
+      "port": 22,
+      "sort_order": 0,
+      "tags": [
+        "合成",
+        "stage-0"
+      ],
+      "updated_at": "2026-10-20T00:00:00Z",
+      "username": "deploy"
+    },
+    {
+      "auth_type": "vault",
+      "created_at": "2026-10-20T00:00:00Z",
+      "group_id": "group-child",
+      "host": "profile-jump.example.invalid",
+      "icon": "linux",
+      "id": "profile-jump",
+      "name": "合成服务器 profile-jump",
+      "note": "测试专用，不连接真实服务器",
+      "options": "{\"custom\":\"preserve-me\",\"proxy\":{\"jump_profile_id\":\"profile-inline\",\"type\":\"jump\"}}",
+      "port": 22,
+      "sort_order": 0,
+      "tags": [
+        "合成",
+        "stage-0"
+      ],
+      "updated_at": "2026-10-20T00:00:00Z",
+      "username": "deploy",
+      "vault_id": "vault-key"
+    },
+    {
+      "auth_type": "password",
+      "created_at": "2026-10-20T00:00:00Z",
+      "group_id": "group-child",
+      "host": "profile-socks.example.invalid",
+      "icon": "linux",
+      "id": "profile-socks",
+      "inline_credential": {
+        "password": "fixture-only-socks-login"
+      },
+      "name": "合成服务器 profile-socks",
+      "note": "测试专用，不连接真实服务器",
+      "options": "{\"proxy\":{\"host\":\"socks.example.invalid\",\"port\":1080,\"type\":\"socks5\",\"username\":\"fixture\"}}",
+      "port": 22,
+      "proxy_password": "fixture-only-代理密码",
+      "sort_order": 0,
+      "tags": [
+        "合成",
+        "stage-0"
+      ],
+      "updated_at": "2026-10-20T00:00:00Z",
+      "username": "deploy"
+    },
+    {
+      "auth_type": "vault",
+      "created_at": "2026-10-20T00:00:00Z",
+      "group_id": "group-child",
+      "host": "profile-vault.example.invalid",
+      "icon": "linux",
+      "id": "profile-vault",
+      "name": "合成服务器 profile-vault",
+      "note": "测试专用，不连接真实服务器",
+      "options": "{}",
+      "port": 22,
+      "sort_order": 0,
+      "tags": [
+        "合成",
+        "stage-0"
+      ],
+      "updated_at": "2026-10-20T00:00:00Z",
+      "username": "deploy",
+      "vault_id": "vault-password"
+    }
+  ],
+  "snippets": [
+    {
+      "content": "printf '%s\\n' '合成内容'\nprintf '%s\\n' \"quote\\\"\"",
+      "created_at": "2026-10-20T00:00:00Z",
+      "description": "合成多行，不自动执行",
+      "id": "snippet-multiline",
+      "is_global": false,
+      "name": "中文与引号",
+      "tags": [],
+      "updated_at": "2026-10-20T00:00:00Z"
+    },
+    {
+      "content": "df -h",
+      "created_at": "2026-10-20T00:00:00Z",
+      "description": "合成单行",
+      "id": "snippet-global",
+      "is_global": true,
+      "name": "磁盘检查",
+      "tags": [
+        "检查"
+      ],
+      "updated_at": "2026-10-20T00:00:00Z"
+    }
+  ],
+  "vault": [
+    {
+      "created_at": "2026-10-20T00:00:00Z",
+      "credential": {
+        "password": "fixture-only-共享密码"
+      },
+      "fingerprint": "",
+      "id": "vault-password",
+      "name": "合成密码",
+      "remark": "fixture-only",
+      "type": "password",
+      "updated_at": "2026-10-20T00:00:00Z",
+      "username": "deploy"
+    },
+    {
+      "created_at": "2026-10-20T00:00:00Z",
+      "credential": {
+        "passphrase": "fixture-only-私钥口令",
+        "private_key": "-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXktdjEAAAAACmFlczI1Ni1jdHIAAAAGYmNyeXB0AAAAGAAAABDZE4AmM0\n6oB9rpI0dZ1Kc5AAAAEAAAAAEAAAAzAAAAC3NzaC1lZDI1NTE5AAAAIFTOFWRu3eWwp173\n7ITMb/5KF4vk/SUx/QMnfIZp4g2oAAAAkP5T2k7ObAIdWe2i/vb5Bh6f0c419DItEvaA7a\n3ILklkBLLElszHwf+N4NCIRjQ3L0rpmFejul3d06AP3ENi6hvbnHhxlLAnILnruSZvM12L\nmTFO2ExLkiDo8MSz39OiwoaXMa71TPYBm82Fp1tjKBAziGz+u+9gJ2RMjnVE2o/+xmunjq\nowKAAQYphD0eT+pA==\n-----END OPENSSH PRIVATE KEY-----",
+        "public_key": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFTOFWRu3eWwp1737ITMb/5KF4vk/SUx/QMnfIZp4g2o"
+      },
+      "fingerprint": "ad8c692234a026d5",
+      "id": "vault-key",
+      "name": "合成加密私钥",
+      "remark": "fixture-only",
+      "type": "private_key",
+      "updated_at": "2026-10-20T00:00:00Z",
+      "username": ""
+    }
+  ],
+  "version": 2
+}
