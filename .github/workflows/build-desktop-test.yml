@@ -5,8 +5,43 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: electron-test-release
+  cancel-in-progress: false
 jobs:
   desktop:
     uses: ./.github/workflows/build-desktop.yml
     with:
       channel: test
+  release:
+    needs: desktop
+    if: github.ref == 'refs/heads/dev'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_CHANNEL: test
+      RELEASE_SOURCE_SHA: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: eizhu-test-*
+          path: release-input
+      - name: Verify four targets and prepare immutable preview assets
+        id: prepare
+        run: node scripts/prepare-desktop-release.mjs
+      - name: Upload complete preview before publishing
+        shell: bash
+        env:
+          RELEASE_VERSION: ${{ steps.prepare.outputs.version }}
+        run: |
+          gh release create "v$RELEASE_VERSION" --target "$GITHUB_SHA" --title "eizhu $RELEASE_VERSION" --notes "Electron 测试预览版本。来源提交：$GITHUB_SHA。测试版本可能不稳定，请按需安装。" --prerelease --latest=false --draft
+          gh release upload "v$RELEASE_VERSION" release-output/*
+          gh release edit "v$RELEASE_VERSION" --draft=false --prerelease --latest=false

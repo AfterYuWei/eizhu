@@ -1,4 +1,4 @@
-import { beforeEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   check: vi.fn(),
@@ -19,6 +19,13 @@ beforeEach(() => {
   mocks.download.mockResolvedValue(undefined)
   mocks.install.mockResolvedValue(undefined)
   mocks.on.mockReturnValue(mocks.stop)
+})
+afterEach(() => vi.unstubAllEnvs())
+it.each(['test', 'stable'] as const)('开发预览中显式配置 %s 通道时仍与安装版一致', async (channel) => {
+  vi.stubEnv('VITE_EIZHU_CHANNEL', channel)
+  vi.stubEnv('DEV', true)
+  const api = await import('./updater')
+  expect(api.buildChannel).toBe(channel)
 })
 it('安装使用用户看到的候选，不在下载前重查；通道不符时拒绝安装', async () => {
   const api = await import('./updater')

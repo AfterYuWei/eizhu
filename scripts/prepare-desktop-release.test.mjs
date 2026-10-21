@@ -5,12 +5,14 @@ import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { prepareDesktopRelease, validatePackagedRun } from './prepare-desktop-release.mjs'
+import { parseUpdateInfo } from 'electron-updater/out/providers/Provider.js'
 
-async function fixture(t) {
+async function fixture(t, channel = 'stable') {
   const root = await mkdtemp(join(tmpdir(), 'eizhu-release-test-'))
   t.after(() => rm(root, { recursive: true, force: true }))
   const options = {
-    version: '0.5.0',
+    version: channel === 'stable' ? '0.5.0' : '0.5.0-test.100.aaaaaaaa',
+    channel,
     revision: 'a'.repeat(40),
     expectedSourceDigest: 'b'.repeat(64),
     inputDirectory: join(root, 'input'),
@@ -22,13 +24,13 @@ async function fixture(t) {
     ['darwin', 'arm64', 'mac', ['dmg', 'zip']],
     ['linux', 'x64', 'linux', ['AppImage', 'deb', 'rpm']],
   ]) {
-    const directory = join(options.inputDirectory, `eizhu-stable-${platform}-${arch}`)
+    const directory = join(options.inputDirectory, `eizhu-${channel}-${platform}-${arch}`)
     await mkdir(join(directory, 'desktop'), { recursive: true })
     await mkdir(join(directory, 'smoke'), { recursive: true })
     for (const extension of extensions) {
       const fileArch = platform === 'linux' ? (extension === 'deb' ? 'amd64' : 'x86_64') : arch
       await writeFile(
-        join(directory, 'desktop', `eizhu-0.5.0-${os}-${fileArch}.${extension}`),
+        join(directory, 'desktop', `eizhu-${options.version}-${os}-${fileArch}.${extension}`),
         `asset ${platform} ${arch} ${extension}`,
       )
     }
@@ -36,7 +38,7 @@ async function fixture(t) {
       join(directory, 'smoke', `build-info-${platform}-${arch}.json`),
       JSON.stringify({
         version: options.version,
-        channel: 'stable',
+        channel,
         revision: options.revision,
         platform,
         arch,
@@ -63,7 +65,7 @@ async function fixture(t) {
 test('release requires all four targets and hashes the exact copied installer bytes', async (t) => {
   const options = await fixture(t)
   const assets = await prepareDesktopRelease(options)
-  assert.equal(assets.length, 16)
+  assert.equal(assets.length, 19)
   const sums = await readFile(join(options.outputDirectory, 'SHA256SUMS.txt'), 'utf8')
   for (const line of sums.trim().split('\n')) {
     const [hash, name] = line.split('  ')
@@ -76,6 +78,38 @@ test('release requires all four targets and hashes the exact copied installer by
   }
   await assert.rejects(prepareDesktopRelease(options), /输出目录必须为空/)
 })
+
+for (const channel of ['stable', 'test']) {
+  test(`${channel}: updater parses platform manifests with exact installer SHA-512 and both macOS architectures`, async (t) => {
+    const options = await fixture(t, channel)
+    await prepareDesktopRelease({ ...options, releaseNotes: '中文更新说明\n第二行' })
+    const prefix = channel === 'test' ? 'test' : 'latest'
+    for (const [suffix, extension, count] of [
+      ['', '.exe', 1],
+      ['-mac', '.zip', 4],
+      ['-linux', '.AppImage', 1],
+    ]) {
+      const name = `${prefix}${suffix}.yml`
+      const info = parseUpdateInfo(await readFile(join(options.outputDirectory, name), 'utf8'), name, name)
+      assert.equal(info.version, options.version)
+      assert.equal(info.releaseNotes, '中文更新说明\n第二行')
+      assert.equal(info.files.length, count)
+      assert.ok(info.files.some((file) => file.url.endsWith(extension)))
+      if (suffix === '-mac') {
+        for (const arch of ['x64', 'arm64'])
+          assert.ok(info.files.some((file) => file.url.endsWith(`-${arch}.zip`)))
+      }
+      for (const file of info.files) {
+        const bytes = await readFile(join(options.outputDirectory, file.url))
+        assert.equal(file.size, bytes.length)
+        assert.equal(file.sha512, createHash('sha512').update(bytes).digest('base64'))
+      }
+    }
+    await assert.rejects(
+      prepareDesktopRelease({ ...options, channel: channel === 'test' ? 'stable' : 'test' }),
+    )
+  })
+}
 
 test('release rejects a missing target or installer', async (t) => {
   const options = await fixture(t)

@@ -49,6 +49,7 @@ import { Updates } from './updates.ts'
 declare const __EIZHU_VERSION__: string
 declare const __EIZHU_CHANNEL__: string
 declare const __EIZHU_UPDATE_FEEDS__: Partial<Record<'stable' | 'test', string>>
+declare const __EIZHU_UPDATE_REPOSITORY__: { owner: string; repo: string }
 
 const smoke = process.argv.includes('--smoke-test')
 const smokeRoot = process.argv.find((value) => value.startsWith('--smoke-root='))?.slice(13)
@@ -587,6 +588,7 @@ async function start(): Promise<void> {
   updates = new Updates({
     driver: updater.autoUpdater,
     feeds: smoke ? {} : __EIZHU_UPDATE_FEEDS__,
+    repository: smoke ? undefined : __EIZHU_UPDATE_REPOSITORY__,
     supported: app.isPackaged && (process.platform !== 'linux' || Boolean(process.env.APPIMAGE)),
     progress: (progress) => windows.emit(windows.main, 'eizhu-update-progress', progress),
     install: (action) => windows.runConfirmedQuit(() => quit(action)),

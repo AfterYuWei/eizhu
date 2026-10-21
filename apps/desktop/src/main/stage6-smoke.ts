@@ -84,12 +84,9 @@ export async function verifyStage6(window: BrowserWindow, root: string) {
       `(()=>{const tab=[...document.querySelectorAll('[role="tab"]')].find(e=>e.textContent==='关于');if(!tab)return false;tab.focus();tab.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}));return true})()`,
     )
     await wait(
-      `(()=>{const button=[...document.querySelectorAll('button')].find(e=>e.textContent==='检查更新');if(!button)return false;button.click();return true})()`,
+      `(()=>{const button=[...document.querySelectorAll('button')].find(e=>e.textContent==='检查更新');return button?.disabled&&document.body.innerText.includes('手动安装')&&document.body.innerText.includes('版本页面')})()`,
     )
-    await wait(
-      `document.body.innerText.includes('检查更新失败')&&document.body.innerText.includes('手动安装')`,
-    )
-    // Let the existing toast entrance finish before preserving visual evidence.
+    // Let the settings panel settle before preserving visual evidence.
     await new Promise((resolve) => setTimeout(resolve, 500))
     await writeFile(
       join(root, 'stage6-update.png'),

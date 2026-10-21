@@ -1,0 +1,45 @@
+{
+  "generatedAt": "2026-10-21T11:35:56.837Z",
+  "branch": "dev",
+  "baseCommit": "057362d20dcb9b7127f1f298afd4e19eb147d521",
+  "settings": {
+    "base": "0.5.0",
+    "version": "0.5.0-test.319.057362d2",
+    "channel": "test",
+    "revision": "057362d20dcb9b7127f1f298afd4e19eb147d521",
+    "platform": "darwin",
+    "arch": "x64",
+    "feeds": {},
+    "updateRepository": {
+      "owner": "AfterYuWei",
+      "repo": "eizhu"
+    },
+    "sourceDigest": "04988aa6a7182e8770a281599d82a6faa405dbcffc49bd5b81cd3e8e990e1904"
+  },
+  "dirtyWorkspace": true,
+  "artifacts": [
+    {
+      "path": "artifacts/desktop/eizhu-0.5.0-test.319.057362d2-mac-x64.dmg",
+      "bytes": 158056347,
+      "sha256": "6f137b620d183796b12a243f5fd780a69d210f46d06470560db00be4285e2165"
+    },
+    {
+      "path": "artifacts/desktop/eizhu-0.5.0-test.319.057362d2-mac-x64.dmg.blockmap",
+      "bytes": 165747,
+      "sha256": "6200f94ad61be2d46c5c4e1c7a17942217c15bb2b8553cc384aad974bdcae795"
+    },
+    {
+      "path": "artifacts/desktop/eizhu-0.5.0-test.319.057362d2-mac-x64.zip",
+      "bytes": 157395614,
+      "sha256": "3bdf31f9f0ff8ce0ccff6697cec4d08f3eaeb9724c4a5181a8497867a5a84ede"
+    },
+    {
+      "path": "artifacts/desktop/eizhu-0.5.0-test.319.057362d2-mac-x64.zip.blockmap",
+      "bytes": 164665,
+      "sha256": "ba559ffb47470dca3a084c65247c953180b886d583b4fb04fa79deebf056516b"
+    }
+  ],
+  "verifiedPackageFiles": 269,
+  "publication": "local-test-candidate-only",
+  "acceptance": "See docs/desktop-rebuild/STAGE_6_REPORT.md; unexecuted release gates remain pending"
+}

@@ -2,12 +2,13 @@ import { create } from 'zustand'
 import { createJSONStorage,persist } from 'zustand/middleware'
 import { settingsStorage } from '@/lib/settingsStorage'
 import { DEFAULT_DESKTOP_SIDEBAR_WIDTH } from '@/lib/desktopSidebar'
+import { buildChannel } from '@/lib/updater'
 
 type Theme = 'light' | 'dark' | 'system'
-export type UpdateChannel = 'stable' | 'test'
+export type { UpdateChannel } from '@eizhu/contracts'
+import type { UpdateChannel } from '@eizhu/contracts'
 
-const configuredBuildChannel = import.meta.env.VITE_EIZHU_CHANNEL
-const DEFAULT_UPDATE_CHANNEL: UpdateChannel = configuredBuildChannel === 'test' ? 'test' : 'stable'
+const DEFAULT_UPDATE_CHANNEL = buildChannel
 export const DEFAULT_DESKTOP_TERMINAL_FONT_SIZE = 13
 
 interface SettingsStore {

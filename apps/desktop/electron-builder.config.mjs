@@ -1,5 +1,5 @@
 import { buildSettings } from '../../scripts/desktop-build-settings.mjs'
-const { version, channel, feeds } = buildSettings()
+const { version, channel, feeds, updateRepository } = buildSettings()
 export default {
   appId: 'com.yuweinfo.eizhu',
   productName: 'eizhu',
@@ -37,5 +37,14 @@ export default {
     maintainer: 'yuweinfo',
   },
   protocols: [{ name: 'eizhu', schemes: ['eizhu'] }],
-  publish: feeds[channel] ? [{ provider: 'generic', url: feeds[channel], channel: 'latest' }] : null,
+  publish: feeds[channel]
+    ? [{ provider: 'generic', url: feeds[channel], channel: 'latest' }]
+    : [
+        {
+          provider: 'github',
+          ...updateRepository,
+          channel: channel === 'test' ? 'test' : 'latest',
+          releaseType: channel === 'test' ? 'prerelease' : 'release',
+        },
+      ],
 }
