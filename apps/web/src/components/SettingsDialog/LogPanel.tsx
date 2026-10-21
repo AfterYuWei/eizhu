@@ -63,9 +63,10 @@ export function LogPanel() {
         <span>调试日志（DEBUG）</span>
       </div>
 
-      <div className="log-toolbar">
+      <div className="settings-card settings-log-card">
+      <div className="log-toolbar settings-card-toolbar">
         <Tabs value={kind} onValueChange={(value) => setKind(value as LogKind)}>
-          <TabsList className="log-kind-switch" aria-label="日志类型">
+          <TabsList className="settings-subtabs" variant="line" aria-label="日志类型">
           <TabsTrigger value="frontend">
             前端日志
           </TabsTrigger>
@@ -90,7 +91,8 @@ export function LogPanel() {
 
       <div className="log-path" title={snapshot?.path}>{snapshot?.path ?? '正在读取…'}</div>
       <pre className="log-viewer">{snapshot?.content || '暂无日志'}</pre>
-      <div className="settings-field-desc">每 2 秒自动刷新；日志最多显示末尾 256 KiB，审计仅包含操作、记录标识和时间。</div>
+      <div className="settings-field-desc settings-log-note">每 2 秒自动刷新；日志最多显示末尾 256 KiB，审计仅包含操作、记录标识和时间。</div>
+      </div>
     </div>
   )
 }

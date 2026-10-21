@@ -3,6 +3,7 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { ArchivePanel } from './ArchivePanel'
+import { Tabs } from '@/components/ui/tabs'
 import { archiveApi } from '@/api/archive'
 import type { BackupSettings, RestorePreview } from '@/types/backup'
 vi.mock('@/api/archive', () => ({ archiveApi: { settings: vi.fn(), status: vi.fn(), versions: vi.fn(), safetyVersions: vi.fn(), previewVersion: vi.fn(), events: vi.fn(), applyRestore: vi.fn() } }))
@@ -22,7 +23,7 @@ beforeEach(() => {
 })
 afterEach(async () => { await act(async () => root.unmount()); host.remove() })
 it('shows the authoritative source and change counts; cancelling never applies a restore', async () => {
-  await act(async () => root.render(<ArchivePanel />))
+  await act(async () => root.render(<Tabs defaultValue="restore"><ArchivePanel /></Tabs>))
   const button = (label: string) => [...document.querySelectorAll('button')].find((b) => b.textContent === label)!
   await act(async () => button('恢复预览').click())
   expect(document.body.textContent).toContain('本地版本 v9')

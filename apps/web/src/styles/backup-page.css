@@ -1,0 +1,100 @@
+/* 数据备份：通栏分组、左侧说明与右侧控件，仅作用于桌面主窗口。 */
+.desktop-shell .backup-page { gap: 0; container-type: inline-size; }
+.desktop-shell .backup-tabs { margin-bottom: 24px; }
+.desktop-shell .backup-tab-content { min-width: 0; }
+.desktop-shell .backup-tab-content[data-state='active'] { display: flex; flex-direction: column; gap: 28px; }
+.desktop-shell .backup-page :is(h2, h3, p) { margin: 0; }
+.desktop-shell .backup-page h2 { color: var(--fg); font-size: var(--sans-size); font-weight: 500; line-height: 1.5; }
+.desktop-shell .backup-page h3 { color: var(--fg); font-size: var(--sans-size); font-weight: 500; line-height: 1.5; }
+.desktop-shell .backup-group > h2 { margin-bottom: 10px; }
+.desktop-shell .backup-page .backup-description,
+.desktop-shell .backup-page .settings-field-desc { color: var(--settings-muted); font-size: max(12px, calc(var(--sans-size) - 2px)); line-height: 1.6; overflow-wrap: anywhere; }
+.desktop-shell .backup-setting-info { min-width: 0; }
+.desktop-shell .backup-setting-info > :is(label, .backup-setting-label) { color: var(--fg); font-weight: 400; }
+.desktop-shell .backup-setting-info > .backup-description { margin-top: 4px; }
+.desktop-shell .backup-setting-row { display: flex; align-items: center; justify-content: space-between; gap: 24px; min-height: 68px; padding: 13px 16px; }
+.desktop-shell .backup-setting-row + .backup-setting-row { border-top: 1px solid var(--edge-soft); }
+.desktop-shell .backup-page :is(.backup-overview, .backup-preferences) { gap: 0; padding: 0; }
+.desktop-shell .backup-setting-row > input { width: 240px; min-width: 0; flex: 0 0 240px; }
+.desktop-shell .backup-setting-row > input[type='number'] { width: 80px; flex-basis: 80px; text-align: center; }
+.desktop-shell .backup-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.desktop-shell .backup-settings-grid { display: flex; flex-direction: column; gap: 28px; }
+.desktop-shell .backup-schedule-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; padding: 4px 16px 16px; border-bottom: 1px solid var(--edge-soft); }
+.desktop-shell .backup-schedule-fields > div { display: grid; grid-template-columns: 1fr 160px; align-items: center; gap: 4px 12px; }
+.desktop-shell .backup-schedule-fields label { color: var(--fg); }
+.desktop-shell .backup-schedule-fields .backup-description { grid-column: 1 / -1; }
+.desktop-shell .backup-card-footer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; padding: 12px 16px; border-top: 1px solid var(--edge-soft); }
+.desktop-shell .backup-status-message { padding: 0 16px 12px; font-size: var(--sans-size); color: var(--settings-muted); }
+.desktop-shell .backup-status-message[role='alert'] { color: var(--red); }
+.desktop-shell .backup-count { margin-left: 4px; color: var(--settings-muted); font-size: max(12px, calc(var(--sans-size) - 2px)); font-weight: 400; }
+.desktop-shell .backup-page .sync-provider-header { align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 10px; }
+.desktop-shell .backup-page .settings-subsection-title { display: flex; align-items: center; gap: 8px; color: var(--settings-muted); }
+.desktop-shell .backup-provider-content { min-width: 0; }
+.desktop-shell .backup-page .sync-provider-list { gap: 0; overflow: hidden; border: 1px solid var(--edge-soft); border-radius: var(--r-lg); background: var(--surface-app); }
+.desktop-shell .backup-page .sync-provider-row { flex-wrap: wrap; gap: 12px; padding: 16px; border: 0; border-radius: 0; background: transparent; }
+.desktop-shell .backup-page .sync-provider-row + .sync-provider-row { border-top: 1px solid var(--edge-soft); }
+.desktop-shell .backup-page .sync-provider-row-main { flex-basis: 120px; }
+.desktop-shell .backup-page .sync-provider-name { font-size: var(--sans-size); font-weight: 400; line-height: 1.5; }
+.desktop-shell .backup-page .sync-provider-sub { color: var(--settings-muted); font-size: max(12px, calc(var(--sans-size) - 2px)); line-height: 1.5; }
+.desktop-shell .backup-page .sync-provider-row-actions { margin-left: auto; flex-wrap: wrap; }
+.desktop-shell .backup-page .sync-status-pill { padding: 4px 8px; font-weight: 400; }
+.desktop-shell .backup-empty { display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 10px; padding: 24px 16px; text-align: center; color: var(--settings-muted); }
+.desktop-shell .backup-empty > p { color: var(--fg); font-size: var(--sans-size); }
+.desktop-shell .backup-page .sync-provider-empty-hint { display: flex; align-items: center; justify-content: space-between; flex-direction: row; flex-wrap: wrap; gap: 12px 24px; margin: 0; padding: 18px 16px; border: 1px solid var(--edge-soft); border-radius: var(--r-lg); background: var(--surface-app); text-align: left; }
+.desktop-shell .sync-provider-empty-hint p { margin-bottom: 4px; color: var(--fg); font-size: var(--sans-size); }
+.desktop-shell .backup-provider-types { color: var(--settings-muted); font-size: max(12px, calc(var(--sans-size) - 2px)); line-height: 1.6; }
+.desktop-shell .backup-page .backup-cloud-note { margin-top: 10px; }
+.desktop-shell .backup-page-footer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+.desktop-shell .backup-page-footer > span { display: inline-flex; align-items: center; gap: 6px; }
+.desktop-shell .backup-page-footer > span > svg { flex-shrink: 0; }
+.desktop-shell .backup-section-heading { display: flex; align-items: flex-start; gap: 10px; min-width: 0; }
+.desktop-shell .backup-section-heading > div { min-width: 0; }
+.desktop-shell .backup-section-heading .backup-description { margin-top: 4px; }
+.desktop-shell .backup-section-icon { display: grid; place-items: center; flex-shrink: 0; height: 22px; color: var(--settings-muted); }
+.desktop-shell .backup-page .backup-restore-password { flex-direction: row; align-items: center; justify-content: space-between; padding: 16px; }
+.desktop-shell .backup-restore-password > input { width: 280px; max-width: 100%; }
+.desktop-shell .backup-version-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-block: 16px; }
+.desktop-shell .backup-version-row + .backup-version-row { border-top: 1px solid var(--edge-soft); }
+.desktop-shell .backup-version-list > .backup-version-row:first-child { padding-top: 0; }
+.desktop-shell .backup-version-list > .backup-version-row:last-child { padding-bottom: 0; }
+.desktop-shell .backup-version-info { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 4px; color: var(--fg); }
+.desktop-shell .backup-version-tag { padding: 4px 10px; border: 1px solid var(--edge-soft); border-radius: var(--r-sm); color: var(--fg); background: var(--bg-active); font-variant-numeric: tabular-nums; }
+.desktop-shell .backup-cloud-picker { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
+.desktop-shell .backup-cloud-picker > [role='combobox'] { width: 280px; max-width: 100%; }
+.desktop-shell .backup-file-grid { display: flex; flex-direction: column; gap: 28px; }
+.desktop-shell .backup-file-card > .backup-row { justify-content: space-between; gap: 24px; padding-block: 12px; }
+.desktop-shell .backup-file-card > .backup-row + .backup-row { border-top: 1px solid var(--edge-soft); }
+.desktop-shell .backup-page .backup-row-label { color: var(--fg) !important; width: auto; font-weight: 400 !important; }
+.desktop-shell .backup-file-card .backup-row :is(input, .settings-select) { width: 300px; max-width: 100%; flex: 0 1 300px; }
+.desktop-shell .backup-page .backup-file-card .settings-select { width: 300px; max-width: 100%; }
+.desktop-shell .backup-page .backup-action { align-self: flex-end; }
+.desktop-shell .backup-page .backup-stats { flex-wrap: wrap; color: var(--settings-muted); font-size: max(12px, calc(var(--sans-size) - 2px)); }
+.desktop-shell .backup-page .backup-warning { align-items: flex-start; font-size: max(12px, calc(var(--sans-size) - 2px)); line-height: 1.6; }
+.desktop-shell .backup-warning > svg { flex-shrink: 0; margin-top: 3px; }
+.desktop-shell .backup-file-picker { display: flex; align-items: center; flex-direction: column; gap: 12px; padding: 24px 16px; border: 1px dashed var(--border); border-radius: var(--r-md); color: var(--settings-muted); text-align: center; }
+.desktop-shell .backup-page .backup-file-restore { padding: 16px 0 0; gap: 12px; border: 0; border-top: 1px solid var(--edge-soft); border-radius: 0; background: transparent; }
+.desktop-shell .backup-file-restore > button { align-self: flex-start; }
+.desktop-shell .backup-cloud-card .backup-row { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 12px; min-height: 44px; }
+.desktop-shell .backup-cloud-card .backup-row > :is(input, .settings-select) { width: min(100%, 360px); justify-self: end; }
+.desktop-shell .backup-cloud-card .backup-row:has(> button),
+.desktop-shell .backup-cloud-card .backup-row:has(> [role='switch']) { display: flex; flex-wrap: wrap; }
+.desktop-shell .backup-loading { display: flex; align-items: center; gap: 8px; padding-block: 24px; color: var(--settings-muted); }
+
+/* 随内容区宽度与字号调整，不依赖固定显示器尺寸。 */
+@container (max-width: 760px) {
+  .desktop-shell .backup-setting-row:has(.backup-actions) { align-items: flex-start; flex-direction: column; gap: 12px; }
+  .desktop-shell .backup-schedule-fields { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  .desktop-shell .backup-page .backup-restore-password { align-items: stretch; flex-direction: column; }
+  .desktop-shell .backup-restore-password > input { width: 100%; }
+  .desktop-shell .backup-version-row { flex-wrap: wrap; }
+  .desktop-shell .backup-version-row > .backup-actions { width: 100%; }
+}
+@container (max-width: 520px) {
+  .desktop-shell .backup-tabs { gap: 16px; flex-wrap: wrap; }
+  .desktop-shell .backup-setting-row:has(> input:not([type='number'])) { align-items: stretch; flex-direction: column; gap: 10px; }
+  .desktop-shell .backup-setting-row > input:not([type='number']) { width: 100%; flex: none; }
+  .desktop-shell .backup-file-card > .backup-row { flex-direction: column; align-items: stretch; gap: 8px; }
+  .desktop-shell .backup-file-card .backup-row :is(input, .settings-select) { width: 100%; flex: none; }
+  .desktop-shell .backup-cloud-card .backup-row { grid-template-columns: minmax(0, 1fr); }
+  .desktop-shell .backup-cloud-card .backup-row > :is(input, .settings-select) { width: 100%; }
+}

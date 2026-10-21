@@ -72,6 +72,7 @@ export function AboutPanel() {
         <span>关于 eizhu</span>
       </div>
 
+      <div className="settings-card">
       <div className="settings-field">
         <div className="settings-field-info">
           <span className="settings-field-label">当前版本</span>
@@ -89,7 +90,7 @@ export function AboutPanel() {
       {desktop && (
         <div className="settings-field">
           <div className="settings-field-info">
-            <span className="settings-field-label">更新通道</span>
+            <label htmlFor="settings-update-channel" className="settings-field-label">更新通道</label>
             <span className="settings-field-desc">正式版优先稳定性；测试版可提前获取最新修复</span>
           </div>
           <Select
@@ -100,7 +101,7 @@ export function AboutPanel() {
             }}
             disabled={checking || downloading}
           >
-            <SelectTrigger className="settings-select"><SelectValue placeholder="请选择" /></SelectTrigger>
+            <SelectTrigger id="settings-update-channel" className="settings-select"><SelectValue placeholder="请选择" /></SelectTrigger>
             <SelectContent>{channelOptions.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent>
           </Select>
         </div>
@@ -146,6 +147,7 @@ export function AboutPanel() {
           </div>
         </div>
       )}
+      </div>
     </div>
   )
 }

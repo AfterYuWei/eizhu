@@ -89,11 +89,11 @@ export function SettingsPage({ onBack, initialTab = 'appearance' }: SettingsPage
                 <div className="settings-card">
                   <div className="settings-field">
                     <div className="settings-field-info">
-                      <Label className="settings-field-label">主题</Label>
+                      <Label htmlFor="settings-theme" className="settings-field-label">主题</Label>
                       <span className="settings-field-desc">选择界面配色方案</span>
                     </div>
                     <Select value={theme} onValueChange={(value) => setTheme(value as 'light' | 'dark' | 'system')}>
-                      <SelectTrigger className="settings-select"><SelectValue placeholder="请选择"/></SelectTrigger>
+                      <SelectTrigger id="settings-theme" className="settings-select"><SelectValue placeholder="请选择"/></SelectTrigger>
                       <SelectContent>{themeOptions.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent>
                     </Select>
                   </div>
@@ -101,14 +101,14 @@ export function SettingsPage({ onBack, initialTab = 'appearance' }: SettingsPage
                   {/* 界面字体 */}
                   <div className="settings-field">
                     <div className="settings-field-info">
-                      <Label className="settings-field-label">
+                      <Label htmlFor="settings-app-font" className="settings-field-label">
                         <Type size={13} className="settings-field-icon"/>
                         界面字体
                       </Label>
                       <span className="settings-field-desc">软件界面使用的字体</span>
                     </div>
                     <Select value={appFontFamily} onValueChange={setAppFontFamily}>
-                      <SelectTrigger className="settings-select"><SelectValue placeholder="请选择"/></SelectTrigger>
+                      <SelectTrigger id="settings-app-font" className="settings-select"><SelectValue placeholder="请选择"/></SelectTrigger>
                       <SelectContent>{appFontFamilyOptions.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent>
                     </Select>
                   </div>
@@ -116,11 +116,11 @@ export function SettingsPage({ onBack, initialTab = 'appearance' }: SettingsPage
                   {/* 界面字体大小 */}
                   <div className="settings-field">
                     <div className="settings-field-info">
-                      <Label className="settings-field-label">界面字体大小</Label>
+                      <Label htmlFor="settings-app-size" className="settings-field-label">界面字体大小</Label>
                       <span className="settings-field-desc">界面文字的基础大小</span>
                     </div>
                     <div className="settings-number-group">
-                      <Input type="number" aria-label="界面字体大小" min={10} max={20} value={appFontSize} onChange={(e) => {
+                      <Input id="settings-app-size" type="number" aria-label="界面字体大小" min={10} max={20} value={appFontSize} onChange={(e) => {
             const v = Number(e.target.value);
             if (!isNaN(v))
                 setAppFontSize(v);
@@ -142,13 +142,13 @@ export function SettingsPage({ onBack, initialTab = 'appearance' }: SettingsPage
                 <div className="settings-card">
                   <div className="settings-field">
                     <div className="settings-field-info">
-                      <Label className="settings-field-label">
+                      <Label htmlFor="settings-terminal-theme" className="settings-field-label">
                         <Palette size={13} className="settings-field-icon"/>
                         终端主题
                       </Label>
                       <span className="settings-field-desc">终端颜色方案</span>
                     </div>
-                    <Button type="button" variant="outline" className="settings-theme-btn" onClick={() => setThemePickerOpen(true)}>
+                    <Button id="settings-terminal-theme" type="button" variant="outline" className="settings-theme-btn" onClick={() => setThemePickerOpen(true)}>
                       <span>{currentThemeLabel}</span>
                       <ChevronRight size={14}/>
                     </Button>
@@ -160,14 +160,14 @@ export function SettingsPage({ onBack, initialTab = 'appearance' }: SettingsPage
                   {/* 终端字体（英文） */}
                   <div className="settings-field">
                     <div className="settings-field-info">
-                      <Label className="settings-field-label">
+                      <Label htmlFor="settings-terminal-font-en" className="settings-field-label">
                         <Type size={13} className="settings-field-icon"/>
                         终端字体（英文）
                       </Label>
                       <span className="settings-field-desc">等宽字体，用于显示代码和英文字符</span>
                     </div>
                     <Select value={fontFamily} onValueChange={setFontFamily}>
-                      <SelectTrigger className="settings-select"><SelectValue placeholder="请选择"/></SelectTrigger>
+                      <SelectTrigger id="settings-terminal-font-en" className="settings-select"><SelectValue placeholder="请选择"/></SelectTrigger>
                       <SelectContent>{terminalFontFamilyOptions.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent>
                     </Select>
                   </div>
@@ -175,14 +175,14 @@ export function SettingsPage({ onBack, initialTab = 'appearance' }: SettingsPage
                   {/* 终端字体（中文） */}
                   <div className="settings-field">
                     <div className="settings-field-info">
-                      <Label className="settings-field-label">
+                      <Label htmlFor="settings-terminal-font-cn" className="settings-field-label">
                         <Type size={13} className="settings-field-icon"/>
                         终端字体（中文）
                       </Label>
                       <span className="settings-field-desc">中文字体，用于显示中文字符</span>
                     </div>
                     <Select value={fontFamilyCN} onValueChange={setFontFamilyCN}>
-                      <SelectTrigger className="settings-select"><SelectValue placeholder="请选择"/></SelectTrigger>
+                      <SelectTrigger id="settings-terminal-font-cn" className="settings-select"><SelectValue placeholder="请选择"/></SelectTrigger>
                       <SelectContent>{terminalFontFamilyCNOptions.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent>
                     </Select>
                   </div>
@@ -190,11 +190,11 @@ export function SettingsPage({ onBack, initialTab = 'appearance' }: SettingsPage
                   {/* 终端字体大小 */}
                   <div className="settings-field">
                     <div className="settings-field-info">
-                      <Label className="settings-field-label">终端字体大小</Label>
+                      <Label htmlFor="settings-terminal-size" className="settings-field-label">终端字体大小</Label>
                       <span className="settings-field-desc">终端文字的大小</span>
                     </div>
                     <div className="settings-number-group">
-                      <Input type="number" aria-label="终端字体大小" min={8} max={32} value={fontSize} onChange={(e) => {
+                      <Input id="settings-terminal-size" type="number" aria-label="终端字体大小" min={8} max={32} value={fontSize} onChange={(e) => {
             const v = Number(e.target.value);
             if (!isNaN(v))
                 setFontSize(v);
@@ -203,16 +203,19 @@ export function SettingsPage({ onBack, initialTab = 'appearance' }: SettingsPage
                     </div>
                   </div>
 
-                  {/* 自动补全分隔线 */}
-                  <div className="settings-divider"/>
+                </div>
+              </div>
+              <div className="settings-section">
+                <div className="settings-section-title">输入与补全</div>
+                <div className="settings-card">
 
                   {/* 弹出菜单补全 */}
                   <div className="settings-field">
                     <div className="settings-field-info">
-                      <Label className="settings-field-label">自动补全</Label>
+                      <Label htmlFor="settings-terminal-completion" className="settings-field-label">自动补全</Label>
                       <span className="settings-field-desc">输入时显示浮动补全面板，↑/↓ 选择，Enter 应用，Tab 透传给远端 shell。</span>
                     </div>
-                    <Switch checked={terminalPopupMenu} onCheckedChange={setTerminalPopupMenu}/>
+                    <Switch id="settings-terminal-completion" checked={terminalPopupMenu} onCheckedChange={setTerminalPopupMenu}/>
                   </div>
                 </div>
               </div>

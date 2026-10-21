@@ -79,8 +79,8 @@ export function LocalRestorePanel({
     }
   }
   return (
-    <div className="backup-card">
-      <p className="backup-row-label">完整恢复与安全快照</p>
+    <div className="backup-card backup-file-restore">
+      <h3>完整恢复与安全快照</h3>
       <p className="settings-field-desc">
         先选择并解锁上方备份，再查看完整变化。合并保留其他本地记录；替换移除备份中不存在的记录。每次导入或恢复前保留设备密钥加密的安全快照。
       </p>

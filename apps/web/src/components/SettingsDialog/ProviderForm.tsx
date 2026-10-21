@@ -148,7 +148,7 @@ export function ProviderSection({ providers, onChanged }: Props) {
     <div className="sync-provider-block">
       <div className="sync-provider-header">
         <div className="settings-subsection-title">
-          <Server size={13} /><span>云存储配置（{visibleProviders.length}）</span>
+          <Server size={16} /><h2>云存储 <span className="backup-count">{visibleProviders.length}</span></h2>
         </div>
         {!adding && (
           <Button variant="outline" size="sm" onClick={() => setAdding(true)}>
@@ -157,8 +157,12 @@ export function ProviderSection({ providers, onChanged }: Props) {
         )}
       </div>
 
+      <div className="backup-provider-content">
       {visibleProviders.length === 0 && !adding && (
-        <div className="sync-provider-empty-hint">尚未配置云存储源，点击「添加存储源」开始备份。</div>
+        <div className="sync-provider-empty-hint backup-empty">
+          <div><p>尚未添加云存储</p><span className="backup-description">添加存储源，将完整版本保存在本机以外。</span></div>
+          <span className="backup-provider-types">WebDAV · S3 · Google Drive · OneDrive</span>
+        </div>
       )}
 
       {visibleProviders.length > 0 && (
@@ -183,11 +187,11 @@ export function ProviderSection({ providers, onChanged }: Props) {
                       <ExternalLink size={12} /> 授权
                     </Button>
                   )}
-                  <Button variant="ghost" size="sm" disabled={busy} onClick={() => void handleTest(p)} title="测试连接">
+                  <Button variant="ghost" size="sm" disabled={busy} onClick={() => void handleTest(p)} title="测试连接" aria-label={`测试「${p.name}」连接`}>
                     <TestTube2 size={13} />
                   </Button>
-                  <Switch checked={p.enabled} onCheckedChange={() => void handleToggle(p)} title="启用 / 禁用" />
-                  <Button variant="ghost" size="sm" onClick={() => void handleDelete(p)} title="删除">
+                  <Switch checked={p.enabled} onCheckedChange={() => void handleToggle(p)} title="启用 / 禁用" aria-label={`启用「${p.name}」`} />
+                  <Button variant="ghost" size="sm" onClick={() => void handleDelete(p)} title="删除" aria-label={`删除「${p.name}」`}>
                     <Trash2 size={13} />
                   </Button>
                 </div>
@@ -305,6 +309,7 @@ export function ProviderSection({ providers, onChanged }: Props) {
         </div>
       )}
 
+      </div>
       <AlertDialog open={providerToDelete !== null} onOpenChange={(open) => !open && setProviderToDelete(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>

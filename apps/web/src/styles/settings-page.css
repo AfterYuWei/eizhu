@@ -5,7 +5,8 @@
   z-index: 30;
   overflow: hidden;
   background: var(--surface-panel);
-  color: var(--fg-2);
+  --settings-muted: color-mix(in srgb, var(--fg) 62%, var(--surface-panel));
+  color: var(--fg);
   font: 400 var(--sans-size) / 1.5 var(--sans);
 }
 .settings-page-loading { display: grid; place-items: center; }
@@ -26,17 +27,65 @@
 .settings-page-main { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; }
 .settings-page-heading { flex-shrink: 0; padding: 48px 40px 24px; user-select: none; }
 .settings-page-heading h1 { margin: 0; font: 600 20px / 28px var(--sans); color: var(--fg); }
-.settings-page .settings-content { padding: 0 40px 48px; scrollbar-gutter: stable; }
+.settings-page .settings-content { padding: 0 40px 48px; scrollbar-gutter: stable; container-type: inline-size; }
 .settings-page .settings-section { max-width: 1120px; padding: 0; margin-bottom: 28px; }
-.settings-page .settings-section-title { padding: 0; margin: 0 0 12px; border: 0; font: 500 var(--sans-size) / 1.5 var(--sans); letter-spacing: 0; text-transform: none; color: var(--fg-2); }
-.settings-page .settings-field { min-height: 72px; padding: 14px 0; }
-.settings-page .settings-field-desc { font-size: max(12px, calc(var(--sans-size) - 2px)); line-height: 1.5; }
-.settings-page .settings-card { overflow: hidden; border: 1px solid var(--edge-soft); border-radius: var(--r-lg); background: var(--surface-app); }
-.settings-page .settings-card > .settings-field { padding: 16px 18px; }
-.settings-page .settings-card > .settings-divider { margin: 0; }
-.settings-page .settings-select, .settings-page .settings-theme-btn { width: 220px; max-width: 100%; min-height: 36px; height: auto; padding-block: 6px; }
-.settings-page .settings-number-input { min-height: 36px; height: auto; padding-block: 6px; }
+.settings-page .settings-section-title { padding: 0; margin: 0 0 12px; border: 0; font: 500 var(--sans-size) / 1.5 var(--sans); letter-spacing: 0; text-transform: none; color: var(--fg); }
+/* 所有设置分类共享的分组、说明与紧凑控件；备份页只保留领域布局。 */
+.desktop-shell .settings-page .settings-field { min-height: 68px; padding: 13px 16px; gap: 24px; }
+.desktop-shell .settings-page .settings-field-label { color: var(--fg) !important; font-weight: 400 !important; line-height: 1.5 !important; }
+.desktop-shell .settings-page .settings-field-info { gap: 4px; }
+.desktop-shell .settings-page .settings-field-desc { margin: 0; color: var(--settings-muted); font-size: max(12px, calc(var(--sans-size) - 2px)); line-height: 1.6; overflow-wrap: anywhere; }
+.desktop-shell .settings-page .settings-content :is(h2, h3) { color: var(--fg); font-size: var(--sans-size); font-weight: 500; line-height: 1.5; }
+.desktop-shell .settings-page :where(.settings-content) :is(.settings-card, .backup-card) { min-width: 0; margin: 0; overflow: hidden; border: 1px solid var(--edge-soft); border-radius: var(--r-lg); background: var(--surface-app); }
+.desktop-shell .settings-page :where(.settings-content) .backup-card { padding: 20px; gap: 16px; }
+.desktop-shell .settings-page .settings-card > .settings-field + .settings-field { border-top: 1px solid var(--edge-soft); }
+.desktop-shell .settings-page .settings-card > .settings-divider { margin: 0; background: var(--edge-soft); }
+.desktop-shell .settings-page .settings-content :is(input, [data-slot='select-trigger'], .settings-theme-btn) { min-height: 30px; height: auto; padding: 4px 10px; border-color: var(--border); border-radius: var(--r-sm); background: var(--bg-active); color: var(--fg); box-shadow: none; }
+.desktop-shell .settings-page .settings-content :is(.settings-select, .settings-theme-btn) { width: 240px; max-width: 100%; flex-shrink: 0; }
+.desktop-shell .settings-page .settings-number-input { width: 80px !important; background: var(--bg-active) !important; color: var(--fg) !important; }
+.desktop-shell .settings-page .settings-number-unit { color: var(--settings-muted); font-size: max(12px, calc(var(--sans-size) - 2px)); }
+.desktop-shell .settings-page .settings-field-icon { color: var(--settings-muted); }
+.desktop-shell .settings-page .settings-content [data-slot='button'] { min-height: 30px; height: auto; padding: 4px 10px; font-weight: 400; box-shadow: none; }
+.desktop-shell .settings-page .settings-content [data-variant='default'][data-slot='button'] { color: var(--fg); border: 1px solid var(--border); background: var(--bg-active); }
+.desktop-shell .settings-page .settings-content [data-variant='default'][data-slot='button']:hover { background: var(--bg-hover); }
+.desktop-shell .settings-page .settings-content [data-variant='outline'][data-slot='button'] { border-color: var(--border); background: transparent; }
+.desktop-shell .settings-page .settings-content .settings-theme-btn[data-slot='button'] { background: var(--bg-active); }
+.desktop-shell .settings-page [data-slot='switch-thumb'] { background: light-dark(var(--surface-panel), var(--fg)); }
 .settings-page :is(button, input, [role='combobox']) { font-family: var(--sans); font-size: var(--sans-size); line-height: 1.5; }
+.desktop-shell .settings-page .settings-stack { display: flex; flex-direction: column; gap: 20px; }
+.desktop-shell .settings-page .settings-stack > .settings-section-title { margin-bottom: -8px; }
+.desktop-shell .settings-page .settings-stack > .backup-card > [data-slot='button'] { align-self: flex-end; }
+.desktop-shell .settings-page .settings-status { display: inline-flex; align-items: center; flex-shrink: 0; padding: 4px 10px; border: 1px solid var(--edge-soft); border-radius: var(--r-sm); background: var(--bg-active); color: var(--settings-muted); font-size: max(12px, calc(var(--sans-size) - 2px)); }
+.desktop-shell .settings-page .settings-card-footer { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--edge-soft); }
+.desktop-shell .settings-page .settings-card-toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; padding: 16px; }
+.desktop-shell .settings-page .settings-empty { margin: 0; padding: 20px 16px; color: var(--settings-muted); font-size: max(12px, calc(var(--sans-size) - 2px)); line-height: 1.6; }
+.desktop-shell .settings-page .about-version-value { max-width: 100%; padding: 4px 10px; border-color: var(--border); border-radius: var(--r-sm); background: var(--bg-active); color: var(--fg); font-size: var(--sans-size); line-height: 1.5; overflow-wrap: anywhere; }
+.desktop-shell .settings-page .about-release-notes { max-width: none; }
+.desktop-shell .settings-page .settings-subtabs { flex-direction: row; justify-content: flex-start; width: 100%; height: auto; gap: 24px; padding: 0; border: 0; border-bottom: 1px solid var(--edge-soft); border-radius: 0; background: transparent; }
+.desktop-shell .settings-page .settings-subtabs > [role='tab'] { width: auto; flex: 0 0 auto; min-height: 36px; height: auto; padding: 0 0 10px; border: 0; border-radius: 0; font: 400 var(--sans-size) / 1.5 var(--sans); color: var(--settings-muted); background: transparent; box-shadow: none; }
+.desktop-shell .settings-page .settings-subtabs > [role='tab'][data-state='active'] { color: var(--fg); background: transparent; }
+.desktop-shell .settings-page .settings-subtabs > [role='tab']::after { inset: auto 0 -1px; height: 2px; width: auto; background: var(--fg-2); }
+.desktop-shell .settings-page .settings-history-list { max-height: 260px; overflow: auto; }
+.desktop-shell .settings-page .settings-history-entry { display: flex; align-items: flex-start; gap: 16px; padding: 14px 16px; border-top: 1px solid var(--edge-soft); }
+.desktop-shell .settings-page .settings-history-entry > div { flex: 1; min-width: 0; }
+.desktop-shell .settings-page .settings-history-entry code { color: var(--fg); font-size: max(12px, calc(var(--sans-size) - 2px)); overflow-wrap: anywhere; white-space: pre-wrap; }
+.desktop-shell .settings-page .settings-history-search { width: 300px; max-width: 100%; }
+.desktop-shell .settings-page .settings-log-card { display: flex; flex-direction: column; min-height: 0; }
+.desktop-shell .settings-page .log-toolbar { margin: 0; }
+.desktop-shell .settings-page .log-toolbar > [data-slot='tabs'] { min-width: 0; }
+.desktop-shell .settings-page .log-actions { flex-wrap: wrap; }
+.desktop-shell .settings-page .log-path { margin: 0; padding: 0 16px 12px; color: var(--settings-muted); font-size: max(12px, calc(var(--sans-size) - 2px)); line-height: 1.5; }
+.desktop-shell .settings-page .log-viewer { min-height: 260px; max-height: 430px; margin: 0; padding: 16px; border: 0; border-top: 1px solid var(--edge-soft); border-bottom: 1px solid var(--edge-soft); border-radius: 0; background: transparent; color: var(--fg); font-size: max(12px, calc(var(--sans-size) - 2px)); }
+.desktop-shell .settings-page .settings-log-note { padding: 12px 16px; }
+
+/* 以内容区可用宽度换行，字体放大后允许行自然增高。 */
+@container (max-width: 520px) {
+  .desktop-shell .settings-page .settings-field:not(:has(> [role='switch'])) { flex-direction: column; align-items: stretch; gap: 10px; }
+  .desktop-shell .settings-page .settings-field > :is(.settings-select, .settings-theme-btn, .settings-history-search) { width: 100%; }
+  .desktop-shell .settings-page .settings-number-group { align-self: flex-end; }
+  .desktop-shell .settings-page .settings-status { align-self: flex-start; }
+  .desktop-shell .settings-page .settings-subtabs { gap: 16px; flex-wrap: wrap; }
+}
 
 @media (max-width: 960px) {
   .settings-page-sidebar { flex-basis: 220px; }
