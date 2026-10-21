@@ -1,0 +1,145 @@
+{
+  "tag_name": "v0.5.0",
+  "target_commitish": "main",
+  "draft": false,
+  "prerelease": false,
+  "published_at": "2026-10-21T06:00:52Z",
+  "html_url": "https://github.com/AfterYuWei/eizhu/releases/tag/v0.5.0",
+  "sourceCommit": "1350ddd9e4a9b304c3fcd127329634cb14362ab3",
+  "packagingRun": "https://github.com/AfterYuWei/eizhu/actions/runs/39550429348",
+  "publicationRun": "https://github.com/AfterYuWei/eizhu/actions/runs/39552712986",
+  "assets": [
+    {
+      "name": "build-info-darwin-arm64.json",
+      "bytes": 269,
+      "sha256": "27b83f21646b915c83bfdb194c2b3baa1df3f0628286796c5b01a001e7fa6450",
+      "url": "https://github.com/AfterYuWei/eizhu/releases/download/v0.5.0/build-info-darwin-arm64.json"
+    },
+    {
+      "name": "build-info-darwin-x64.json",
+      "bytes": 267,
+      "sha256": "aa2f3f394138daaab5de0a671ef2107fcfcd763b2acf0d5f7673ab0fcb373fc3",
+      "url": "https://github.com/AfterYuWei/eizhu/releases/download/v0.5.0/build-info-darwin-x64.json"
+    },
+    {
+      "name": "build-info-linux-x64.json",
+      "bytes": 266,
+      "sha256": "9af298a6cf06e1c09af151ca91ed7f07664ec79093654c9752298219fd1ce710",
+      "url": "https://github.com/AfterYuWei/eizhu/releases/download/v0.5.0/build-info-linux-x64.json"
+    },
+    {
+      "name": "build-info-win32-x64.json",
+      "bytes": 266,
+      "sha256": "2de11f1d74fca4e479e6e4742df8ec62b909ac4d461d9876ec356a856217dc77",
+      "url": "https://github.com/AfterYuWei/eizhu/releases/download/v0.5.0/build-info-win32-x64.json"
+    },
+    {
+      "name": "eizhu-0.5.0-linux-amd64.deb",
+      "bytes": 119764540,
+      "sha256": "1f277227491191142c2d9a0b9608167b035808fc34ffa8bf0a84e784c36b9d77",
+      "url": "https://github.com/AfterYuWei/eizhu/releases/download/v0.5.0/eizhu-0.5.0-linux-amd64.deb"
+    },
+    {
+      "name": "eizhu-0.5.0-linux-x86_64.AppImage",
+      "bytes": 150273201,
+      "sha256": "62e5c011b06907fc304e27a74162752071ed91568435b1824c76dfd3c1523f7e",
+      "url": "https://github.com/AfterYuWei/eizhu/releases/download/v0.5.0/eizhu-0.5.0-linux-x86_64.AppImage"
+    },
+    {
+      "name": "eizhu-0.5.0-linux-x86_64.rpm",
+      "bytes": 107163265,
+      "sha256": "90ff4476308c0c3f6898bca63953e11284324c1fd6be167bd55c4c87a16a288a",
+      "url": "https://github.com/AfterYuWei/eizhu/releases/download/v0.5.0/eizhu-0.5.0-linux-x86_64.rpm"
+    },
+    {
+      "name": "eizhu-0.5.0-mac-arm64.dmg",
+      "bytes": 154302447,
+      "sha256": "a998b8bbbe4cbb5c1593e016b2f933b0b48b993e84f59dbf265876ffe550115d",
+      "url": "https://github.com/AfterYuWei/eizhu/releases/download/v0.5.0/eizhu-0.5.0-mac-arm64.dmg"
+    },
+    {
+      "name": "eizhu-0.5.0-mac-arm64.dmg.blockmap",
+      "bytes": 162629,
+      "sha256": "16bccd3aea54130f16292b98f18bfdedb4bb0de70fe9f046ec83b29d0154aac9",
+      "url": "https://github.com/AfterYuWei/eizhu/releases/download/v0.5.0/eizhu-0.5.0-mac-arm64.dmg.blockmap"
+    },
+    {
+      "name": "eizhu-0.5.0-mac-arm64.zip",
+      "bytes": 153610772,
+      "sha256": "3acf6d17a9557c94ae28c828be8e49cb40d073575a2a0558e698162d89f1cc83",
+      "url": "https://github.com/AfterYuWei/eizhu/releases/download/v0.5.0/eizhu-0.5.0-mac-arm64.zip"
+    },
+    {
+      "name": "eizhu-0.5.0-mac-arm64.zip.blockmap",
+      "bytes": 161394,
+      "sha256": "52dba9b3657fc9f2652fdb5ea601d6d96f07ec2794e86b25e1b64cb50ce5fb25",
+      "url": "https://github.com/AfterYuWei/eizhu/releases/download/v0.5.0/eizhu-0.5.0-mac-arm64.zip.blockmap"
+    },
+    {
+      "name": "eizhu-0.5.0-mac-x64.dmg",
+      "bytes": 158109721,
+      "sha256": "ce8b728d757f5a8940fe136e5e455ffcb4087f8b71511fc856cd171b24521004",
+      "url": "https://github.com/AfterYuWei/eizhu/releases/download/v0.5.0/eizhu-0.5.0-mac-x64.dmg"
+    },
+    {
+      "name": "eizhu-0.5.0-mac-x64.dmg.blockmap",
+      "bytes": 166574,
+      "sha256": "832c4703b2331d05e624fd87c240c0911037962c0091e56c9aabc86855dbccc7",
+      "url": "https://github.com/AfterYuWei/eizhu/releases/download/v0.5.0/eizhu-0.5.0-mac-x64.dmg.blockmap"
+    },
+    {
+      "name": "eizhu-0.5.0-mac-x64.zip",
+      "bytes": 157425533,
+      "sha256": "f7a1240939e277e0a707ab8892016b91de5338117c8d97277ca8e556fb4fa42b",
+      "url": "https://github.com/AfterYuWei/eizhu/releases/download/v0.5.0/eizhu-0.5.0-mac-x64.zip"
+    },
+    {
+      "name": "eizhu-0.5.0-mac-x64.zip.blockmap",
+      "bytes": 164895,
+      "sha256": "fa327aac148c89f2d9e7045c2f906733ec7ef556283b9ccb4fff96aa04beeab6",
+      "url": "https://github.com/AfterYuWei/eizhu/releases/download/v0.5.0/eizhu-0.5.0-mac-x64.zip.blockmap"
+    },
+    {
+      "name": "eizhu-0.5.0-win-x64.exe",
+      "bytes": 132930677,
+      "sha256": "65377cd092507c438364028fcaf645f44e695b85242c09eefbf61114f44d1c58",
+      "url": "https://github.com/AfterYuWei/eizhu/releases/download/v0.5.0/eizhu-0.5.0-win-x64.exe"
+    },
+    {
+      "name": "eizhu-0.5.0-win-x64.exe.blockmap",
+      "bytes": 139687,
+      "sha256": "83a8fe37cfecc1cfe35b3e5d3ad638bd4c1ca544b3feef3f8c44ad9ea038bf8b",
+      "url": "https://github.com/AfterYuWei/eizhu/releases/download/v0.5.0/eizhu-0.5.0-win-x64.exe.blockmap"
+    },
+    {
+      "name": "SHA256SUMS.txt",
+      "bytes": 1966,
+      "sha256": "0f2394098af4aa8136599db006d97b88df9b8e3b0e20488ee4b543fed5350563",
+      "url": "https://github.com/AfterYuWei/eizhu/releases/download/v0.5.0/SHA256SUMS.txt"
+    },
+    {
+      "name": "smoke-darwin-arm64.json",
+      "bytes": 9206,
+      "sha256": "ca1cd6feb5f2a010b379c028c898b7b024bf9570264f1c2ff3a8f66b47edb0d2",
+      "url": "https://github.com/AfterYuWei/eizhu/releases/download/v0.5.0/smoke-darwin-arm64.json"
+    },
+    {
+      "name": "smoke-darwin-x64.json",
+      "bytes": 9091,
+      "sha256": "ec7f43f6de9f35f57329c13de80bdf48911f460ffd5b1c0a2d760eb26ae105f6",
+      "url": "https://github.com/AfterYuWei/eizhu/releases/download/v0.5.0/smoke-darwin-x64.json"
+    },
+    {
+      "name": "smoke-linux-x64.json",
+      "bytes": 9128,
+      "sha256": "2f4d0ab47b0f393308a484f7803b4e0a60cc27b453269397457db7293affc574",
+      "url": "https://github.com/AfterYuWei/eizhu/releases/download/v0.5.0/smoke-linux-x64.json"
+    },
+    {
+      "name": "smoke-win32-x64.json",
+      "bytes": 8879,
+      "sha256": "570dded5f69324770db8239a30a794161227506e44392a61f4c2a8cd8ee18811",
+      "url": "https://github.com/AfterYuWei/eizhu/releases/download/v0.5.0/smoke-win32-x64.json"
+    }
+  ]
+}

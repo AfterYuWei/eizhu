@@ -1,0 +1,374 @@
+{
+  "platform": "linux",
+  "arch": "x64",
+  "versions": {
+    "node": "24.22.0",
+    "acorn": "8.18.0",
+    "ada": "4.0.0",
+    "amaro": "1.1.11",
+    "ares": "1.34.8",
+    "brotli": "1.2.0",
+    "cldr": "48.0",
+    "icu": "78.2",
+    "llhttp": "9.4.3",
+    "merve": "1.2.2",
+    "modules": "149",
+    "napi": "10",
+    "nbytes": "0.1.4",
+    "ncrypto": "0.0.1",
+    "nghttp2": "1.70.0",
+    "nghttp3": "",
+    "ngtcp2": "",
+    "openssl": "0.0.0",
+    "simdjson": "4.6.11",
+    "simdutf": "7.7.0",
+    "sqlite": "3.53.4",
+    "tz": "2026d",
+    "undici": "7.29.1",
+    "unicode": "17.0",
+    "uv": "1.52.1",
+    "uvwasi": "0.0.23",
+    "v8": "15.2.124.43-electron.0",
+    "zlib": "1.3.2.1-motley",
+    "zstd": "1.6.0",
+    "electron": "44.9.0",
+    "chrome": "152.0.7977.167"
+  },
+  "packaged": true,
+  "dataRoot": "/tmp/eizhu-desktop-smoke-BeJ8fG/profile",
+  "keyMode": "restricted-file",
+  "health": {
+    "context": {
+      "runtimeId": "8d71263f-402f-4bb3-b64e-f72d97bfcdfe",
+      "workspaceId": "offline",
+      "generation": 1
+    },
+    "schema": 2,
+    "workers": 2
+  },
+  "crypto": {
+    "kdf": true,
+    "crypto": true,
+    "ssh2": true
+  },
+  "renderer": {
+    "node": "undefined",
+    "require": "undefined",
+    "bridge": "function",
+    "health": {
+      "context": {
+        "runtimeId": "8d71263f-402f-4bb3-b64e-f72d97bfcdfe",
+        "workspaceId": "offline",
+        "generation": 1
+      },
+      "schema": 2,
+      "workers": 2
+    },
+    "text": true,
+    "reserved": "STAGE_NOT_READY",
+    "local": [],
+    "arbitraryPath": "FORBIDDEN",
+    "inputValidation": "BAD_REQUEST"
+  },
+  "stage2": {
+    "passed": true,
+    "checks": [
+      "本地 CRUD、查询、默认名称、引用保护、用户名联动、循环拒绝与脱敏列表",
+      "真实 SQLite 中途失败：业务、审计、outbox、安全快照与预览消费整体回滚",
+      "七个固定旧备份：两种格式、三种凭据模式、历史 Go 密文及精确 payload 字节",
+      "十个固定反例：生产预览/导入错误码及完整数据保留",
+      "生产导出往返、加密前 hash、中文/emoji/首尾空白密码及 50 MiB 上限",
+      "skip/overwrite/regenerate、分组/凭据/跳板 ID 重映射、merge/replace、过期/编辑失效与安全快照恢复",
+      "ED25519/RSA2048/RSA4096 OpenSSH 加密私钥、注释与错误口令拒绝",
+      "SQLite 无明文凭据、正确密钥重启持久化、错误密钥拒绝并保留原数据"
+    ],
+    "fixedBackups": 7,
+    "invalidCases": 10,
+    "nativeDatabase": true,
+    "keyAlgorithms": 3
+  },
+  "stage3": {
+    "load": {
+      "passed": true,
+      "synthetic": true,
+      "requestedMs": 60000,
+      "elapsedMs": 60066.76403600001,
+      "sshConnections": 20,
+      "activeBinaryTerminals": 4,
+      "localTransferTasksPerBatch": 5,
+      "transferBatches": 534,
+      "bytesVerifiedPerBatch": 10485760,
+      "rounds": 361,
+      "ipcSamples": 361,
+      "ipcP50Ms": 0.30000000004656613,
+      "ipcP95Ms": 0.6999999999534339,
+      "ipcMaxMs": 4.5,
+      "memory": [
+        {
+          "elapsedMs": 128.80608399999983,
+          "workingSetKiB": 828608,
+          "processes": 5
+        },
+        {
+          "elapsedMs": 30085.740396999998,
+          "workingSetKiB": 858264,
+          "processes": 5
+        },
+        {
+          "elapsedMs": 60015.65749500001,
+          "workingSetKiB": 846548,
+          "processes": 5
+        }
+      ],
+      "fullAcceptance": false,
+      "pending": [
+        "真实远端五路网络传输",
+        "完整备份与编辑器混合负载",
+        "P95 交互 100ms",
+        "8 小时稳定性"
+      ]
+    },
+    "passed": true,
+    "authentication": [
+      "password",
+      "encrypted-private-key",
+      "keyboard-interactive"
+    ],
+    "routes": [
+      "direct",
+      "http-connect",
+      "socks5",
+      "jump"
+    ],
+    "binary": {
+      "utf8": true,
+      "consumedBytes": 262144,
+      "replayedInput": false
+    },
+    "hostKey": {
+      "wrongRejected": true,
+      "staleRejected": true,
+      "permanent": true
+    },
+    "completion": true,
+    "historyPrivacy": true,
+    "details": true,
+    "tunnels": [
+      "local",
+      "remote",
+      "dynamic"
+    ],
+    "portsReleased": true,
+    "tunnelReconnect": true,
+    "faults": {
+      "hostRejectBeforeAuthentication": true,
+      "hostCancel": true,
+      "mfaCancel": true,
+      "handshakeStop": true,
+      "proxyRejected": true,
+      "portOccupied": true,
+      "halfPacketStop": true,
+      "tunnelLimit32": true
+    },
+    "agent": "待目标平台 Agent 实测"
+  },
+  "stage3Storage": {
+    "passed": true,
+    "retention": "500/30d",
+    "disabled": true,
+    "encrypted": true,
+    "persisted": true,
+    "excludedFromBackup": true,
+    "tunnelReferenceProtected": true
+  },
+  "stage4": {
+    "passed": true,
+    "unavailable": false,
+    "restoredTaskId": "2310e260-2df9-45ae-9bcc-db626d1f2814",
+    "subsystem": "OpenSSH sftp-server",
+    "hostKeyConfirmation": true,
+    "streaming": true,
+    "resume": true,
+    "relay": true,
+    "tarGz": true,
+    "zip": true,
+    "archiveTools": {
+      "tar": true,
+      "unzip": true
+    },
+    "safeSave": true,
+    "unsupportedAtomicReplacePreservesOriginal": true,
+    "editorOwnership": true,
+    "dirtyCloseCancelled": true,
+    "staleWindowCloseRejected": true,
+    "encryptedCheckpoints": true
+  },
+  "stage5": {
+    "passed": true,
+    "localVersions": true,
+    "dedup": true,
+    "encryptedStorage": true,
+    "webdav": true,
+    "s3SigV4": true,
+    "independentTargets": true,
+    "conditionalIndex": true,
+    "unknownResultManualRecovery": true,
+    "cloudPreview": true,
+    "stalePreviewRejected": true,
+    "passwordRotation": true,
+    "changeScheduler": true,
+    "shutdownBarrier": true,
+    "oauthPkceCallback": true,
+    "officialDeferred": true,
+    "persistedVersionId": "68ac49a9-3dde-49cb-b898-d9f64230ef7b"
+  },
+  "stage6": {
+    "passed": true,
+    "ipcValidation": true,
+    "uiUnconfiguredFeedback": true,
+    "realUpdaterMetadata": true,
+    "sha512MismatchRejected": true,
+    "noRecheckDuringDownload": true,
+    "cacheIsolated": true,
+    "realSignedUpgrade": false,
+    "transport": "electron-updater shared HTTP downloader through NsisUpdater"
+  },
+  "localBridge": {
+    "crud": true,
+    "computeWorker": true,
+    "revealed": true,
+    "protectedDelete": true,
+    "redacted": true,
+    "audit": true,
+    "profileId": "9dfe226d-aff9-423f-96ca-0309b9eddf0d",
+    "vaultId": "47664794-bad0-4e98-a654-ad4518f69b9d",
+    "groupId": "ffa943cd-6b8f-487e-ba36-e3e89b8a901c"
+  },
+  "editor": true,
+  "editorGeometry": {
+    "requested": [
+      1280,
+      800
+    ],
+    "actual": [
+      1280,
+      800
+    ],
+    "workArea": [
+      1280,
+      1024
+    ],
+    "frame": [
+      0,
+      0
+    ]
+  },
+  "recovery": {
+    "failed": "RUNTIME_UNAVAILABLE",
+    "generation": 2,
+    "retainedEditorMemory": true,
+    "persistedSettings": true
+  },
+  "updaterModule": true,
+  "monaco": {
+    "typescript": true,
+    "json": true,
+    "model": true
+  },
+  "firstWindowMs": 782.111185,
+  "processMetrics": [
+    {
+      "type": "Browser",
+      "memory": {
+        "workingSetSize": 231608,
+        "peakWorkingSetSize": 308548
+      },
+      "cpu": {
+        "cumulativeCPUUsage": 9.21,
+        "percentCPUUsage": 0.6379513452815384,
+        "idleWakeupsPerSecond": 65
+      }
+    },
+    {
+      "type": "GPU",
+      "memory": {
+        "workingSetSize": 158428,
+        "peakWorkingSetSize": 174924
+      },
+      "cpu": {
+        "cumulativeCPUUsage": 0.44,
+        "percentCPUUsage": 0.07312488357383838,
+        "idleWakeupsPerSecond": 3
+      }
+    },
+    {
+      "type": "Utility",
+      "memory": {
+        "workingSetSize": 89964,
+        "peakWorkingSetSize": 89964
+      },
+      "cpu": {
+        "cumulativeCPUUsage": 0.12,
+        "percentCPUUsage": 0.017650840375169723,
+        "idleWakeupsPerSecond": 0
+      }
+    },
+    {
+      "type": "Tab",
+      "memory": {
+        "workingSetSize": 209216,
+        "peakWorkingSetSize": 228372
+      },
+      "cpu": {
+        "cumulativeCPUUsage": 5.89,
+        "percentCPUUsage": 0.4387499696657349,
+        "idleWakeupsPerSecond": 21
+      }
+    },
+    {
+      "type": "Tab",
+      "memory": {
+        "workingSetSize": 185992,
+        "peakWorkingSetSize": 185992
+      },
+      "cpu": {
+        "cumulativeCPUUsage": 0.62,
+        "percentCPUUsage": 0,
+        "idleWakeupsPerSecond": 0
+      }
+    },
+    {
+      "type": "Utility",
+      "memory": {
+        "workingSetSize": 188660,
+        "peakWorkingSetSize": 188660
+      },
+      "cpu": {
+        "cumulativeCPUUsage": 0.45,
+        "percentCPUUsage": 0,
+        "idleWakeupsPerSecond": 0
+      }
+    },
+    {
+      "type": "Tab",
+      "memory": {
+        "workingSetSize": 270040,
+        "peakWorkingSetSize": 272216
+      },
+      "cpu": {
+        "cumulativeCPUUsage": 1.71,
+        "percentCPUUsage": 0,
+        "idleWakeupsPerSecond": 0
+      }
+    }
+  ],
+  "screenshots": [
+    "home-light.png",
+    "home-dark.png",
+    "editor-empty.png"
+  ],
+  "screenshotContrast": {
+    "light": 244,
+    "dark": 23
+  }
+}

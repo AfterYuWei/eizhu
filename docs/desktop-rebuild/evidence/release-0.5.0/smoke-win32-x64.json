@@ -1,0 +1,360 @@
+{
+  "platform": "win32",
+  "arch": "x64",
+  "versions": {
+    "node": "24.22.0",
+    "acorn": "8.18.0",
+    "ada": "4.0.0",
+    "amaro": "1.1.11",
+    "ares": "1.34.8",
+    "brotli": "1.2.0",
+    "cldr": "48.0",
+    "icu": "78.2",
+    "llhttp": "9.4.3",
+    "merve": "1.2.2",
+    "modules": "149",
+    "napi": "10",
+    "nbytes": "0.1.4",
+    "ncrypto": "0.0.1",
+    "nghttp2": "1.70.0",
+    "nghttp3": "",
+    "ngtcp2": "",
+    "openssl": "0.0.0",
+    "simdjson": "4.6.11",
+    "simdutf": "7.7.0",
+    "sqlite": "3.53.4",
+    "tz": "2026d",
+    "undici": "7.29.1",
+    "unicode": "17.0",
+    "uv": "1.52.1",
+    "uvwasi": "0.0.23",
+    "v8": "15.2.124.43-electron.0",
+    "zlib": "1.3.2.1-motley",
+    "zstd": "1.6.0",
+    "electron": "44.9.0",
+    "chrome": "152.0.7977.167"
+  },
+  "packaged": true,
+  "dataRoot": "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\eizhu-desktop-smoke-SFd3wu\\profile",
+  "keyMode": "restricted-file",
+  "health": {
+    "context": {
+      "runtimeId": "9e8fc038-8bfb-448d-b9b9-ac4f0aaa4157",
+      "workspaceId": "offline",
+      "generation": 1
+    },
+    "schema": 2,
+    "workers": 2
+  },
+  "crypto": {
+    "kdf": true,
+    "crypto": true,
+    "ssh2": true
+  },
+  "renderer": {
+    "node": "undefined",
+    "require": "undefined",
+    "bridge": "function",
+    "health": {
+      "context": {
+        "runtimeId": "9e8fc038-8bfb-448d-b9b9-ac4f0aaa4157",
+        "workspaceId": "offline",
+        "generation": 1
+      },
+      "schema": 2,
+      "workers": 2
+    },
+    "text": true,
+    "reserved": "STAGE_NOT_READY",
+    "local": [],
+    "arbitraryPath": "FORBIDDEN",
+    "inputValidation": "BAD_REQUEST"
+  },
+  "stage2": {
+    "passed": true,
+    "checks": [
+      "本地 CRUD、查询、默认名称、引用保护、用户名联动、循环拒绝与脱敏列表",
+      "真实 SQLite 中途失败：业务、审计、outbox、安全快照与预览消费整体回滚",
+      "七个固定旧备份：两种格式、三种凭据模式、历史 Go 密文及精确 payload 字节",
+      "十个固定反例：生产预览/导入错误码及完整数据保留",
+      "生产导出往返、加密前 hash、中文/emoji/首尾空白密码及 50 MiB 上限",
+      "skip/overwrite/regenerate、分组/凭据/跳板 ID 重映射、merge/replace、过期/编辑失效与安全快照恢复",
+      "ED25519/RSA2048/RSA4096 OpenSSH 加密私钥、注释与错误口令拒绝",
+      "SQLite 无明文凭据、正确密钥重启持久化、错误密钥拒绝并保留原数据"
+    ],
+    "fixedBackups": 7,
+    "invalidCases": 10,
+    "nativeDatabase": true,
+    "keyAlgorithms": 3
+  },
+  "stage3": {
+    "load": {
+      "passed": true,
+      "synthetic": true,
+      "requestedMs": 60000,
+      "elapsedMs": 60089.751000000004,
+      "sshConnections": 20,
+      "activeBinaryTerminals": 4,
+      "localTransferTasksPerBatch": 5,
+      "transferBatches": 226,
+      "bytesVerifiedPerBatch": 10485760,
+      "rounds": 1779,
+      "ipcSamples": 1779,
+      "ipcP50Ms": 0.30000000004656613,
+      "ipcP95Ms": 0.5,
+      "ipcMaxMs": 2.300000000046566,
+      "memory": [
+        {
+          "elapsedMs": 14.479600000000573,
+          "workingSetKiB": 610352,
+          "processes": 5
+        },
+        {
+          "elapsedMs": 30033.795599999998,
+          "workingSetKiB": 603356,
+          "processes": 5
+        }
+      ],
+      "fullAcceptance": false,
+      "pending": [
+        "真实远端五路网络传输",
+        "完整备份与编辑器混合负载",
+        "P95 交互 100ms",
+        "8 小时稳定性"
+      ]
+    },
+    "passed": true,
+    "authentication": [
+      "password",
+      "encrypted-private-key",
+      "keyboard-interactive"
+    ],
+    "routes": [
+      "direct",
+      "http-connect",
+      "socks5",
+      "jump"
+    ],
+    "binary": {
+      "utf8": true,
+      "consumedBytes": 262144,
+      "replayedInput": false
+    },
+    "hostKey": {
+      "wrongRejected": true,
+      "staleRejected": true,
+      "permanent": true
+    },
+    "completion": true,
+    "historyPrivacy": true,
+    "details": true,
+    "tunnels": [
+      "local",
+      "remote",
+      "dynamic"
+    ],
+    "portsReleased": true,
+    "tunnelReconnect": true,
+    "faults": {
+      "hostRejectBeforeAuthentication": true,
+      "hostCancel": true,
+      "mfaCancel": true,
+      "handshakeStop": true,
+      "proxyRejected": true,
+      "portOccupied": true,
+      "halfPacketStop": true,
+      "tunnelLimit32": true
+    },
+    "agent": "待目标平台 Agent 实测"
+  },
+  "stage3Storage": {
+    "passed": true,
+    "retention": "500/30d",
+    "disabled": true,
+    "encrypted": true,
+    "persisted": true,
+    "excludedFromBackup": true,
+    "tunnelReferenceProtected": true
+  },
+  "stage4": {
+    "passed": false,
+    "unavailable": true,
+    "reason": "本机缺少 OpenSSH sftp-server，阶段 4 协议集成待验",
+    "restoredTaskId": ""
+  },
+  "stage5": {
+    "passed": true,
+    "localVersions": true,
+    "dedup": true,
+    "encryptedStorage": true,
+    "webdav": true,
+    "s3SigV4": true,
+    "independentTargets": true,
+    "conditionalIndex": true,
+    "unknownResultManualRecovery": true,
+    "cloudPreview": true,
+    "stalePreviewRejected": true,
+    "passwordRotation": true,
+    "changeScheduler": true,
+    "shutdownBarrier": true,
+    "oauthPkceCallback": true,
+    "officialDeferred": true,
+    "persistedVersionId": "c9158f52-d280-4a90-93c6-98c8675e1f07"
+  },
+  "stage6": {
+    "passed": true,
+    "ipcValidation": true,
+    "uiUnconfiguredFeedback": true,
+    "realUpdaterMetadata": true,
+    "sha512MismatchRejected": true,
+    "noRecheckDuringDownload": true,
+    "cacheIsolated": true,
+    "realSignedUpgrade": false,
+    "transport": "electron-updater shared HTTP downloader through NsisUpdater"
+  },
+  "localBridge": {
+    "crud": true,
+    "computeWorker": true,
+    "revealed": true,
+    "protectedDelete": true,
+    "redacted": true,
+    "audit": true,
+    "profileId": "734f5be2-b1b2-40ff-977f-5eb9c7190e4d",
+    "vaultId": "38ab4c93-41de-4724-80c1-41644e55277e",
+    "groupId": "13233484-68bf-440b-abbe-8e0ed53a86db"
+  },
+  "editor": true,
+  "editorGeometry": {
+    "requested": [
+      1280,
+      800
+    ],
+    "actual": [
+      1024,
+      728
+    ],
+    "workArea": [
+      1024,
+      728
+    ],
+    "frame": [
+      0,
+      0
+    ]
+  },
+  "recovery": {
+    "failed": "RUNTIME_UNAVAILABLE",
+    "generation": 2,
+    "retainedEditorMemory": true,
+    "persistedSettings": true
+  },
+  "updaterModule": true,
+  "monaco": {
+    "typescript": true,
+    "json": true,
+    "model": true
+  },
+  "firstWindowMs": 1719.369,
+  "processMetrics": [
+    {
+      "type": "Browser",
+      "memory": {
+        "workingSetSize": 201972,
+        "peakWorkingSetSize": 205032,
+        "privateBytes": 180148
+      },
+      "cpu": {
+        "cumulativeCPUUsage": 12.039182,
+        "percentCPUUsage": 3.776264396297583,
+        "idleWakeupsPerSecond": 0
+      }
+    },
+    {
+      "type": "GPU",
+      "memory": {
+        "workingSetSize": 72984,
+        "peakWorkingSetSize": 78776,
+        "privateBytes": 18808
+      },
+      "cpu": {
+        "cumulativeCPUUsage": 0.20862,
+        "percentCPUUsage": 0.06582160739886911,
+        "idleWakeupsPerSecond": 0
+      }
+    },
+    {
+      "type": "Utility",
+      "memory": {
+        "workingSetSize": 36796,
+        "peakWorkingSetSize": 47720,
+        "privateBytes": 11968
+      },
+      "cpu": {
+        "cumulativeCPUUsage": 0.11431,
+        "percentCPUUsage": 0.030932259160275564,
+        "idleWakeupsPerSecond": 0
+      }
+    },
+    {
+      "type": "Tab",
+      "memory": {
+        "workingSetSize": 183492,
+        "peakWorkingSetSize": 183720,
+        "privateBytes": 115188
+      },
+      "cpu": {
+        "cumulativeCPUUsage": 7.48609,
+        "percentCPUUsage": 2.189310811756217,
+        "idleWakeupsPerSecond": 0
+      }
+    },
+    {
+      "type": "Tab",
+      "memory": {
+        "workingSetSize": 179772,
+        "peakWorkingSetSize": 179772,
+        "privateBytes": 106636
+      },
+      "cpu": {
+        "cumulativeCPUUsage": 0.747893,
+        "percentCPUUsage": 0,
+        "idleWakeupsPerSecond": 0
+      }
+    },
+    {
+      "type": "Utility",
+      "memory": {
+        "workingSetSize": 164788,
+        "peakWorkingSetSize": 164788,
+        "privateBytes": 169308
+      },
+      "cpu": {
+        "cumulativeCPUUsage": 0.487432,
+        "percentCPUUsage": 0,
+        "idleWakeupsPerSecond": 0
+      }
+    },
+    {
+      "type": "Tab",
+      "memory": {
+        "workingSetSize": 263644,
+        "peakWorkingSetSize": 268792,
+        "privateBytes": 196480
+      },
+      "cpu": {
+        "cumulativeCPUUsage": 1.802834,
+        "percentCPUUsage": 0,
+        "idleWakeupsPerSecond": 0
+      }
+    }
+  ],
+  "screenshots": [
+    "home-light.png",
+    "home-dark.png",
+    "editor-empty.png"
+  ],
+  "screenshotContrast": {
+    "light": 244,
+    "dark": 23
+  }
+}
