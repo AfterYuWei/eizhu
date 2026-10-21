@@ -44,7 +44,7 @@ interface SessionStore {
   openDraftTab: () => string
   openSftpTab: (profileId?: string, cwd?: string) => string
   openVaultTab: () => string
-  closeTab: (tabId: string) => void
+  closeTab: (tabId: string) => Promise<void>
   setActiveTab: (tabId: string) => void
   updateTabStatus: (tabId: string, status: TabStatus, sessionId?: string) => void
   updateTabCwd: (tabId: string, cwd: string) => void

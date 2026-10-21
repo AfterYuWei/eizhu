@@ -500,7 +500,7 @@ export function TerminalPane({ tab, isActive, isVisible = isActive }: TerminalPa
                 clearTimeout(observerTimer);
         };
     }, [fit, isVisible]);
-    useEffect(() => { if (isActive && tab.profileId && tab.sessionId)
+    useEffect(() => { if (isActive && tab.profileId && tab.sessionId && !document.activeElement?.closest('[role="tablist"]'))
         getTerminal()?.focus(); }, [isActive, getTerminal, tab.profileId, tab.sessionId]);
     useEffect(() => {
         return () => {

@@ -48,14 +48,14 @@ export function TerminalView() {
         {tabs.map((tab) => {
             const active = tab.id === activeTabId;
             if (tab.kind === 'sftp') {
-                return (<div key={tab.id} className={`absolute inset-0 ${active ? 'block' : 'hidden'}`}>
+                return (<div key={tab.id} id={`workspace-panel-${tab.id}`} role="tabpanel" aria-labelledby={`workspace-tab-${tab.id}`} className={`absolute inset-0 ${active ? 'block' : 'hidden'}`}>
                 <Suspense fallback={<div className="h-full bg-[var(--bg)]"/>}>
                   <SftpView ownerId={tab.id} initialProfileId={tab.profileId || undefined} initialPath={tab.cwd}/>
                 </Suspense>
               </div>);
             }
             if (tab.kind === 'vault') {
-                return (<div key={tab.id} className={`absolute inset-0 ${active ? 'block' : 'hidden'}`}>
+                return (<div key={tab.id} id={`workspace-panel-${tab.id}`} role="tabpanel" aria-labelledby={`workspace-tab-${tab.id}`} className={`absolute inset-0 ${active ? 'block' : 'hidden'}`}>
                 <Suspense fallback={<div className="h-full bg-[var(--bg)]"/>}>
                   <VaultView />
                 </Suspense>
@@ -66,7 +66,7 @@ export function TerminalView() {
             const style: CSSProperties = rectangle && !maximizedId
                 ? paneStyle(rectangle, Boolean(split))
                 : { inset: 0 };
-            return (<div key={tab.id} data-terminal-tab={tab.id} role="group" aria-label={`终端窗格 · ${tab.profileName}`} className={cn('term-pane', active && 'is-active', !visible && 'is-hidden')} style={style} onPointerDownCapture={() => { if (useSessionStore.getState().activeTabId !== tab.id)
+            return (<div key={tab.id} id={`workspace-panel-${tab.id}`} data-terminal-tab={tab.id} role="tabpanel" aria-labelledby={`workspace-tab-${tab.id}`} className={cn('term-pane', active && 'is-active', !visible && 'is-hidden')} style={style} onPointerDownCapture={() => { if (useSessionStore.getState().activeTabId !== tab.id)
                 useSessionStore.getState().setActiveTab(tab.id); }}>
               <div className={cn('relative min-h-0 flex-1', 'term-pane-card')}><Suspense fallback={<div className="h-full bg-[var(--term-bg)]"/>}>
                 <TerminalPane tab={tab} isActive={active && visible} isVisible={visible}/>

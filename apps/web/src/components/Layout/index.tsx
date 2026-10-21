@@ -22,10 +22,10 @@ import { useSplitSidebar } from '@/hooks/useSplitSidebar'
 import { useSidebarPreview } from '@/hooks/useSidebarPreview'
 import { useWindowControls } from '@/hooks/useWindowControls'
 import { WindowControls } from '@/components/WindowControls'
-import { ShellIconButton,ShellResizeHandle } from './ShellControls'
+import { ShellIconButton } from './ShellControls'
 import { SidebarResizeHandle } from './SidebarResizeHandle'
 import { AccountMenu } from './AccountMenu'
-import { OpenItems } from './OpenItems'
+import { WorkspaceTabs } from './WorkspaceTabs'
 import { ConnectionHome } from './ConnectionHome'
 import { ServerInspector } from './ServerInspector'
 import { WorkspaceActions } from './WorkspaceActions'
@@ -54,7 +54,7 @@ export function Layout() {
     if (sidebarHidden) setSidebarWidth(DEFAULT_DESKTOP_SIDEBAR_WIDTH)
     toggleSidebarVisibility()
   }, [sidebarHidden, setSidebarWidth, toggleSidebarVisibility])
-  const { serverRatio, serversCollapsed, openedCollapsed, toggleServers, toggleOpened, setServerRatio, inspectorWidth } = useDesktopShellStore()
+  const { serversCollapsed, toggleServers, inspectorWidth } = useDesktopShellStore()
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [tunnelsOpen, setTunnelsOpen] = useState(false)
   const [snippetsOpen, setSnippetsOpen] = useState(false)
@@ -63,12 +63,10 @@ export function Layout() {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [inspectorOpen, setInspectorOpen] = useState(false)
   const [workspaceWidth, setWorkspaceWidth] = useState(window.innerWidth)
-  const [listsHeight, setListsHeight] = useState(400)
   const workspace = useRef<HTMLDivElement>(null)
   const sessionView = useRef<HTMLDivElement>(null)
   const settingsReturnFocus = useRef<HTMLElement | null>(null)
   const wasSettingsOpen = useRef(false)
-  const lists = useRef<HTMLDivElement>(null)
   const knownTabs = useRef(new Set<string>())
   const focusAfterResizeCollapse = useRef(false)
   const sidebar = useRef<HTMLElement>(null)
@@ -81,11 +79,6 @@ export function Layout() {
   const { fetchProfiles, fetchGroups } = useProfileStore()
   const activeTab = tabs.find((tab) => tab.id === activeTabId)
   const terminal = activeTab?.kind === 'terminal' && Boolean(activeTab.profileId)
-  const pageName = activeTab?.kind === 'vault' ? '密钥管理' : activeTab?.kind === 'sftp' ? 'SFTP 文件' : activeTab?.profileName
-  const status = !terminal ? '' : activeTab.status === 'connected'
-    ? activeTab.latency != null ? `${activeTab.latency}ms` : '已连接'
-    : activeTab.status === 'connecting' ? '连接中…'
-    : activeTab.status === 'reconnecting' ? `重连中${activeTab.reconnectAttempt ? ` (${activeTab.reconnectAttempt})` : ''}` : '已断开'
 
   const openSettings = useCallback((tab: SettingsTab) => {
     const focused = document.activeElement
@@ -116,12 +109,10 @@ export function Layout() {
   useEffect(() => {
     const measure = () => {
       if (workspace.current) setWorkspaceWidth(workspace.current.clientWidth)
-      if (lists.current) setListsHeight(lists.current.clientHeight)
     }
     measure()
     const observer = new ResizeObserver(measure)
     if (workspace.current) observer.observe(workspace.current)
-    if (lists.current) observer.observe(lists.current)
     return () => observer.disconnect()
   }, [])
   useEffect(() => {
@@ -171,12 +162,10 @@ export function Layout() {
           <Button variant="ghost" className={activeTab?.kind === 'vault' ? 'is-active' : ''} onClick={() => openVaultTab()}><KeyRound size={16} /><span>密钥管理</span></Button>
           <Button variant="ghost" onClick={() => runDesktopAction('snippets')}><SquareTerminal size={16} /><span>命令片段</span></Button>
         </nav>
-        <div className="shell-lists" ref={lists}>
-          <section className="shell-servers" aria-label="服务器分组" style={{ flex: serversCollapsed ? '0 0 auto' : `${openedCollapsed ? 1 : serverRatio} 1 0` }}>
+        <div className="shell-lists">
+          <section className="shell-servers" aria-label="服务器分组" style={{ flex: serversCollapsed ? '0 0 auto' : '1 1 0' }}>
             <Sidebar visible={sidebarInteractive && !settingsOpen} collapsed={serversCollapsed} onToggle={toggleServers} onAddServer={() => setProfileFormOpen(true)} />
           </section>
-          {!serversCollapsed && !openedCollapsed && <ShellResizeHandle label="调整服务器和已打开区域比例" orientation="horizontal" value={serverRatio} min={0.2} max={0.8} step={0.05} pixelsPerUnit={listsHeight} onChange={setServerRatio} />}
-          <div className="shell-open-section" style={{ flex: openedCollapsed ? '0 0 auto' : `${serversCollapsed ? 1 : 1 - serverRatio} 1 0` }}><OpenItems collapsed={openedCollapsed} onToggle={toggleOpened} /></div>
         </div>
         <div className="shell-sidebar-footer"><AccountMenu onSettings={openSettings} /></div>
       </aside>
@@ -190,10 +179,7 @@ export function Layout() {
       <main className="shell-workspace">
         <header className="shell-workspace-header" data-eizhu-drag-region={desktop || undefined}>
           {sidebarHidden && <div className="shell-top-controls-slot" aria-hidden="true" />}
-          <div className="shell-page-heading" data-eizhu-drag-region={desktop || undefined}>
-            {pageName && <span className="shell-page-name" title={pageName}>{pageName}</span>}
-            {terminal && <span className="shell-page-status" role="status" title={activeTab?.errorMessage || status}><span className={`shell-connection-dot is-${activeTab?.status}`} />{status}</span>}
-          </div>
+          <WorkspaceTabs />
           <div className="shell-workspace-actions" data-eizhu-drag-region={desktop || undefined}>
             <TerminalSplitMenu iconOnly />
             {terminal && <ShellIconButton label="服务器详情" aria-pressed={inspectorOpen} onClick={() => setInspectorOpen((v) => !v)}><PanelRight size={16} /></ShellIconButton>}

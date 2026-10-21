@@ -80,8 +80,8 @@
 .shell-primary-nav > button > span { overflow: hidden; text-overflow: ellipsis; }
 .shell-primary-nav kbd { margin-left: auto; font: 400 11px var(--sans); color: var(--fg-4); }
 .shell-lists { width: 100%; min-height: 0; flex: 1; display: flex; flex-direction: column; padding: 0 var(--shell-sidebar-inset); }
-.shell-servers, .shell-open-section { display: flex; min-height: 34px; overflow: hidden; }
-.shell-server-list, .shell-open-items { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; }
+.shell-servers { display: flex; min-height: 34px; overflow: hidden; }
+.shell-server-list { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; }
 .shell-section-heading { display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; gap: 4px; min-height: 34px; }
 .shell-section-toggle { min-width: 0; justify-content: flex-start; height: auto; min-height: 32px; gap: 5px; padding: 4px; font: 400 var(--sans-size) / 1.5 var(--sans); color: var(--fg-3); }
 .shell-section-toggle:hover { background: transparent; color: var(--fg); }
@@ -105,19 +105,8 @@
 .desktop-shell .srv-edit-btn { width: 22px; height: 22px; padding: 0; opacity: 0; }
 .desktop-shell .srv:hover .srv-edit-btn, .desktop-shell .srv:focus-within .srv-edit-btn { opacity: 1; }
 .desktop-shell .sidebar-empty { font-size: var(--sans-size); padding: 20px 8px; color: var(--fg-3); }
-.shell-open-list { min-height: 0; overflow: auto; flex: 1; padding: 2px 0 8px; }
-.desktop-shell :is(.shell-sidebar .sidebar-body, .shell-sidebar .shell-open-list, .settings-page .settings-nav) { scrollbar-width: none; }
-.desktop-shell :is(.shell-sidebar .sidebar-body, .shell-sidebar .shell-open-list, .settings-page .settings-nav)::-webkit-scrollbar { display: none; width: 0; height: 0; }
-.shell-open-item { display: flex; align-items: center; min-height: 32px; border-radius: var(--r-sm); }
-.shell-open-item:hover { background: var(--shell-hover); }
-.shell-open-item.is-active { background: var(--shell-selected); }
-.shell-open-select { flex: 1; min-width: 0; height: auto; min-height: 32px; justify-content: flex-start; padding: 5px 8px; gap: 8px; font: inherit; color: var(--fg-3); }
-.shell-open-select:hover { background: transparent; }
-.shell-open-item.is-active .shell-open-select { color: var(--fg-2); }
-.shell-open-name { min-width: 0; flex: 1; text-align: left; overflow: hidden; text-overflow: ellipsis; }
-.shell-open-close { width: 24px; height: 24px; margin-right: 3px; opacity: 0; }
-.shell-open-item:hover .shell-open-close, .shell-open-item:focus-within .shell-open-close { opacity: 1; }
-.shell-list-empty { padding: 16px 10px; color: var(--fg-3); font-size: var(--sans-size); text-align: center; }
+.desktop-shell :is(.shell-sidebar .sidebar-body, .settings-page .settings-nav) { scrollbar-width: none; }
+.desktop-shell :is(.shell-sidebar .sidebar-body, .settings-page .settings-nav)::-webkit-scrollbar { display: none; width: 0; height: 0; }
 .shell-connection-dot { display: inline-block; flex-shrink: 0; width: 6px; height: 6px; border-radius: 50%; background: var(--fg-5); }
 .shell-connection-dot.is-connected { background: var(--green); }
 .shell-connection-dot.is-connecting, .shell-connection-dot.is-reconnecting { background: var(--yellow); }
@@ -151,11 +140,23 @@
   pointer-events: none;
 }
 .desktop-shell.sidebar-is-hidden .shell-workspace { margin-left: var(--shell-outer-gap); }
-.shell-workspace-header { display: flex; align-items: center; flex-shrink: 0; gap: 12px; height: var(--shell-header-height); min-height: var(--shell-header-height); padding: 0 var(--shell-header-right-pad) 0 16px; background: var(--surface-workspace); user-select: none; }
+.shell-workspace-header { display: flex; align-items: center; flex-shrink: 0; gap: 12px; height: var(--shell-header-height); min-height: max(var(--shell-header-height), calc(var(--sans-size) * 1.5 + 14px)); padding: 0 var(--shell-header-right-pad) 0 16px; background: var(--surface-workspace); user-select: none; }
 .desktop-shell.is-mac.sidebar-is-hidden .shell-workspace-header { padding-left: calc(var(--shell-mac-controls-space) - var(--shell-outer-gap)); }
-.shell-page-heading { display: flex; flex: 1; align-items: center; gap: 12px; min-width: 0; align-self: stretch; overflow: hidden; }
-.shell-page-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
-.shell-page-status { display: flex; flex-shrink: 0; align-items: center; gap: 6px; white-space: nowrap; color: var(--fg-3); font-size: 11px; }
+.desktop-shell .shell-workspace-tabs { display: flex; flex: 1; align-items: center; gap: 4px; min-width: 0; align-self: stretch; container-type: inline-size; }
+.desktop-shell .shell-tab-scroll { flex: 0 1 auto; min-width: 0; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; overscroll-behavior-x: contain; -webkit-app-region: no-drag; }
+.desktop-shell .shell-tab-scroll::-webkit-scrollbar { display: none; }
+.desktop-shell .shell-tab-list { display: flex; align-items: center; gap: 4px; width: max-content; padding: 3px; }
+.desktop-shell .shell-tab { display: flex; align-items: center; flex: 0 0 auto; max-width: min(max(280px, calc(var(--sans-size) * 22)), calc(100cqi - 42px)); border: 1px solid transparent; border-radius: var(--r-sm); color: var(--fg-3); }
+.desktop-shell .shell-tab:hover { background: var(--shell-hover); }
+.desktop-shell .shell-tab.is-active { background: var(--shell-selected); border-color: var(--edge-soft); color: var(--fg); }
+.desktop-shell .shell-tab-select { flex: 1; flex-shrink: 1; min-width: 0; min-height: 32px; height: auto; gap: 8px; padding: 3px 4px 3px 8px; justify-content: flex-start; font: inherit; color: inherit; background: transparent; }
+.desktop-shell .shell-tab-select:hover { background: transparent; color: inherit; }
+.desktop-shell .shell-tab-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.desktop-shell .shell-tab-status { display: inline-flex; align-items: center; flex-shrink: 0; gap: 5px; font-size: max(11px, calc(var(--sans-size) - 2px)); color: var(--fg-3); white-space: nowrap; }
+.desktop-shell .shell-tab-status > span:last-child { display: inline-block; min-width: 7ch; text-align: right; font-variant-numeric: tabular-nums; }
+.desktop-shell .shell-tab-close { flex-shrink: 0; width: 24px; height: 24px; margin-right: 3px; opacity: 0; pointer-events: none; }
+.desktop-shell .shell-tab:is(.is-active, :hover, :focus-within) .shell-tab-close { opacity: 1; pointer-events: auto; }
+.desktop-shell .shell-tab-add { flex-shrink: 0; -webkit-app-region: no-drag; }
 /* Window buttons belong to the window corner, outside the rounded workspace's
    clipping. macOS native controls keep their existing shared top-band layout. */
 .desktop-shell > .shell-window-controls { position: absolute; top: 0; right: 0; z-index: 40; width: var(--shell-window-controls-width); height: var(--shell-top-height); margin: 0; }
@@ -204,7 +205,6 @@
   .shell-home { padding: 32px 24px; }
   .shell-home-shortcuts { gap: 6px; }
   .shell-primary-nav kbd { display: none; }
-  .shell-page-heading { gap: 6px; }
   .shell-workspace-header { gap: 6px; padding-left: 10px; }
 }
 @media (max-height: 640px) {

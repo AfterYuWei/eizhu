@@ -1,4 +1,5 @@
-import { beforeEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { local } from '@eizhu/contracts'
 import { useTerminalLayoutStore, resetTerminalLayout, restoreTerminalLayout } from './terminalLayout'
 import { leaves, geometry, parseSplitTree, type SplitTree } from '@/lib/terminalLayout'
 import { useSessionStore } from './session'
@@ -14,6 +15,7 @@ beforeEach(() => {
   useSessionStore.setState(useSessionStore.getInitialState(), true)
   useProfileStore.setState(useProfileStore.getInitialState(), true)
 })
+afterEach(() => { resetTerminalLayout(); vi.useRealTimers() })
 it('四窗格上限、比例、焦点与合并保持连接，关闭仅关闭所属会话', () => {
   useSessionStore.setState({ tabs: [{ id: 'a', profileId: 'p', profileName: 'p', kind: 'terminal', status: 'connected', sessionId: 'ssh-one' }], activeTabId: 'a' })
   for (const axis of ['horizontal', 'vertical', 'horizontal'] as const) useTerminalLayoutStore.getState().split(axis)
@@ -55,4 +57,24 @@ it('拒绝重复叶、非法比例与深层损坏布局', () => {
   const tree = { type: 'split', id: 's', axis: 'vertical', ratio: 0.5, first: leaf, second: leaf }
   expect(leaves(parseSplitTree(tree, new Set(['a'])))).toEqual(['a'])
   expect(parseSplitTree({ ...tree, ratio: Number.NaN }, new Set(['a']))).toBeNull()
+})
+
+it('新建与分屏草稿保持在窗口中，恢复快照仅保存有效服务器引用并通过生产契约', async () => {
+  vi.useFakeTimers()
+  vi.mocked(localStateApi.write).mockResolvedValue(undefined)
+  useSessionStore.setState({ tabs: [{ id: 'a', profileId: 'p', profileName: '服务器', kind: 'terminal', status: 'connected', sessionId: 'ssh' }], activeTabId: 'a' })
+  useTerminalLayoutStore.setState({ ready: true })
+  useTerminalLayoutStore.getState().split('horizontal')
+  await vi.advanceTimersByTimeAsync(300)
+  let snapshot = vi.mocked(localStateApi.write).mock.calls.at(-1)![1]
+  expect(snapshot).toMatchObject({ tree: { type: 'leaf', tabId: 'a' }, focusedId: 'a', tabs: [{ id: 'a', profileId: 'p' }] })
+  expect(local['localState.write'].input.safeParse({ key: 'terminal_layout', value: snapshot }).success).toBe(true)
+  expect(useSessionStore.getState().tabs).toHaveLength(2)
+  expect(leaves(useTerminalLayoutStore.getState().tree)).toHaveLength(2)
+  await useSessionStore.getState().closeTab('a')
+  await vi.advanceTimersByTimeAsync(300)
+  snapshot = vi.mocked(localStateApi.write).mock.calls.at(-1)![1]
+  expect(snapshot).toEqual({ version: 1, tree: null, focusedId: null, tabs: [] })
+  expect(local['localState.write'].input.safeParse({ key: 'terminal_layout', value: snapshot }).success).toBe(true)
+  expect(useSessionStore.getState().tabs).toHaveLength(1)
 })

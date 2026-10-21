@@ -3,7 +3,7 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { Sidebar } from '@/components/Sidebar'
-import { OpenItems } from './OpenItems'
+import { WorkspaceTabs } from './WorkspaceTabs'
 import { ServerInspector } from './ServerInspector'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useProfileStore } from '@/store/profile'
@@ -19,12 +19,13 @@ let host: HTMLDivElement
 let root: Root
 beforeEach(() => {
   ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+  vi.stubGlobal('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} })
   useSessionStore.setState(useSessionStore.getInitialState(), true)
   useProfileStore.setState({ profiles: [profile], groups: [{ id: 'parent', name: '父分组', icon: '', sort_order: 0, created_at: '' }, { id: 'child', name: '子分组', parent_id: 'parent', icon: '', sort_order: 1, created_at: '' }] })
   useDesktopShellStore.setState({ collapsedGroups: {} })
   host = document.createElement('div'); document.body.append(host); root = createRoot(host)
 })
-afterEach(async () => { await act(async () => root.unmount()); host.remove(); vi.restoreAllMocks() })
+afterEach(async () => { await act(async () => root.unmount()); host.remove(); vi.restoreAllMocks(); vi.unstubAllGlobals() })
 
 it('分组可折叠，服务器单击不连接，双击复用当前连接草稿', async () => {
   const open = vi.fn()
@@ -49,10 +50,10 @@ it('全部打开项可以区分同名会话、切换 SFTP 并关闭密钥页', a
     { id: 'sftp', kind: 'sftp', profileId: 'p', profileName: 'SFTP', status: 'disconnected', sessionId: null },
     { id: 'vault', kind: 'vault', profileId: '', profileName: 'Vaults', status: 'connected', sessionId: null },
   ], activeTabId: 'a' })
-  await act(async () => root.render(<TooltipProvider><OpenItems collapsed={false} onToggle={() => {}} /></TooltipProvider>))
+  await act(async () => root.render(<TooltipProvider><WorkspaceTabs /></TooltipProvider>))
   expect(host.textContent).toContain('生产环境 (1)')
   expect(host.textContent).toContain('生产环境 (2)')
-  const sftp = [...host.querySelectorAll<HTMLButtonElement>('[data-open-item]')].find((b) => b.textContent?.includes('SFTP'))!
+  const sftp = [...host.querySelectorAll<HTMLButtonElement>('[role="tab"]')].find((b) => b.textContent?.includes('SFTP'))!
   await act(async () => sftp.click())
   expect(useSessionStore.getState().activeTabId).toBe('sftp')
   await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="关闭 密钥管理"]')!.click())

@@ -11,7 +11,7 @@ export function ConnectionPicker({ tabId, isActive = true, inputRef }: { tabId: 
   const [query, setQuery] = useState('')
   const localInput = useRef<HTMLInputElement>(null)
   const input = inputRef ?? localInput
-  useEffect(() => { if (isActive) input.current?.focus() }, [isActive, input])
+  useEffect(() => { if (isActive && !document.activeElement?.closest('[role="tablist"]')) input.current?.focus() }, [isActive, input])
   const matches = profiles.filter((p) => `${p.name} ${p.host} ${p.username}`.toLowerCase().includes(query.trim().toLowerCase()))
 
   return (

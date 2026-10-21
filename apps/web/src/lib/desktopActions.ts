@@ -66,7 +66,7 @@ export async function executeDesktopAction(id: DesktopActionId, tabId?: string):
     else if (id === 'maximize-pane') useTerminalLayoutStore.getState().maximize()
     else if (id === 'merge-panes') useTerminalLayoutStore.getState().merge()
     else if (id === 'new') useSessionStore.getState().openDraftTab()
-    else if (id === 'close') { const active = tabId ?? useSessionStore.getState().activeTabId; if (active) useSessionStore.getState().closeTab(active) }
+    else if (id === 'close') { const active = tabId ?? useSessionStore.getState().activeTabId; if (active) await useSessionStore.getState().closeTab(active) }
     else if (id === 'sftp') { const tab = activeTerminal(); useSessionStore.getState().openSftpTab(tab?.profileId, tab?.cwd) }
     else {
       const tab = activeTerminal()

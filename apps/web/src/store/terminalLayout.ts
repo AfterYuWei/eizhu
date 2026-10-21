@@ -77,10 +77,14 @@ function scheduleSave() {
         if (generation !== workspaceGeneration())
             return;
         const { tree, focusedId } = useTerminalLayoutStore.getState();
-        const sessions = useSessionStore.getState().tabs.filter((tab) => tab.kind === 'terminal');
+        // Drafts have no restorable server reference and cannot pass the saved-layout schema.
+        const sessions = useSessionStore.getState().tabs.filter((tab) => tab.kind === 'terminal' && tab.profileId);
         const visible = new Set(leaves(tree));
         const tabs = [...sessions.filter((tab) => visible.has(tab.id)), ...sessions.filter((tab) => !visible.has(tab.id))].slice(0, 128).map(({ id, profileId }) => ({ id, profileId }));
-        const snapshot = { version: 1, tree, focusedId, tabs };
+        const savedIds = new Set(tabs.map((tab) => tab.id));
+        const savedTree = pruneTree(tree, savedIds);
+        const savedFocus = focusedId && savedIds.has(focusedId) ? focusedId : leaves(savedTree)[0] ?? tabs[0]?.id ?? null;
+        const snapshot = { version: 1, tree: savedTree, focusedId: savedFocus, tabs };
         const serialized = JSON.stringify(snapshot);
         if (serialized === savedSnapshot)
             return;

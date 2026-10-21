@@ -2,6 +2,7 @@ import { verifyStage3 } from './stage3-smoke.ts'
 import { verifyStage5 } from './stage5-smoke.ts'
 import { verifyStage6 } from './stage6-smoke.ts'
 import { verifyStage4 } from './stage4-smoke.ts'
+import { verifyWorkspaceTabs } from './workspace-tabs-smoke.ts'
 import { app, BrowserWindow as TestWindow, screen } from 'electron'
 import type { BrowserWindow } from 'electron'
 import { join } from 'node:path'
@@ -88,6 +89,8 @@ export async function runSmoke(options: {
   step('foundation-bridge-passed')
   const stage6 = await verifyStage6(window, root)
   step('stage6-updater-passed')
+  const workspaceTabs = await verifyWorkspaceTabs(window, root)
+  step('workspace-tabs-passed')
   const localBridge = await window.webContents.executeJavaScript(`(async () => {
     const api=window.eizhu;
     const group=await api.group.create({request:{name:'阶段 2 合成分组'}});
@@ -249,6 +252,7 @@ export async function runSmoke(options: {
     stage4,
     stage5,
     stage6,
+    workspaceTabs,
     localBridge,
     editor: true,
     editorGeometry,
@@ -262,7 +266,7 @@ export async function runSmoke(options: {
     monaco,
     firstWindowMs,
     processMetrics: app.getAppMetrics().map(({ type, memory, cpu }) => ({ type, memory, cpu })),
-    screenshots: ['home-light.png', 'home-dark.png', 'editor-empty.png'],
+    screenshots: ['home-light.png', 'home-dark.png', 'editor-empty.png', ...workspaceTabs.screenshots],
     screenshotContrast,
   }
   await writeFile(join(root, 'smoke.json'), JSON.stringify(report, null, 2))
