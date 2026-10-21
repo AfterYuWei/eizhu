@@ -4,6 +4,7 @@ import { TunnelDialog,TunnelPrompts } from '@/components/Terminal/TunnelDialog'
 import type { SettingsTab } from '@/components/SettingsDialog'
 import { workspaceGeneration } from '@/lib/workspaceScope'
 import { registerDesktopAction,runDesktopAction,shortcutAction } from '@/lib/desktopActions'
+import { getTerminalTheme,resolveTerminalThemeId } from '@/lib/terminalThemes'
 import { DEFAULT_DESKTOP_SIDEBAR_WIDTH,MIN_DESKTOP_SIDEBAR_WIDTH,MAX_DESKTOP_SIDEBAR_WIDTH,DESKTOP_SIDEBAR_INSET } from '@/lib/desktopSidebar'
 import { Sidebar } from '@/components/Sidebar'
 import { TerminalSplitMenu } from '@/components/Terminal/SplitControls'
@@ -36,7 +37,7 @@ const SnippetDialog = lazy(() => import('@/components/Snippets/SnippetDialog').t
 export function Layout() {
   const { tabs, activeTabId } = useSessionStore()
   const { activePage, openSftp, openVault } = useWorkspaceViewStore()
-  const { sidebarWidth, setSidebarWidth } = useSettingsStore()
+  const { sidebarWidth, setSidebarWidth, terminalTheme } = useSettingsStore()
   const theme = useResolvedTheme()
   const splitActive = useTerminalLayoutStore((s) => s.tree?.type === 'split')
   const { collapsed: sidebarHidden, toggle: toggleSidebarVisibility, collapse: collapseSidebar, expand: expandSidebar } = useSplitSidebar(splitActive)
@@ -80,6 +81,7 @@ export function Layout() {
   const { fetchProfiles, fetchGroups } = useProfileStore()
   const activeTab = tabs.find((tab) => tab.id === activeTabId)
   const terminal = activePage === 'terminal' && Boolean(activeTab?.profileId)
+  const terminalPalette = getTerminalTheme(resolveTerminalThemeId(terminalTheme, theme))
 
   const openSettings = useCallback((tab: SettingsTab) => {
     const focused = document.activeElement
@@ -178,7 +180,8 @@ export function Layout() {
       }} />
       {sidebarHidden && <div className="shell-fixed-top-controls">{topControls}</div>}
       <main className="shell-workspace">
-        <header className="shell-workspace-header" data-eizhu-drag-region={desktop || undefined}>
+        <header className="shell-workspace-header" data-eizhu-drag-region={desktop || undefined}
+          style={terminal ? { '--shell-header-bg': terminalPalette.background, '--shell-header-fg': terminalPalette.foreground } as CSSProperties : undefined}>
           {sidebarHidden && <div className="shell-top-controls-slot" aria-hidden="true" />}
           <WorkspaceTabs />
           <div className="shell-workspace-actions" data-eizhu-drag-region={desktop || undefined}>

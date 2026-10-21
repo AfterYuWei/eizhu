@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef } from 'react'
-import { Plus, SquareTerminal, X } from 'lucide-react'
+import { CircleAlert, LoaderCircle, Plus, SquareTerminal, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useSessionStore, type SessionTab } from '@/store/session'
@@ -19,6 +19,14 @@ function connectionStatus(tab: SessionTab): string {
     case 'error': return '连接失败'
     case 'disconnected': return '已断开'
   }
+}
+
+function ConnectionIndicator({ tab }: { tab: SessionTab }) {
+  if (tab.status === 'error') return <CircleAlert className="shell-connection-error" size={13} />
+  if (tab.status === 'connecting' || tab.status === 'reconnecting') return <LoaderCircle className="shell-connection-pending animate-spin" size={12} />
+  const latency = tab.status === 'connected' && tab.latency != null && Number.isFinite(tab.latency) && tab.latency >= 0 ? tab.latency : null
+  const quality = latency === null ? null : latency <= 100 ? 'good' : latency <= 300 ? 'fair' : 'slow'
+  return <span className={cn('shell-connection-dot', quality && `is-${quality}`)} />
 }
 
 export function WorkspaceTabs() {
@@ -89,7 +97,7 @@ export function WorkspaceTabs() {
                   }}>
                   <Icon size={16} aria-hidden="true" />
                   <span className="shell-tab-name">{label}</span>
-                  {status && <span className="shell-tab-status"><span className={`shell-connection-dot is-${tab.status}`} aria-hidden="true" /><span>{status}</span></span>}
+                  {status && <span className="shell-tab-status" aria-hidden="true"><ConnectionIndicator tab={tab} /></span>}
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="bottom" sideOffset={8}>{description}</TooltipContent>

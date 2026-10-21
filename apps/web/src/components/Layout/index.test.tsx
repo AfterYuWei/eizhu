@@ -5,7 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
 const { windowControls, settings } = vi.hoisted(() => ({
   windowControls: { desktop: false, mac: false, showControls: false, maximized: false, minimize: vi.fn(), toggleMaximize: vi.fn(), close: vi.fn() },
-  settings: { sidebarWidth: 300, setSidebarWidth: vi.fn(), theme: 'light', systemRevision: 0 },
+  settings: { sidebarWidth: 300, setSidebarWidth: vi.fn(), theme: 'light', terminalTheme: 'default', systemRevision: 0 },
 }))
 
 vi.mock('@/components/Sidebar', () => ({ Sidebar: ({ visible }: { visible: boolean }) => <div data-sidebar-visible={String(visible)} /> }))

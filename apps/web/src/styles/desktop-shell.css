@@ -111,6 +111,11 @@
 .shell-connection-dot.is-connected { background: var(--green); }
 .shell-connection-dot.is-connecting, .shell-connection-dot.is-reconnecting { background: var(--yellow); }
 .shell-connection-dot.is-error { background: var(--red); }
+.desktop-shell .shell-tab-status .shell-connection-dot.is-good { background: var(--green); }
+.desktop-shell .shell-tab-status .shell-connection-dot.is-fair { background: var(--yellow); }
+.desktop-shell .shell-tab-status .shell-connection-dot.is-slow { background: var(--red); }
+.desktop-shell .shell-connection-error { color: var(--red); }
+.desktop-shell .shell-connection-pending { color: var(--yellow); }
 .shell-sidebar-footer { flex-shrink: 0; padding: 12px var(--shell-sidebar-inset); }
 .shell-account { display: flex; justify-content: flex-start; width: 100%; height: 40px; gap: 8px; padding: 4px 8px; font-size: inherit; font-weight: 400; }
 .shell-account:hover { background: var(--shell-hover); }
@@ -140,22 +145,25 @@
   pointer-events: none;
 }
 .desktop-shell.sidebar-is-hidden .shell-workspace { margin-left: var(--shell-outer-gap); }
-.shell-workspace-header { display: flex; align-items: center; flex-shrink: 0; gap: 12px; height: var(--shell-header-height); min-height: max(var(--shell-header-height), calc(var(--sans-size) * 1.5 + 14px)); padding: 0 var(--shell-header-right-pad) 0 16px; background: var(--surface-workspace); user-select: none; }
+.desktop-shell .shell-workspace-header { --shell-hover: color-mix(in srgb, var(--shell-header-fg, var(--fg)) 6%, var(--shell-header-bg, var(--surface-workspace))); --shell-selected: color-mix(in srgb, var(--shell-header-fg, var(--fg)) 10%, var(--shell-header-bg, var(--surface-workspace))); display: flex; align-items: center; flex-shrink: 0; gap: 12px; height: var(--shell-header-height); min-height: max(var(--shell-header-height), calc(var(--sans-size) * 1.5 + 14px)); padding: 0 var(--shell-header-right-pad) 0 16px; background: var(--shell-header-bg, var(--surface-workspace)); user-select: none; }
+.desktop-shell .shell-workspace-header .shell-icon-button { color: var(--shell-header-fg, var(--fg-3)); }
+.desktop-shell .shell-workspace-header .shell-icon-button:hover { color: var(--shell-header-fg, var(--fg)); }
 .desktop-shell.is-mac.sidebar-is-hidden .shell-workspace-header { padding-left: calc(var(--shell-mac-controls-space) - var(--shell-outer-gap)); }
 .desktop-shell .shell-workspace-tabs { display: flex; flex: 1; align-items: center; gap: 4px; min-width: 0; align-self: stretch; container-type: inline-size; }
 .desktop-shell .shell-tab-scroll { flex: 0 1 auto; min-width: 0; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; overscroll-behavior-x: contain; -webkit-app-region: no-drag; }
 .desktop-shell .shell-tab-scroll::-webkit-scrollbar { display: none; }
 .desktop-shell .shell-tab-list { display: flex; align-items: center; gap: 4px; width: max-content; padding: 3px; }
-.desktop-shell .shell-tab { display: flex; align-items: center; flex: 0 0 auto; max-width: min(max(280px, calc(var(--sans-size) * 22)), calc(100cqi - 42px)); border: 1px solid transparent; border-radius: var(--r-sm); color: var(--fg-3); }
+.desktop-shell .shell-tab { display: flex; align-items: center; flex: 0 0 auto; max-width: min(max(280px, calc(var(--sans-size) * 22)), calc(100cqi - 42px)); border: 1px solid transparent; border-radius: var(--r-sm); color: var(--shell-header-fg, var(--fg-3)); }
 .desktop-shell .shell-tab:hover { background: var(--shell-hover); }
-.desktop-shell .shell-tab.is-active { background: var(--shell-selected); border-color: var(--edge-soft); color: var(--fg); }
+.desktop-shell .shell-tab.is-active { background: var(--shell-selected); border-color: color-mix(in srgb, var(--shell-header-fg, var(--fg)) 10%, transparent); color: var(--shell-header-fg, var(--fg)); }
 .desktop-shell .shell-tab-select { flex: 1; flex-shrink: 1; min-width: 0; min-height: 32px; height: auto; gap: 8px; padding: 3px 4px 3px 8px; justify-content: flex-start; font: inherit; color: inherit; background: transparent; }
 .desktop-shell .shell-tab-select:hover { background: transparent; color: inherit; }
 .desktop-shell .shell-tab-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.desktop-shell .shell-tab-status { display: inline-flex; align-items: center; flex-shrink: 0; gap: 5px; font-size: max(11px, calc(var(--sans-size) - 2px)); color: var(--fg-3); white-space: nowrap; }
-.desktop-shell .shell-tab-status > span:last-child { display: inline-block; min-width: 7ch; text-align: right; font-variant-numeric: tabular-nums; }
-.desktop-shell .shell-tab-close { flex-shrink: 0; width: 24px; height: 24px; margin-right: 3px; opacity: 0; pointer-events: none; }
-.desktop-shell .shell-tab:is(.is-active, :hover, :focus-within) .shell-tab-close { opacity: 1; pointer-events: auto; }
+.desktop-shell .shell-tab-status { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; width: 13px; height: 16px; }
+.desktop-shell .shell-tab-close { flex-shrink: 0; width: 24px; height: 24px; margin-right: 3px; color: inherit; opacity: 0; pointer-events: none; }
+.desktop-shell .shell-tab.is-active .shell-tab-close { opacity: 0.5; pointer-events: auto; }
+.desktop-shell .shell-tab:is(:hover, :focus-within) .shell-tab-close { opacity: 1; pointer-events: auto; }
+.desktop-shell .shell-tab.is-active .shell-tab-close:hover { background: color-mix(in srgb, currentColor 8%, transparent); color: inherit; }
 .desktop-shell .shell-tab-add { flex-shrink: 0; -webkit-app-region: no-drag; }
 /* Window buttons belong to the window corner, outside the rounded workspace's
    clipping. macOS native controls keep their existing shared top-band layout. */
@@ -206,7 +214,7 @@
   .shell-home { padding: 32px 24px; }
   .shell-home-shortcuts { gap: 6px; }
   .shell-primary-nav kbd { display: none; }
-  .shell-workspace-header { gap: 6px; padding-left: 10px; }
+  .desktop-shell .shell-workspace-header { gap: 6px; padding-left: 10px; }
 }
 @media (max-height: 640px) {
   .shell-home { align-items: flex-start; }

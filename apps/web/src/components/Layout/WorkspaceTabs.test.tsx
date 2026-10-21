@@ -50,7 +50,7 @@ const render = async (tabs: SessionTab[], activeTabId = tabs[0]?.id ?? null) => 
 const buttons = () => [...host.querySelectorAll<HTMLButtonElement>('[role="tab"]')]
 const key = async (button: HTMLElement, value: string) => act(async () => button.dispatchEvent(new KeyboardEvent('keydown', { key: value, bubbles: true, cancelable: true })))
 
-it('每个 SSH 标签独立显示延迟，生命周期状态优先于旧测量值，草稿不显示连接信息', async () => {
+it('SSH 标签仅显示延迟色点或状态图标，完整状态保留在无障碍名称中，草稿不显示连接信息', async () => {
   await render([
     terminal('a', { latency: 32 }), terminal('b', { latency: 0 }), terminal('c'),
     terminal('d', { status: 'connecting', latency: 88 }),
@@ -58,15 +58,27 @@ it('每个 SSH 标签独立显示延迟，生命周期状态优先于旧测量�
     terminal('f', { status: 'disconnected', latency: 88 }),
     terminal('g', { status: 'error', latency: 88, errorMessage: '认证失败' }),
     terminal('draft', { profileId: '', profileName: '新连接', status: 'disconnected' }),
+    terminal('h', { latency: 100 }), terminal('i', { latency: 101 }),
+    terminal('j', { latency: 300 }), terminal('k', { latency: 301 }),
   ])
-  expect(buttons().map((button) => button.querySelector('.shell-tab-status')?.textContent ?? '')).toEqual([
-    '32 ms', '0 ms', '已连接', '连接中…', '重连中 (2)', '已断开', '连接失败', '',
+  expect(buttons().map((button) => button.querySelector('.shell-tab-status')?.firstElementChild?.getAttribute('class') ?? '')).toEqual([
+    'shell-connection-dot is-good', 'shell-connection-dot is-good', 'shell-connection-dot',
+    expect.stringContaining('shell-connection-pending'), expect.stringContaining('shell-connection-pending'),
+    'shell-connection-dot', expect.stringContaining('shell-connection-error'), '',
+    'shell-connection-dot is-good', 'shell-connection-dot is-fair',
+    'shell-connection-dot is-fair', 'shell-connection-dot is-slow',
+  ])
+  expect(buttons().every((button) => !button.querySelector('.shell-tab-status')?.textContent)).toBe(true)
+  expect(buttons().slice(0, 8).map((button) => button.getAttribute('aria-label'))).toEqual([
+    'Aliyun (1) · 32 ms', 'Aliyun (2) · 0 ms', 'Aliyun (3) · 已连接',
+    'Aliyun (4) · 连接中…', 'Aliyun (5) · 重连中 (2)', 'Aliyun (6) · 已断开', 'Aliyun (7) · 连接失败', '新连接',
   ])
   const first = buttons()[0]
   await act(async () => useSessionStore.getState().updateTabLatency('a', 123))
   expect(buttons()[0]).toBe(first)
-  expect(buttons()[0].textContent).toContain('123 ms')
-  expect(buttons()[1].textContent).toContain('0 ms')
+  expect(buttons()[0].querySelector('.shell-connection-dot')?.classList.contains('is-fair')).toBe(true)
+  expect(buttons()[0].getAttribute('aria-label')).toContain('123 ms')
+  expect(buttons()[1].getAttribute('aria-label')).toContain('0 ms')
   expect(scrollIntoView).toHaveBeenCalledTimes(1)
 })
 
