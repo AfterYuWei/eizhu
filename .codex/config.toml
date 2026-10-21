@@ -1,0 +1,13 @@
+[agents]
+enabled = true
+
+# 默认所有子代理使用 Luna
+default_subagent_model = "gpt-6-luna"
+default_subagent_reasoning_effort = "high"
+
+# 最多同时运行 3 个子代理
+max_concurrent_threads_per_session = 3
+
+[agents.tester]
+description = "测试代码、分析异常，不修改源代码"
+config_file = "agents/tester.toml"
