@@ -64,6 +64,10 @@ parentPort!.on('message', async (message) => {
         const d = input as { credential: StoredVault['credential']; type: StoredVault['type'] }
         return prepareCredential(d.credential, d.type)
       }
+      if (operation === 'archive.decode') {
+        const d = input as {bytes: Uint8Array;password?: string}
+        try { return await decodeBackup(d.bytes,d.password) } finally { d.bytes.fill(0) }
+      }
       if (operation === 'backup.decode') {
         const d = input as { path: string; password?: string; identity?: FileIdentity }
         const bytes = await readBounded(d.path, undefined, d.identity)

@@ -12,6 +12,8 @@ export * from './events.ts'
 export * from './local.ts'
 export * from './ssh.ts'
 export * from './sftp.ts'
+export { archive, isArchiveOperation, backupSettingsSchema, providerConfigSchema, targetSchema, versionSchema, cloudIndexSchema } from './archive.ts'
+export type { ArchiveOperation, CloudIndex, CloudEntry } from './archive.ts'
 export { reservedOperations } from './domains.ts'
 export type { DomainOperations }
 

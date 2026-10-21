@@ -1,3 +1,6 @@
+import { ArchiveService } from '../archive/service.ts'
+import type { Transport } from '../archive/network.ts'
+import { archive, isArchiveOperation } from '@eizhu/contracts'
 import { SshService } from '../ssh/service.ts'
 import { SftpService } from '../sftp/service.ts'
 import { sftp,isSftpOperation } from '@eizhu/contracts'
@@ -23,6 +26,7 @@ export class RuntimeService {
     if (this.restoreTokens.size >= 4) this.restoreTokens.delete(this.restoreTokens.values().next().value!)
     this.restoreTokens.add(token)
   }
+  private archive: ArchiveService
   private ssh: SshService
   private sftp:SftpService
   private verification: { root: string; path: string; path3: string }
@@ -34,6 +38,7 @@ export class RuntimeService {
     key: Uint8Array,
     emit: (name: 'eizhu-session-message'|'eizhu-sftp-message', payload: unknown) => void = () => undefined,
     localHome?:string,
+    transport:Transport=async()=>fail('CLOUD_UNAVAILABLE','云存储网络不可用'),
   ) {
     this.context = context
     this.verification = {
@@ -49,16 +54,20 @@ export class RuntimeService {
     this.scope.own(() => this.ssh.close())
     this.sftp=new SftpService(this.ssh,this.database,context,root,emit,localHome)
     this.scope.own(()=>this.sftp.close())
+    this.archive=new ArchiveService(this.database,this.compute,transport,token=>this.rememberToken(token))
+    this.scope.own(()=>this.archive.close())
   }
   async execute(request: RpcRequest): Promise<unknown> {
     if (!sameContext(request.context, this.context)) fail('WORKSPACE_CHANGED', '数据空间已变化，请重试')
     if (this.scope.controller.signal.aborted) fail('RUNTIME_CLOSED', '业务进程正在关闭')
+    if(isArchiveOperation(request.operation)) return archive[request.operation].output.parse(await this.archive.execute(request.operation,request.input))
     if (isSshOperation(request.operation))
       return ssh[request.operation].output.parse(await this.ssh.execute(request.operation, request.input))
     if(isSftpOperation(request.operation))return sftp[request.operation].output.parse(await this.sftp.execute(request.operation,request.input))
     if(request.operation==='sftp.authorizeEditor'){const d=request.input as {sessionId:string;path:string};return this.sftp.authorizeEditor(d.sessionId,d.path)}
     if(request.operation==='sftp.downloadPath')return this.sftp.downloadPath((request.input as {taskId:string}).taskId)
     switch (request.operation) {
+      case 'runtime.beforeQuit': return this.archive.beforeQuit()
       case 'runtime.health':
         await this.database.call('health')
         return { context: this.context, schema: 2, workers: 2 }
@@ -127,7 +136,7 @@ export class RuntimeService {
           return
         }
         if (isLocalOperation(request.operation)) return this.executeLocal(request.operation, request.input)
-        return fail('STAGE_NOT_READY', '该业务能力将在后续实施阶段开放')
+        return fail('STAGE_NOT_READY', '该业务能力待开发；官方账号、同步和官方备份在后端部署后再接入')
     }
   }
   private async executeLocal(

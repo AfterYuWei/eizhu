@@ -135,7 +135,11 @@ export const restoreSchema = z.strictObject({
   credentialMode: z.enum(['none', 'plain', 'encrypted']),
   exportedAt: time,
   source: z.strictObject({
-    kind: z.enum(['file', 'safety']),
+    kind: z.enum(['file', 'safety', 'local_version', 'cloud']),
+    version: z.int().nonnegative().optional(),
+    origin: label.optional(),
+    providerName: label.optional(),
+    object: label.optional(),
     name: label.optional(),
     createdAt: time.optional(),
   }),

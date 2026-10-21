@@ -150,6 +150,7 @@ export async function decodeBackup(raw: Uint8Array, password = '') {
   }
   return {
     payload,
+    payloadHash: createHash('sha256').update(JSON.stringify(orderedPayload(payload))).digest('hex'),
     mode: file.credential_mode,
     exportedAt: file.exported_at,
     hash: createHash('sha256').update(raw).digest('hex'),

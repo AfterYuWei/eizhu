@@ -25,7 +25,7 @@ type Preview = {
   expires: number
   mode: 'none' | 'plain' | 'encrypted'
   exportedAt: string
-  source: { kind: 'file' | 'safety'; name?: string; createdAt?: string }
+  source: import('@eizhu/contracts/models/backup').RestorePreview['source']
 }
 const now = () => new Date().toISOString()
 const stats = (p: Payload) => Object.fromEntries(kinds.map((k) => [k, p[k].length])) as Record<Kind, number>
@@ -82,6 +82,13 @@ export class LocalStore {
     const key=`transfer:${d.id}`
     this.db.transaction(()=>{if(operation==='sftp.storage.delete')this.db.prepare('DELETE FROM local_state WHERE key=?').run(key);else this.db.prepare('INSERT INTO local_state VALUES (?,?) ON CONFLICT(key) DO UPDATE SET data=excluded.data').run(key,this.cipher.seal(d.value,key))})()
   }
+  archiveState<T>(key: string, fallback: T): T { return this.state(`archive:${key}`, fallback) }
+  archiveWrite(key: string, value: unknown): void {
+    this.db.transaction(() => this.setState(`archive:${key}`, value))()
+  }
+  archiveTransaction<T>(work: () => T): T { return this.db.transaction(work)() }
+  archiveDelete(key: string): void { this.db.prepare('DELETE FROM local_state WHERE key=?').run(`archive:${key}`) }
+  archiveRevision(): number { return this.revision() }
   snapshot(): Payload {
     const result = emptyPayload()
     for (const kind of kinds) {

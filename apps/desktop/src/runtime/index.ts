@@ -1,3 +1,6 @@
+import { randomUUID } from 'node:crypto'
+import type { HttpResponse, Transport } from '@eizhu/core/archive/network'
+import { DesktopError } from '@eizhu/contracts'
 import { z } from 'zod'
 import { join } from 'node:path'
 import { RuntimeService } from '@eizhu/core/runtime/service'
@@ -6,8 +9,22 @@ import { contextSchema, requestSchema, failureOf, sameContext } from '@eizhu/con
 const port = process.parentPort!
 let service: RuntimeService | undefined
 let closing = false
+const pendingNetwork = new Map<string,{resolve:(value:HttpResponse)=>void;reject:(error:unknown)=>void;cleanup:()=>void}>()
+const transport: Transport = (request, signal) => new Promise((resolve,reject)=>{
+  if(signal.aborted)return reject(new Error('Aborted'))
+  const id=randomUUID(), abort=()=>{pendingNetwork.delete(id);port.postMessage({type:'cloud.abort',id});reject(new DesktopError({code:'BACKUP_STOPPED',message:'备份任务已停止'}))}
+  signal.addEventListener('abort',abort,{once:true})
+  pendingNetwork.set(id,{resolve,reject,cleanup:()=>signal.removeEventListener('abort',abort)})
+  port.postMessage({type:'cloud.request',id,context:service!.context,request})
+})
 port.on('message', async ({ data, ports }) => {
   try {
+    if(data.type==='cloud.response'){
+      const p=pendingNetwork.get(data.id);if(!p)return
+      pendingNetwork.delete(data.id);p.cleanup()
+      if(data.error)p.reject(new DesktopError({code:'CLOUD_REQUEST_FAILED',message:'云存储网络请求失败或超时，请检查网络、系统代理和 TLS 配置'}));else p.resolve(data.value)
+      return
+    }
     if (data.type === 'init') {
       if (service || closing) throw new Error('Already initialized')
       const input = z
@@ -32,6 +49,7 @@ port.on('message', async ({ data, ports }) => {
         input.key,
         (name, payload) => port.postMessage({ type: 'event', context: input.context, name, payload }),
         input.localHome,
+        transport,
       )
       input.key.fill(0)
       await service.execute({

@@ -1,3 +1,5 @@
+import { ArchiveRepository } from '../archive/repository.ts'
+import { isArchiveOperation, archive } from '@eizhu/contracts'
 import { parentPort, workerData } from 'node:worker_threads'
 import { z } from 'zod'
 import { foundation, fail, isLocalOperation, local, isSshOperation, ssh } from '@eizhu/contracts'
@@ -9,6 +11,7 @@ const { root, key } = z
   .strictObject({ root: z.string().min(1), key: z.instanceof(Uint8Array) })
   .parse(workerData)
 const store = new FoundationStore(root, key)
+const archiveStore = new ArchiveRepository(store.local)
 key.fill(0)
 const historySweep = setInterval(() => store.local.pruneHistory(), 3600000)
 historySweep.unref()
@@ -42,6 +45,8 @@ parentPort!.on('message', async (message) => {
         clearInterval(historySweep)
         return store.close()
       default:
+        if(operation.startsWith('archive.')) return archiveStore.execute(operation,input)
+        if(isArchiveOperation(operation)) return archive[operation].output.parse(archiveStore.execute(operation,archive[operation].input.parse(input)))
         if(operation.startsWith('sftp.storage.'))return store.local.transferState(operation,input)
         if (operation.startsWith('ssh.')) return store.local.sshExecute(operation, input)
         if (isSshOperation(operation))

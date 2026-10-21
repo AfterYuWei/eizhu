@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Loader2,Plus,TestTube2,Trash2,ExternalLink,ShieldCheck,Cloud,Database,HardDrive,Folder,Server } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -52,6 +52,8 @@ export function ProviderSection({ providers, onChanged }: Props) {
   const visibleProviders = providers.filter(
     (provider): provider is EditableProvider => provider.type !== 'account',
   )
+  const oauthPolls = useRef(new Set<ReturnType<typeof setInterval>>())
+  useEffect(() => () => { for (const timer of oauthPolls.current) clearInterval(timer); oauthPolls.current.clear() }, [])
   const [adding, setAdding] = useState(false)
   const [form, setForm] = useState<ProviderConfig>(emptyForm('webdav'))
   const [busy, setBusy] = useState(false)
@@ -96,18 +98,20 @@ export function ProviderSection({ providers, onChanged }: Props) {
       // 桌面端走系统默认浏览器（等价 Electron 行为：OAuth 回调页在外部浏览器完成）
       await openExternal(url)
       toast.info('请在打开的页面中完成授权，完成后回到此处刷新')
+      let remainingPolls = 100
       const timer = setInterval(() => void (async () => {
+        if (--remainingPolls <= 0) { clearInterval(timer); oauthPolls.current.delete(timer); return }
         try {
           const list = await archiveApi.providers()
           const me = list.find((x) => x.id === p.id)
           if (me?.authorized) {
-            clearInterval(timer)
+            clearInterval(timer); oauthPolls.current.delete(timer)
             toast.success(`「${p.name}」授权成功`)
             onChanged()
           }
         } catch { /* ignore */ }
       })(), 3000)
-      setTimeout(() => clearInterval(timer), 5 * 60 * 1000)
+      oauthPolls.current.add(timer)
     } catch (err) {
       toast.error('获取授权链接失败', { description: errMessage(err) })
     }
@@ -267,8 +271,8 @@ export function ProviderSection({ providers, onChanged }: Props) {
                 <ShieldCheck size={13} />
                 <span>
                   {form.type === 'gdrive'
-                    ? '需在 Google Cloud Console 创建 OAuth 应用，回调地址填：eizhu://oauth/gdrive'
-                    : '需在 Azure Portal 注册应用，回调地址填：eizhu://oauth/onedrive'}
+                    ? '在 Google Cloud Console 创建桌面应用 OAuth 凭据；授权使用临时 127.0.0.1 回调和 PKCE'
+                    : '在 Azure Portal 注册移动和桌面应用，在清单中登记 http://127.0.0.1/oauth/onedrive 原生回调；授权使用临时端口和 PKCE'}
                 </span>
               </div>
               <div className="backup-row">

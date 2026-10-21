@@ -461,7 +461,7 @@ export async function verifyStage4(
     )
     assert.ok(await editor.webContents.executeJavaScript(`document.body.innerText.includes('未保存内容')`))
     await editor.webContents.executeJavaScript(
-      `document.fonts.ready.then(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))))`,
+      `Promise.race([document.fonts.ready.then(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))),new Promise(resolve=>setTimeout(resolve,250))])`,
     )
     await writeFile(join(root, 'stage4-editor.png'), (await editor.webContents.capturePage()).toPNG())
     windows.closeEditor(true)
@@ -495,7 +495,7 @@ export async function verifyStage4(
         : undefined,
     )
     await window.webContents.executeJavaScript(
-      `document.fonts.ready.then(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))))`,
+      `Promise.race([document.fonts.ready.then(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))),new Promise(resolve=>setTimeout(resolve,250))])`,
     )
     await writeFile(join(root, 'stage4-sftp.png'), (await window.webContents.capturePage()).toPNG())
     await window.webContents.executeJavaScript(

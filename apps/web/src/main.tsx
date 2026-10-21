@@ -1,7 +1,8 @@
 import { StrictMode } from 'react'
 import { createRoot,type Root } from 'react-dom/client'
+import { MainWindowReady } from '@/components/MainWindowReady'
 import { bridge,desktopBootstrap } from '@/lib/bridge'
-import { initializePlatform,isDesktopRuntime } from '@/lib/platform'
+import { initializePlatform } from '@/lib/platform'
 import { initializeSettingsStorage } from '@/lib/settingsStorage'
 import { installFrontendLogging } from '@/lib/appLog'
 import './index.css'
@@ -22,8 +23,8 @@ async function bootstrap() {
       })
     })
     appRoot = createRoot(document.getElementById('root')!)
-    appRoot.render(<StrictMode><App /></StrictMode>)
-    if (isDesktopRuntime() && !isEditor) requestAnimationFrame(() => void bridge().app.ready())
+    // A hidden window may pause animation frames and timers. Signal readiness at the DOM commit.
+    appRoot.render(<StrictMode><App />{!isEditor && <MainWindowReady />}</StrictMode>)
   } catch (error) {
     renderFatal(error instanceof Error ? error.message : String(error))
     if (window.eizhu) await bridge().app.ready().catch(() => undefined)

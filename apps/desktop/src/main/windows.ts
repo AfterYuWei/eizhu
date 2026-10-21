@@ -2,7 +2,7 @@ import { BrowserWindow, dialog, screen } from 'electron'
 import { join } from 'node:path'
 import type { DesktopEvents, RuntimeContext } from '@eizhu/contracts'
 import { randomUUID } from 'node:crypto'
-import { eventSchemas,fail } from '@eizhu/contracts'
+import { eventSchemas,fail,failureOf } from '@eizhu/contracts'
 
 type Transition = {
   id: string
@@ -168,9 +168,9 @@ export class Windows {
         this.quitting = true
         await this.quit()
       }
-    } catch {
+    } catch (cause) {
       this.quitting = false
-      dialog.showErrorBox('无法退出 eizhu', '业务进程尚未退出，窗口和未保存内容已保留。请重试关闭应用。')
+      dialog.showErrorBox('无法退出 eizhu', failureOf(cause).message + '。窗口和未保存内容已保留，请重试关闭应用。')
     } finally {
       this.closing = false
     }

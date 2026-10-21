@@ -21,6 +21,8 @@ import { promisify } from 'node:util'
 import { lstatSync, readdirSync, realpathSync, mkdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import {
+  archive,
+  isArchiveOperation,
   foundation,
   requestSchema,
   isFoundationOperation,
@@ -187,6 +189,7 @@ async function quit(): Promise<void> {
   shuttingDown = true
   try {
     await restarting?.catch(() => undefined)
+    if(healthy)await runtime.call('runtime.beforeQuit')
     healthy = false
     await runtime?.close()
     await sensitiveClipboard.close()
@@ -195,11 +198,14 @@ async function quit(): Promise<void> {
     app.quit()
   } catch (cause) {
     shuttingDown = false
-    runtimeFailed()
+    if(!healthy)runtimeFailed()
     throw cause
   }
 }
 async function load(window: BrowserWindow): Promise<void> {
+  if(smoke)window.webContents.on('console-message',details=>{
+    if(details.level==='error')console.error('EIZHU_SMOKE_RENDERER_ERROR',details.message.slice(0,1200))
+  })
   window.webContents.setWindowOpenHandler(({ url }) => {
     if (/^https?:\/\//i.test(url)) void shell.openExternal(url).catch(() => undefined)
     return { action: 'deny' }
@@ -211,6 +217,11 @@ async function load(window: BrowserWindow): Promise<void> {
   else await window.loadURL('eizhu://app/index.html' + suffix)
 }
 async function execute(window: BrowserWindow, operation: string, input: unknown): Promise<unknown> {
+  if(isArchiveOperation(operation)){
+    if(window!==windows.main)fail('FORBIDDEN','仅主窗口可管理备份')
+    if(!healthy)fail('RUNTIME_UNAVAILABLE','业务进程不可用，请先恢复')
+    return archive[operation].output.parse(await runtime.call(operation,archive[operation].input.parse(input)))
+  }
   if(isSftpOperation(operation)){
     if(!healthy)fail('RUNTIME_UNAVAILABLE','业务进程不可用，未保存内容已保留')
     const host=runtime,value=sftp[operation].input.parse(input)
@@ -355,13 +366,14 @@ async function execute(window: BrowserWindow, operation: string, input: unknown)
     }
     return local[operation].output.parse(result)
   }
-  if (!isFoundationOperation(operation)) return fail('STAGE_NOT_READY', '该业务能力将在后续实施阶段开放')
+  if (!isFoundationOperation(operation)) return fail('STAGE_NOT_READY', (operation.startsWith('account.') || operation.startsWith('sync.') || operation === 'backup.previewLegacyAccount') ? '官方账号、同步和官方备份待开发，后端部署后再接入' : '该业务能力将在后续实施阶段开放')
   const value = foundation[operation].input.parse(input)
   switch (operation) {
     case 'app.bootstrap':
       return bootstrap(window)
     case 'app.ready':
       window.show()
+      if(smoke)console.log('EIZHU_SMOKE_APP_READY',window.id,window.isVisible())
       return
     case 'runtime.health':
     case 'workspace.status':
@@ -519,7 +531,7 @@ app.on('activate', () => {
     windows.main.focus()
   }
 })
-// Deep links are registered now; OAuth validation and handling arrive with stage 5.
+// Third-party desktop OAuth uses an ephemeral PKCE loopback callback; unsolicited deep links stay inactive.
 app.on('open-url', (event) => event.preventDefault())
 
 async function start(): Promise<void> {

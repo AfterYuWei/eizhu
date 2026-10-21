@@ -1,3 +1,4 @@
+import { cloudRequest } from './cloud-network.ts'
 import { utilityProcess } from 'electron'
 import type { UtilityProcess, MessagePortMain } from 'electron'
 import { join } from 'node:path'
@@ -8,6 +9,7 @@ import { stopProcess } from './process-shutdown.ts'
 
 type Pending = { resolve: (value: unknown) => void; reject: (reason: unknown) => void; timer: NodeJS.Timeout }
 export class RuntimeHost {
+  private network = new Map<string, AbortController>()
   private child?: UtilityProcess
   private pending = new Map<string, Pending>()
   private stopping?: Promise<void>
@@ -40,6 +42,18 @@ export class RuntimeHost {
         child.kill()
       }, 30_000)
       child.on('message', (message) => {
+        if (message.type === 'cloud.abort') { this.network.get(message.id)?.abort(); return }
+        if (message.type === 'cloud.request') {
+          if (!sameContext(message.context,this.context) || typeof message.id !== 'string') return
+          if(this.network.size>=8){child.postMessage({type:'cloud.response',id:message.id,error:true});return}
+          const controller = new AbortController(); this.network.set(message.id,controller)
+          const timeout = setTimeout(()=>controller.abort(),20000)
+          void cloudRequest(message.request,controller.signal).then(value=>{
+            if(this.child===child)child.postMessage({type:'cloud.response',id:message.id,value})
+          },()=>{if(this.child===child)child.postMessage({type:'cloud.response',id:message.id,error:true})}).finally(()=>{clearTimeout(timeout);this.network.delete(message.id)})
+          return
+        }
+
         if (
           message.type === 'event' &&
           sameContext(message.context, this.context) &&
@@ -120,10 +134,12 @@ export class RuntimeHost {
       )
     }
     this.pending.clear()
+    for(const controller of this.network.values())controller.abort()
+    this.network.clear()
   }
   close(): Promise<void> {
     if (this.stopping) return this.stopping
-    this.stopping = (this.child ? stopProcess(this.child) : Promise.resolve())
+    this.stopping = (this.child ? stopProcess(this.child, { graceful: 25000, forced: 5000 }) : Promise.resolve())
       .catch((cause) => {
         this.stopping = undefined
         throw cause

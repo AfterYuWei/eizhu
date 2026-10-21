@@ -33,7 +33,7 @@ export function SyncPanel() {
     catch (e) { setOperationError(normalizeCommandError(e).error.code); toast.error(e instanceof Error ? e.message : String(e)); await useSyncStore.getState().refresh() }
     finally { setBusy(false) }
   }
-  if (!loggedIn) return <div className="settings-section"><div className="settings-section-title"><CloudSync size={14} />云同步</div><p className="settings-field-desc">登录云账号后可接入实时同步。本地数据仍可正常使用。</p></div>
+  if (!loggedIn) return <div className="settings-section"><div className="settings-section-title"><CloudSync size={14} />云同步</div><p className="settings-field-desc">官方账号同步正在开发中，后端服务部署完成后再接入。本地数据和第三方云备份可正常使用。</p></div>
   return <div className="settings-section">
     <div className="settings-section-title"><CloudSync size={14} />账号实时同步</div>
     <div className="backup-card">

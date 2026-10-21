@@ -22,3 +22,5 @@ Linux GUI 烟测需要 X11 显示环境，可使用 `xvfb-run`，不得通过关
 阶段 3 烟测在隔离 Electron 进程树内启动本机合成 SSH、代理与回显服务，覆盖认证/路由、二进制终端、指纹失效、隧道端口释放及加密历史；不连接真实服务器或使用用户凭据。最终安装包必须运行同一烟测。详见 [阶段 3 报告](desktop-rebuild/STAGE_3_REPORT.md)。
 
 阶段 4 在同一进程树中用本机 `sftp-server` 执行真实 OpenSSH 文件子系统，SSH 握手由合成回环服务承载，所有文件与检查点位于临时数据根。测试工具不属于用户运行依赖；缺少此工具时报告阶段 4 协议集成待验，不标为通过。安装包同样执行安全保存、分块续传、归档、编辑器权限/未保存关闭和真实数据库重启恢复。详见 [阶段 4 报告](desktop-rebuild/STAGE_4_REPORT.md)。
+
+阶段 5 继续使用完整 Electron 进程树，烟测在临时数据根启动合成 WebDAV/S3 服务，经主窗口 → preload → main → utilityProcess → 数据库/计算 Worker，网络走 Electron net.fetch，覆盖独立目标确认、ETag 冲突、索引响应丢失及手动恢复、密码轮换、变更防抖和重启。OAuth 单元测试监听临时回环端口。真实云厂商账号/租户、代理和 OAuth 同意流程单列待验，见 [阶段 5 报告](desktop-rebuild/STAGE_5_REPORT.md)。

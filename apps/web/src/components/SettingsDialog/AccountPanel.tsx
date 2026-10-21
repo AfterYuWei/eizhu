@@ -10,6 +10,7 @@ export function AccountPanel() {
       <div role="status" className="flex min-h-60 flex-col items-center justify-center gap-3 text-muted-foreground">
         <UserRound size={28} className="opacity-60" aria-hidden="true" />
         <p className="text-sm">正在开发中</p>
+        <p className="text-xs">官方账号服务部署完成后再接入</p>
       </div>
     </section>
   )
