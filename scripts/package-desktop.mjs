@@ -4,6 +4,9 @@ import { nativeToolchainEnvironment } from './native-toolchain.mjs'
 import { readFile } from 'node:fs/promises'
 import assert from 'node:assert/strict'
 import { buildSettings } from './desktop-build-settings.mjs'
+import { patchInstalledSsh2 } from './patch-ssh2-keygen.mjs'
+
+await patchInstalledSsh2()
 
 const platform =
   process.argv.find((value) => value.startsWith('--platform='))?.split('=')[1] ?? process.platform

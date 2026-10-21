@@ -42,6 +42,9 @@ function sourceDigest() {
     'package-lock.json',
     'scripts/build-desktop.mjs',
     'scripts/desktop-build-settings.mjs',
+    'scripts/package-desktop.mjs',
+    'scripts/rebuild-native.mjs',
+    'scripts/patch-ssh2-keygen.mjs',
   ])
     visit(name)
   return hash.digest('hex')
