@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { BrowserWindow } from 'electron'
+import { verifyVaultLayout } from './vault-layout-smoke.ts'
 
 /** Synthetic UI actions in the existing smoke window and its isolated data directory. */
 export async function verifyWorkspaceTabs(window: BrowserWindow, root: string) {
@@ -59,6 +60,8 @@ export async function verifyWorkspaceTabs(window: BrowserWindow, root: string) {
     await js(`document.dispatchEvent(new KeyboardEvent('keydown',{key:'w',ctrlKey:true,shiftKey:true,bubbles:true,cancelable:true}))`)
     assert.equal(await js(tabCount), 12, 'Closing a tool page must not close a background terminal')
     assert.equal(await js(`!!document.querySelector('.shell-primary-nav [aria-current="page"]')&&!document.querySelector('.shell-workspace-actions button')`), true)
+    const vaultLayout = await verifyVaultLayout(window, root)
+    screenshots.push(...vaultLayout.screenshots)
     await capture('workspace-vault-light.png', 'light')
     await capture('workspace-vault-dark.png', 'dark')
     await js(`document.querySelectorAll('.shell-tab-list [role="tab"]')[11].click()`)
@@ -94,7 +97,7 @@ export async function verifyWorkspaceTabs(window: BrowserWindow, root: string) {
     // Close through the same button path, checking the restored keyboard focus.
     await js(`(()=>{const close=document.querySelector('.shell-tab.is-active .shell-tab-close');close.focus();close.click()})()`)
     await wait(`${tabCount}===11&&document.activeElement===document.querySelector('.shell-tab-list [aria-selected="true"]')`)
-    return { passed: true, synthetic: true, keyboard: true, mountedContentRetained: true, singletonTools: true, toolShortcutIsolation: true, closeFocus: true, wide, narrow, enlarged, screenshots }
+    return { passed: true, synthetic: true, keyboard: true, mountedContentRetained: true, singletonTools: true, toolShortcutIsolation: true, closeFocus: true, vaultLayout, wide, narrow, enlarged, screenshots }
   } finally {
     await js(`document.documentElement.className=${JSON.stringify(original.theme)};document.documentElement.style.setProperty('--sans-size',${JSON.stringify(original.font)});delete window.__tabsSmokePanel;delete window.__tabsSmokeVault`)
     await js(`(()=>{if(document.querySelector('.desktop-shell.sidebar-is-hidden'))document.dispatchEvent(new KeyboardEvent('keydown',{key:'b',ctrlKey:true,shiftKey:true,bubbles:true,cancelable:true}))})()`)

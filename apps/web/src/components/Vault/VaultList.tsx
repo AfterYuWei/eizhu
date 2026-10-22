@@ -3,16 +3,17 @@ import { useEffect,useRef } from 'react'
 import { useVaultStore } from '@/store/vault'
 import { VaultItemRow } from './VaultItemRow'
 import { Button } from '@/components/ui/button'
-import type { VaultItem,ProfileRef } from '@/types/vault'
+import type { VaultItem } from '@/types/vault'
 
 interface VaultListProps {
-  onEdit: (item: VaultItem) => void
-  onDelete: (item: VaultItem, refs: ProfileRef[]) => void
+  selectedId: string | null
+  disabled?: boolean
+  onSelect: (item: VaultItem) => void
   onCreate: () => void
 }
 
-export function VaultList({ onEdit, onDelete, onCreate }: VaultListProps) {
-  const { items, loading, error, fetchList, focusedItemId } = useVaultStore()
+export function VaultList({ selectedId, disabled, onSelect, onCreate }: VaultListProps) {
+  const { items, loading, error, fetchList, focusedItemId, searchQuery, filterType } = useVaultStore()
   const grid = useRef<HTMLDivElement>(null)
   useEffect(() => {
     if (!focusedItemId || loading) return
@@ -22,9 +23,9 @@ export function VaultList({ onEdit, onDelete, onCreate }: VaultListProps) {
   }, [focusedItemId, loading, items])
 
   // 加载态
-  if (loading) {
+  if (loading && items.length === 0) {
     return (
-      <div className="vault-loading">
+      <div className="vault-loading" role="status">
         <div className="vault-spinner" />
         <div className="vault-empty-desc">加载中…</div>
       </div>
@@ -34,7 +35,7 @@ export function VaultList({ onEdit, onDelete, onCreate }: VaultListProps) {
   // 错误态
   if (error) {
     return (
-      <div className="vault-error">
+      <div className="vault-error" role="alert">
         <AlertCircle size={28} className="vault-error-icon" />
         <div className="vault-error-title">加载失败</div>
         <div className="vault-error-desc">{error}</div>
@@ -50,8 +51,8 @@ export function VaultList({ onEdit, onDelete, onCreate }: VaultListProps) {
     return (
       <div className="vault-empty">
         <KeyRound size={28} className="vault-empty-icon" />
-        <div className="vault-empty-title">暂无凭据</div>
-        <div className="vault-empty-desc">创建密码、私钥或 SSH 证书以辅助服务器登录</div>
+        <div className="vault-empty-title">{searchQuery || filterType !== 'all' ? '没有匹配的凭据' : '暂无凭据'}</div>
+        <div className="vault-empty-desc">创建密码或私钥以辅助服务器登录</div>
         <Button type="button" size="sm" onClick={onCreate} className="pf-btn-submit">
           <Plus size={14} /> 新建凭据
         </Button>
@@ -61,12 +62,11 @@ export function VaultList({ onEdit, onDelete, onCreate }: VaultListProps) {
 
   // 正常态
   return (
-    <div className="vault-grid" ref={grid}>
-      {items.map((item) => (
-        <div key={item.id} data-vault-item={item.id} tabIndex={-1} className={focusedItemId === item.id ? 'shell-vault-focus' : undefined}>
-          <VaultItemRow item={item} onEdit={onEdit} onDelete={onDelete} />
-        </div>
-      ))}
+    <div className="vault-list-content" ref={grid} aria-busy={loading}>
+      <div className="vault-list-items" aria-label="凭据列表">
+        {items.map((item) => <VaultItemRow key={item.id} item={item} selected={selectedId === item.id} disabled={disabled} onSelect={onSelect} />)}
+      </div>
+      <div className="vault-list-count" aria-live="polite">{items.length} 项凭据</div>
     </div>
   )
 }

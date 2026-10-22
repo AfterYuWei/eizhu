@@ -1679,3 +1679,85 @@
     grid-column: auto;
   }
 }
+
+/* 密钥管理沿用桌面设置页的分组表面，列表和详情通过留白分隔。 */
+.desktop-shell .vault-master-detail {
+  --vault-muted: color-mix(in srgb, var(--fg) 62%, var(--surface-panel));
+  background: var(--surface-panel);
+  color: var(--fg);
+  font: 400 var(--sans-size) / 1.5 var(--sans);
+  container-type: inline-size;
+}
+.desktop-shell .vault-master-detail .vault-toolbar { flex-wrap: wrap; gap: 8px; padding: 24px 28px 20px; border: 0; background: transparent; }
+.desktop-shell .vault-master-detail .vault-toolbar-title { gap: 6px; font-size: inherit; font-weight: 500; color: var(--fg); }
+.desktop-shell .vault-master-detail .vault-toolbar-filter { min-width: 96px; }
+.desktop-shell .vault-master-detail .vault-toolbar-search { min-width: 120px; max-width: 260px; height: auto; min-height: 32px; font-size: max(12px, calc(var(--sans-size) - 2px)); }
+.desktop-shell .vault-master-detail .vault-toolbar-actions { flex-wrap: wrap; }
+.desktop-shell .vault-master-detail :is(input, [data-slot='select-trigger']) { min-height: 30px; height: auto; padding: 4px 10px; border-color: var(--border); border-radius: var(--r-sm); background: var(--bg-active); color: var(--fg); box-shadow: none; }
+.desktop-shell .vault-master-detail [data-slot='button'] { min-height: 30px; height: auto; padding: 4px 10px; border-radius: var(--r-sm); font-weight: 400; box-shadow: none; }
+.desktop-shell .vault-master-detail [data-slot='button'][data-variant='outline'],
+.desktop-shell .vault-master-detail [data-slot='button'][data-variant='default'] { color: var(--fg); background: var(--bg-active); border: 1px solid var(--border); }
+.desktop-shell .vault-master-detail [data-slot='button'][data-variant='outline']:hover,
+.desktop-shell .vault-master-detail [data-slot='button'][data-variant='default']:hover { background: var(--bg-hover); }
+.desktop-shell .vault-columns { display: grid; grid-template-columns: 258px minmax(0, 1fr); flex: 1; min-height: 0; gap: 28px; padding: 0 28px 28px; overflow: hidden; }
+.desktop-shell .vault-list-panel { display: flex; flex-direction: column; min-height: 0; min-width: 0; padding: 8px; border: 1px solid var(--edge-soft); border-radius: var(--r-lg); background: var(--surface-app); overflow: hidden; }
+.desktop-shell .vault-list-content { display: flex; flex: 1; flex-direction: column; min-height: 0; }
+.desktop-shell .vault-list-items { min-height: 0; overflow-y: auto; scrollbar-width: none; }
+.desktop-shell .vault-list-items::-webkit-scrollbar { display: none; }
+.desktop-shell .vault-list-entry { display: flex; align-items: center; min-width: 0; margin-bottom: 2px; border-radius: 8px; }
+.desktop-shell .vault-list-entry:hover { background: var(--shell-hover); }
+.desktop-shell .vault-list-entry.is-selected { background: var(--shell-selected); }
+.desktop-shell .vault-list-item { display: flex; align-items: flex-start; gap: 10px; flex: 1; min-width: 0; width: 100%; min-height: 60px; padding: 9px; border: 0; border-radius: 8px; background: transparent; color: var(--fg); text-align: left; font: inherit; }
+.desktop-shell .vault-list-item:focus-visible { outline: 1px solid var(--desktop-focus-border); outline-offset: -1px; }
+.desktop-shell .vault-list-item:disabled { opacity: .6; }
+.desktop-shell .vault-list-item > svg { flex-shrink: 0; margin-top: 3px; color: var(--vault-muted); }
+.desktop-shell .vault-list-item-copy { flex: 1; min-width: 0; }
+.desktop-shell .vault-list-item-name { display: block; overflow-wrap: anywhere; }
+.desktop-shell .vault-list-item-meta { display: flex; justify-content: space-between; gap: 8px; margin-top: 3px; color: var(--vault-muted); font-size: max(12px, calc(var(--sans-size) - 2px)); }
+.desktop-shell .vault-list-item-meta time { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.desktop-shell .vault-list-count { margin-top: auto; padding: 16px 9px 6px; color: var(--vault-muted); font-size: max(12px, calc(var(--sans-size) - 2px)); }
+.desktop-shell .vault-inspector { min-width: 0; min-height: 0; padding-top: 8px; overflow-y: auto; scrollbar-width: thin; }
+.desktop-shell .vault-detail-view, .desktop-shell .vault-inline-editor { max-width: 1120px; }
+.desktop-shell .vault-detail-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; margin-bottom: 24px; }
+.desktop-shell .vault-detail-heading h2 { margin: 0; font: 500 var(--sans-size) / 1.5 var(--sans); overflow-wrap: anywhere; }
+.desktop-shell .vault-detail-heading > div:first-child { min-width: 0; }
+.desktop-shell .vault-detail-meta { margin-top: 4px; color: var(--vault-muted); font-size: max(12px, calc(var(--sans-size) - 2px)); }
+.desktop-shell .vault-detail-heading-actions { display: flex; gap: 5px; flex-shrink: 0; }
+.desktop-shell .vault-detail-group { min-width: 0; padding: 13px 16px 16px; border: 1px solid var(--edge-soft); border-radius: var(--r-lg); background: var(--surface-app); }
+.desktop-shell .vault-detail-group + .vault-detail-group { margin-top: 28px; }
+.desktop-shell .vault-detail-group-head { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; min-height: 30px; margin-bottom: 8px; }
+.desktop-shell .vault-detail-content-actions { display: flex; gap: 2px; }
+.desktop-shell .vault-detail-content-actions [data-slot='button'] { gap: 4px; padding: 4px 6px; color: var(--vault-muted); font-size: max(12px, calc(var(--sans-size) - 2px)); }
+.desktop-shell .vault-detail-content-actions [data-slot='button']:hover { color: var(--fg); }
+.desktop-shell .vault-detail-secret { margin: 0; padding-top: 8px; min-width: 0; white-space: pre-wrap; overflow-wrap: anywhere; font: 400 max(12px, calc(var(--sans-size) - 2px)) / 1.7 var(--mono); user-select: text; }
+.desktop-shell .vault-detail-secret.is-multiline { min-height: 82px; max-height: 220px; overflow-y: auto; }
+.desktop-shell .vault-detail-note { display: flex; gap: 14px; margin-bottom: 20px; overflow-wrap: anywhere; }
+.desktop-shell .vault-detail-note > span { flex-shrink: 0; color: var(--vault-muted); }
+.desktop-shell .vault-reference-group { padding: 0; }
+.desktop-shell .vault-reference-toggle { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; min-height: 68px; padding: 13px 16px; border: 0; border-radius: var(--r-lg); background: transparent; color: var(--fg); font: inherit; text-align: left; }
+.desktop-shell .vault-reference-toggle > span:last-child { display: flex; align-items: center; gap: 7px; color: var(--vault-muted); }
+.desktop-shell .vault-reference-list { padding: 0 16px 14px; color: var(--vault-muted); font-size: max(12px, calc(var(--sans-size) - 2px)); }
+.desktop-shell .vault-reference-list p { margin: 0; }
+.desktop-shell .vault-reference-row { display: flex; align-items: center; gap: 8px; padding-block: 6px; overflow-wrap: anywhere; }
+.desktop-shell .vault-reference-row > svg { flex-shrink: 0; }
+.desktop-shell .vault-detail-placeholder { padding: 16px 0; color: var(--vault-muted); }
+.vault-editor-fields { display: flex; flex-direction: column; gap: 20px; min-inline-size: 0; margin: 0; padding: 0; border: 0; }
+.vault-editor-status { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 0; font-size: 13px; }
+.desktop-shell .vault-inline-editor :is(.vault-form-basic, .vault-form-password-panel, .vault-form-key-panel, .vault-form-passphrase-row) { padding: 16px; background: var(--surface-app); border-color: var(--edge-soft); border-radius: var(--r-lg); box-shadow: none; }
+.desktop-shell .vault-inline-editor .vault-form-basic-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.desktop-shell .vault-inline-editor .vault-form-credential { gap: 28px; }
+.desktop-shell .vault-inline-editor .vault-sheet-footer { border: 0; padding-top: 0; }
+.desktop-shell .vault-inline-editor .pf-label { color: var(--fg); font-weight: 400; }
+.desktop-shell .vault-inline-editor .vault-form-password-hint { color: var(--vault-muted); }
+.desktop-shell .vault-master-detail :is(.vault-loading, .vault-error, .vault-empty) { flex: 1; min-height: 0; padding: 20px 8px; }
+.desktop-shell .vault-master-detail :is(.vault-empty-title, .vault-error-title) { font-size: inherit; }
+.desktop-shell .vault-master-detail :is(.vault-empty-desc, .vault-error-desc) { color: var(--vault-muted); font-size: max(12px, calc(var(--sans-size) - 2px)); }
+@container (max-width: 800px) {
+  .desktop-shell .vault-master-detail .vault-toolbar { padding: 20px 20px 16px; }
+  .desktop-shell .vault-columns { grid-template-columns: 220px minmax(0, 1fr); gap: 20px; padding: 0 20px 20px; }
+}
+@container (max-width: 520px) {
+  .desktop-shell .vault-columns { grid-template-columns: 1fr; grid-template-rows: minmax(140px, 30%) minmax(0, 1fr); }
+  .desktop-shell .vault-master-detail .vault-toolbar-actions { margin-left: 0; }
+  .desktop-shell .vault-inline-editor .vault-form-basic-grid { grid-template-columns: 1fr; }
+}

@@ -1,4 +1,4 @@
-import { useEffect,useRef,useState } from 'react';
+import { useEffect,useId,useRef,useState } from 'react';
 import { ChevronDown,Copy,Dices,Download,Eye,EyeOff,FileText,Terminal,Upload } from 'lucide-react';
 import { Dialog,DialogContent,DialogHeader,DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -26,7 +26,10 @@ interface VaultFormDialogProps {
 interface VaultFormDialogInnerProps {
     item?: VaultItem | null;
     onOpenChange: (open: boolean) => void;
+    onStateChange?: (state: VaultEditorState) => void;
+    onSaved?: (item: VaultItem) => void;
 }
+export interface VaultEditorState { dirty: boolean; busy: boolean }
 const TYPE_OPTIONS = (Object.keys(VAULT_TYPE_LABELS) as VaultType[]).map((type) => ({
     value: type,
     label: VAULT_TYPE_LABELS[type],
@@ -88,10 +91,10 @@ function PasswordEditorSection({ password, isEditing, showGenerator, onPasswordC
         </div>
       </div>
 
-      <Input type={showPassword ? 'text' : 'password'} value={password} onChange={(event) => onPasswordChange(event.target.value)} placeholder="输入密码" required className="pf-input-mono vault-form-password-input"/>
+      <Input aria-label="密码" type={showPassword ? 'text' : 'password'} value={password} onChange={(event) => onPasswordChange(event.target.value)} placeholder="输入密码" required className="pf-input-mono vault-form-password-input"/>
 
       <div className="vault-form-password-hint">
-        💡 建议搭配用户名或备注一起保存。推荐长度 16-24 位。{isEditing ? '类型固定，内容可更新。' : '创建后类型不可修改。'}
+        {isEditing ? '类型固定，凭据内容可以更新。' : '创建后类型不可修改。'}
       </div>
 
       {showGenerator ? <VaultPasswordGenerator onApply={onApplyGeneratedPassword}/> : null}
@@ -110,17 +113,21 @@ export function VaultFormDialog({ open, onOpenChange, item }: VaultFormDialogPro
           </div>
         </DialogHeader>
 
-        {open ? <VaultFormDialogInner key={instanceKey} item={item} onOpenChange={onOpenChange}/> : null}
+        {open ? <VaultForm key={instanceKey} item={item} onOpenChange={onOpenChange}/> : null}
       </DialogContent>
     </Dialog>);
 }
-function VaultFormDialogInner({ item, onOpenChange }: VaultFormDialogInnerProps) {
+export function VaultForm({ item, onOpenChange, onStateChange, onSaved }: VaultFormDialogInnerProps) {
+    const formId = useId();
     const { create, update } = useVaultStore();
     const isEditing = !!item;
     const [form, setForm] = useState<VaultCreateRequest>(() => buildInitialForm(item));
     const [initialForm, setInitialForm] = useState<VaultCreateRequest>(() => buildInitialForm(item));
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
+    const [credentialLoading, setCredentialLoading] = useState(!!item);
+    const [credentialError, setCredentialError] = useState(false);
+    const [loadAttempt, setLoadAttempt] = useState(0);
     const [showGenerator, setShowGenerator] = useState(false);
     const [showPrivateKey, setShowPrivateKey] = useState(false);
     const publicKeyFileRef = useRef<HTMLInputElement>(null);
@@ -128,9 +135,13 @@ function VaultFormDialogInner({ item, onOpenChange }: VaultFormDialogInnerProps)
     useEffect(() => {
         if (!item)
             return;
+        let cancelled = false;
+        setCredentialLoading(true);
+        setCredentialError(false);
         vaultApi
             .reveal(item.id)
             .then((credential) => {
+            if (cancelled) return;
             const nextForm: VaultCreateRequest = {
                 ...buildInitialForm(item),
                 password: credential.password ?? '',
@@ -144,8 +155,12 @@ function VaultFormDialogInner({ item, onOpenChange }: VaultFormDialogInnerProps)
             }));
             setInitialForm(nextForm);
         })
-            .catch(() => toast.warning('加载凭据内容失败，请重新输入'));
-    }, [item]);
+            .catch(() => { if (!cancelled) setCredentialError(true); })
+            .finally(() => { if (!cancelled) setCredentialLoading(false); });
+        return () => { cancelled = true; };
+    }, [item, loadAttempt]);
+    const dirty = !isSameForm(form, initialForm);
+    useEffect(() => { onStateChange?.({ dirty, busy: loading }); }, [dirty, loading, onStateChange]);
     const readFile = (file: File, field: 'private_key' | 'public_key') => {
         if (file.size > 100 * 1024) {
             toast.warning('文件过大，请控制在 100KB 以内');
@@ -167,7 +182,7 @@ function VaultFormDialogInner({ item, onOpenChange }: VaultFormDialogInnerProps)
     const updateField = <K extends keyof VaultCreateRequest>(key: K, value: VaultCreateRequest[K]) => {
         setForm((current) => ({ ...current, [key]: value }));
     };
-    const canSubmit = !loading && (!isEditing || !isSameForm(form, initialForm));
+    const canSubmit = !loading && !credentialLoading && !credentialError && (!isEditing || dirty);
     const handleExportPrivateKey = async () => {
         const privateKey = form.private_key?.trim();
         if (!privateKey) {
@@ -225,6 +240,7 @@ function VaultFormDialogInner({ item, onOpenChange }: VaultFormDialogInnerProps)
     };
     const handleSubmit = async (event: React.FormEvent) => {
         event.preventDefault();
+        if (!canSubmit) return;
         if (!form.name?.trim()) {
             setError('名称不能为空');
             return;
@@ -241,13 +257,9 @@ function VaultFormDialogInner({ item, onOpenChange }: VaultFormDialogInnerProps)
         setLoading(true);
         setError('');
         try {
-            if (isEditing && item) {
-                await update(item.id, payload);
-            }
-            else {
-                await create(payload);
-            }
-            onOpenChange(false);
+            const saved = isEditing && item ? await update(item.id, payload) : await create(payload);
+            if (onSaved) onSaved(saved);
+            else onOpenChange(false);
         }
         catch (err) {
             const message = (err as {
@@ -261,37 +273,37 @@ function VaultFormDialogInner({ item, onOpenChange }: VaultFormDialogInnerProps)
             setLoading(false);
         }
     };
-    return (<form onSubmit={handleSubmit} id="vault-form" className="vault-form vault-sheet-form">
+    return (<form onSubmit={handleSubmit} id={formId} className="vault-form vault-sheet-form">
+      {credentialLoading && <p role="status" className="vault-editor-status">正在读取凭据…</p>}
+      {credentialError && <p role="alert" className="vault-editor-status">读取凭据失败，原有内容已保留。<Button type="button" variant="outline" size="sm" onClick={() => setLoadAttempt((value) => value + 1)}>重试</Button></p>}
+      <fieldset className="vault-editor-fields" disabled={loading || credentialLoading || credentialError}>
       {/* 基本信息 - 上层 */}
       <section className="vault-form-basic">
         <div className="vault-form-basic-grid">
           <div className="pf-field">
-            <Label className="pf-label">名称</Label>
-            <Input value={form.name} onChange={(event) => updateField('name', event.target.value)} placeholder="prod-root-key" required className="pf-input-mono"/>
+            <Label htmlFor={`${formId}-name`} className="pf-label">名称</Label>
+            <Input id={`${formId}-name`} value={form.name} onChange={(event) => updateField('name', event.target.value)} placeholder="输入凭据名称" required className="pf-input-mono"/>
           </div>
 
           <div className="pf-field">
-            <Label className="pf-label">类型</Label>
+            <Label htmlFor={`${formId}-type`} className="pf-label">类型</Label>
             <Select value={form.type} onValueChange={(value) => updateField('type', value as VaultType)} disabled={isEditing}>
-              <SelectTrigger className="w-full"><SelectValue placeholder="请选择"/></SelectTrigger>
+              <SelectTrigger id={`${formId}-type`} className="w-full"><SelectValue placeholder="请选择"/></SelectTrigger>
               <SelectContent>{TYPE_OPTIONS.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent>
             </Select>
           </div>
 
           {form.type === 'password' ? (<div className="pf-field">
-              <Label className="pf-label">用户名</Label>
-              <Input value={form.username ?? ''} onChange={(event) => updateField('username', event.target.value)} placeholder="root" required className="pf-input-mono"/>
+              <Label htmlFor={`${formId}-username`} className="pf-label">用户名</Label>
+              <Input id={`${formId}-username`} value={form.username ?? ''} onChange={(event) => updateField('username', event.target.value)} placeholder="root" required className="pf-input-mono"/>
             </div>) : null}
 
           <div className="pf-field vault-form-remark">
-            <Label className="pf-label">备注（可选）</Label>
-            <Input value={form.remark ?? ''} onChange={(event) => updateField('remark', event.target.value)} placeholder="请输入备注..."/>
+            <Label htmlFor={`${formId}-remark`} className="pf-label">备注（可选）</Label>
+            <Input id={`${formId}-remark`} value={form.remark ?? ''} onChange={(event) => updateField('remark', event.target.value)} placeholder="请输入备注..."/>
           </div>
         </div>
       </section>
-
-      {/* 分隔线 */}
-      <div className="vault-form-divider"/>
 
       {/* 凭据详情 - 下层 */}
       <div className="vault-form-credential">
@@ -303,7 +315,7 @@ function VaultFormDialogInner({ item, onOpenChange }: VaultFormDialogInnerProps)
               <div className="vault-form-key-head">
                 <span className="vault-form-key-title">私钥</span>
                 <div className="vault-form-key-actions">
-                  <Button type="button" variant="outline" size="icon" onClick={() => setShowPrivateKey((current) => !current)} className="vault-sheet-inline-btn" title={showPrivateKey ? '隐藏私钥' : '显示私钥'}>
+                  <Button type="button" variant="outline" size="icon" onClick={() => setShowPrivateKey((current) => !current)} className="vault-sheet-inline-btn" aria-label={showPrivateKey ? '隐藏私钥' : '显示私钥'}>
                     {showPrivateKey ? <EyeOff size={14}/> : <Eye size={14}/>}
                   </Button>
                   <Button type="button" variant="outline" size="sm" onClick={handleExportPrivateKey} disabled={!form.private_key?.trim()} className="vault-sheet-inline-btn" title="导出私钥文件">
@@ -316,7 +328,7 @@ function VaultFormDialogInner({ item, onOpenChange }: VaultFormDialogInnerProps)
                   </Button>
                 </div>
               </div>
-              <Textarea value={form.private_key ?? ''} onChange={(event) => updateField('private_key', event.target.value)} placeholder="-----BEGIN OPENSSH PRIVATE KEY-----" required rows={6} className={`pf-input-mono pf-key-textarea vault-form-key-textarea ${showPrivateKey ? '' : 'vault-form-key-hidden'}`}/>
+              <Textarea aria-label="私钥" value={form.private_key ?? ''} onChange={(event) => updateField('private_key', event.target.value)} placeholder="-----BEGIN OPENSSH PRIVATE KEY-----" required rows={6} className={`pf-input-mono pf-key-textarea vault-form-key-textarea ${showPrivateKey ? '' : 'vault-form-key-hidden'}`}/>
               <Input ref={privateKeyFileRef} type="file" accept=".pem,.key,.id_rsa,.id_ed25519" hidden onChange={(event) => {
                 const file = event.target.files?.[0];
                 if (file)
@@ -360,7 +372,7 @@ function VaultFormDialogInner({ item, onOpenChange }: VaultFormDialogInnerProps)
                   </Button>
                 </div>
               </div>
-              <Textarea value={form.public_key ?? ''} onChange={(event) => updateField('public_key', event.target.value)} placeholder="ssh-ed25519 AAAA..." rows={3} className="pf-input-mono pf-key-textarea vault-form-key-textarea vault-form-key-textarea-short"/>
+              <Textarea aria-label="公钥" value={form.public_key ?? ''} onChange={(event) => updateField('public_key', event.target.value)} placeholder="ssh-ed25519 AAAA..." rows={3} className="pf-input-mono pf-key-textarea vault-form-key-textarea vault-form-key-textarea-short"/>
               <Input ref={publicKeyFileRef} type="file" accept=".pub,.txt" hidden onChange={(event) => {
                 const file = event.target.files?.[0];
                 if (file)
@@ -371,20 +383,21 @@ function VaultFormDialogInner({ item, onOpenChange }: VaultFormDialogInnerProps)
 
             <div className="vault-form-passphrase-row">
               <div className="pf-field vault-form-passphrase-field">
-                <Label className="pf-label">Passphrase（可选）</Label>
-                <Input type="password" value={form.passphrase ?? ''} onChange={(event) => updateField('passphrase', event.target.value)} placeholder="请输入密码短语..." className="pf-input-mono"/>
+                <Label htmlFor={`${formId}-passphrase`} className="pf-label">私钥口令（可选）</Label>
+                <Input id={`${formId}-passphrase`} type="password" value={form.passphrase ?? ''} onChange={(event) => updateField('passphrase', event.target.value)} placeholder="请输入密码短语..." className="pf-input-mono"/>
               </div>
             </div>
           </>)}
       </div>
+      </fieldset>
 
       <div className="vault-sheet-footer">
         {error ? <div className="pf-error vault-sheet-error">{error}</div> : <div />}
         <div className="vault-sheet-footer-actions">
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} className="pf-btn-cancel">
+          <Button type="button" variant="outline" disabled={loading} onClick={() => onOpenChange(false)} className="pf-btn-cancel">
             取消
           </Button>
-          <Button type="submit" form="vault-form" disabled={!canSubmit} className="pf-btn-submit">
+          <Button type="submit" form={formId} disabled={!canSubmit} className="pf-btn-submit">
             {loading ? '保存中...' : isEditing ? '保存' : '创建'}
           </Button>
         </div>
