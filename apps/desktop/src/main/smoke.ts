@@ -195,7 +195,25 @@ export async function runSmoke(options: {
   const recoveredVersions=await window.webContents.executeJavaScript('window.eizhu.backup.versions()') as Array<{id:string}>
   assert.ok(recoveredVersions.some(v=>v.id===stage5.persistedVersionId))
   if(stage4.passed){
-    const fileRecovery=await window.webContents.executeJavaScript(`(async()=>{const api=window.eizhu,id=${JSON.stringify(stage4.restoredTaskId)};const task=(await api.sftp.listTransfers({})).find(t=>t.id===id);if(task?.status!=='recoverable')throw new Error('Checkpoint did not recover');const local=await api.sftp.createSession({profileId:'local'});const proof=await api.sftp.uploadCheckpoint({taskId:id});const resumed=await api.sftp.resumeUpload({taskId:id,size:6,lastModified:42,restart:false,prefixHash:proof.prefix_hash});await api.sftp.uploadChunk({uploadId:resumed.upload_id,sequence:resumed.sequence,data:new TextEncoder().encode('def')});const finished=await api.sftp.uploadFinish({uploadId:resumed.upload_id});await api.sftp.closeSession({id:local.session_id});return finished.tasks[0].status==='completed'&&resumed.received===3})()`)
+    const fileRecovery=await window.webContents.executeJavaScript(`(async()=>{
+      const api=window.eizhu,id=${JSON.stringify(stage4.restoredTaskId)};
+      const task=(await api.sftp.listTransfers({})).find(t=>t.id===id);
+      if(task?.status!=='recoverable')throw new Error('Checkpoint did not recover');
+      const local=await api.sftp.createSession({profileId:'local'});
+      const proof=await api.sftp.uploadCheckpoint({taskId:id});
+      const resumed=await api.sftp.resumeUpload({taskId:id,size:6,lastModified:42,restart:false,prefixHash:proof.prefix_hash});
+      await api.sftp.uploadChunk({uploadId:resumed.upload_id,sequence:resumed.sequence,data:new TextEncoder().encode('def')});
+      await api.sftp.uploadFinish({uploadId:resumed.upload_id});
+      for(let i=0;i<300;i++){
+        const finished=(await api.sftp.listTransfers({})).find(t=>t.id===id);
+        if(finished.status==='failed')throw new Error(finished.error_message);
+        if(finished.status==='completed'){
+          await api.sftp.closeSession({id:local.session_id});return resumed.received===3;
+        }
+        await new Promise(resolve=>setTimeout(resolve,30));
+      }
+      throw new Error('Upload completion timeout');
+    })()`)
     assert.equal(fileRecovery,true);step('stage4-checkpoint-restarted')
   }
   assert.notEqual(restored.runtimeId, before.runtimeId)

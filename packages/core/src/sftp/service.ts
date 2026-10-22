@@ -30,7 +30,6 @@ interface CopyFile {
   dest: string
   stat: FileStat
   target?: FileStat
-  targetHash?: string
   temporary: string
   offset: number
   prefixHash?: string
@@ -59,12 +58,24 @@ interface Job {
   handle?: FileHandle
   uploadId?: string
   digest?: Hash
+  started?: number
+  initial?: number
   busy: boolean
   lastEvent: number
   chain: Promise<unknown>
 }
 type Emit = (name: 'eizhu-sftp-message', payload: unknown) => void
 const activeStatuses = ['queued', 'transferring']
+function transferFailure(cause: unknown) {
+  const code = (cause as { code?: string | number } | null)?.code
+  if (code === 'ENOSPC' || code === 'EDQUOT')
+    return { code: 'DISK_FULL', message: '目标磁盘空间或配额不足，请清理空间后重新开始' }
+  if (code === 'EACCES' || code === 'EPERM' || code === 3)
+    return { code: 'PERMISSION_DENIED', message: '没有文件读写权限，请检查目录和文件权限' }
+  if (code === 'ECONNRESET' || code === 'EPIPE' || code === 'ENOTCONN' || code === 7)
+    return { code: 'CONNECTION_LOST', message: '文件连接已断开，请重新连接后手动恢复' }
+  return failureOf(cause)
+}
 
 /** Five active streams, durable encrypted checkpoints, and explicit session ownership. */
 export class SftpService {
@@ -141,11 +152,11 @@ export class SftpService {
       })
     }
   }
-  private async save(job: Job, event = true) {
+  private async save(job: Job, event = true, force = false) {
     const c = job.checkpoint
     c.task.confirmed_offset = c.task.transferred
     await this.database.call('sftp.storage.save', { id: c.task.id, value: c })
-    if (event && (Date.now() - job.lastEvent > 100 || !activeStatuses.includes(c.task.status))) {
+    if (event && (force || Date.now() - job.lastEvent > 100 || !activeStatuses.includes(c.task.status))) {
       job.lastEvent = Date.now()
       this.emit('eizhu-sftp-message', {
         type:
@@ -158,6 +169,12 @@ export class SftpService {
         payload: { ...c.task, task_id: c.task.id },
       })
     }
+  }
+  private async phase(job: Job, phase: NonNullable<TransferTask['phase']>) {
+    job.checkpoint.task.phase = phase
+    job.checkpoint.task.speed = 0
+    await this.save(job, true, true)
+    job.controller.signal.throwIfAborted()
   }
   private sessionEvent(s: FileSession) {
     this.emit('eizhu-sftp-message', {
@@ -333,14 +350,15 @@ export class SftpService {
   private async target(endpoint: FileEndpoint, path: string) {
     const stat = await endpoint.optional(path)
     if (stat?.link) fail('SYMLINK_UNSAFE', '目标是符号链接，不能覆盖')
-    return { stat, hash: stat && !stat.dir ? await fileHash(endpoint, path) : undefined }
+    return { stat }
   }
-  private async checkTarget(endpoint: FileEndpoint, file: CopyFile) {
+  private async checkTarget(endpoint: FileEndpoint, file: CopyFile, signal?: AbortSignal) {
+    signal?.throwIfAborted()
     const now = await endpoint.optional(file.dest)
+    signal?.throwIfAborted()
     if (
       now?.identity !== file.target?.identity ||
-      now?.link ||
-      (now && !now.dir && (await fileHash(endpoint, file.dest)) !== file.targetHash)
+      now?.link
     )
       fail('TARGET_CHANGED', '目标文件已变化，原目标已保留，请重新选择冲突处理')
   }
@@ -387,7 +405,7 @@ export class SftpService {
             base = dest.slice(0, dest.length - ext.length)
           while ((await target.optional(dest)) || planned.has(dest)) dest = `${base} (${i++})${ext}`
           if (row.dir && mode === 'preserve') renamed.set(row.path, dest)
-          existing = { stat: undefined, hash: undefined }
+          existing = { stat: undefined }
         } else if (resolution === 'overwrite' && existing.stat.dir !== (row.dir && mode === 'preserve'))
           fail('TYPE_CONFLICT', '文件与目录类型冲突，不能覆盖')
       }
@@ -399,7 +417,6 @@ export class SftpService {
         dest,
         stat: row,
         target: existing.stat,
-        targetHash: existing.hash,
         temporary: posix.join(posix.dirname(dest), `.eizhu-${randomUUID()}.part`),
         offset: 0,
         complete: false,
@@ -418,7 +435,7 @@ export class SftpService {
       job.run = this.run(job)
         .catch(async (e) => {
           if (job.controller.signal.aborted) return
-          const f = failureOf(e)
+          const f = transferFailure(e)
           Object.assign(job.checkpoint.task, {
             status: 'failed',
             speed: 0,
@@ -469,6 +486,7 @@ export class SftpService {
       start = Date.now(),
       initial = t.transferred
     t.status = 'transferring'
+    t.phase = 'preparing'
     delete t.error_code
     delete t.error_message
     await this.save(job)
@@ -493,30 +511,35 @@ export class SftpService {
       await source.guard(f.source)
       if ((await source.stat(f.source)).identity !== f.stat.identity)
         fail('SOURCE_CHANGED', '源文件已变化，请重新开始')
-      await this.checkTarget(target, f)
+      await this.phase(job, 'verifying')
+      await this.checkTarget(target, f, job.controller.signal)
       const stage = await target.optional(f.temporary)
       if (f.offset) {
         if (
           !stage ||
           stage.size !== f.offset ||
-          (await fileHash(target, f.temporary)) !== f.prefixHash ||
-          (await fileHash(source, f.source, f.offset)) !== f.prefixHash
+          (await fileHash(target, f.temporary, undefined, job.controller.signal)) !== f.prefixHash
         )
           fail('CHECKPOINT_CHANGED', '源文件或暂存文件与检查点不一致，请重新开始')
       } else if (stage) fail('CHECKPOINT_CHANGED', '暂存文件状态与检查点不一致')
-      const input = await source.open(f.source),
-        output = await target.open(f.temporary, true, !f.offset)
+      const input = await source.open(f.source)
+      let output: FileHandle | undefined
       const digest = createHash('sha256')
       try {
+        output = await target.open(f.temporary, true, !f.offset)
         if (f.offset) {
           let p = 0
           while (p < f.offset) {
+            job.controller.signal.throwIfAborted()
             const b = await input.read(p, Math.min(512 * 1024, f.offset - p))
             if (!b.length) fail('SOURCE_CHANGED', '源文件发生变化')
             digest.update(b)
             p += b.length
           }
+          if (digest.copy().digest('hex') !== f.prefixHash)
+            fail('CHECKPOINT_CHANGED', '源文件与检查点不一致，请重新开始')
         }
+        await this.phase(job, 'transferring')
         while (f.offset < f.stat.size) {
           job.controller.signal.throwIfAborted()
           const b = await input.read(f.offset, Math.min(512 * 1024, f.stat.size - f.offset))
@@ -530,18 +553,24 @@ export class SftpService {
           t.speed = Math.max(0, ((t.transferred - initial) * 1000) / Math.max(1, Date.now() - start))
           await this.save(job)
         }
+        await this.phase(job, 'verifying')
       } finally {
-        await Promise.all([input.close(), output.close()])
+        await Promise.allSettled([input.close(), output?.close()]).then((closed) => {
+          for (const result of closed) if (result.status === 'rejected') throw result.reason
+        })
       }
       job.controller.signal.throwIfAborted()
+      const written = await target.stat(f.temporary)
       if (
         (await source.stat(f.source)).identity !== f.stat.identity ||
-        (await fileHash(target, f.temporary)) !== digest.digest('hex')
+        (written.mode & 0o170000) !== 0o100000 || written.size !== f.stat.size
       )
         fail('VERIFY_FAILED', '文件校验失败，原目标已保留')
       await target.chmod(f.temporary, f.stat.mode)
+      await this.phase(job, 'committing')
       await this.mutate(c.targetProfile, async () => {
-        await this.checkTarget(target, f)
+        await this.checkTarget(target, f, job.controller.signal)
+        job.controller.signal.throwIfAborted()
         await target.rename(f.temporary, f.dest, !!f.target)
       })
       f.complete = true
@@ -559,6 +588,8 @@ export class SftpService {
     job.controller.abort()
     await job.run
     await this.serial(job, async () => {
+      // A successful rename can win a concurrent pause/cancel. Preserve that outcome.
+      if (job.checkpoint.task.status === 'completed') return
       await job.handle?.close()
       job.handle = undefined
       if (job.uploadId) {
@@ -615,7 +646,7 @@ export class SftpService {
           this.forProfile(c.sourceProfile, c.sourceBinding, c.sourceSession),
           c.archive.paths,
         )
-      }
+      } else c.task.size = c.files.reduce((size, file) => size + (file.dir ? 0 : file.stat.size), 0)
     }
     job.controller = new AbortController()
     c.task.status = 'queued'
@@ -704,7 +735,22 @@ export class SftpService {
       case 'sftp.uploadFinish': {
         const p = sftp[operation].input.parse(d),
           j = this.uploads.get(p.uploadId) ?? fail('NOT_FOUND', '上传通道已关闭')
-        return this.serial(j, () => this.uploadFinish(j))
+        return this.serial(j, async () => {
+          j.controller.signal.throwIfAborted()
+          if (!j.handle || !j.uploadId) fail('NOT_FOUND', '上传通道已关闭')
+          if (j.run) fail('TRANSFER_BUSY', '正在提交上传，请等待任务结果')
+          if (j.checkpoint.files[0].offset !== j.checkpoint.task.size)
+            fail('UPLOAD_INCOMPLETE', '上传尚未完成')
+          // Completion may include checking a large existing target. It is a job,
+          // not a 30-second RPC; errors and completion are delivered through task events.
+          j.run = this.uploadFinish(j)
+            .catch((e) => this.uploadFailed(j, e))
+            .finally(() => {
+              this.releaseUpload(j)
+              this.schedule()
+            })
+          return { tasks: [{ ...j.checkpoint.task }] }
+        })
       }
       case 'sftp.download':
         return this.download(sftp[operation].input.parse(d))
@@ -946,7 +992,6 @@ export class SftpService {
         identity: '',
       },
       target: target.stat,
-      targetHash: target.hash,
       temporary: posix.join(p.destDir, `.eizhu-${randomUUID()}.part`),
       offset: 0,
       complete: false,
@@ -979,10 +1024,7 @@ export class SftpService {
       const endpoint = this.forProfile(c.targetProfile, c.targetBinding, c.targetSession)
       await this.checkTarget(endpoint, f)
       const stage = await endpoint.optional(f.temporary)
-      if (
-        f.offset &&
-        (!stage || stage.size !== f.offset || (await fileHash(endpoint, f.temporary)) !== f.prefixHash)
-      )
+      if (f.offset && (!stage || stage.size !== f.offset))
         fail('CHECKPOINT_CHANGED', '上传暂存文件已变化，请重新开始')
       if (!f.offset && stage) fail('CHECKPOINT_CHANGED', '上传暂存文件已存在')
       j.digest = createHash('sha256')
@@ -999,13 +1041,21 @@ export class SftpService {
         } finally {
           await h.close()
         }
+        if (j.digest.copy().digest('hex') !== f.prefixHash)
+          fail('CHECKPOINT_CHANGED', '上传暂存文件已变化，请重新开始')
       }
       j.handle = await endpoint.open(f.temporary, true, !f.offset)
       j.controller = new AbortController()
+      j.run = undefined
+      j.started = Date.now()
+      j.initial = f.offset
       j.uploadId = randomUUID()
       j.busy = true
       this.uploads.set(j.uploadId, j)
       c.task.status = 'transferring'
+      c.task.phase = 'transferring'
+      delete c.task.error_code
+      delete c.task.error_message
       c.task.execution_generation = (c.task.execution_generation ?? 0) + 1
       await this.save(j)
       return { upload_id: j.uploadId, tasks: [c.task], received: f.offset, sequence: c.upload!.sequence }
@@ -1016,7 +1066,7 @@ export class SftpService {
       j.uploadId = undefined
       j.busy = false
       this.active--
-      const f = failureOf(e)
+      const f = transferFailure(e)
       Object.assign(j.checkpoint.task, {
         status: 'failed',
         error_code: f.code,
@@ -1058,13 +1108,21 @@ export class SftpService {
     const c = j.checkpoint,
       f = c.files[0]
     j.controller.signal.throwIfAborted()
+    if (!j.handle || !j.uploadId) fail('NOT_FOUND', '上传通道已关闭')
+    if (j.run) fail('TRANSFER_BUSY', '正在提交上传，请等待任务结果')
     if (sequence !== c.upload!.sequence || f.offset + data.byteLength > c.task.size)
       fail('BAD_SEQUENCE', '上传分块序号或长度不匹配')
-    await j.handle!.write(f.offset, data)
-    await j.handle!.sync()
+    try {
+      await j.handle.write(f.offset, data)
+      await j.handle.sync()
+    } catch (e) {
+      await this.uploadFailed(j, e)
+      throw e
+    }
     f.offset += data.byteLength
     c.upload!.sequence++
     c.task.transferred = f.offset
+    c.task.speed = Math.max(0, ((f.offset - j.initial!) * 1000) / Math.max(1, Date.now() - j.started!))
     // Persist a hash of the acknowledged bytes; a resumed stream revalidates staging before appending.
     j.digest!.update(data)
     f.prefixHash = j.digest!.copy().digest('hex')
@@ -1078,14 +1136,20 @@ export class SftpService {
     const c = j.checkpoint,
       f = c.files[0],
       endpoint = this.forProfile(c.targetProfile, c.targetBinding, c.targetSession)
-    if (f.offset !== c.task.size) fail('UPLOAD_INCOMPLETE', '上传尚未完成')
+    await this.phase(j, 'verifying')
     await j.handle!.close()
     j.handle = undefined
-    if ((await fileHash(endpoint, f.temporary)) !== (f.prefixHash ?? hash(Buffer.alloc(0))))
-      fail('VERIFY_FAILED', '上传暂存文件校验失败')
+    // WRITE callbacks acknowledge all bytes; CLOSE is also acknowledged. Avoid
+    // downloading the entire upload again just to finish it. Recovery still
+    // validates the saved SHA-256 prefix before allowing any append.
+    const written = await endpoint.stat(f.temporary)
+    if ((written.mode & 0o170000) !== 0o100000 || written.size !== c.task.size)
+      fail('VERIFY_FAILED', '上传暂存文件长度不匹配')
     await endpoint.chmod(f.temporary, f.stat.mode)
+    await this.phase(j, 'committing')
     await this.mutate(c.targetProfile, async () => {
-      await this.checkTarget(endpoint, f)
+      await this.checkTarget(endpoint, f, j.controller.signal)
+      j.controller.signal.throwIfAborted()
       await endpoint.rename(f.temporary, f.dest, !!f.target)
     })
     f.complete = true
@@ -1095,13 +1159,31 @@ export class SftpService {
       speed: 0,
       finished_at: Date.now(),
     })
-    this.uploads.delete(j.uploadId!)
-    j.uploadId = undefined
-    j.busy = false
-    this.active--
     await this.save(j)
+  }
+  private releaseUpload(j: Job) {
+    if (!j.uploadId) return
+    this.uploads.delete(j.uploadId)
+    j.uploadId = undefined
+    j.digest = undefined
+    if (j.busy) {
+      j.busy = false
+      this.active--
+    }
+  }
+  private async uploadFailed(j: Job, cause: unknown) {
+    await j.handle?.close().catch(() => undefined)
+    j.handle = undefined
+    this.releaseUpload(j)
+    if (!j.controller.signal.aborted) {
+      const error = transferFailure(cause)
+      Object.assign(j.checkpoint.task, {
+        status: 'failed', speed: 0, error_code: error.code,
+        error_message: error.message, retryable: true,
+      })
+      await this.save(j)
+    }
     this.schedule()
-    return { tasks: [c.task] }
   }
   private async download(p: import('zod').infer<(typeof sftp)['sftp.download']['input']>) {
     const source = this.endpoint(p.sessionId),

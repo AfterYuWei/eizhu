@@ -295,6 +295,7 @@ export interface DomainOperations {
     input: { uploadId: string; data: Uint8Array<ArrayBufferLike>; sequence: number }
     output: void
   }
+  /** 接受后台提交；以任务 completed/failed 事件或 listTransfers 查询最终结果。 */
   'sftp.uploadFinish': { input: { uploadId: string }; output: SftpUploadResponse }
 }
 

@@ -9,12 +9,14 @@ export async function fileHash(
   endpoint: FileEndpoint,
   path: string,
   limit = Number.MAX_SAFE_INTEGER,
+  signal?: AbortSignal,
 ): Promise<string> {
   const h = await endpoint.open(path),
     digest = createHash('sha256')
   let offset = 0
   try {
     while (offset < limit) {
+      signal?.throwIfAborted()
       const bytes = await h.read(offset, Math.min(512 * 1024, limit - offset))
       if (!bytes.length) break
       digest.update(bytes)

@@ -5,9 +5,10 @@ import type { BrowserWindow } from 'electron'
 import { spawn, execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
-import { existsSync } from 'node:fs'
+import { existsSync, createReadStream } from 'node:fs'
 import { mkdir, writeFile, readFile, stat, readdir, realpath, chmod } from 'node:fs/promises'
 import { join } from 'node:path'
+import { createHash } from 'node:crypto'
 import { gunzipSync } from 'node:zlib'
 import { displayPath } from '@eizhu/core/sftp/endpoint'
 import type { RuntimeHost } from './runtime-host.ts'
@@ -333,7 +334,38 @@ export async function verifyStage4(
       `window.eizhu.sftp.uploadChunk({uploadId:${JSON.stringify(resumed.upload_id)},sequence:1,data:new TextEncoder().encode('def')})`,
     )
     await call('sftp.uploadFinish', { uploadId: resumed.upload_id })
+    await completed(upload.tasks[0].id)
     assert.equal(await readFile(join(remote, 'dest', 'upload.txt'), 'utf8'), 'abcdef')
+    const largeBytes = Number(process.env.EIZHU_SMOKE_SFTP_LARGE_BYTES ?? 32 * 1024 * 1024 + 17)
+    assert.ok(Number.isSafeInteger(largeBytes) && largeBytes >= 32 * 1024 * 1024 && largeBytes <= 8 * 1024 ** 3)
+    const largeStarted = Date.now()
+    const large = await call<{ upload_id: string; tasks: Array<{ id: string }> }>('sftp.uploadBegin', {
+      sessionId, name: 'large-upload.bin', destDir: dest, overwrite: false,
+      size: largeBytes, lastModified: 42,
+    })
+    await window.webContents.executeJavaScript(`(async()=>{
+      const data=new Uint8Array(524288).fill(73);
+      for(let offset=0,sequence=0;offset<${largeBytes};sequence++){
+        const chunk=data.subarray(0,Math.min(data.length,${largeBytes}-offset));
+        await window.eizhu.sftp.uploadChunk({uploadId:${JSON.stringify(large.upload_id)},sequence,data:chunk});
+        offset+=chunk.length;
+      }
+    })()`)
+    const finishStarted = Date.now()
+    await call('sftp.uploadFinish', { uploadId: large.upload_id })
+    await completed(large.tasks[0].id)
+    const finalizeMs = Date.now() - finishStarted
+    const largePath = join(remote, 'dest', 'large-upload.bin')
+    assert.equal((await stat(largePath)).size, largeBytes)
+    const actualHash = createHash('sha256')
+    for await (const block of createReadStream(largePath)) actualHash.update(block)
+    const expectedHash = createHash('sha256')
+    const expectedBlock = Buffer.alloc(512 * 1024, 73)
+    for (let offset = 0; offset < largeBytes; offset += expectedBlock.length)
+      expectedHash.update(expectedBlock.subarray(0, Math.min(expectedBlock.length, largeBytes - offset)))
+    assert.equal(actualHash.digest('hex'), expectedHash.digest('hex'))
+    const largeUploadMs = Date.now() - largeStarted
+    step(`large-upload-${largeBytes}-committed`)
     const download = await call<{ tasks: Array<{ id: string }> }>('sftp.download', {
       sessionId,
       paths: [source + '/large.bin'],
@@ -513,8 +545,8 @@ export async function verifyStage4(
     const reopenedSessions = await call<Array<{ id: string }>>('sftp.listSessions')
     assert.deepEqual(reopenedSessions.map((session) => session.id).sort(), fileSessions.map((session) => session.id).sort())
     await window.webContents.executeJavaScript(`window.eizhu.sftp.uploadChunk({uploadId:${JSON.stringify(inFlight.upload_id)},sequence:0,data:new TextEncoder().encode('123456')})`)
-    const finished = await call<{ tasks: Array<{ id: string; status: string }> }>('sftp.uploadFinish', { uploadId: inFlight.upload_id })
-    assert.equal(finished.tasks[0].status, 'completed', '页面切换不暂停或中断进行中的上传')
+    await call('sftp.uploadFinish', { uploadId: inFlight.upload_id })
+    await completed(inFlight.tasks[0].id)
     assert.equal(await readFile(join(remote, 'navigation-inflight.txt'), 'utf8'), '123456')
     // 普通导航保持连接；烟测结束时通过内部断开按钮释放合成服务器。
     await window.webContents.executeJavaScript(`document.querySelectorAll('.sftp-ptab-x').forEach(button=>button.click());document.querySelector('.shell-tab-add').click();delete window.__stage4Sftp`)
@@ -548,6 +580,7 @@ export async function verifyStage4(
       subsystem: 'OpenSSH sftp-server',
       hostKeyConfirmation: true,
       streaming: true,
+      largeUpload: { bytes: largeBytes, elapsedMs: largeUploadMs, finalizeMs, sha256: true },
       resume: true,
       relay: true,
       tarGz: true,

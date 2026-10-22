@@ -30,6 +30,7 @@ export const transferTaskSchema = z.strictObject({
   size: uint,
   transferred: uint,
   status: z.enum(['queued', 'transferring', 'completed', 'failed', 'cancelled', 'paused', 'recoverable']),
+  phase: z.enum(['preparing', 'transferring', 'verifying', 'committing']).optional(),
   speed: z.number().finite().nonnegative(),
   started_at: uint,
   finished_at: uint.optional(),

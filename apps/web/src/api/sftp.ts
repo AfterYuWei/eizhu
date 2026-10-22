@@ -266,11 +266,15 @@ async function sendUpload(
       }
     }
     if (buffered > 0) await sendChunk(buffer.subarray(0, buffered))
+    // This accepts background finalization. Events/listTransfers own the final
+    // completed/failed outcome, including close, conflict check, and rename.
     return await bridge().sftp.uploadFinish({ uploadId })
   } catch (cause) {
     if (generation === workspaceGeneration() && begin.tasks[0]) {
       try {
-        await sftpApi.pauseTransfer(begin.tasks[0].id)
+        const task = (await sftpApi.listTransfers()).find((task) => task.id === begin.tasks[0].id)
+        if (task && ['queued', 'transferring'].includes(task.status))
+          await sftpApi.pauseTransfer(task.id)
       } catch {
         /* Keep the original error and durable checkpoint. */
       }

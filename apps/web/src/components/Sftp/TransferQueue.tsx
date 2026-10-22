@@ -21,7 +21,7 @@ import { sftpApi } from '@/api/sftp'
 import { normalizeCommandError } from '@eizhu/contracts'
 import { Dialog,DialogContent,DialogHeader,DialogTitle,DialogDescription,DialogFooter } from '@/components/ui/dialog'
 import type { TransferTask } from '@/types/sftp'
-import { transferProgress } from '@/lib/transferTasks'
+import { transferProgress, transferPhaseLabel } from '@/lib/transferTasks'
 
 function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
@@ -39,7 +39,7 @@ function formatSpeed(bytesPerSec: number): string {
 function statusMeta(task: TransferTask) {
   switch (task.status) {
     case 'transferring':
-      return { icon: <Loader2 size={12} className="sftp-tx-spin" />, label: task.transferred >= task.size ? '正在完成' : '传输中', cls: 'transferring' }
+      return { icon: <Loader2 size={12} className="sftp-tx-spin" />, label: transferPhaseLabel(task), cls: 'transferring' }
     case 'paused':
       return { icon: <Pause size={12} />, label: '已暂停', cls: 'paused' }
     case 'recoverable':
@@ -162,7 +162,7 @@ export function TransferQueue() {
                 </span>
                 <span className={`sftp-tx-status ${meta.cls}`}>
                   {meta.icon}
-                  {task.status === 'transferring' && task.transferred < task.size ? formatSpeed(task.speed) : meta.label}
+                  {task.status === 'transferring' && (!task.phase || task.phase === 'transferring') && task.transferred < task.size ? formatSpeed(task.speed) : meta.label}
                 </span>
                 {(['queued', 'transferring'].includes(task.status)) && <Button variant="ghost" size="icon-xs" title="暂停" aria-label={`暂停 ${task.file_name}`} disabled={busy.has(task.id)} onClick={() => void run(task.id, () => pauseTransfer(task.id))}><Pause size={12} /></Button>}
                 {(['paused', 'recoverable'].includes(task.status) || (task.status === 'failed' && task.retryable)) && <Button variant="ghost" size="icon-xs" title={task.status === 'failed' ? '重试' : '继续'} aria-label={`继续 ${task.file_name}`} disabled={busy.has(task.id)} onClick={() => void run(task.id, () => resumeTransfer(task.id))}><Play size={12} /></Button>}

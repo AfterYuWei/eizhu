@@ -28,6 +28,8 @@ export interface TransferTask {
   size: number
   transferred: number
   status: TransferStatus
+  /** 当前执行步骤；字节传完后仍需关闭、检查和提交。 */
+  phase?: 'preparing' | 'transferring' | 'verifying' | 'committing'
   /** bytes/sec */
   speed: number
   started_at: number // Unix milliseconds

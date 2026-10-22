@@ -27,6 +27,22 @@ afterEach(() => {
 })
 
 describe('sftpApi', () => {
+  it('后端写入失败后保留失败状态，不再用暂停覆盖错误', async () => {
+    setWorkspaceGeneration(1)
+    const file = new File(['abc'], 'a')
+    Object.defineProperty(file, 'stream', {
+      value: () => new ReadableStream({ start(controller) {
+        controller.enqueue(new Uint8Array([1, 2, 3])); controller.close()
+      } }),
+    })
+    invoke.mockImplementation(async (command: string) => {
+      if (command === 'sftp.uploadBegin') return { upload_id: 'ul', tasks: [{ id: 'tx' }] }
+      if (command === 'sftp.uploadChunk') throw { code: 'DISK_FULL', message: '合成磁盘已满' }
+      if (command === 'sftp.listTransfers') return [{ id: 'tx', status: 'failed' }]
+    })
+    await expect(sftpApi.upload('s', [file], '/')).rejects.toThrow('合成磁盘已满')
+    expect(invoke.mock.calls.some(([name]) => name === 'sftp.pauseTransfer')).toBe(false)
+  })
   it('通过细粒度 领域接口 发起跨会话传输', async () => {
     const response = { task_id: 'tx-1', method: 'relay', tasks: [] }
     invoke.mockResolvedValue(response)

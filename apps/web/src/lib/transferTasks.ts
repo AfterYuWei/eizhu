@@ -1,5 +1,14 @@
 import type { TransferTask } from '@/types/sftp'
 
+export function transferPhaseLabel(task: TransferTask): string {
+  switch (task.phase) {
+    case 'preparing': return '准备文件'
+    case 'verifying': return '检查文件'
+    case 'committing': return '提交文件'
+    default: return task.transferred >= task.size ? '正在完成' : '传输中'
+  }
+}
+
 /** 100% means the staging file has actually been committed. */
 export function transferProgress(task: TransferTask): number {
   if (task.status === 'completed') return 100

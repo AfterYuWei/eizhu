@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { SftpService } from './service.ts'
-import { displayPath } from './endpoint.ts'
+import { FileEndpoint, displayPath } from './endpoint.ts'
 import type { WorkerClient } from '../workers/client.ts'
 import type { SshService } from '../ssh/service.ts'
 import type { TransferTask, SftpUploadBeginResponse } from '@eizhu/contracts/models/sftp'
@@ -13,6 +13,7 @@ import { hash } from './editor.ts'
 async function setup() {
   const root = await mkdtemp(join(tmpdir(), 'eizhu-transfer-')),
     saved = new Map<string, unknown>(),
+    events: Array<{ type: string; payload: TransferTask }> = [],
     context = { runtimeId: randomUUID(), workspaceId: 'offline', generation: 1 }
   await mkdir(join(root, 'dest'))
   const db = {
@@ -28,16 +29,21 @@ async function setup() {
       db,
       context,
       root,
-      () => undefined,
+      (_name, event) => events.push(structuredClone(event) as (typeof events)[number]),
       root,
     )
   const service = make()
   const session = (await service.execute('sftp.createSession', { profileId: 'local' })) as {
     session_id: string
   }
-  return { root, service, session: session.session_id, make, dest: displayPath(join(root, 'dest')) }
+  return { root, service, session: session.session_id, make, events, dest: displayPath(join(root, 'dest')) }
 }
 const code = (expected: string) => (e: unknown) => (e as { error: { code: string } }).error.code === expected
+function deferred() {
+  let resolve!: () => void
+  const promise = new Promise<void>((done) => { resolve = done })
+  return { promise, resolve }
+}
 test('上传按序确认，暂停保留检查点，重启手动恢复并校验原文件', async () => {
   const x = await setup()
   let service = x.service
@@ -92,6 +98,7 @@ test('上传按序确认，暂停保留检查点，重启手动恢复并校验�
       sequence: 1,
     })
     await service.execute('sftp.uploadFinish', { uploadId: resumed.upload_id })
+    assert.equal((await terminal(service, list[0].id)).status, 'completed')
     assert.equal(await readFile(join(x.root, 'dest', 'a'), 'utf8'), 'abcdef')
     await assert.rejects(
       service.execute('sftp.uploadChunk', {
@@ -125,10 +132,8 @@ test('上传仅在校验与提交后替换目标；目标变化和取消均保�
     })
     assert.equal(await readFile(join(x.root, 'dest', 'a'), 'utf8'), 'original')
     await writeFile(join(x.root, 'dest', 'a'), 'external')
-    await assert.rejects(
-      x.service.execute('sftp.uploadFinish', { uploadId: b.upload_id }),
-      code('TARGET_CHANGED'),
-    )
+    await x.service.execute('sftp.uploadFinish', { uploadId: b.upload_id })
+    assert.equal((await terminal(x.service, b.tasks[0].id)).error_code, 'TARGET_CHANGED')
     await x.service.execute('sftp.cancelTransfer', { taskId: b.tasks[0].id })
     assert.equal(await readFile(join(x.root, 'dest', 'a'), 'utf8'), 'external')
     assert.deepEqual(await readdir(join(x.root, 'dest')), ['a'])
@@ -284,7 +289,141 @@ test('源文件在排队期间变化，恢复后拒绝提交目标', async () =>
     await x.service.execute('sftp.resumeTransfer', { taskId: id })
     assert.equal((await terminal(x.service, id)).error_code, 'SOURCE_CHANGED')
     assert.ok(!(await readdir(join(x.root, 'dest'))).includes('a'))
+    await x.service.execute('sftp.retryTransfer', { taskId: id, restart: true })
+    const restarted = await terminal(x.service, id)
+    assert.equal(restarted.status, 'completed')
+    assert.equal(restarted.size, 5)
+    assert.equal(restarted.transferred, 5)
+    assert.equal(await readFile(join(x.root, 'dest', 'a'), 'utf8'), 'after')
   } finally {
+    await x.service.close()
+    await rm(x.root, { recursive: true, force: true })
+  }
+})
+
+const beginUpload = (x: Awaited<ReturnType<typeof setup>>, name: string, size: number) =>
+  x.service.execute('sftp.uploadBegin', {
+    sessionId: x.session, name, destDir: x.dest, overwrite: false, size, lastModified: 1,
+  }) as Promise<SftpUploadBeginResponse>
+
+test('多块上传与复制完成时不再整文件回读，阶段事件强制送达', async (t) => {
+  const x = await setup()
+  const open = FileEndpoint.prototype.open
+  let stageReads = 0
+  t.mock.method(FileEndpoint.prototype, 'open', async function (this: FileEndpoint, path: string, ...args: [boolean?, boolean?]) {
+    const h = await open.call(this, path, ...args)
+    if (path.endsWith('.part') && !args[0]) stageReads++
+    return h
+  })
+  try {
+    const block = Buffer.alloc(512 * 1024, 91), size = 8 * 1024 * 1024 + 17
+    const begin = await beginUpload(x, 'large.bin', size)
+    for (let offset = 0, sequence = 0; offset < size; sequence++) {
+      const data = block.subarray(0, Math.min(block.length, size - offset))
+      await x.service.execute('sftp.uploadChunk', { uploadId: begin.upload_id, data, sequence })
+      offset += data.length
+    }
+    await x.service.execute('sftp.uploadFinish', { uploadId: begin.upload_id })
+    assert.equal((await terminal(x.service, begin.tasks[0].id)).status, 'completed')
+    assert.equal(hash(await readFile(join(x.root, 'dest', 'large.bin'))), hash(Buffer.alloc(size, 91)))
+    const copied = await x.service.execute('sftp.transfer', {
+      sourceSessionId: x.session, targetSessionId: x.session,
+      paths: [x.dest + '/large.bin'], destDir: displayPath(x.root),
+      conflictResolution: 'ask', directoryMode: 'preserve',
+    }) as { tasks: TransferTask[] }
+    assert.equal((await terminal(x.service, copied.tasks[0].id)).status, 'completed')
+    assert.equal(stageReads, 0)
+    const phases = x.events.filter((event) => event.payload.id === begin.tasks[0].id).map((event) => event.payload.phase)
+    assert.ok(phases.includes('verifying'))
+    assert.ok(phases.includes('committing'))
+    assert.equal(x.events.filter((event) => event.type === 'transfer_complete').length, 2)
+  } finally {
+    await x.service.close()
+    await rm(x.root, { recursive: true, force: true })
+  }
+})
+
+test('完成请求先返回，等 CLOSE 和 rename 确认后才发布已完成；提交胜出的取消不改写结果', async (t) => {
+  const x = await setup()
+  const rename = FileEndpoint.prototype.rename
+  const entered = deferred(), release = deferred()
+  t.mock.method(FileEndpoint.prototype, 'rename', async function (this: FileEndpoint, ...args: Parameters<typeof rename>) {
+    entered.resolve()
+    await release.promise
+    return rename.apply(this, args)
+  })
+  try {
+    const begin = await beginUpload(x, 'a', 0)
+    const accepted = await x.service.execute('sftp.uploadFinish', { uploadId: begin.upload_id }) as { tasks: TransferTask[] }
+    assert.equal(accepted.tasks[0].status, 'transferring')
+    await entered.promise
+    assert.equal(x.events.some((event) => event.type === 'transfer_complete'), false)
+    const stopping = x.service.execute('sftp.cancelTransfer', { taskId: begin.tasks[0].id })
+    release.resolve()
+    assert.equal((await stopping as TransferTask).status, 'completed')
+    assert.equal((await readFile(join(x.root, 'dest', 'a'))).length, 0)
+  } finally {
+    release.resolve()
+    await x.service.close()
+    await rm(x.root, { recursive: true, force: true })
+  }
+})
+
+test('写入与最终提交失败均发布失败并释放五路名额，拒绝旧上传通道', async (t) => {
+  const x = await setup()
+  const open = FileEndpoint.prototype.open
+  t.mock.method(FileEndpoint.prototype, 'open', async function (this: FileEndpoint, path: string, ...args: [boolean?, boolean?]) {
+    const h = await open.call(this, path, ...args)
+    if (path.endsWith('.part') && args[0]) h.write = async () => {
+      throw Object.assign(new Error('synthetic disk full'), { code: 'ENOSPC' })
+    }
+    return h
+  })
+  try {
+    const held = []
+    for (let i = 0; i < 5; i++) held.push(await beginUpload(x, `held${i}`, 1))
+    await assert.rejects(x.service.execute('sftp.uploadChunk', {
+      uploadId: held[0].upload_id, data: Buffer.from('a'), sequence: 0,
+    }), /synthetic disk full/)
+    assert.equal((await terminal(x.service, held[0].tasks[0].id)).status, 'failed')
+    assert.equal((await terminal(x.service, held[0].tasks[0].id)).error_code, 'DISK_FULL')
+    await assert.rejects(x.service.execute('sftp.uploadChunk', {
+      uploadId: held[0].upload_id, data: Buffer.from('a'), sequence: 0,
+    }), code('NOT_FOUND'))
+    const last = await beginUpload(x, 'last', 0)
+    t.mock.method(FileEndpoint.prototype, 'chmod', async () => { throw new Error('synthetic permission denied') })
+    await x.service.execute('sftp.uploadFinish', { uploadId: last.upload_id })
+    assert.equal((await terminal(x.service, last.tasks[0].id)).status, 'failed')
+    await beginUpload(x, 'replacement', 0)
+    assert.equal(x.events.filter((event) => event.type === 'transfer_failed').length, 2)
+  } finally {
+    await x.service.close()
+    await rm(x.root, { recursive: true, force: true })
+  }
+})
+
+test('提交前取消阻止最终重命名并清理暂存', async (t) => {
+  const x = await setup()
+  const chmod = FileEndpoint.prototype.chmod
+  const entered = deferred(), release = deferred()
+  let renames = 0
+  t.mock.method(FileEndpoint.prototype, 'chmod', async function (this: FileEndpoint, ...args: Parameters<typeof chmod>) {
+    entered.resolve()
+    await release.promise
+    return chmod.apply(this, args)
+  })
+  t.mock.method(FileEndpoint.prototype, 'rename', async () => { renames++ })
+  try {
+    const begin = await beginUpload(x, 'cancelled', 0)
+    await x.service.execute('sftp.uploadFinish', { uploadId: begin.upload_id })
+    await entered.promise
+    const stopping = x.service.execute('sftp.cancelTransfer', { taskId: begin.tasks[0].id })
+    release.resolve()
+    assert.equal((await stopping as TransferTask).status, 'cancelled')
+    assert.equal(renames, 0)
+    assert.deepEqual(await readdir(join(x.root, 'dest')), [])
+  } finally {
+    release.resolve()
     await x.service.close()
     await rm(x.root, { recursive: true, force: true })
   }
