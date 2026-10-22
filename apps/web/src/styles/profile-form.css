@@ -1,11 +1,87 @@
-/* ===== PROFILE FORM (add/edit connection dialog) ===== */
-/* Vercel-style: vertical label-above-input layout and compact grid card.
-   Interactive controls keep the shared shadcn focus treatment. */
-.pf-form {
+/* ===== 新建 / 编辑连接 ===== */
+.pf-dialog-content[data-slot='dialog-content'] {
+  --pf-muted: color-mix(in srgb, var(--fg) 62%, var(--surface-panel));
+  --pf-placeholder: color-mix(in srgb, var(--fg) 59%, var(--bg-active));
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  width: min(600px, calc(100vw - 2rem));
+  height: auto;
+  max-height: min(520px, calc(100dvh - 2rem));
+  padding: 0;
+  overflow: hidden;
+  font: 400 var(--sans-size) / 1.5 var(--sans);
+}
+.pf-header {
+  flex: none;
+  gap: 6px;
+  padding: 22px 48px 16px 24px;
+  text-align: left;
+}
+.pf-header [data-slot='dialog-title'] { font: 600 max(20px, var(--sans-size)) / 1.4 var(--sans); }
+.pf-header [data-slot='dialog-description'] { color: var(--pf-muted); font: inherit; }
+.pf-form, .pf-tabs { display: flex; flex: 0 1 auto; flex-direction: column; min-height: 0; gap: 0; }
+.pf-tab-list[data-slot='tabs-list'] {
+  flex: none;
+  justify-content: flex-start;
+  gap: 24px;
+  width: auto;
+  height: auto;
+  margin: 0 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.pf-tab-list > [role='tab'] {
+  flex: none;
+  height: auto;
+  min-height: 38px;
+  padding: 0 0 10px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--pf-muted);
+  font: inherit;
+  box-shadow: none;
+}
+.pf-tab-list > [role='tab'][data-state='active'] { color: var(--fg); background: transparent; }
+.pf-tab-list > [role='tab']::after { inset: auto 0 -1px; width: auto; height: 2px; background: var(--fg-2); }
+.pf-body { flex: 0 1 auto; min-height: 0; overflow-y: auto; padding: 20px 24px 12px; scrollbar-gutter: stable; }
+.pf-panel { display: flex; flex-direction: column; gap: 16px; }
+.pf-panel[hidden] { display: none; }
+.pf-group {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--edge-soft);
+  border-radius: var(--r-lg);
+  background: var(--surface-app);
 }
+.pf-hint { margin: -4px 0 0; color: var(--pf-muted); font-size: max(12px, calc(var(--sans-size) - 2px)); }
+.pf-dialog-content .pf-field :where(input:not([type='file']), textarea, [data-slot='select-trigger'], .vault-select-btn) {
+  height: auto;
+  min-height: 30px;
+  padding: 4px 10px;
+  border-color: var(--border);
+  border-radius: var(--r-sm);
+  background: var(--bg-active);
+  color: var(--fg);
+  font-size: var(--sans-size);
+  line-height: 1.5;
+  box-shadow: none;
+}
+.pf-dialog-content .pf-field :is(input, textarea)::placeholder {
+  color: var(--pf-placeholder);
+  font-family: var(--sans);
+  font-size: var(--sans-size);
+  opacity: 1;
+}
+.pf-dialog-content .vault-select-btn-placeholder { color: var(--pf-placeholder); }
+.pf-dialog-content .pf-note { min-height: 84px; field-sizing: fixed; resize: vertical; }
+.pf-close { position: absolute; top: 18px; right: 18px; color: var(--pf-muted); }
 /* Vertical field — label on top, control below. */
 .pf-field {
   display: flex;
@@ -13,11 +89,10 @@
   gap: 8px;
   min-width: 0;
 }
-/* Label — small, muted, medium weight (Vercel aesthetic). */
+/* 标签和输入内容跟随用户界面字号。 */
 .pf-label {
-  font: 500 var(--sans-size) / 1 var(--sans) !important;
-  color: var(--fg-3) !important;
-  letter-spacing: 0.01em;
+  font: 400 var(--sans-size) / 1.5 var(--sans);
+  color: var(--fg);
 }
 .pf-field-head {
   display: flex;
@@ -50,29 +125,25 @@
 /* 2-column grid row for host:port / username:auth pairs. */
 .pf-grid-2 {
   display: grid;
-  grid-template-columns: 3fr 1fr;
+  grid-template-columns: minmax(0, 1fr) 100px;
   gap: 12px;
 }
 .pf-grid-2.pf-grid-equal {
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 /* Monospace inputs — IP / port / username / host use mono font. */
-.pf-input-mono,
-.pf-input-mono::placeholder {
-  font-family: var(--mono) !important;
-  font-size: 12.5px !important;
-}
+.pf-input-mono { font-family: var(--mono); }
 /* Name input group with icon prefix. */
 .pf-input-group {
   display: flex;
   align-items: stretch;
   position: relative;
 }
-.pf-input-group > input {
+.pf-dialog-content .pf-input-group > input {
   padding-left: 38px;
 }
-.pf-input-group-action > input {
-  padding-left: 12px;
+.pf-dialog-content .pf-input-group-action > input {
+  padding-left: 10px;
   padding-right: 40px;
 }
 .pf-inline-action {
@@ -94,18 +165,6 @@
 .pf-inline-action:hover {
   color: var(--fg);
 }
-.pf-section-divider {
-  height: 1px;
-  background: var(--border-subtle);
-  margin: 2px 0;
-}
-.pf-section-title {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  color: var(--fg-2);
-  font: 600 var(--sans-size) / 1 var(--sans);
-}
 .pf-clear-secret {
   align-self: flex-start;
   border: 0;
@@ -116,9 +175,9 @@
   cursor: pointer;
 }
 .pf-test-result {
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  background: var(--bg-panel);
+  border: 1px solid var(--edge-soft);
+  border-radius: var(--r-lg);
+  background: var(--surface-app);
   padding: 10px 12px;
 }
 .pf-test-result.success {
@@ -163,7 +222,6 @@
   gap: 7px;
   margin-top: 9px;
   padding-top: 9px;
-  border-top: 1px solid var(--border-subtle);
 }
 .pf-test-stage {
   color: var(--fg-3);
@@ -238,28 +296,12 @@
   color: var(--accent);
 }
 /* Private-key textarea. */
-.pf-key-textarea {
+.pf-dialog-content .pf-key-textarea {
   font-family: var(--mono) !important;
-  font-size: 11.5px !important;
+  min-height: 140px;
+  max-height: 240px;
+  field-sizing: fixed;
   resize: vertical;
-}
-/* Dark mode default input state — visible background + border. */
-:root.dark .pf-field input,
-:root.dark .pf-field textarea,
-:root.dark .pf-field select {
-  background: var(--bg-input) !important;
-  color: var(--fg) !important;
-}
-:root.dark .pf-field input::placeholder,
-:root.dark .pf-field textarea::placeholder {
-  color: var(--fg-4) !important;
-}
-:root.dark .pf-input-mono,
-:root.dark .pf-input-group > input,
-:root.dark .pf-field > input,
-:root.dark .pf-field > textarea,
-:root.dark .pf-field > div > select {
-  transition: border-color 0.18s, box-shadow 0.18s, background-color 0.18s;
 }
 .pf-field input:hover:not(:disabled):not(:focus-visible),
 .pf-field textarea:hover:not(:disabled):not(:focus-visible),
@@ -267,30 +309,49 @@
   border-color: var(--input-hover-border) !important;
   background: var(--input-hover-bg) !important;
 }
+.pf-feedback { flex: none; max-height: 140px; overflow-y: auto; padding: 0 24px; }
+.pf-feedback:empty { display: none; }
+.pf-feedback > :last-child { margin-bottom: 12px; }
 /* Error message. */
 .pf-error {
   font: 400 var(--sans-size) / 1.4 var(--sans);
   color: var(--red);
 }
-/* Footer — cancel left, submit right, main button slightly wider. */
+/* 操作栏固定在滚动区域外。 */
 .pf-footer {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-top: 24px;
-  padding-top: 16px;
-  border-top: 1px solid var(--border-subtle);
+  flex: none;
+  gap: 8px;
+  padding: 8px 24px 16px;
 }
 .pf-footer-spacer {
   flex: 1;
 }
 .pf-btn-test {
   gap: 6px;
-  margin-right: 8px;
 }
 .pf-btn-cancel {
   min-width: 76px;
 }
 .pf-btn-submit {
   min-width: 96px;
+}
+
+.pf-footer > button { height: auto; min-height: 30px; padding: 4px 10px; font: inherit; box-shadow: none; }
+.pf-footer > [data-variant='outline'] { border-color: var(--border); background: transparent; color: var(--fg); }
+.pf-footer > [data-variant='outline']:hover { background: var(--bg-hover); }
+.pf-footer > .pf-btn-submit { border: 1px solid var(--border); background: var(--bg-active); color: var(--fg); }
+.pf-footer > .pf-btn-submit:hover { background: var(--bg-hover); }
+.pf-dialog-content :is(button, input, textarea):focus-visible { outline: 1px solid var(--desktop-focus-border, var(--border)); outline-offset: 2px; --tw-ring-shadow: 0 0 #0000; }
+@media (max-width: 480px) {
+  .pf-header { padding-left: 16px; }
+  .pf-tab-list[data-slot='tabs-list'] { margin-inline: 16px; gap: 16px; }
+  .pf-body { padding: 16px 16px 12px; }
+  .pf-feedback { padding-inline: 16px; }
+  .pf-group { padding: 12px; }
+  .pf-grid-2.pf-grid-equal { grid-template-columns: minmax(0, 1fr); }
+  .pf-footer { padding: 8px 16px 16px; }
+  .pf-btn-cancel, .pf-btn-submit { min-width: 0; }
 }

@@ -1,10 +1,11 @@
 import { useCallback,useRef,useState } from 'react';
-import { CheckCircle2,Eye,EyeOff,LoaderCircle,Network,ShieldAlert,Upload,XCircle } from 'lucide-react';
-import { Dialog,DialogContent,DialogHeader,DialogTitle } from '@/components/ui/dialog';
+import { CheckCircle2,Eye,EyeOff,LoaderCircle,Network,ShieldAlert,Upload,X,XCircle } from 'lucide-react';
+import { Dialog,DialogClose,DialogContent,DialogDescription,DialogHeader,DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select,SelectContent,SelectItem,SelectTrigger,SelectValue } from '@/components/ui/select';
+import { Tabs,TabsContent,TabsList,TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { Popover,PopoverContent,PopoverTrigger } from '@/components/ui/popover';
 import { useProfileStore } from '@/store/profile';
@@ -15,6 +16,7 @@ import { jumpProfileCandidates,newProxyInput,proxyInputFromProfile } from '@/lib
 import { VaultSelectButton } from '@/components/Vault/VaultSelectButton';
 import type { Profile,ProfileCreateRequest,ProfileProxyInput,ProfileTestResult,ProxyType } from '@/types/profile';
 import type { VaultItem } from '@/types/vault';
+type ProfileFormTab = 'connection' | 'auth' | 'advanced';
 interface ProfileFormProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
@@ -58,6 +60,10 @@ export function ProfileForm({ open, onOpenChange, profile, presetGroupId }: Prof
             note: '',
         };
     });
+    const [activeTab, setActiveTab] = useState<ProfileFormTab>('connection');
+    const formRef = useRef<HTMLFormElement>(null);
+    const bodyRef = useRef<HTMLDivElement>(null);
+    const invalidFieldRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [passwordVisible, setPasswordVisible] = useState(false);
@@ -69,9 +75,38 @@ export function ProfileForm({ open, onOpenChange, profile, presetGroupId }: Prof
     const [selectedVaultItem, setSelectedVaultItem] = useState<VaultItem | null>(null);
     const autoVaultUsernameRef = useRef('');
     const privateKeyFileRef = useRef<HTMLInputElement>(null);
+    const changeTab = (tab: ProfileFormTab) => {
+        if (bodyRef.current) bodyRef.current.scrollTop = 0;
+        setActiveTab(tab);
+        setPasswordVisible(false);
+        setProxyPasswordVisible(false);
+    };
     const closeIconPopover = useCallback(() => setIconOpen(false), []);
+    // 所有页签保留挂载以参与原生校验；先显示第一个无效字段，再聚焦。
+    const handleInvalid = (event: React.FormEvent<HTMLFormElement>) => {
+        event.preventDefault();
+        if (invalidFieldRef.current) return;
+        const field = event.target as HTMLInputElement | HTMLTextAreaElement;
+        invalidFieldRef.current = field;
+        const tab = field.closest<HTMLElement>('[data-profile-tab]')?.dataset.profileTab as ProfileFormTab;
+        if (tab) changeTab(tab);
+        setError(field.validity.valueMissing ? `请填写${field.labels?.[0]?.textContent?.trim() || '必填项'}` : '请输入 1–65535 之间的端口');
+        requestAnimationFrame(() => {
+            field.focus();
+            invalidFieldRef.current = null;
+        });
+    };
+    const validateConnection = () => {
+        const id = !form.host.trim() ? 'host' : !form.username.trim() ? 'username' : null;
+        if (!id) return true;
+        changeTab('connection');
+        setError(id === 'host' ? '请填写主机' : '请填写用户名');
+        requestAnimationFrame(() => formRef.current?.querySelector<HTMLInputElement>(`#${id}`)?.focus());
+        return false;
+    };
     const handleSubmit = async (event: React.FormEvent) => {
         event.preventDefault();
+        if (!validateConnection()) return;
         setLoading(true);
         setError('');
         try {
@@ -82,11 +117,6 @@ export function ProfileForm({ open, onOpenChange, profile, presetGroupId }: Prof
                 name: form.name.trim() || host,
                 username: form.username.trim(),
             };
-            if (!payload.username) {
-                setError('用户名不能为空');
-                setLoading(false);
-                return;
-            }
             if (payload.auth_type === 'vault') {
                 payload.password = '';
                 payload.private_key = '';
@@ -116,6 +146,7 @@ export function ProfileForm({ open, onOpenChange, profile, presetGroupId }: Prof
         }
     };
     const runConnectionTest = async () => {
+        if (!formRef.current?.reportValidity() || !validateConnection()) return;
         setTesting(true);
         setTestResult(null);
         setError('');
@@ -127,10 +158,6 @@ export function ProfileForm({ open, onOpenChange, profile, presetGroupId }: Prof
                 name: form.name.trim() || host,
                 username: form.username.trim(),
             };
-            if (!payload.host.trim() || !payload.username) {
-                setError('请先填写主机和用户名');
-                return;
-            }
             if (payload.auth_type === 'vault') {
                 payload.password = '';
                 payload.private_key = '';
@@ -250,12 +277,25 @@ export function ProfileForm({ open, onOpenChange, profile, presetGroupId }: Prof
         setTestResult(null);
     };
     return (<Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="pf-dialog-content max-h-[calc(100dvh-2rem)] w-[min(760px,calc(100vw-2rem))] max-w-none overflow-y-auto">
-        <DialogHeader className="mb-6">
+      <DialogContent className="pf-dialog-content" showCloseButton={false}>
+        <DialogHeader className="pf-header">
           <DialogTitle>{isEditing ? '编辑连接' : '新建连接'}</DialogTitle>
+          <DialogDescription>配置服务器信息与 SSH 连接方式</DialogDescription>
         </DialogHeader>
+        <DialogClose asChild>
+          <Button type="button" variant="ghost" size="icon-sm" className="pf-close" aria-label="关闭连接表单"><X size={16}/></Button>
+        </DialogClose>
 
-        <form onSubmit={handleSubmit} id="profile-form" className="pf-form">
+        <form ref={formRef} onSubmit={handleSubmit} onInvalidCapture={handleInvalid} onChangeCapture={() => setError('')} id="profile-form" className="pf-form">
+          <Tabs value={activeTab} onValueChange={(value) => changeTab(value as ProfileFormTab)} className="pf-tabs">
+            <TabsList variant="line" className="pf-tab-list" aria-label="连接配置">
+              <TabsTrigger value="connection">基本连接</TabsTrigger>
+              <TabsTrigger value="auth">身份认证</TabsTrigger>
+              <TabsTrigger value="advanced">代理与备注</TabsTrigger>
+            </TabsList>
+            <div ref={bodyRef} className="pf-body">
+            <TabsContent value="connection" forceMount hidden={activeTab !== 'connection'} data-profile-tab="connection" className="pf-panel">
+              <div className="pf-group" role="group" aria-label="服务器信息">
           <div className="pf-field">
             <Label htmlFor="name" className="pf-label">
               名称（可选）
@@ -285,7 +325,7 @@ export function ProfileForm({ open, onOpenChange, profile, presetGroupId }: Prof
                   </PopoverContent>
                 </Popover>
               </div>
-              <Input id="name" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} placeholder="留空则使用主机地址" className="pf-input-mono"/>
+              <Input id="name" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} placeholder="留空时使用主机地址"/>
             </div>
           </div>
 
@@ -294,16 +334,17 @@ export function ProfileForm({ open, onOpenChange, profile, presetGroupId }: Prof
               <Label htmlFor="host" className="pf-label">
                 主机
               </Label>
-              <Input id="host" value={form.host} onChange={(event) => setForm({ ...form, host: event.target.value })} placeholder="192.168.1.100" required className="pf-input-mono"/>
+              <Input id="host" value={form.host} onChange={(event) => setForm({ ...form, host: event.target.value })} placeholder="例如：192.168.1.100" required className="pf-input-mono"/>
             </div>
             <div className="pf-field">
               <Label htmlFor="port" className="pf-label">
                 端口
               </Label>
-              <Input id="port" type="number" value={form.port} onChange={(event) => setForm({ ...form, port: parseInt(event.target.value, 10) || 22 })} className="pf-input-mono"/>
+              <Input id="port" type="number" min={1} max={65535} value={form.port} onChange={(event) => setForm({ ...form, port: parseInt(event.target.value, 10) || 22 })} className="pf-input-mono"/>
             </div>
           </div>
 
+          <div className="pf-grid-2 pf-grid-equal">
           <div className="pf-field">
             <Label htmlFor="username" className="pf-label">
               用户名
@@ -312,15 +353,28 @@ export function ProfileForm({ open, onOpenChange, profile, presetGroupId }: Prof
           </div>
 
           <div className="pf-field">
-            <Label className="pf-label">认证方式</Label>
+            <Label htmlFor="profile-group" className="pf-label">分组</Label>
+            <Select value={form.group_id || '__none__'} onValueChange={(value) => setForm({ ...form, group_id: value === '__none__' ? '' : value })}>
+              <SelectTrigger id="profile-group" className="w-full"><SelectValue placeholder="请选择"/></SelectTrigger>
+              <SelectContent>{groupOptions.map((option) => <SelectItem key={option.value || '__none__'} value={option.value || '__none__'}>{option.label}</SelectItem>)}</SelectContent>
+            </Select>
+          </div>
+
+          </div>
+              </div>
+            </TabsContent>
+            <TabsContent value="auth" forceMount hidden={activeTab !== 'auth'} data-profile-tab="auth" className="pf-panel">
+              <div className="pf-group" role="group" aria-label="SSH 身份认证">
+          <div className="pf-field">
+            <Label htmlFor="profile-auth" className="pf-label">认证方式</Label>
             <Select value={form.auth_type} onValueChange={handleAuthTypeChange}>
-              <SelectTrigger className="w-full"><SelectValue placeholder="请选择"/></SelectTrigger>
+              <SelectTrigger id="profile-auth" className="w-full"><SelectValue placeholder="请选择"/></SelectTrigger>
               <SelectContent>{authOptions.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent>
             </Select>
           </div>
 
-          {form.auth_type === 'vault' ? (<div className="pf-field">
-              <Label className="pf-label">凭据选择</Label>
+          {form.auth_type === 'vault' ? (<div className="pf-field" role="group" aria-labelledby="profile-vault-label">
+              <div id="profile-vault-label" className="pf-label">凭据选择</div>
               <VaultSelectButton vaultId={form.vault_id} onItemResolved={handleVaultResolved} onChange={handleVaultSelection}/>
             </div>) : (<>
               {showPasswordAuth && (<div className="pf-field">
@@ -328,7 +382,7 @@ export function ProfileForm({ open, onOpenChange, profile, presetGroupId }: Prof
                     密码
                   </Label>
                   <div className="pf-input-group pf-input-group-action">
-                    <Input id="password" type={passwordVisible ? 'text' : 'password'} value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} placeholder={isEditing ? '留空则不修改' : ''} className="pf-input-mono"/>
+                    <Input id="password" type={passwordVisible ? 'text' : 'password'} value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} placeholder={isEditing ? '已保存，留空则不修改' : '输入服务器密码'} className="pf-input-mono"/>
                     <Button type="button" variant="ghost" size="icon-sm" className="pf-inline-action" onClick={() => setPasswordVisible((value) => !value)} aria-label={passwordVisible ? '隐藏密码' : '显示密码'} title={passwordVisible ? '隐藏密码' : '显示密码'}>
                       {passwordVisible ? <EyeOff size={14}/> : <Eye size={14}/>}
                     </Button>
@@ -352,16 +406,15 @@ export function ProfileForm({ open, onOpenChange, profile, presetGroupId }: Prof
                 </>)}
             </>)}
 
-          <div className="pf-section-divider"/>
-          <div className="pf-section-title">
-            <Network size={14}/>
-            SSH 代理
-          </div>
+              </div>
+            </TabsContent>
+            <TabsContent value="advanced" forceMount hidden={activeTab !== 'advanced'} data-profile-tab="advanced" className="pf-panel">
+              <div className="pf-group" role="group" aria-label="SSH 代理">
 
           <div className="pf-field">
-            <Label className="pf-label">连接方式</Label>
+            <Label htmlFor="profile-proxy" className="pf-label">连接方式</Label>
             <Select value={proxy.type} onValueChange={handleProxyTypeChange}>
-              <SelectTrigger className="w-full"><SelectValue placeholder="请选择"/></SelectTrigger>
+              <SelectTrigger id="profile-proxy" className="w-full"><SelectValue placeholder="请选择"/></SelectTrigger>
               <SelectContent>{proxyOptions.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent>
             </Select>
           </div>
@@ -397,14 +450,32 @@ export function ProfileForm({ open, onOpenChange, profile, presetGroupId }: Prof
               </div>
             </>)}
 
+          {proxy.type === 'direct' && <p className="pf-hint">直接连接服务器，无需配置代理。</p>}
           {proxy.type === 'jump' && (<div className="pf-field">
-              <Label className="pf-label">跳板服务器</Label>
+              <Label htmlFor="profile-jump" className="pf-label">跳板服务器</Label>
               <Select value={proxy.jump_profile_id || '__none__'} onValueChange={(value) => updateProxy({ jump_profile_id: value === '__none__' ? '' : value })}>
-                <SelectTrigger className="w-full"><SelectValue placeholder="请选择"/></SelectTrigger>
+                <SelectTrigger id="profile-jump" className="w-full"><SelectValue placeholder="请选择"/></SelectTrigger>
                 <SelectContent>{jumpProfileOptions.map((option) => <SelectItem key={option.value || '__none__'} value={option.value || '__none__'}>{option.label}</SelectItem>)}</SelectContent>
               </Select>
             </div>)}
 
+              </div>
+              <div className="pf-group" role="group" aria-label="连接备注">
+          <div className="pf-field">
+            <Label htmlFor="note" className="pf-label">
+              备注
+            </Label>
+            <Textarea id="note" value={form.note} onChange={(event) => setForm({ ...form, note: event.target.value })} placeholder="添加用途、环境等备注（可选）" rows={3} className="pf-note"/>
+          </div>
+
+              </div>
+            </TabsContent>
+            </div>
+          </Tabs>
+        </form>
+
+        <div className="pf-feedback" aria-live="polite">
+          {error && <div className="pf-error" role="alert">{error}</div>}
           {testResult && (<div className={`pf-test-result ${testResult.success ? 'success' : 'error'}`}>
               <div className="pf-test-summary">
                 {testResult.success ? <CheckCircle2 size={15}/> : <XCircle size={15}/>}
@@ -423,24 +494,7 @@ export function ProfileForm({ open, onOpenChange, profile, presetGroupId }: Prof
               </div>
             </div>)}
 
-          <div className="pf-field">
-            <Label className="pf-label">分组</Label>
-            <Select value={form.group_id || '__none__'} onValueChange={(value) => setForm({ ...form, group_id: value === '__none__' ? '' : value })}>
-              <SelectTrigger className="w-full"><SelectValue placeholder="请选择"/></SelectTrigger>
-              <SelectContent>{groupOptions.map((option) => <SelectItem key={option.value || '__none__'} value={option.value || '__none__'}>{option.label}</SelectItem>)}</SelectContent>
-            </Select>
-          </div>
-
-          <div className="pf-field">
-            <Label htmlFor="note" className="pf-label">
-              备注
-            </Label>
-            <Textarea id="note" value={form.note} onChange={(event) => setForm({ ...form, note: event.target.value })} placeholder="可选备注信息" rows={3}/>
-          </div>
-
-          {error && <div className="pf-error">{error}</div>}
-        </form>
-
+        </div>
         <div className="pf-footer">
           <Button type="button" variant="outline" onClick={runConnectionTest} disabled={loading || testing} className="pf-btn-test">
             {testing ? <LoaderCircle size={14} className="animate-spin"/> : <Network size={14}/>}
