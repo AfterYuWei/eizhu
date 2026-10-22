@@ -5,11 +5,11 @@
 | 通道 | 发布入口 | 元数据 | 客户端选择 |
 |---|---|---|---|
 | stable | main 四目标验收后的正式 Release | latest.yml、latest-mac.yml、latest-linux.yml | 最新正式 Release，不接受预览版本 |
-| test | dev 四目标验收后的预览 Release | test.yml、test-mac.yml、test-linux.yml | 显式 test 通道，只选择 test 预览标签 |
+| test | dev 的 Windows x64、macOS Intel x64 验收后的预览 Release | test.yml、test-mac.yml | Windows x64、macOS Intel x64 显式选择 test 通道，只选择 test 预览标签 |
 
-默认仓库为 `AfterYuWei/eizhu`。预览版本使用 `v<VERSION>-test.<Git提交计数>.<短SHA>`，发布设置为预览且不占用正式最新版。两类发布均先验证四目标版本、提交、源码指纹、最终安装包烟测及 60 秒负载报告；草稿上传完整资产后再公开，不覆盖既有资产。
+2026-10-22 起，正式环境仍构建四目标，测试环境构建 Windows x64 和 macOS Intel（x64）。默认仓库为 `AfterYuWei/eizhu`。预览版本使用 `v<VERSION>-test.<Git提交计数>.<短SHA>`，发布设置为预览且不占用正式最新版。两类发布均先验证所需目标的版本、提交、源码指纹、最终安装包烟测及 60 秒负载报告；草稿上传完整资产后再公开，不覆盖既有资产。测试发布校验 Windows x64 与 macOS x64，其他平台不生成空更新元数据，也不提供新的测试安装包。
 
-发布准备工具从实际复制的安装包字节计算 SHA-512 和文件大小，生成符合 electron-updater 的 YAML 元数据（采用 YAML 兼容的 JSON 语法），元数据一并计入 SHA256SUMS.txt。macOS 的单个元数据文件同时包含 x64/arm64 的 ZIP 与 DMG；Windows 包含 NSIS EXE，Linux 包含 AppImage。deb/rpm 继续提供手动安装。
+发布准备工具从实际复制的安装包字节计算 SHA-512 和文件大小，生成符合 electron-updater 的 YAML 元数据（采用 YAML 兼容的 JSON 语法），元数据一并计入 SHA256SUMS.txt。正式版 macOS 的单个元数据文件同时包含 x64/arm64 的 ZIP 与 DMG，测试版仅包含 x64；Windows 的两个通道均包含 NSIS EXE，Linux 正式版包含 AppImage。deb/rpm 继续提供手动安装。
 
 主进程显式设置更新通道，每次设置后关闭 electron-updater 隐式启用的降级许可。正式版也可主动选择测试通道；回到正式通道时仅接受版本更高的正式版本，不自动降级。下载、摘要校验和安装始终使用用户已看到的候选，检查失败或下载失败会废弃旧候选，安装前仍执行未保存编辑器确认。
 
@@ -19,7 +19,7 @@
 
 已有 0.5.0 及本轮之前的测试安装包无法通过修改仓库获得新客户端配置；需手动安装首个包含本次适配的版本。本轮本地验收时改动尚未推送或发布，不修改已公开的 0.5.0 资产。Windows 签名、macOS Developer ID/公证和真实 A→B 升级仍待验，自动化与本机烟测不能代替这些验收。
 
-本轮本机验证结果（macOS x64，Electron 44.9.0）：
+2026-10-21 更新适配时的本机验证结果（macOS x64，Electron 44.9.0；下表保留当时四目标策略的历史证据）：
 
 | 检查 | 结果及证据 |
 |---|---|

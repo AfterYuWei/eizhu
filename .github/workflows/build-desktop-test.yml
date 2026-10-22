@@ -34,7 +34,7 @@ jobs:
         with:
           pattern: eizhu-test-*
           path: release-input
-      - name: Verify four targets and prepare immutable preview assets
+      - name: Verify Windows x64 and macOS Intel packages and prepare immutable preview assets
         id: prepare
         run: node scripts/prepare-desktop-release.mjs
       - name: Upload complete preview before publishing

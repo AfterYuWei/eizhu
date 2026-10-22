@@ -5,13 +5,7 @@ import { appendFile, copyFile, mkdir, readFile, readdir, writeFile } from 'node:
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { buildSettings } from './desktop-build-settings.mjs'
-
-const targets = [
-  { platform: 'win32', arch: 'x64', os: 'win', extensions: ['exe'] },
-  { platform: 'darwin', arch: 'x64', os: 'mac', extensions: ['dmg', 'zip'] },
-  { platform: 'darwin', arch: 'arm64', os: 'mac', extensions: ['dmg', 'zip'] },
-  { platform: 'linux', arch: 'x64', os: 'linux', extensions: ['AppImage', 'deb', 'rpm'] },
-]
+import { desktopTargets } from './desktop-targets.mjs'
 
 export function validatePackagedRun(run, jobs, repository) {
   assert.equal(run.repository?.full_name, repository, '产物必须来自当前仓库')
@@ -20,12 +14,10 @@ export function validatePackagedRun(run, jobs, repository) {
   assert.equal(run.status, 'completed')
   assert.match(run.head_sha, /^[a-f0-9]{40}$/)
   const packages = jobs.filter((job) => job.name.startsWith('desktop / package ('))
-  const expected = [
-    'desktop / package (windows-2022, win32, x64, *.exe)',
-    'desktop / package (macos-15-intel, darwin, x64, *.dmg)',
-    'desktop / package (macos-15, darwin, arm64, *.dmg)',
-    'desktop / package (ubuntu-22.04, linux, x64, *.AppImage)',
-  ]
+  const expected = desktopTargets('stable').map(
+    ({ runner, platform, arch, installer }) =>
+      `desktop / package (${runner}, ${platform}, ${arch}, ${installer})`,
+  )
   assert.deepEqual(packages.map((job) => job.name).sort(), expected.sort(), '必须包含完整四目标')
   for (const job of packages) assert.equal(job.conclusion, 'success', `目标未通过: ${job.name}`)
   return run.head_sha
@@ -49,6 +41,13 @@ export async function prepareDesktopRelease({
   assert.match(revision, /^[a-f0-9]{40}$/)
   const assets = []
   const digests = new Set()
+  const targets = desktopTargets(channel)
+  const directories = new Set(
+    targets.map(({ platform, arch }) => `eizhu-${channel}-${platform}-${arch}`),
+  )
+  for (const name of await readdir(inputDirectory))
+    if (name.startsWith(`eizhu-${channel}-`))
+      assert.ok(directories.has(name), `包含通道未开放的构建目标: ${name}`)
   for (const { platform, arch, os, extensions } of targets) {
     const target = `${platform}-${arch}`
     const directory = join(inputDirectory, `eizhu-${channel}-${target}`)
@@ -87,7 +86,7 @@ export async function prepareDesktopRelease({
       { name: `smoke-${target}.json`, path: smokePath },
     )
   }
-  assert.equal(digests.size, 1, '四目标源码指纹不一致')
+  assert.equal(digests.size, 1, '构建目标源码指纹不一致')
   if (expectedSourceDigest)
     assert.equal([...digests][0], expectedSourceDigest, '产物与当前应用源码指纹不一致')
   assert.equal(new Set(assets.map(({ name }) => name)).size, assets.length, '发布资产名称冲突')
@@ -121,10 +120,15 @@ export async function prepareDesktopRelease({
     ['darwin', '-mac'],
     ['linux', '-linux'],
   ]) {
+    if (updateFiles[platform].length === 0) continue
     const name = `${prefix}${suffix}.yml`
     // JSON is valid YAML, and avoids a second serializer in the release toolchain.
     const bytes =
-      JSON.stringify({ version, files: updateFiles[platform], releaseDate, releaseNotes }, null, 2) + '\n'
+      JSON.stringify(
+        { version, files: updateFiles[platform], releaseDate, releaseNotes },
+        null,
+        2,
+      ) + '\n'
     await writeFile(join(outputDirectory, name), bytes)
     sums.push(`${createHash('sha256').update(bytes).digest('hex')}  ${name}`)
     assets.push({ name })
@@ -134,7 +138,10 @@ export async function prepareDesktopRelease({
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const settings = buildSettings({ ...process.env, EIZHU_CHANNEL: process.env.RELEASE_CHANNEL ?? 'stable' })
+  const settings = buildSettings({
+    ...process.env,
+    EIZHU_CHANNEL: process.env.RELEASE_CHANNEL ?? 'stable',
+  })
   const version = process.env.RELEASE_VERSION ?? settings.version
   const releaseNotes =
     settings.channel === 'stable'
@@ -150,5 +157,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     releaseNotes,
   })
   if (process.env.GITHUB_OUTPUT) await appendFile(process.env.GITHUB_OUTPUT, `version=${version}\n`)
-  console.log(`四目标来源及烟测验证通过，共 ${assets.length} 个资产与 SHA256SUMS.txt`)
+  console.log(
+    `${settings.channel} 通道 ${desktopTargets(settings.channel).length} 个目标来源及烟测验证通过，共 ${assets.length} 个资产与 SHA256SUMS.txt`,
+  )
 }

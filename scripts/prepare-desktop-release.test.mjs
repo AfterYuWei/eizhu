@@ -1,10 +1,11 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
-import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { prepareDesktopRelease, validatePackagedRun } from './prepare-desktop-release.mjs'
+import { desktopBuildMatrix, desktopTargets } from './desktop-targets.mjs'
 import { parseUpdateInfo } from 'electron-updater/out/providers/Provider.js'
 
 async function fixture(t, channel = 'stable') {
@@ -24,6 +25,7 @@ async function fixture(t, channel = 'stable') {
     ['darwin', 'arm64', 'mac', ['dmg', 'zip']],
     ['linux', 'x64', 'linux', ['AppImage', 'deb', 'rpm']],
   ]) {
+    if (channel === 'test' && !(arch === 'x64' && ['win32', 'darwin'].includes(platform))) continue
     const directory = join(options.inputDirectory, `eizhu-${channel}-${platform}-${arch}`)
     await mkdir(join(directory, 'desktop'), { recursive: true })
     await mkdir(join(directory, 'smoke'), { recursive: true })
@@ -79,24 +81,50 @@ test('release requires all four targets and hashes the exact copied installer by
   await assert.rejects(prepareDesktopRelease(options), /输出目录必须为空/)
 })
 
+test('stable 构建四目标，test 构建 Windows x64 和 macOS Intel，未知通道不能退回默认矩阵', () => {
+  assert.deepEqual(
+    desktopTargets('stable').map(({ platform, arch }) => `${platform}-${arch}`),
+    ['win32-x64', 'darwin-x64', 'darwin-arm64', 'linux-x64'],
+  )
+  assert.deepEqual(desktopBuildMatrix('test'), {
+    include: [
+      { os: 'windows-2022', platform: 'win32', arch: 'x64', installer: '*.exe' },
+      { os: 'macos-15-intel', platform: 'darwin', arch: 'x64', installer: '*.dmg' },
+    ],
+  })
+  assert.equal(desktopBuildMatrix('stable').include.length, 4)
+  assert.throws(() => desktopBuildMatrix('preview'), /stable\/test/)
+})
+
 for (const channel of ['stable', 'test']) {
-  test(`${channel}: updater parses platform manifests with exact installer SHA-512 and both macOS architectures`, async (t) => {
+  test(`${channel}: updater metadata includes only supported targets with exact installer SHA-512`, async (t) => {
     const options = await fixture(t, channel)
     await prepareDesktopRelease({ ...options, releaseNotes: '中文更新说明\n第二行' })
     const prefix = channel === 'test' ? 'test' : 'latest'
-    for (const [suffix, extension, count] of [
-      ['', '.exe', 1],
-      ['-mac', '.zip', 4],
-      ['-linux', '.AppImage', 1],
-    ]) {
+    const manifests =
+      channel === 'stable'
+        ? [
+            ['', '.exe', 1],
+            ['-mac', '.zip', 4],
+            ['-linux', '.AppImage', 1],
+          ]
+        : [
+            ['', '.exe', 1],
+            ['-mac', '.zip', 2],
+          ]
+    for (const [suffix, extension, count] of manifests) {
       const name = `${prefix}${suffix}.yml`
-      const info = parseUpdateInfo(await readFile(join(options.outputDirectory, name), 'utf8'), name, name)
+      const info = parseUpdateInfo(
+        await readFile(join(options.outputDirectory, name), 'utf8'),
+        name,
+        name,
+      )
       assert.equal(info.version, options.version)
       assert.equal(info.releaseNotes, '中文更新说明\n第二行')
       assert.equal(info.files.length, count)
       assert.ok(info.files.some((file) => file.url.endsWith(extension)))
       if (suffix === '-mac') {
-        for (const arch of ['x64', 'arm64'])
+        for (const arch of channel === 'stable' ? ['x64', 'arm64'] : ['x64'])
           assert.ok(info.files.some((file) => file.url.endsWith(`-${arch}.zip`)))
       }
       for (const file of info.files) {
@@ -105,11 +133,49 @@ for (const channel of ['stable', 'test']) {
         assert.equal(file.sha512, createHash('sha512').update(bytes).digest('base64'))
       }
     }
+    const publishedManifests = (await readdir(options.outputDirectory)).filter((name) =>
+      name.endsWith('.yml'),
+    )
+    assert.deepEqual(
+      publishedManifests.sort(),
+      manifests.map(([suffix]) => `${prefix}${suffix}.yml`).sort(),
+    )
     await assert.rejects(
       prepareDesktopRelease({ ...options, channel: channel === 'test' ? 'stable' : 'test' }),
     )
   })
 }
+
+test('test 发布必须具备 Windows 和 Intel Mac 安装包及通过的烟测，无需其他目标', async (t) => {
+  const options = await fixture(t, 'test')
+  const assets = await prepareDesktopRelease(options)
+  assert.equal(assets.length, 9)
+  assert.ok(assets.includes(`eizhu-${options.version}-win-x64.exe`))
+  assert.ok(assets.includes(`eizhu-${options.version}-mac-x64.dmg`))
+  assert.ok(assets.includes(`eizhu-${options.version}-mac-x64.zip`))
+  assert.ok(!assets.some((name) => name.includes('arm64') || name.includes('linux')))
+  await rm(options.outputDirectory, { recursive: true })
+  const directory = join(options.inputDirectory, 'eizhu-test-darwin-x64')
+  const smokePath = join(directory, 'smoke', 'darwin-x64.json')
+  const smoke = JSON.parse(await readFile(smokePath, 'utf8'))
+  await writeFile(smokePath, JSON.stringify({ ...smoke, stage6: { passed: false } }))
+  await assert.rejects(prepareDesktopRelease(options), /stage6 烟测未通过/)
+  await writeFile(smokePath, JSON.stringify(smoke))
+  await rm(join(directory, 'desktop', `eizhu-${options.version}-mac-x64.zip`))
+  await assert.rejects(prepareDesktopRelease(options), /缺少安装资产/)
+})
+
+test('test 发布缺少 Windows 目标时不能发布仅有 Mac 的残缺版本', async (t) => {
+  const options = await fixture(t, 'test')
+  await rm(join(options.inputDirectory, 'eizhu-test-win32-x64'), { recursive: true })
+  await assert.rejects(prepareDesktopRelease(options), { code: 'ENOENT' })
+})
+
+test('test 发布拒绝混入其他平台目标', async (t) => {
+  const options = await fixture(t, 'test')
+  await mkdir(join(options.inputDirectory, 'eizhu-test-darwin-arm64'))
+  await assert.rejects(prepareDesktopRelease(options), /通道未开放的构建目标/)
+})
 
 test('release rejects a missing target or installer', async (t) => {
   const options = await fixture(t)
@@ -131,7 +197,10 @@ test('release rejects mismatched provenance, failed smoke and incomplete load', 
     prepareDesktopRelease({ ...options, expectedSourceDigest: 'c'.repeat(64) }),
     /当前应用源码指纹不一致/,
   )
-  await assert.rejects(prepareDesktopRelease({ ...options, revision: 'c'.repeat(40) }), /构建来源不匹配/)
+  await assert.rejects(
+    prepareDesktopRelease({ ...options, revision: 'c'.repeat(40) }),
+    /构建来源不匹配/,
+  )
   const directory = join(options.inputDirectory, 'eizhu-stable-linux-x64', 'smoke')
   const infoPath = join(directory, 'build-info-linux-x64.json')
   const info = JSON.parse(await readFile(infoPath, 'utf8'))

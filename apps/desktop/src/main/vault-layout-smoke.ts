@@ -31,9 +31,14 @@ export async function verifyVaultLayout(window: BrowserWindow, root: string) {
   }
   const screenshots: string[] = []
   const capture = async (name: string, theme: string) => {
-    await js(`(async()=>{document.activeElement?.blur();document.documentElement.classList.remove('light','dark');document.documentElement.classList.add(${JSON.stringify(theme)});await document.fonts.ready;await new Promise(resolve=>setTimeout(resolve,200))})()`)
-    await writeFile(join(root, name), (await window.webContents.capturePage(undefined, { stayAwake: true })).toPNG())
-    screenshots.push(name)
+    // Xvfb 下成功通知的计时可能暂停；截图只隐藏成功通知，不依赖其自动关闭，也不隐藏错误。
+    await js(`(async()=>{document.activeElement?.blur();document.documentElement.classList.remove('light','dark');document.documentElement.classList.add(${JSON.stringify(theme)});const style=document.createElement('style');style.id='vault-smoke-capture-style';style.textContent='[data-sonner-toast][data-type="success"]{visibility:hidden!important}';document.head.append(style);await document.fonts.ready;await new Promise(resolve=>setTimeout(resolve,200))})()`)
+    try {
+      await writeFile(join(root, name), (await window.webContents.capturePage(undefined, { stayAwake: true })).toPNG())
+      screenshots.push(name)
+    } finally {
+      await js(`document.getElementById('vault-smoke-capture-style')?.remove()`)
+    }
   }
   try {
     window.setContentSize(1320, 820)
@@ -63,6 +68,7 @@ export async function verifyVaultLayout(window: BrowserWindow, root: string) {
     assert.equal(await js(`document.querySelector('.vault-inline-editor input[id$="-name"]').value`), '布局验收已编辑')
     await js(`document.querySelector('.vault-inline-editor form').requestSubmit()`)
     await wait(`!document.querySelector('.vault-inline-editor')&&document.querySelector('.vault-detail-heading h2')?.textContent==='布局验收已编辑'`)
+    assert.equal(await js(`window.eizhu.vault.get({id:${JSON.stringify(ids.key)}}).then(item=>item.name)`), '布局验收已编辑')
     await select(ids.password)
     await wait(`document.querySelector('.vault-detail-heading h2')?.textContent==='布局验收密码'`)
     await js(`document.querySelector('[aria-label="复制密码"]').click()`)
@@ -71,9 +77,10 @@ export async function verifyVaultLayout(window: BrowserWindow, root: string) {
     await wait(`document.querySelector('[role="dialog"]')?.textContent.includes('确认删除')`)
     await js(`[...document.querySelectorAll('[role="dialog"] button')].find(el=>el.textContent==='删除').click()`)
     await wait(`!document.querySelector('[data-vault-item="'+${JSON.stringify(ids.password)}+'"]')&&!document.querySelector('[role="dialog"]')`)
+    assert.equal(await js(`(async()=>{try{await window.eizhu.vault.get({id:${JSON.stringify(ids.password)}});return true}catch(error){if(error.code!=='NOT_FOUND')throw error;return false}})()`), false)
     await select(ids.key)
     await wait(`!!document.querySelector('.vault-detail-view')`)
-    await wait(`!document.querySelector('[data-sonner-toast]')`)
+    assert.deepEqual(await js(`Array.from(document.querySelectorAll('[data-sonner-toast][data-type="error"]'),el=>el.textContent)`), [], 'Vault 操作出现错误通知')
     const geometry = await js<{ gap: number; round: number; toolbarLine: string; fits: boolean; controlsEnabled: boolean }>(`(()=>{
       const list=document.querySelector('.vault-list-panel'),detail=document.querySelector('.vault-inspector'),columns=document.querySelector('.vault-columns');
       const l=list.getBoundingClientRect(),d=detail.getBoundingClientRect(),c=columns.getBoundingClientRect();

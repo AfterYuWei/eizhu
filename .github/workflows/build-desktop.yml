@@ -1,4 +1,4 @@
-name: Electron four-target acceptance
+name: Electron package acceptance
 on:
   workflow_dispatch:
     inputs:
@@ -22,15 +22,27 @@ on:
 permissions:
   contents: read
 jobs:
+  targets:
+    runs-on: ubuntu-24.04
+    outputs:
+      matrix: ${{ steps.targets.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - id: targets
+        shell: bash
+        env:
+          RELEASE_CHANNEL: ${{ inputs.channel || 'test' }}
+        run: |
+          matrix=$(node scripts/desktop-targets.mjs)
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
   package:
+    needs: targets
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - { os: windows-2022, platform: win32, arch: x64, installer: '*.exe' }
-          - { os: macos-15-intel, platform: darwin, arch: x64, installer: '*.dmg' }
-          - { os: macos-15, platform: darwin, arch: arm64, installer: '*.dmg' }
-          - { os: ubuntu-22.04, platform: linux, arch: x64, installer: '*.AppImage' }
+      matrix: ${{ fromJSON(needs.targets.outputs.matrix) }}
     runs-on: ${{ matrix.os }}
     env:
       CSC_IDENTITY_AUTO_DISCOVERY: 'false'
