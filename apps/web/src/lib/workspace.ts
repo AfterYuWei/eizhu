@@ -11,6 +11,7 @@ import { useHistoryStore } from '@/store/history'
 import { useSidebarDetailStore } from '@/store/sidebarDetail'
 import { useDesktopShellStore } from '@/store/desktopShell'
 import { workspaceGeneration,setWorkspaceGeneration } from './workspaceScope'
+import { resetSnippetQuickAccess } from './snippetQuickAccess'
 export interface WorkspaceStatus { id: string; generation: number; userId: number }
 export { workspaceGeneration } from './workspaceScope'
 export function applyWorkspace(workspace: WorkspaceStatus) {
@@ -18,6 +19,7 @@ export function applyWorkspace(workspace: WorkspaceStatus) {
   void resetWorkspaceView().catch((error: unknown) => console.error('释放旧工作空间文件资源失败', error))
   resetTerminalLayout()
   setWorkspaceGeneration(workspace.generation)
+  resetSnippetQuickAccess()
   useProfileStore.setState(useProfileStore.getInitialState(), true)
   useVaultStore.setState(useVaultStore.getInitialState(), true)
   useSessionStore.setState(useSessionStore.getInitialState(), true)

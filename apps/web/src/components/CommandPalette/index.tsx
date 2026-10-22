@@ -45,8 +45,8 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
           void useVaultStore.getState().fetchList()
         },
       })),
-      ...desktopActions.filter((a) => a.id !== 'palette' && a.label.toLowerCase().includes(needle)).map((a) => ({
-        id: a.id, type: 'action' as const, label: a.label, detail: '', shortcut: `Ctrl/Cmd+Shift+${a.key.toUpperCase()}`, run: () => runDesktopAction(a.id),
+      ...desktopActions.filter((a) => a.id !== 'palette' && `${a.label} ${'keywords' in a ? a.keywords : ''}`.toLowerCase().includes(needle)).map((a) => ({
+        id: a.id, type: 'action' as const, label: a.label, detail: '', shortcut: a.key ? `Ctrl/Cmd+Shift+${a.key.toUpperCase()}` : '', run: () => runDesktopAction(a.id),
       })),
     ]
   }, [profiles, query, vaults])
@@ -114,7 +114,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
               className={`pal-item ${index === selected ? 'sel' : ''}`} role="option" aria-selected={index === selected}
               onMouseEnter={() => setSelectedKey(`${item.type}:${item.id}`)} onClick={() => execute(index)}>
               <span className="pal-item-icon">{type === 'server' ? <Server size={15} /> : type === 'vault' ? <KeyRound size={15} /> : <Command size={15} />}</span>
-              <span className="pal-item-label">{item.label}{item.detail && <small>{item.detail}</small>}</span><span className="pal-item-kbd">{item.shortcut}</span>
+              <span className="pal-item-label">{item.label}{item.detail && <small>{item.detail}</small>}</span>{item.shortcut && <span className="pal-item-kbd">{item.shortcut}</span>}
             </Button>)}
           </div>
         })}

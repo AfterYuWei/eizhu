@@ -21,6 +21,7 @@ it('preserves remote control keys and ignores composing or Alt combinations', ()
   expect(shortcutAction({ ...event, key: 'K', shiftKey: true })).toBe('palette')
   expect(shortcutAction({ ...event, shiftKey: true, isComposing: true })).toBeUndefined()
   expect(shortcutAction({ ...event, shiftKey: true, altKey: true })).toBeUndefined()
+  expect(shortcutAction({ ...event, key: 'S', shiftKey: true })).toBe('snippet-quick')
 })
 it('新建连接创建终端标签，SFTP 使用独立页面', async () => {
   await executeDesktopAction('new')

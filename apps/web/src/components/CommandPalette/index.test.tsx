@@ -53,6 +53,17 @@ it('统一显示服务器、密钥、命令，选择服务器复用已有会话'
   expect(close).toHaveBeenCalledOnce()
 })
 
+it('片段管理与快速调用分开，快捷键仅显示在快选入口', async () => {
+  await render()
+  await query('命令片段')
+  const actions = [...document.querySelectorAll('[role="group"][aria-label="操作命令"] button')]
+  const manage = actions.find((item) => item.textContent === '片段管理')!
+  const quick = actions.find((item) => item.textContent?.startsWith('快速调用片段'))!
+  expect(manage).toBeDefined()
+  expect(manage.querySelector('.pal-item-kbd')).toBeNull()
+  expect(quick.querySelector('.pal-item-kbd')?.textContent).toBe('Ctrl/Cmd+Shift+S')
+})
+
 it('密钥搜索定位确切条目，并清除此前的类型筛选', async () => {
   useVaultStore.setState({ filterType: 'password' })
   await render()

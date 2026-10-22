@@ -16,6 +16,8 @@ vi.mock('@/components/Terminal/TunnelDialog', () => ({ TunnelDialog: () => null,
 vi.mock('@/components/ProfileForm', () => ({ ProfileForm: () => null }))
 vi.mock('./ServerInspector', () => ({ ServerInspector: ({ open }: { open: boolean }) => <div data-inspector-open={String(open)} /> }))
 vi.mock('@/components/CommandPalette', () => ({ CommandPalette: () => null }))
+vi.mock('@/components/Snippets/SnippetDialog', () => ({ SnippetDialog: () => <div role="dialog" aria-label="片段管理" /> }))
+vi.mock('@/components/Snippets/SnippetQuickPicker', () => ({ SnippetQuickPicker: ({ target, onManage }: { target: { tabId: string } | null; onManage: () => void }) => <div role="dialog" className="snippet-quick-picker" aria-label="快速调用片段" data-target={target?.tabId}><button onClick={onManage}>管理片段</button></div> }))
 vi.mock('@/components/ThemeToggle', () => ({ ThemeToggle: () => null }))
 vi.mock('@/components/SyncIndicator', () => ({ SyncIndicator: () => null }))
 vi.mock('@/components/ui/sonner', () => ({ Toaster: () => null }))
@@ -71,6 +73,23 @@ afterEach(async () => {
 function sidebar() { return host.querySelector<HTMLElement>('.eizhu-sidebar')! }
 function toggle() { return host.querySelector<HTMLButtonElement>('.shell-top-controls button')! }
 async function render() { await act(async () => root.render(<TooltipProvider><Layout /></TooltipProvider>)) }
+
+it('侧栏打开片段管理，快捷键打开独立快选器并固定调用时的终端', async () => {
+  await render()
+  await act(async () => host.querySelectorAll<HTMLButtonElement>('.shell-primary-nav > button')[3].click())
+  expect(document.querySelector('[aria-label="片段管理"]')).not.toBeNull()
+  expect(document.querySelector('[aria-label="快速调用片段"]')).toBeNull()
+  await act(async () => root.render(null))
+  useSessionStore.getState().updateTabStatus('a', 'connected', 'session-a')
+  await render()
+  await act(async () => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'S', ctrlKey: true, shiftKey: true, bubbles: true, cancelable: true })))
+  expect(document.querySelector('[aria-label="快速调用片段"]')?.getAttribute('data-target')).toBe('a')
+  await act(async () => useSessionStore.getState().openDraftTab())
+  expect(document.querySelector('[aria-label="快速调用片段"]')?.getAttribute('data-target')).toBe('a')
+  await act(async () => document.querySelector<HTMLButtonElement>('[aria-label="快速调用片段"] button')!.click())
+  expect(document.querySelector('[aria-label="快速调用片段"]')).toBeNull()
+  expect(document.querySelector('[aria-label="片段管理"]')).not.toBeNull()
+})
 
 async function pointer(handle: HTMLElement, type: string, clientX: number) {
   const event = new Event(type, { bubbles: true, cancelable: true })

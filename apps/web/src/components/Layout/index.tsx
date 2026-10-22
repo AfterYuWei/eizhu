@@ -4,11 +4,13 @@ import { TunnelDialog,TunnelPrompts } from '@/components/Terminal/TunnelDialog'
 import type { SettingsTab } from '@/components/SettingsDialog'
 import { workspaceGeneration } from '@/lib/workspaceScope'
 import { registerDesktopAction,runDesktopAction,shortcutAction } from '@/lib/desktopActions'
+import { snippetTarget,type SnippetTarget } from '@/lib/snippetInsertion'
 import { getTerminalTheme,resolveTerminalThemeId } from '@/lib/terminalThemes'
 import { DEFAULT_DESKTOP_SIDEBAR_WIDTH,MIN_DESKTOP_SIDEBAR_WIDTH,MAX_DESKTOP_SIDEBAR_WIDTH,DESKTOP_SIDEBAR_INSET } from '@/lib/desktopSidebar'
 import { Sidebar } from '@/components/Sidebar'
 import { TerminalSplitMenu } from '@/components/Terminal/SplitControls'
 import { CommandPalette } from '@/components/CommandPalette'
+import { SnippetQuickPicker } from '@/components/Snippets/SnippetQuickPicker'
 import { Toaster } from '@/components/ui/sonner'
 import { Button } from '@/components/ui/button'
 import { ProfileForm } from '@/components/ProfileForm'
@@ -60,6 +62,7 @@ export function Layout() {
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [tunnelsOpen, setTunnelsOpen] = useState(false)
   const [snippetsOpen, setSnippetsOpen] = useState(false)
+  const [snippetQuick, setSnippetQuick] = useState<{ target: SnippetTarget | null } | null>(null)
   const [profileFormOpen, setProfileFormOpen] = useState(false)
   const [settingsTab, setSettingsTab] = useState<SettingsTab>('appearance')
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -130,11 +133,12 @@ export function Layout() {
       registerDesktopAction('sync-settings', () => openSettings('sync')),
       registerDesktopAction('account-settings', () => openSettings('account')),
       registerDesktopAction('snippets', () => setSnippetsOpen(true)),
+      registerDesktopAction('snippet-quick', () => setSnippetQuick({ target: snippetTarget() })),
       registerDesktopAction('sidebar', toggleSidebar),
     ]
     const handler = (event: KeyboardEvent) => {
       const action = shortcutAction(event)
-      if (!action || event.defaultPrevented || (document.querySelector('[role="dialog"]') && action !== 'palette')) return
+      if (!action || event.defaultPrevented || (document.querySelector('[role="dialog"]') && (action !== 'palette' || document.querySelector('.snippet-quick-picker')))) return
       event.preventDefault()
       event.stopPropagation()
       if (settingsOpen && action !== 'sync-settings' && action !== 'account-settings') return
@@ -202,6 +206,8 @@ export function Layout() {
     <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
     <ProfileForm open={profileFormOpen} onOpenChange={setProfileFormOpen} />
     {snippetsOpen && <Suspense fallback={null}><SnippetDialog key={workspaceGeneration()} open onOpenChange={setSnippetsOpen} /></Suspense>}
+    {snippetQuick && <SnippetQuickPicker key={workspaceGeneration()} target={snippetQuick.target}
+      onClose={() => setSnippetQuick(null)} onManage={() => { setSnippetQuick(null); setSnippetsOpen(true) }} />}
     {settingsOpen && <Suspense fallback={<div className="settings-page settings-page-loading" role="status">正在打开设置…</div>}><SettingsPage key={settingsTab} initialTab={settingsTab} onBack={() => setSettingsOpen(false)} /></Suspense>}
     <Toaster theme={theme} />
   </div>
