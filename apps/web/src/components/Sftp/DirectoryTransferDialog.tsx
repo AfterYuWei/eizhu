@@ -10,7 +10,7 @@ export function DirectoryTransferDialog() {
     const count = pending.drag.entries.filter((entry) => entry.is_dir).length;
     const destination = `${pending.target.serverName}:${pending.target.destDir}`;
     return (<Dialog open onOpenChange={(open) => !open && resolve(null)}>
-      <DialogContent showCloseButton={false} className="w-auto max-w-none gap-0 p-0">
+      <DialogContent showCloseButton={false} className="sftp-dialog w-auto max-w-none gap-0 p-0">
         <DialogTitle className="sr-only">选择文件夹传输方式</DialogTitle>
         <div className="sftp-dir-mode">
         <div className="sftp-conflict-hdr">

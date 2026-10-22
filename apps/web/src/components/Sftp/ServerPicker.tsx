@@ -102,7 +102,7 @@ export function ServerPicker({ open, pane, onClose }: ServerPickerProps) {
       <span className="sftp-picker-grp-cnt">{count}</span>
     </div>);
     return (<Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent showCloseButton={false} className="w-auto max-w-none gap-0 border-0 bg-transparent p-0 shadow-none">
+      <DialogContent showCloseButton={false} className="sftp-dialog w-auto max-w-none gap-0 border-0 bg-transparent p-0 shadow-none">
         <DialogTitle className="sr-only">选择服务器</DialogTitle>
         <div className="sftp-picker">
         <div className="sftp-picker-hdr">

@@ -1,4 +1,4 @@
-import { useState,useEffect,useRef } from 'react';
+import { useState,useEffect,useRef,useId } from 'react';
 import { Dialog,DialogContent,DialogHeader,DialogTitle,DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -18,6 +18,7 @@ export function InputDialog({ open, onOpenChange, title, label, placeholder = ''
     const [error, setError] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
     const inputRef = useRef<HTMLInputElement>(null);
+    const inputId = useId();
     // Reset state when dialog opens
     useEffect(() => {
         if (open) {
@@ -57,15 +58,15 @@ export function InputDialog({ open, onOpenChange, title, label, placeholder = ''
         }
     };
     return (<Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="sftp-dialog">
         <form onSubmit={handleSubmit}>
           <DialogHeader>
             <DialogTitle>{title}</DialogTitle>
           </DialogHeader>
 
           <div className="py-4">
-            <label className="text-sm font-medium mb-2 block">{label}</label>
-            <Input ref={inputRef} value={value} onChange={(e) => {
+            <label htmlFor={inputId} className="text-sm font-medium mb-2 block">{label}</label>
+            <Input id={inputId} ref={inputRef} value={value} onChange={(e) => {
             setValue(e.target.value);
             setError(null);
         }} placeholder={placeholder} disabled={loading}/>

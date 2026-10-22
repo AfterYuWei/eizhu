@@ -34,7 +34,7 @@ export function DeleteConfirmDialog({ open, onOpenChange, entries, onConfirm, }:
     if (dirCount > 0)
         summary.push(`${dirCount} 个文件夹`);
     return (<Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="sftp-dialog">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <AlertTriangle className="h-5 w-5 text-destructive"/>
@@ -49,7 +49,7 @@ export function DeleteConfirmDialog({ open, onOpenChange, entries, onConfirm, }:
 
           <div className="max-h-[300px] overflow-y-auto border rounded-md p-2 space-y-1">
             {entries.map((entry) => (<div key={entry.path} className="flex items-center gap-2 px-2 py-1 text-sm rounded hover:bg-muted">
-                {entry.is_dir ? (<Folder className="h-4 w-4 text-blue-500 flex-shrink-0"/>) : (<FileText className="h-4 w-4 text-gray-500 flex-shrink-0"/>)}
+                {entry.is_dir ? (<Folder className="h-4 w-4 text-muted-foreground flex-shrink-0"/>) : (<FileText className="h-4 w-4 text-gray-500 flex-shrink-0"/>)}
                 <span className="truncate">{entry.name}</span>
                 {!entry.is_dir && entry.size > 0 && (<span className="text-xs text-muted-foreground ml-auto flex-shrink-0">
                     {formatSize(entry.size)}

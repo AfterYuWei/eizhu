@@ -7,15 +7,16 @@ interface AuthPromptDialogProps {
     request?: AuthenticationRequestPayload;
     onSubmit: (responses: string[]) => void;
     onCancel: () => void;
+    className?: string;
 }
-export function AuthPromptDialog({ request, onSubmit, onCancel }: AuthPromptDialogProps) {
+export function AuthPromptDialog({ request, onSubmit, onCancel, className = '' }: AuthPromptDialogProps) {
     const [responses, setResponses] = useState<string[]>([]);
     const promptCount=request?.prompts.length??0;
     useEffect(() => {
         setResponses(Array.from({length:promptCount},()=>''));
     }, [request?.request_id,promptCount]);
     return (<Dialog open={Boolean(request)} onOpenChange={(open) => !open && onCancel()}>
-      <DialogContent className="w-[min(440px,calc(100vw-2rem))] rounded-[var(--r-lg)]" onPointerDownOutside={(event) => event.preventDefault()}>
+      <DialogContent className={`w-[min(440px,calc(100vw-2rem))] rounded-[var(--r-lg)] ${className}`} onPointerDownOutside={(event) => event.preventDefault()}>
         <DialogTitle>{request?.name || 'SSH 交互式认证'}</DialogTitle>
         <DialogDescription>
           {request?.instructions || '服务器需要更多认证信息才能继续连接。'}

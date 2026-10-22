@@ -70,7 +70,7 @@ export function SftpView({ store }: { store: SftpStoreApi }) {
 }
 function SftpAuthDialog(){
   const request=useSftpStore(s=>s.pendingAuth),store=useContext(SftpStoreContext)!
-  return <AuthPromptDialog request={request??undefined} onSubmit={responses=>{if(request)void bridge().session.authRespond({requestId:request.request_id,responses}).then(()=>store.setState({pendingAuth:null})).catch(e=>toast.error(String(e)))}} onCancel={()=>{if(request)void sftpApi.closeSession(request.sessionId).catch(e=>toast.error(String(e)));store.setState({pendingAuth:null})}}/>
+  return <AuthPromptDialog className="sftp-dialog" request={request??undefined} onSubmit={responses=>{if(request)void bridge().session.authRespond({requestId:request.request_id,responses}).then(()=>store.setState({pendingAuth:null})).catch(e=>toast.error(String(e)))}} onCancel={()=>{if(request)void sftpApi.closeSession(request.sessionId).catch(e=>toast.error(String(e)));store.setState({pendingAuth:null})}}/>
 }
 /** Renders all SFTP operation dialogs (new file, new folder, rename, delete confirm).
  *  Must be inside SftpStoreContext.Provider. */

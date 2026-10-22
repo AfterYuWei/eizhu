@@ -15,7 +15,7 @@ export function HostKeyDialog() {
 
   return (
     <AlertDialog open={pending !== null}>
-      <AlertDialogContent className="max-w-lg">
+      <AlertDialogContent className="sftp-dialog max-w-lg">
         <AlertDialogHeader>
           <AlertDialogTitle className="flex items-center gap-2">
             <ShieldAlert size={18} /> 确认 SFTP 主机指纹
