@@ -1,6 +1,7 @@
+import { Loading } from '@/components/ui/loading'
 import React,{ useEffect,useRef,useState } from 'react'
 import {
-File,Folder,HardDrive,Cpu,Loader2,AlertCircle,
+File,Folder,HardDrive,Cpu,AlertCircle,
 FilePlus,FolderPlus,RefreshCw,Pencil,Trash2,Copy,Eye,EyeOff,
 FolderOpen,FileEdit,Inbox,Crosshair,ChevronDown
 } from 'lucide-react'
@@ -454,10 +455,7 @@ export function ServerDetail({
         >
           <div className="sdetail-file-list">
             {isConnecting && (
-              <div className="sdetail-file-loading">
-                <Loader2 size={14} className="animate-spin" />
-                <span>正在连接服务器...</span>
-              </div>
+              <Loading />
             )}
             {hasError && (
               <div className="sdetail-file-error">
@@ -488,10 +486,7 @@ export function ServerDetail({
                   </div>
                 )}
                 {serverDetail.loading && (
-                  <div className="sdetail-file-loading">
-                    <Loader2 size={14} className="animate-spin" />
-                    <span>加载中...</span>
-                  </div>
+                  <Loading />
                 )}
                 {!serverDetail.loading && serverDetail.files.length === 0 && (
                   <div className="sdetail-file-empty sdetail-file-loading">

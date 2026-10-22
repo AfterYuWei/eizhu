@@ -78,7 +78,6 @@
 .desktop-shell .backup-cloud-card .backup-row > :is(input, .settings-select) { width: min(100%, 360px); justify-self: end; }
 .desktop-shell .backup-cloud-card .backup-row:has(> button),
 .desktop-shell .backup-cloud-card .backup-row:has(> [role='switch']) { display: flex; flex-wrap: wrap; }
-.desktop-shell .backup-loading { display: flex; align-items: center; gap: 8px; padding-block: 24px; color: var(--settings-muted); }
 
 /* 随内容区宽度与字号调整，不依赖固定显示器尺寸。 */
 @container (max-width: 760px) {

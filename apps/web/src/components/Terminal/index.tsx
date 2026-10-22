@@ -1,3 +1,4 @@
+import { Loading } from '@/components/ui/loading'
 import { geometry,type PaneRect } from '@/lib/terminalLayout';
 import { useTerminalLayoutStore } from '@/store/terminalLayout';
 import { SplitResizeHandle } from './SplitControls';
@@ -52,7 +53,7 @@ export function TerminalView() {
                 : { inset: 0 };
             return (<div key={tab.id} id={`workspace-panel-${tab.id}`} data-terminal-tab={tab.id} role="tabpanel" aria-labelledby={`workspace-tab-${tab.id}`} className={cn('term-pane', active && 'is-active', !visible && 'is-hidden')} style={style} onPointerDownCapture={() => { if (useSessionStore.getState().activeTabId !== tab.id)
                 useSessionStore.getState().setActiveTab(tab.id); }}>
-              <div className={cn('relative min-h-0 flex-1', 'term-pane-card')}><Suspense fallback={<div className="h-full bg-[var(--term-bg)]"/>}>
+              <div className={cn('relative min-h-0 flex-1', 'term-pane-card')}><Suspense fallback={<Loading className="bg-[var(--term-bg)] text-[var(--fg-4)]" />}>
                 <TerminalPane tab={tab} isActive={active && visible} isVisible={visible}/>
               </Suspense></div>
             </div>);

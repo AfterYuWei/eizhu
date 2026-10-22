@@ -1,3 +1,4 @@
+import { Loading } from '@/components/ui/loading'
 import { ItemSyncBadge } from '@/components/SyncIndicator';
 import { useState,useMemo,useEffect,useRef,type ReactNode } from 'react';
 import { Plus,Edit,Trash2,Server,FolderPlus,FolderEdit,ChevronDown } from 'lucide-react';
@@ -298,9 +299,7 @@ export function Sidebar({ collapsed = false, onToggle, onAddServer }: {
         </DropdownMenu>
       </div>
           <div className="sidebar-body" hidden={collapsed} inert={collapsed} onContextMenu={handleBlankContextMenu} onClick={() => setSelectedProfileId(null)}>
-            {loading ? (<div className="sidebar-empty">
-                <span>加载中…</span>
-              </div>) : profiles.length === 0 && groups.length === 0 ? (<div className="sidebar-empty">
+            {loading ? (<Loading />) : profiles.length === 0 && groups.length === 0 ? (<div className="sidebar-empty">
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round">
                   <circle cx="7" cy="7" r="4.5"/>
                   <line x1="10.2" y1="10.2" x2="14" y2="14"/>

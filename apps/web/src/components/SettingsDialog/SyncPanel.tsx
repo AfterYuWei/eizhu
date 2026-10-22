@@ -1,3 +1,4 @@
+import { Loading } from '@/components/ui/loading'
 import { conflictDependencies,syncDiagnostic } from '@/lib/syncExperience'
 import { writeClipboardText } from '@/lib/clipboard'
 import { ErrorRecovery } from './ErrorRecovery'
@@ -37,7 +38,7 @@ export function SyncPanel() {
   return <div className="settings-section settings-stack">
     <div className="settings-section-title"><CloudSync size={14} />账号实时同步</div>
     <div className="backup-card">
-      <div className="backup-row">{status ? SYNC_STATUS_LABELS[status.status] ?? status.status : '加载中…'}</div>
+      <div className="backup-row">{status ? SYNC_STATUS_LABELS[status.status] ?? status.status : <Loading inline />}</div>
       <p className="settings-field-desc">修改立即保存到本地，并异步提交云端。离线时修改保留；同条目冲突需逐条选择。</p>
       <div className="backup-row">待同步 {status?.pendingCount ?? 0} 条 · 冲突 {status?.conflictCount ?? 0} 条</div>
       {status?.lastConfirmed && <p className="settings-field-desc">最近云端确认：{new Date(status.lastConfirmed).toLocaleString()}</p>}

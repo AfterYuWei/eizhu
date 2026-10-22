@@ -349,9 +349,6 @@
   font: 400 var(--sans-size) / 1.4 var(--sans);
   color: var(--fg-4);
 }
-.sdetail-file-loading .animate-spin {
-  animation: spin 1s linear infinite;
-}
 .sdetail-file-error {
   display: flex;
   align-items: center;

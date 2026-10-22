@@ -1,3 +1,4 @@
+import { Loading } from '@/components/ui/loading'
 import { useRef,useCallback,useLayoutEffect } from 'react'
 import { loader, type EditorReady } from '@/lib/monaco'
 import MonacoEditor from '@monaco-editor/react'
@@ -108,10 +109,7 @@ export function CodeEditor({
       onChange={(value: string | undefined) => onChange(value ?? '')}
       onMount={handleMount}
       loading={
-        <div className="editor-monaco-loading">
-          <div className="editor-monaco-spinner" />
-          <span>编辑器加载中…</span>
-        </div>
+        <Loading />
       }
       options={{
         fontSize: 13,

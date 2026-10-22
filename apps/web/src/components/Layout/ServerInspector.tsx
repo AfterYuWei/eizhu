@@ -1,3 +1,4 @@
+import { Loading } from '@/components/ui/loading'
 import { lazy,Suspense,useEffect,useState } from 'react'
 import { X } from 'lucide-react'
 import { useWorkspaceViewStore } from '@/store/workspaceView'
@@ -26,7 +27,7 @@ export function ServerInspector({ open, overlay, onClose }: { open: boolean; ove
     <div className="shell-inspector-heading"><span>服务器详情</span><ShellIconButton label="关闭服务器详情" onClick={onClose}><X size={15} /></ShellIconButton></div>
     <div className="shell-inspector-stack">
       {tabs.filter((tab) => visited.includes(tab.id) && tab.profileId).map((tab) => <div key={tab.id} className="shell-inspector-slot" hidden={tab.id !== activeTabId}>
-        <Suspense fallback={<p className="shell-list-empty">加载详情…</p>}>
+        <Suspense fallback={<Loading />}>
           <ServerDetail tabId={tab.id} profileId={tab.profileId} profileName={tab.profileName} host={tab.host || '未知'} port={tab.port || 22} username={tab.username || 'root'} active={visible && tab.id === activeTabId} />
         </Suspense>
       </div>)}

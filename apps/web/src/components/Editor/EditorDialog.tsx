@@ -1,6 +1,6 @@
+import { Loading } from '@/components/ui/loading'
 import { useState,useEffect } from 'react';
 import { Dialog,DialogContent,DialogTitle } from '@/components/ui/dialog';
-import { Skeleton } from '@/components/ui/skeleton';
 import { AlertDialog,AlertDialogAction,AlertDialogCancel,AlertDialogContent,AlertDialogDescription,AlertDialogFooter,AlertDialogHeader,AlertDialogTitle,} from '@/components/ui/alert-dialog';
 import { useEditorStore,useActiveTab } from '@/store/editor';
 import { CodeEditor } from './CodeEditor';
@@ -8,7 +8,6 @@ import { EditorToolbar } from './EditorToolbar';
 import { EditorStatusBar } from './EditorStatusBar';
 import { EditorTabs } from './EditorTabs';
 import { isDesktopRuntime } from '@/lib/platform';
-const SKELETON_WIDTHS = [52, 74, 43, 81, 61, 36, 69, 48, 86, 57, 72, 39, 64, 78, 45, 83, 55, 68];
 /** Full-screen-ish modal hosting the Monaco editor with multi-tab support.
  *  Shown when store.open is true. Guards close when there are unsaved edits. */
 export function EditorDialog() {
@@ -63,14 +62,7 @@ export function EditorDialog() {
         <EditorToolbar path={activeTab.path} dirty={dirty} saving={activeTab.saving} readOnly={activeTab.readOnly} loading={activeTab.loading} conflict={activeTab.conflict} hasSession={!!activeTab.sessionId} onSave={() => saveFile(activeTabId!)} onReload={() => reloadFile(activeTabId!)} onClose={handleClose}/>
 
         <div className="editor-body">
-          {activeTab.loading ? (<div className="editor-loading">
-              <div className="editor-skeleton">
-                {Array.from({ length: 18 }).map((_, i) => (<div key={i} className="editor-skel-line">
-                    <Skeleton className="editor-skel-gutter"/>
-                    <Skeleton className="editor-skel-code" style={{ width: `${SKELETON_WIDTHS[i]}%` }}/>
-                  </div>))}
-              </div>
-            </div>) : (<CodeEditor content={activeTab.content} language={activeTab.language} readOnly={activeTab.readOnly} loading={activeTab.loading} onChange={(value) => setContent(activeTabId!, value)} onSave={() => saveFile(activeTabId!)}/>)}
+          {activeTab.loading ? (<Loading />) : (<CodeEditor content={activeTab.content} language={activeTab.language} readOnly={activeTab.readOnly} loading={activeTab.loading} onChange={(value) => setContent(activeTabId!, value)} onSave={() => saveFile(activeTabId!)}/>)}
         </div>
 
         <EditorStatusBar language={activeTab.language} lineEnding={activeTab.lineEnding} contentLength={activeTab.content.length} dirty={dirty} error={activeTab.error}/>

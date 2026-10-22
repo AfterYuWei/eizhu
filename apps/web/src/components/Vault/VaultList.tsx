@@ -1,3 +1,4 @@
+import { Loading } from '@/components/ui/loading'
 import { KeyRound,AlertCircle,Plus } from 'lucide-react'
 import { useEffect,useRef } from 'react'
 import { useVaultStore } from '@/store/vault'
@@ -25,10 +26,7 @@ export function VaultList({ selectedId, disabled, onSelect, onCreate }: VaultLis
   // 加载态
   if (loading && items.length === 0) {
     return (
-      <div className="vault-loading" role="status">
-        <div className="vault-spinner" />
-        <div className="vault-empty-desc">加载中…</div>
-      </div>
+      <Loading />
     )
   }
 

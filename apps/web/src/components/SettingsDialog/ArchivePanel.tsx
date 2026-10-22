@@ -1,3 +1,4 @@
+import { Loading } from '@/components/ui/loading'
 import { normalizeCommandError } from '@eizhu/contracts'
 import { backupDiagnostic, restoreSourceLabel } from '@/lib/syncExperience'
 import { writeClipboardText } from '@/lib/clipboard'
@@ -10,7 +11,7 @@ import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
 import { TabsContent } from '@/components/ui/tabs'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Archive, Cloud, Copy, History, Loader2, LockKeyhole, ShieldCheck, Upload } from 'lucide-react'
+import { Archive, Cloud, Copy, History, LockKeyhole, ShieldCheck, Upload } from 'lucide-react'
 import { archiveApi } from '@/api/archive'
 import type { BackupSettings, BackupStatus, BackupVersion } from '@/types/backup'
 import { formatSize } from '@/types/backup'
@@ -98,10 +99,7 @@ export function ArchivePanel() {
       ) : errorCode ? (
         <ErrorRecovery code={errorCode} onRetry={() => void refresh()} />
       ) : (
-        <p className="backup-loading" role="status">
-          <Loader2 size={16} className="animate-spin" />
-          加载备份配置…
-        </p>
+        <Loading />
       )
     return (
       <>

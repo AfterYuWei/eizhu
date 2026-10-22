@@ -1,3 +1,4 @@
+import { Loading } from '@/components/ui/loading'
 import { lazy, Suspense } from 'react'
 import { TerminalView } from '@/components/Terminal'
 import { useSessionStore } from '@/store/session'
@@ -15,10 +16,10 @@ export function WorkspaceContent({ onAddServer }: { onAddServer: () => void }) {
       {hasTerminals ? <TerminalView /> : <ConnectionHome onAddServer={onAddServer} />}
     </div>
     {sftpStore && <section id="workspace-sftp" className="shell-page" aria-label="SFTP 文件" hidden={activePage !== 'sftp'} inert={activePage !== 'sftp'}>
-      <Suspense fallback={<p role="status">正在打开 SFTP…</p>}><SftpView store={sftpStore} /></Suspense>
+      <Suspense fallback={<Loading />}><SftpView store={sftpStore} /></Suspense>
     </section>}
     {vaultOpened && <section id="workspace-vault" className="shell-page" aria-label="密钥管理" hidden={activePage !== 'vault'} inert={activePage !== 'vault'}>
-      <Suspense fallback={<p role="status">正在打开密钥管理…</p>}><VaultView /></Suspense>
+      <Suspense fallback={<Loading />}><VaultView /></Suspense>
     </section>}
   </>
 }

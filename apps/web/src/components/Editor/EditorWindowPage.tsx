@@ -1,3 +1,4 @@
+import { Loading } from '@/components/ui/loading'
 import { EditorMergeDialog } from './EditorMergeDialog'
 import { EditorSaveAsDialog } from './EditorSaveAsDialog'
 import { isEditorDirty as isDirty,saveBeforeEditorClose,type EditorCloseRequest } from '@/lib/editorCloseGuard'
@@ -6,7 +7,6 @@ import { listen } from '@/lib/bridge'
 import { bridge,desktopBootstrap } from '@/lib/bridge'
 import { FileText } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Skeleton } from '@/components/ui/skeleton'
 import { toast } from 'sonner'
 import {
 AlertDialog,AlertDialogAction,AlertDialogCancel,AlertDialogContent,
@@ -25,7 +25,6 @@ import { EditorTabs } from './EditorTabs'
 
 type PendingClose = EditorCloseRequest
 
-const SKELETON_WIDTHS = [52, 74, 43, 81, 61, 36, 69, 48, 86, 57, 72, 39, 64, 78, 45, 83, 55, 68]
 
 /** Standalone desktop editor webview with its own multi-file tab strip. */
 export function EditorWindowPage() {
@@ -268,16 +267,7 @@ export function EditorWindowPage() {
             />
             <div className="editor-body">
               {activeTab.loading ? (
-                <div className="editor-loading">
-                  <div className="editor-skeleton">
-                    {SKELETON_WIDTHS.map((width, index) => (
-                      <div key={index} className="editor-skel-line">
-                        <Skeleton className="editor-skel-gutter" />
-                        <Skeleton className="editor-skel-code" style={{ width: `${width}%` }} />
-                      </div>
-                    ))}
-                  </div>
-                </div>
+                <Loading />
               ) : (
                 <CodeEditor
                   content={activeTab.content}

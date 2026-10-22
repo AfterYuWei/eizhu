@@ -1,3 +1,4 @@
+import { Loading } from '@/components/ui/loading'
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { writeClipboardText } from '@/lib/clipboard';
@@ -347,10 +348,7 @@ export function FilePane({ pane, onPickServer }: FilePaneProps) {
                     drag.start(e, session);
             }} dropTargetPath={matchesDropTarget(visualDropTarget, pane, activeTab.id, 'tree')
                 ? visualDropTarget?.destDir
-                : null} draggingPaths={store.dragSession?.sourceTabId === activeTab.id ? new Set(store.dragSession.entries.map((item) => item.path)) : undefined} makeDropTarget={(entry) => makeTarget(entry.path, 'tree')}/>) : (<div className="sftp-list-empty">
-          <Inbox size={20}/>
-          <span>加载中...</span>
-        </div>)}
+                : null} draggingPaths={store.dragSession?.sourceTabId === activeTab.id ? new Set(store.dragSession.entries.map((item) => item.path)) : undefined} makeDropTarget={(entry) => makeTarget(entry.path, 'tree')}/>) : (<Loading />)}
     </div>);
     return (<div className="sftp-pane">
       {false}

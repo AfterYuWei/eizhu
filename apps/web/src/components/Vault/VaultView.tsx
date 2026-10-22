@@ -1,3 +1,4 @@
+import { Loading } from '@/components/ui/loading'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Plus, KeyRound, AlertTriangle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -90,7 +91,7 @@ export function VaultView() {
         {editorOpen ? <div className="vault-inline-editor">
           <header className="vault-detail-heading"><h2>{editing ? '编辑凭据' : '新建凭据'}</h2></header>
           <VaultForm key={editorInstance} item={editing} onStateChange={setEditorState} onOpenChange={(open) => { if (!open) afterEditing(() => {}) }} onSaved={handleSaved} />
-        </div> : selected && !error ? active && <VaultDetail key={`${selected.id}:${selected.updated_at}`} item={selected} onEdit={startEditor} onDelete={(item, refs) => setDeleteTarget({ item, refs })} /> : <div className="vault-detail-placeholder">{loading ? '正在加载凭据…' : '选择凭据以查看详情'}</div>}
+        </div> : selected && !error ? active && <VaultDetail key={`${selected.id}:${selected.updated_at}`} item={selected} onEdit={startEditor} onDelete={(item, refs) => setDeleteTarget({ item, refs })} /> : loading ? <Loading /> : <div className="vault-detail-placeholder">选择凭据以查看详情</div>}
       </section>
     </div>
     <VaultGenerateDialog open={genOpen} onOpenChange={setGenOpen} />

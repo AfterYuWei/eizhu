@@ -1,3 +1,4 @@
+import { Loading } from '@/components/ui/loading'
 import { useEffect, useRef, useState } from 'react'
 import { ChevronDown, ChevronRight, Copy, Eye, EyeOff, MoreHorizontal, Pencil, Server, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -113,7 +114,7 @@ export function VaultDetail({ item, onEdit, onDelete }: VaultDetailProps) {
         <span>关联连接</span><span>{item.ref_count > 0 ? `${item.ref_count} 个连接` : '未引用'}{refsOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}</span>
       </button>
       {refsOpen && <div id={`vault-references-${item.id}`} className="vault-reference-list">
-        {refsError ? <p role="alert">{refsError}<Button type="button" variant="ghost" size="sm" onClick={() => void loadReferences()}>重试</Button></p> : references === null ? <p role="status">正在加载引用…</p> : references.length === 0 ? <p>暂无连接引用此凭据</p> : references.map((ref) => <div className="vault-reference-row" key={ref.id}><Server size={16} aria-hidden="true" /><span>{ref.name || '未命名连接'}</span></div>)}
+        {refsError ? <p role="alert">{refsError}<Button type="button" variant="ghost" size="sm" onClick={() => void loadReferences()}>重试</Button></p> : references === null ? <Loading className="min-h-12" /> : references.length === 0 ? <p>暂无连接引用此凭据</p> : references.map((ref) => <div className="vault-reference-row" key={ref.id}><Server size={16} aria-hidden="true" /><span>{ref.name || '未命名连接'}</span></div>)}
       </div>}
     </section>
   </div>

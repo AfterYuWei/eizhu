@@ -1,3 +1,4 @@
+import { Loading } from '@/components/ui/loading'
 import { useEffect,useState } from 'react';
 import { Check } from 'lucide-react';
 import { Dialog,DialogContent,DialogHeader,DialogTitle } from '@/components/ui/dialog';
@@ -54,7 +55,7 @@ export function VaultSelectDialog({ open, onOpenChange, selectedId, onSelect }: 
         <Input type="text" className="vault-select-search" placeholder="搜索名称 / 备注" value={search} onChange={(event) => setSearch(event.target.value)} autoFocus/>
 
         <div className="vault-select-list">
-          {loading ? (<div className="vault-select-empty">加载中...</div>) : filtered.length === 0 ? (<div className="vault-select-empty">无匹配凭据</div>) : (filtered.map((item) => {
+          {loading ? (<Loading />) : filtered.length === 0 ? (<div className="vault-select-empty">无匹配凭据</div>) : (filtered.map((item) => {
             const Icon = VAULT_TYPE_ICONS[item.type];
             const isSelected = item.id === selectedId;
             const needsUsername = vaultNeedsUsername(item);

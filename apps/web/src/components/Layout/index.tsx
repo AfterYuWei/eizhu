@@ -1,3 +1,4 @@
+import { Loading } from '@/components/ui/loading'
 import { lazy,Suspense,useCallback,useEffect,useRef,useState,type CSSProperties } from 'react'
 import { FolderUp,KeyRound,PanelLeft,PanelLeftClose,PanelRight,Plus,Search,SquareTerminal } from 'lucide-react'
 import { TunnelDialog,TunnelPrompts } from '@/components/Terminal/TunnelDialog'
@@ -208,7 +209,7 @@ export function Layout() {
     {snippetsOpen && <Suspense fallback={null}><SnippetDialog key={workspaceGeneration()} open onOpenChange={setSnippetsOpen} /></Suspense>}
     {snippetQuick && <SnippetQuickPicker key={workspaceGeneration()} target={snippetQuick.target}
       onClose={() => setSnippetQuick(null)} onManage={() => { setSnippetQuick(null); setSnippetsOpen(true) }} />}
-    {settingsOpen && <Suspense fallback={<div className="settings-page settings-page-loading" role="status">正在打开设置…</div>}><SettingsPage key={settingsTab} initialTab={settingsTab} onBack={() => setSettingsOpen(false)} /></Suspense>}
+    {settingsOpen && <Suspense fallback={<div className="settings-page settings-page-loading"><Loading /></div>}><SettingsPage key={settingsTab} initialTab={settingsTab} onBack={() => setSettingsOpen(false)} /></Suspense>}
     <Toaster theme={theme} />
   </div>
 }
