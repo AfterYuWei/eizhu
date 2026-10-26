@@ -175,7 +175,7 @@ function sameDropTarget(a: SftpDropTarget | null, b: SftpDropTarget | null): boo
 /** Stored when a transfer is blocked by destination conflicts. The UI renders
  *  a conflict dialog from `conflicts`; the user's choice is fed back via
  *  resolveConflict(), which retries the transfer with the chosen strategy. */
-export interface PendingConflict {
+interface LegacyPendingConflict {
   conflicts: SftpConflictInfo[]
   operation: 'transfer' | 'move'
   // Original request context used to retry after resolution
@@ -188,6 +188,7 @@ export interface PendingConflict {
   direction: TransferDirection
   directoryMode?: DirectoryTransferMode
 }
+export type PendingConflict = LegacyPendingConflict | { taskId: string; operation: 'transfer'; conflicts: SftpConflictInfo[]; directoryMode?: DirectoryTransferMode }
 
 /** Dialog state types for file operations */
 export interface NewFileDialogState {
@@ -296,7 +297,8 @@ export interface SftpStore {
     destDir: string,
   ) => Promise<void>
   reloadTransfers: () => Promise<void>
-  acceptTransferTasks: (tasks: TransferTask[]) => void
+  acceptTransferTasks: (tasks: TransferTask[], target?: { pane: PaneSide; tabId: string }) => void
+  openTransferConflict: (id: string) => Promise<void>
   pauseTransfer: (id: string) => Promise<void>
   resumeTransfer: (id: string, restart?: boolean, file?: File) => Promise<void>
   cancelTransfer: (id: string) => Promise<void>
@@ -371,6 +373,25 @@ export function createSftpStore(options: SftpStoreOptions = {}): SftpStoreApi {
   let disposed=false
   let disposal: Promise<void> | undefined
   const connections = new Map<string, Promise<void>>()
+  const transferTargets = new Map<string, { pane: PaneSide; tabId: string }>()
+  const conflictRequests = new Set<string>()
+  let transferTimer: ReturnType<typeof setTimeout> | undefined
+  let transferPoll: Promise<void> | undefined
+  const pollTransfers = () => {
+    if (disposed || generation !== workspaceGeneration() || transferTimer || transferPoll) return
+    if (!api.getState().transfers.some((task) => ['queued', 'transferring'].includes(task.status))) return
+    transferTimer = setTimeout(() => {
+      transferTimer = undefined
+      if (disposed || generation !== workspaceGeneration()) return
+      if (!api.getState().transfers.some((task) => ['queued', 'transferring'].includes(task.status))) return
+      transferPoll = sftpApi.listTransfers().then((tasks) => {
+        if (!disposed && generation === workspaceGeneration()) api.getState().acceptTransferTasks(tasks)
+      }).catch(() => undefined).finally(() => {
+        transferPoll = undefined
+        pollTransfers()
+      })
+    }, 800)
+  }
   const connect = (get: GetState, set: SetState, pane: PaneSide, id: string, server: SftpServer) => {
     if (disposed || generation !== workspaceGeneration()) return Promise.resolve()
     const pending = connections.get(id)
@@ -387,6 +408,9 @@ export function createSftpStore(options: SftpStoreOptions = {}): SftpStoreApi {
     dispose: () => {
       if (disposal) return disposal
       disposed = true
+      clearTimeout(transferTimer)
+      transferTimer = undefined
+      transferTargets.clear()
       const sessions = new Set([...get().leftTabs, ...get().rightTabs].flatMap((tab) => tab.sessionId ? [tab.sessionId] : []))
       set({ leftTabs: [], rightTabs: [], activeLeftTabId: '', activeRightTabId: '', pendingAuth: null, pendingHostKey: null })
       disposal = Promise.allSettled([
@@ -396,6 +420,7 @@ export function createSftpStore(options: SftpStoreOptions = {}): SftpStoreApi {
           if (!['NOT_FOUND', 'WORKSPACE_CHANGED'].includes(error?.code ?? error?.error?.code ?? '')) throw cause
         })),
         ...connections.values(),
+        ...(transferPoll ? [transferPoll] : []),
       ]).then((results) => {
         const errors = results.filter((result) => result.status === 'rejected').map((result) => result.reason)
         if (errors.length) throw new AggregateError(errors, 'SFTP 资源释放失败')
@@ -679,8 +704,7 @@ export function createSftpStore(options: SftpStoreOptions = {}): SftpStoreApi {
           get().acceptTransferTasks,
         )
         if (res.tasks.length === 0) return
-        get().acceptTransferTasks(res.tasks)
-        void monitorUploadTasks(get, set, res.tasks.map((task) => task.id), target)
+        get().acceptTransferTasks(res.tasks, { pane: target.pane, tabId: target.tabId })
       } catch (err) {
         toast.error(err instanceof Error ? err.message : '上传失败')
       }
@@ -721,7 +745,11 @@ export function createSftpStore(options: SftpStoreOptions = {}): SftpStoreApi {
       })
     },
 
-    dismissConflict: () => set({ pendingConflict: null }),
+    dismissConflict: () => {
+      const pending = get().pendingConflict
+      set({ pendingConflict: null })
+      if (pending && 'taskId' in pending) void get().cancelTransfer(pending.taskId).catch(() => toast.error('取消任务失败，请从队列重试'))
+    },
 
     // Dialog actions
     openNewFileDialog: (pane) => set({ newFileDialog: { pane }, newFolderDialog: null, renameDialog: null, deleteConfirm: null }),
@@ -761,6 +789,12 @@ export function createSftpStore(options: SftpStoreOptions = {}): SftpStoreApi {
       const pending = get().pendingConflict
       if (!pending) return
       set({ pendingConflict: null })
+      if ('taskId' in pending) {
+        if (resolution === 'ask') return
+        try { get().acceptTransferTasks([await sftpApi.resolveTransferConflicts(pending.taskId, resolution)]) }
+        catch (cause) { toast.error(cause instanceof Error ? cause.message : '冲突处理失败，请从队列重新选择') }
+        return
+      }
       if (pending.operation === 'move') {
         await runMove(get, set, {
           sessionId: pending.sourceSessionId,
@@ -779,25 +813,59 @@ export function createSftpStore(options: SftpStoreOptions = {}): SftpStoreApi {
           targetPane: pending.targetPane,
           targetTabId: pending.targetTabId,
           direction: pending.direction,
-          directoryMode: pending.directoryMode ?? 'archive',
+          directoryMode: pending.directoryMode ?? 'preserve',
           resolution,
         })
       }
     },
 
-    acceptTransferTasks: (tasks) => {
-      if (generation !== workspaceGeneration()) return
-      set((state) => ({ transfers: mergeTransferTasks(state.transfers, tasks) }))
+    openTransferConflict: async (id) => {
+      if (disposed || generation !== workspaceGeneration() || conflictRequests.has(id)) return
+      conflictRequests.add(id)
+      try {
+        const result = await sftpApi.getTransferConflicts(id)
+        if (!disposed && generation === workspaceGeneration() && result.conflicts.length && !get().pendingConflict)
+          set({ pendingConflict: { taskId: id, operation: 'transfer', conflicts: result.conflicts, ...(result.directoryMode ? { directoryMode: result.directoryMode } : {}) } })
+      } catch (cause) { toast.error(cause instanceof Error ? cause.message : '读取冲突失败，请从队列重试') }
+      finally { conflictRequests.delete(id) }
+    },
+    acceptTransferTasks: (tasks, target) => {
+      if (disposed || generation !== workspaceGeneration()) return
+      if (target) for (const task of tasks) transferTargets.set(task.id, target)
+      const before = new Map(get().transfers.map((task) => [task.id, task]))
+      const merged = mergeTransferTasks(get().transfers, tasks)
+      set({ transfers: merged })
+      const refresh = new Map<string, { pane: PaneSide; tabId: string }>()
+      for (const task of merged) {
+        if (['queued', 'transferring'].includes(task.status) || before.get(task.id) === task) continue
+        if (before.get(task.id)?.status === task.status && !target) continue
+        const owner = transferTargets.get(task.id)
+        if (owner && task.conflict_count && ['paused', 'recoverable'].includes(task.status) && !get().pendingConflict) void get().openTransferConflict(task.id)
+        if (owner) refresh.set(owner.tabId, owner)
+        else for (const pane of ['left', 'right'] as const) {
+          for (const tab of tabsOf(get(), pane).tabs) {
+            if (tab.server.id === task.target_profile) refresh.set(tab.id, { pane, tabId: tab.id })
+          }
+        }
+        if (['completed', 'cancelled'].includes(task.status)) transferTargets.delete(task.id)
+      }
+      for (const owner of refresh.values()) void refreshTabById(get, set, owner.pane, owner.tabId)
+      pollTransfers()
     },
     reloadTransfers: async () => {
       const tasks = await sftpApi.listTransfers()
       if (generation !== workspaceGeneration()) return
-      set((state) => ({ transfers: mergeTransferTasks(state.transfers.filter((task) => tasks.some((next) => next.id === task.id)), tasks) }))
+      set((state) => ({ transfers: state.transfers.filter((task) => tasks.some((next) => next.id === task.id)) }))
+      get().acceptTransferTasks(tasks)
     },
     pauseTransfer: async (id) => {
       get().acceptTransferTasks([await sftpApi.pauseTransfer(id)])
     },
     resumeTransfer: async (id, restart = false, file) => {
+      if (get().transfers.find((task) => task.id === id)?.conflict_count) {
+        await get().openTransferConflict(id)
+        return
+      }
       if (file) {
         const result = await sftpApi.resumeUpload(id, file, restart, get().acceptTransferTasks)
         get().acceptTransferTasks(result.tasks)
@@ -1076,6 +1144,7 @@ async function runTransfer(
   },
 ) {
   const resolution: ConflictResolution = params.resolution ?? 'ask'
+  const generation = workspaceGeneration()
   let res
   try {
     res = await sftpApi.transfer(
@@ -1085,7 +1154,9 @@ async function runTransfer(
       params.destDir,
       resolution,
       params.directoryMode,
+      true,
     )
+    if (generation !== workspaceGeneration()) return
   } catch (err) {
     console.error('transfer failed', err)
     toast.error(err instanceof Error ? err.message : '传输失败')
@@ -1094,7 +1165,7 @@ async function runTransfer(
 
   // 409 path: backend detected conflicts while resolution was "ask".
   // Surface them to the UI via pendingConflict.
-  if (res.conflicts && res.conflicts.length > 0 && !res.task_id) {
+  if (res.conflicts && res.conflicts.length > 0 && !res.tasks?.length) {
     set({
       pendingConflict: {
         operation: 'transfer',
@@ -1112,72 +1183,10 @@ async function runTransfer(
     return
   }
 
-  if (!res.task_id || !res.tasks || res.tasks.length === 0) return
+  if (!res.tasks?.length) return
 
   // Add the backend-created task(s) to the store for progress tracking
-  get().acceptTransferTasks(res.tasks.map((task) => ({ ...task, direction: params.direction })))
-
-  // Polling is a fallback for missed events; it cannot cross account spaces.
-  const generation = workspaceGeneration()
-  const taskId = res.task_id
-  ;(async () => {
-    const deadline = Date.now() + 10 * 60 * 1000 // 10 min timeout
-    while (Date.now() < deadline) {
-      await new Promise((r) => setTimeout(r, 800))
-      try {
-        const tasks = await sftpApi.listTransfers()
-        const t = tasks.find((x) => x.id === taskId)
-        if (!t) continue
-
-        if (generation !== workspaceGeneration()) return
-        set((s) => ({ transfers: mergeTransferTasks(s.transfers, [t]) }))
-
-        if (['completed', 'failed', 'cancelled', 'paused', 'recoverable'].includes(t.status)) {
-          if (t.status === 'completed') {
-            await refreshTabById(get, set, params.targetPane, params.targetTabId)
-            if (t.error_message) toast.warning(`传输部分完成：${t.error_message}`)
-          } else if (t.status === 'failed') {
-            toast.error(t.error_message || '传输失败')
-          }
-          return
-        }
-      } catch {
-        // ignore polling errors
-      }
-    }
-  })()
-}
-
-async function monitorUploadTasks(
-  get: GetState,
-  set: SetState,
-  taskIds: string[],
-  target: SftpDropTarget,
-) {
-  const generation = workspaceGeneration()
-  const pending = new Set(taskIds)
-  const deadline = Date.now() + 10 * 60 * 1000
-  while (pending.size > 0 && Date.now() < deadline) {
-    await new Promise((resolve) => setTimeout(resolve, 800))
-    try {
-      const tasks = await sftpApi.listTransfers()
-      if (generation !== workspaceGeneration()) return
-      const byId = new Map(tasks.map((task) => [task.id, task]))
-      set((state) => ({
-        transfers: mergeTransferTasks(state.transfers, tasks),
-      }))
-      for (const id of [...pending]) {
-        const task = byId.get(id)
-        if (!task) continue
-        if (['completed', 'failed', 'cancelled', 'paused', 'recoverable'].includes(task.status)) {
-          pending.delete(id)
-        }
-      }
-    } catch {
-      // Keep polling while the backend connection recovers.
-    }
-  }
-  await refreshTabById(get, set, target.pane, target.tabId)
+  get().acceptTransferTasks(res.tasks, { pane: params.targetPane, tabId: params.targetTabId })
 }
 
 /** Refresh a specific tab without changing the user's active tab. */

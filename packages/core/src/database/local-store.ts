@@ -6,6 +6,8 @@ import { randomUUID } from 'node:crypto'
 import { DesktopError, fail, local } from '@eizhu/contracts'
 import type { LocalInput } from '@eizhu/contracts'
 import { LocalCipher } from '../local/crypto.ts'
+import { restoreCheckpoint } from '../sftp/checkpoint.ts'
+import type { Checkpoint, CheckpointProgress } from '../sftp/checkpoint.ts'
 import {
   emptyPayload,
   kinds,
@@ -77,10 +79,22 @@ export class LocalStore {
   }
   transferState(operation:string,input:unknown):unknown{
     const d=input as {id:string;value?:unknown}
-    if(operation==='sftp.storage.list')return (this.db.prepare("SELECT key,data FROM local_state WHERE key LIKE 'transfer:%'").all() as Array<{key:string;data:Buffer}>).map(r=>this.cipher.open(r.data,r.key))
+    if(operation==='sftp.storage.list')return (this.db.prepare("SELECT key,data FROM local_state WHERE key LIKE 'transfer:%'").all() as Array<{key:string;data:Buffer}>).map(r=>{
+      const base=this.cipher.open<Checkpoint>(r.data,r.key)
+      const progress=this.state<CheckpointProgress|undefined>(`transfer-progress:${base.task.id}`,undefined)
+      return restoreCheckpoint(base,progress)
+    })
     if(!/^[a-f0-9-]{36}$/.test(d.id))fail('BAD_REQUEST','传输编号无效')
     const key=`transfer:${d.id}`
-    this.db.transaction(()=>{if(operation==='sftp.storage.delete')this.db.prepare('DELETE FROM local_state WHERE key=?').run(key);else this.db.prepare('INSERT INTO local_state VALUES (?,?) ON CONFLICT(key) DO UPDATE SET data=excluded.data').run(key,this.cipher.seal(d.value,key))})()
+    const progressKey=`transfer-progress:${d.id}`
+    this.db.transaction(()=>{
+      if(operation==='sftp.storage.delete')this.db.prepare('DELETE FROM local_state WHERE key IN (?,?)').run(key,progressKey)
+      else if(operation==='sftp.storage.checkpoint')this.setState(progressKey,d.value)
+      else {
+        this.db.prepare('INSERT INTO local_state VALUES (?,?) ON CONFLICT(key) DO UPDATE SET data=excluded.data').run(key,this.cipher.seal(d.value,key))
+        this.db.prepare('DELETE FROM local_state WHERE key=?').run(progressKey)
+      }
+    })()
   }
   archiveState<T>(key: string, fallback: T): T { return this.state(`archive:${key}`, fallback) }
   archiveWrite(key: string, value: unknown): void {

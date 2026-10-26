@@ -16,6 +16,8 @@ export function ConflictDialog() {
     const dismiss = useSftpStore((s) => s.dismissConflict);
     const open = pending !== null;
     const conflicts = pending?.conflicts ?? [];
+    const archive = pending?.directoryMode === 'archive';
+    const typeConflict = conflicts.some((conflict) => (conflict.source_is_dir === true && !archive) !== (conflict.dest_is_dir === true));
     const choose = (resolution: ConflictResolution) => {
         resolve(resolution);
     };
@@ -32,7 +34,8 @@ export function ConflictDialog() {
         </div>
         <div className="sftp-conflict-sub">
           目标位置已存在 {conflicts.length} 个同名项目。请选择处理方式（将应用到全部冲突项）。
-          {conflicts.some((c) => c.dest_is_dir) && ' 覆盖文件夹会递归删除目标端原有目录。'}
+          {' 同名文件将被替换，已有目录中的其他内容会保留。'}
+          {typeConflict && ' 文件与目录类型冲突时，请选择重命名或跳过。'}
         </div>
 
         <div className="sftp-conflict-list">
@@ -55,8 +58,8 @@ export function ConflictDialog() {
         </div>
 
         <div className="sftp-conflict-actions">
-          <Button type="button" className="sftp-conflict-btn" onClick={() => choose('overwrite')}>
-            {conflicts.some((c) => c.dest_is_dir) ? '覆盖并删除目标目录' : '覆盖'}
+          <Button type="button" className="sftp-conflict-btn" disabled={typeConflict} onClick={() => choose('overwrite')}>
+            覆盖同名文件
           </Button>
           <Button type="button" variant="outline" className="sftp-conflict-btn" onClick={() => choose('rename')}>
             重命名

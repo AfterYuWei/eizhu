@@ -11,10 +11,11 @@ import type { WorkerClient } from '../workers/client.ts'
 import { SshService } from '../ssh/service.ts'
 import { SshConnection } from '../ssh/connection.ts'
 import { FileEndpoint, cleanPath, displayPath, entry } from './endpoint.ts'
-import type { FileStat, FileHandle } from './endpoint.ts'
+import type { FileHandle } from './endpoint.ts'
 import { fileHash, readText, writeText, hash } from './editor.ts'
 import { archive, collect } from './archive.ts'
-import type { ArchiveEntry } from './archive.ts'
+import { checkpointProgress } from './checkpoint.ts'
+import type { CopyFile, Checkpoint } from './checkpoint.ts'
 
 interface FileSession {
   borrowed?: boolean
@@ -24,32 +25,6 @@ interface FileSession {
   endpoint?: FileEndpoint
   task?: Promise<void>
   closing?: Promise<void>
-}
-interface CopyFile {
-  source: string
-  dest: string
-  stat: FileStat
-  target?: FileStat
-  temporary: string
-  offset: number
-  prefixHash?: string
-  complete: boolean
-  dir: boolean
-}
-interface Checkpoint {
-  task: TransferTask
-  sourceProfile: string
-  targetProfile: string
-  sourceSession: string
-  targetSession: string
-  sourceBinding?: string
-  targetBinding?: string
-  files: CopyFile[]
-  index: number
-  upload?: { size: number; lastModified: number; sequence: number; prefixHash?: string; prefixBytes?: number }
-  download?: boolean
-  dragRoot?: string
-  archive?: { paths: string[]; rows: ArchiveEntry[]; format: 'tar.gz' | 'zip'; spool: string; ready: boolean }
 }
 interface Job {
   checkpoint: Checkpoint
@@ -63,6 +38,7 @@ interface Job {
   busy: boolean
   lastEvent: number
   chain: Promise<unknown>
+  persisted?: boolean
 }
 type Emit = (name: 'eizhu-sftp-message', payload: unknown) => void
 const activeStatuses = ['queued', 'transferring']
@@ -149,13 +125,21 @@ export class SftpService {
         busy: false,
         lastEvent: 0,
         chain: Promise.resolve(),
+        persisted: true,
       })
     }
   }
   private async save(job: Job, event = true, force = false) {
     const c = job.checkpoint
     c.task.confirmed_offset = c.task.transferred
-    await this.database.call('sftp.storage.save', { id: c.task.id, value: c })
+    await this.database.call(job.persisted ? 'sftp.storage.checkpoint' : 'sftp.storage.save', {
+      id: c.task.id, value: job.persisted ? checkpointProgress(c) : c,
+    })
+    job.persisted = true
+    this.publish(job, event, force)
+  }
+  private publish(job: Job, event = true, force = false) {
+    const c = job.checkpoint
     if (event && (force || Date.now() - job.lastEvent > 100 || !activeStatuses.includes(c.task.status))) {
       job.lastEvent = Date.now()
       this.emit('eizhu-sftp-message', {
@@ -173,7 +157,7 @@ export class SftpService {
   private async phase(job: Job, phase: NonNullable<TransferTask['phase']>) {
     job.checkpoint.task.phase = phase
     job.checkpoint.task.speed = 0
-    await this.save(job, true, true)
+    this.publish(job, true, job.checkpoint.files.length <= 1 || job.checkpoint.index === job.checkpoint.files.length - 1)
     job.controller.signal.throwIfAborted()
   }
   private sessionEvent(s: FileSession) {
@@ -328,7 +312,10 @@ export class SftpService {
         task: {
           id: randomUUID(),
           file_name: name,
-          direction,
+          direction: direction === 'transfer'
+            ? c.sourceProfile === 'local' && c.targetProfile !== 'local' ? 'upload'
+              : c.sourceProfile !== 'local' && c.targetProfile === 'local' ? 'download' : 'transfer'
+            : direction,
           size,
           transferred: 0,
           status: 'queued',
@@ -337,6 +324,8 @@ export class SftpService {
           execution_generation: 0,
           source_profile: c.sourceProfile,
           target_profile: c.targetProfile,
+          items_total: c.files.length,
+          items_completed: 0,
         },
       },
       controller: new AbortController(),
@@ -369,20 +358,26 @@ export class SftpService {
     destDir: string,
     mode: 'preserve' | 'archive',
     resolution: string,
+    signal?: AbortSignal,
+    onEntry?: Parameters<typeof collect>[3],
   ) {
-    const rows = await collect(source, paths),
+    const rows = await collect(source, paths, signal, onEntry),
       result: CopyFile[] = [],
       conflicts: SftpConflictInfo[] = []
     const renamed = new Map<string, string>(),
       skipped: string[] = [],
-      planned = new Set<string>()
+      planned = new Set<string>(),
+      missingDirectories = new Set<string>()
     for (const row of rows) {
+      signal?.throwIfAborted()
       if (skipped.some((path) => row.path.startsWith(path + '/'))) continue
       if (mode === 'archive' && paths.some((p) => row.path !== p && row.path.startsWith(p + '/'))) continue
       let dest = posix.join(destDir, row.name + (mode === 'archive' && row.dir ? '.tar.gz' : ''))
       for (const [from, to] of renamed)
         if (row.path.startsWith(from + '/')) dest = posix.join(to, posix.relative(from, row.path))
-      let existing = await this.target(target, dest)
+      let parent = posix.dirname(dest)
+      while (parent !== '/' && !missingDirectories.has(parent)) parent = posix.dirname(parent)
+      let existing = missingDirectories.has(parent) ? { stat: undefined } : await this.target(target, dest)
       if (
         existing.stat &&
         (!(row.dir && mode === 'preserve' && existing.stat.dir) || resolution === 'rename')
@@ -412,6 +407,7 @@ export class SftpService {
       const key = target.local && ['darwin', 'win32'].includes(process.platform) ? dest.toLowerCase() : dest
       if (planned.has(key)) fail('DUPLICATE_DESTINATION', '所选文件的目标名称重复，请分开传输或先重命名')
       planned.add(key)
+      if (row.dir && mode === 'preserve' && !existing.stat) missingDirectories.add(dest)
       result.push({
         source: row.path,
         dest,
@@ -456,8 +452,15 @@ export class SftpService {
     const c = job.checkpoint,
       a = c.archive!
     if (a.ready) return
+    await this.phase(job, 'archiving')
     const source = this.forProfile(c.sourceProfile, c.sourceBinding, c.sourceSession),
       local = this.spoolEndpoint
+    if (a.refreshRows) {
+      a.rows = await collect(source, a.paths, job.controller.signal)
+      delete a.refreshRows
+      job.persisted = false
+      await this.save(job)
+    }
     if (await local.optional(a.spool)) await local.remove(a.spool)
     const output = await local.open(a.spool, true, true),
       stream = archive(source, a.rows, a.format, job.controller.signal)
@@ -478,19 +481,70 @@ export class SftpService {
     f.source = a.spool
     f.stat = await local.stat(a.spool)
     c.task.size = f.stat.size
+    job.persisted = false
     await this.save(job)
+  }
+  private async prepare(job: Job): Promise<boolean> {
+    const c = job.checkpoint, p = c.preparation!
+    const source = this.forProfile(c.sourceProfile, c.sourceBinding, c.sourceSession)
+    const target = this.forProfile(c.targetProfile, c.targetBinding, c.targetSession)
+    c.task.items_total = 0
+    c.task.items_completed = 0
+    c.task.size = 0
+    await this.phase(job, 'scanning')
+    const onEntry: NonNullable<Parameters<typeof collect>[3]> = (row) => {
+      c.task.items_total!++
+      c.task.current_file = row.path
+      this.publish(job)
+    }
+    let result: Awaited<ReturnType<SftpService['conflict']>>
+    if (c.download && !c.dragRoot) {
+      const rows = await collect(source, p.paths, job.controller.signal, onEntry)
+      const single = rows.length === 1 && !rows[0].dir
+      const name = single ? posix.basename(p.paths[0]) : p.paths.length === 1 ? posix.basename(p.paths[0]) + '.zip' : '下载.zip'
+      c.task.file_name = name
+      const dest = displayPath(join(this.directory, randomUUID() + '-' + name))
+      result = { rows, conflicts: [], files: [{ source: p.paths[0], dest, stat: rows[0],
+        temporary: displayPath(join(this.directory, randomUUID() + '.part')), offset: 0, complete: false, dir: false }] }
+      if (!single) c.archive = { paths: p.paths, rows, format: 'zip', spool: displayPath(join(this.directory, randomUUID() + '.zip')), ready: false }
+    } else result = await this.conflict(source, target, p.paths, p.destDir, p.mode, p.resolution, job.controller.signal, onEntry)
+    job.controller.signal.throwIfAborted()
+    if (p.resolution === 'ask' && result.conflicts.length) {
+      p.conflicts = result.conflicts
+      Object.assign(c.task, { status: 'paused', speed: 0, conflict_count: result.conflicts.length,
+        error_code: 'TRANSFER_CONFLICT', error_message: `${result.conflicts.length} 项内容已存在，请选择冲突处理方式` })
+      job.persisted = false
+      await this.save(job)
+      return false
+    }
+    c.files = result.files
+    c.index = 0
+    c.task.items_total = c.files.length
+    c.task.size = c.files.reduce((sum, file) => sum + (file.dir ? 0 : file.stat.size), 0)
+    if (p.mode === 'archive' && c.files[0]?.stat.dir) {
+      c.archive = { paths: p.paths, rows: result.rows, format: 'tar.gz',
+        spool: displayPath(join(this.directory, randomUUID() + '.tar.gz')), ready: false }
+      c.task.file_name = posix.basename(c.files[0].dest)
+      c.task.size = 0
+    }
+    if (!c.files.length) c.task.error_message = '已跳过全部同名项目'
+    delete c.preparation
+    job.persisted = false
+    await this.save(job)
+    return true
   }
   private async run(job: Job) {
     const c = job.checkpoint,
       t = c.task,
-      start = Date.now(),
       initial = t.transferred
     t.status = 'transferring'
     t.phase = 'preparing'
     delete t.error_code
     delete t.error_message
     await this.save(job)
-    if (c.archive) await this.materialize(job)
+    if (c.preparation && !await this.prepare(job)) return
+    if (c.archive) { t.current_file = c.archive.paths[0]; await this.materialize(job) }
+    const start = Date.now()
     const source = c.archive
         ? this.spoolEndpoint
         : this.forProfile(c.sourceProfile, c.sourceBinding, c.sourceSession),
@@ -499,12 +553,14 @@ export class SftpService {
       job.controller.signal.throwIfAborted()
       const f = c.files[c.index]
       if (f.complete) continue
+      t.current_file = c.archive ? c.archive.paths[0] : f.source
       if (f.dir) {
         await target.guard(f.dest, false)
         const existing = await target.optional(f.dest)
         if (!existing) await target.mkdir(f.dest)
         else if (!existing.dir || existing.link) fail('TARGET_CHANGED', '目录目标已变化')
         f.complete = true
+        t.items_completed = c.index + 1
         await this.save(job)
         continue
       }
@@ -574,9 +630,11 @@ export class SftpService {
         await target.rename(f.temporary, f.dest, !!f.target)
       })
       f.complete = true
+      t.items_completed = c.index + 1
       await this.save(job)
     }
     Object.assign(t, { status: 'completed', transferred: t.size, speed: 0, finished_at: Date.now() })
+    delete t.current_file
     await this.save(job)
   }
   private async stop(job: Job, status: 'paused' | 'cancelled') {
@@ -601,6 +659,7 @@ export class SftpService {
         }
       }
       job.checkpoint.task.status = status
+      if (status === 'cancelled') delete job.checkpoint.task.conflict_count
       job.checkpoint.task.speed = 0
       await this.save(job)
       if (status === 'cancelled') await this.cleanup(job)
@@ -624,29 +683,30 @@ export class SftpService {
   private async resume(job: Job, restart = false) {
     if (job.busy) fail('TRANSFER_BUSY', '传输正在进行')
     const c = job.checkpoint
+    if (c.preparation?.conflicts?.length) fail('TRANSFER_CONFLICT', '请先选择冲突处理方式')
     if (c.upload) fail('UPLOAD_FILE_REQUIRED', '请重新选择原上传文件')
     if (c.task.status === 'completed' || c.task.status === 'cancelled')
       fail('TRANSFER_FINISHED', '任务已结束')
     this.associate(c)
     if (restart) {
       await this.cleanup(job)
-      c.index = 0
-      c.task.transferred = 0
       for (const f of c.files) {
+        if (f.complete) continue
         f.offset = 0
-        f.complete = false
         f.prefixHash = undefined
         f.temporary = posix.join(posix.dirname(f.dest), `.eizhu-${randomUUID()}.part`)
         if (!c.archive)
           f.stat = await this.forProfile(c.sourceProfile, c.sourceBinding, c.sourceSession).stat(f.source)
       }
+      const next = c.files.findIndex((file) => !file.complete)
+      c.index = next < 0 ? c.files.length : next
+      c.task.transferred = c.files.reduce((sum, file) => sum + (file.complete && !file.dir ? file.stat.size : 0), 0)
+      c.task.items_completed = c.files.filter((file) => file.complete).length
       if (c.archive) {
         c.archive.ready = false
-        c.archive.rows = await collect(
-          this.forProfile(c.sourceProfile, c.sourceBinding, c.sourceSession),
-          c.archive.paths,
-        )
+        c.archive.refreshRows = true
       } else c.task.size = c.files.reduce((size, file) => size + (file.dir ? 0 : file.stat.size), 0)
+      job.persisted = false
     }
     job.controller = new AbortController()
     c.task.status = 'queued'
@@ -703,6 +763,22 @@ export class SftpService {
       case 'sftp.retryTransfer': {
         const p = sftp[operation].input.parse(d)
         return this.resume(this.job(p.taskId), p.restart)
+      }
+      case 'sftp.getTransferConflicts': {
+        const c = this.job(sftp[operation].input.parse(d).taskId).checkpoint
+        return { conflicts: c.preparation?.conflicts ?? [], directoryMode: c.preparation?.mode }
+      }
+      case 'sftp.resolveTransferConflicts': {
+        const p = sftp[operation].input.parse(d), job = this.job(p.taskId), c = job.checkpoint
+        if (job.busy) await job.run
+        if (job.busy || !c.preparation?.conflicts?.length || !['paused', 'recoverable'].includes(c.task.status)) fail('TRANSFER_CHANGED', '冲突状态已变化，请刷新任务')
+        c.preparation.resolution = p.resolution
+        delete c.preparation.conflicts
+        delete c.task.conflict_count
+        delete c.task.error_code
+        delete c.task.error_message
+        job.persisted = false
+        return this.resume(job)
       }
       case 'sftp.clearCompletedTransfers': {
         for (const [id, j] of this.jobs)
@@ -891,6 +967,20 @@ export class SftpService {
       )
     )
       fail('BAD_PATH', '不能复制到自身或子目录')
+    if (p.background) {
+      const roots = [...new Set(paths)].filter((path, _index, all) => !all.some((parent) => parent !== path && path.startsWith(parent.replace(/\/$/, '') + '/')))
+      if (new Set(roots.map((path) => target.local && ['darwin', 'win32'].includes(process.platform) ? posix.basename(path).toLowerCase() : posix.basename(path))).size !== roots.length) fail('DUPLICATE_DESTINATION', '所选文件夹名称重复，请分开传输')
+      const batches = p.directoryMode === 'archive' ? roots.map((path) => [path]) : [roots]
+      if (this.jobs.size + batches.length > 1000) fail('QUEUE_FULL', '传输记录达到上限，请先清理已完成任务')
+      const jobs = batches.map((batch) => this.task({
+        sourceProfile: sourceOwner.meta.profile_id, targetProfile: targetOwner.meta.profile_id,
+        sourceSession: p.sourceSessionId, targetSession: p.targetSessionId, files: [], index: 0,
+        preparation: { paths: batch, destDir, mode: p.directoryMode, resolution: p.conflictResolution },
+      }, batch.length === 1 ? posix.basename(batch[0]) : `${batch.length} 项`, 0, 'transfer'))
+      for (const job of jobs) { job.checkpoint.task.phase = 'scanning'; await this.save(job) }
+      this.schedule()
+      return { task_id: jobs[0]?.checkpoint.task.id, tasks: jobs.map((job) => ({ ...job.checkpoint.task })), method: 'relay' }
+    }
     const result = await this.conflict(source, target, paths, destDir, p.directoryMode, p.conflictResolution)
     if (p.conflictResolution === 'ask' && result.conflicts.length) return { conflicts: result.conflicts }
     const created: Job[] = []
@@ -942,7 +1032,7 @@ export class SftpService {
     }
     for (const j of created) await this.save(j)
     this.schedule()
-    return { tasks: created.map((j) => j.checkpoint.task), method: 'relay' }
+    return { task_id: created[0]?.checkpoint.task.id, tasks: created.map((j) => j.checkpoint.task), method: 'relay' }
   }
   private async move(p: import('zod').infer<(typeof sftp)['sftp.move']['input']>) {
     const endpoint = this.endpoint(p.sessionId),
@@ -1101,6 +1191,7 @@ export class SftpService {
         complete: false,
         stat: { ...c.files[0].stat, size: p.size },
       })
+      j.persisted = false
     }
     return this.serial(j, () => this.openUpload(j))
   }
@@ -1156,6 +1247,7 @@ export class SftpService {
     Object.assign(c.task, {
       status: 'completed',
       transferred: c.task.size,
+      items_completed: 1,
       speed: 0,
       finished_at: Date.now(),
     })
@@ -1186,50 +1278,25 @@ export class SftpService {
     this.schedule()
   }
   private async download(p: import('zod').infer<(typeof sftp)['sftp.download']['input']>) {
-    const source = this.endpoint(p.sessionId),
-      paths = p.paths.map(cleanPath),
-      rows = await collect(source, paths),
-      single = rows.length === 1 && !rows[0].dir
-    const name = single
-        ? posix.basename(paths[0])
-        : paths.length === 1
-          ? posix.basename(paths[0]) + '.zip'
-          : '下载.zip',
-      dest = displayPath(join(this.directory, randomUUID() + '-' + name))
-    const f: CopyFile = {
-      source: paths[0],
-      dest,
-      stat: await source.stat(paths[0]),
-      temporary: displayPath(join(this.directory, randomUUID() + '.part')),
-      offset: 0,
-      complete: false,
-      dir: false,
-    }
+    this.endpoint(p.sessionId)
+    const paths = p.paths.map(cleanPath)
+    const name = paths.length === 1 ? posix.basename(paths[0]) : '下载'
     const j = this.task(
       {
         sourceProfile: this.getSession(p.sessionId).meta.profile_id,
         targetProfile: '__staging__',
         sourceSession: p.sessionId,
         targetSession: 'staging',
-        files: [f],
+        files: [],
         index: 0,
         download: true,
-        ...(!single
-          ? {
-              archive: {
-                paths,
-                rows,
-                format: 'zip' as const,
-                spool: displayPath(join(this.directory, randomUUID() + '.zip')),
-                ready: false,
-              },
-            }
-          : {}),
+        preparation: { paths, destDir: displayPath(this.directory), mode: 'preserve', resolution: 'ask' },
       },
       name,
-      single ? f.stat.size : 0,
+      0,
       'download',
     )
+    j.checkpoint.task.phase = 'scanning'
     await this.save(j)
     this.schedule()
     return { tasks: [j.checkpoint.task], download_url: '' }
@@ -1242,41 +1309,30 @@ export class SftpService {
     return { path: c.files[0].dest, name: c.task.file_name }
   }
   private async prepareDrag(p: { sessionId: string; paths: string[] }) {
-    const source = this.endpoint(p.sessionId),
-      jobs: Job[] = []
+    this.endpoint(p.sessionId)
+    const jobs: Job[] = []
     try {
       for (const path of p.paths.map(cleanPath)) {
-        const rows = await collect(source, [path]),
-          base = displayPath(join(this.directory, randomUUID()))
+        const base = displayPath(join(this.directory, randomUUID()))
         await this.spoolEndpoint.mkdir(base)
-        const files: CopyFile[] = rows.map((row) => {
-          const dest = posix.join(base, row.name)
-          return {
-            source: row.path,
-            dest,
-            stat: row,
-            temporary: posix.join(posix.dirname(dest), `.eizhu-${randomUUID()}.part`),
-            offset: 0,
-            complete: false,
-            dir: row.dir,
-          }
-        })
         const job = this.task(
           {
             sourceProfile: this.getSession(p.sessionId).meta.profile_id,
             targetProfile: '__staging__',
             sourceSession: p.sessionId,
             targetSession: 'staging',
-            files,
+            files: [],
             index: 0,
             download: true,
             dragRoot: base,
+            preparation: { paths: [path], destDir: base, mode: 'preserve', resolution: 'ask' },
           },
           posix.basename(path),
-          rows.filter((r) => !r.dir).reduce((n, r) => n + r.size, 0),
+          0,
           'download',
         )
         jobs.push(job)
+        job.checkpoint.task.phase = 'scanning'
         await this.save(job)
       }
     } catch (e) {

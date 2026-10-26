@@ -10,17 +10,24 @@ import type { WorkerClient } from '../workers/client.ts'
 import type { SshService } from '../ssh/service.ts'
 import type { TransferTask, SftpUploadBeginResponse } from '@eizhu/contracts/models/sftp'
 import { hash } from './editor.ts'
+import { restoreCheckpoint, type Checkpoint, type CheckpointProgress } from './checkpoint.ts'
 async function setup() {
   const root = await mkdtemp(join(tmpdir(), 'eizhu-transfer-')),
-    saved = new Map<string, unknown>(),
+    saved = new Map<string, Checkpoint>(),
+    progress = new Map<string, CheckpointProgress>(),
+    writes: Array<{ operation: string; bytes: number }> = [],
     events: Array<{ type: string; payload: TransferTask }> = [],
     context = { runtimeId: randomUUID(), workspaceId: 'offline', generation: 1 }
   await mkdir(join(root, 'dest'))
   const db = {
     call: async (op: string, d?: { id: string; value: unknown }) => {
-      if (op.endsWith('.list')) return [...saved.values()].map((v) => structuredClone(v))
-      if (op.endsWith('.delete')) saved.delete(d!.id)
-      else if (op.endsWith('.save')) saved.set(d!.id, structuredClone(d!.value))
+      if (op.endsWith('.list')) return [...saved.values()].map((v) => restoreCheckpoint(structuredClone(v), structuredClone(progress.get(v.task.id))))
+      if (op.endsWith('.delete')) { saved.delete(d!.id); progress.delete(d!.id) }
+      else if (op.endsWith('.save')) {
+        saved.set(d!.id, structuredClone(d!.value) as Checkpoint)
+        progress.delete(d!.id)
+      } else if (op.endsWith('.checkpoint')) progress.set(d!.id, structuredClone(d!.value) as CheckpointProgress)
+      if (d?.value) writes.push({ operation: op, bytes: Buffer.byteLength(JSON.stringify(d.value)) })
     },
   } as unknown as WorkerClient
   const make = () =>
@@ -36,7 +43,7 @@ async function setup() {
   const session = (await service.execute('sftp.createSession', { profileId: 'local' })) as {
     session_id: string
   }
-  return { root, service, session: session.session_id, make, events, dest: displayPath(join(root, 'dest')) }
+  return { root, service, session: session.session_id, make, events, writes, dest: displayPath(join(root, 'dest')) }
 }
 const code = (expected: string) => (e: unknown) => (e as { error: { code: string } }).error.code === expected
 function deferred() {
@@ -44,6 +51,135 @@ function deferred() {
   const promise = new Promise<void>((done) => { resolve = done })
   return { promise, resolve }
 }
+
+async function waitStatus(service: SftpService, id: string, status: TransferTask['status']) {
+  for (let i = 0; i < 1000; i++) {
+    const task = ((await service.execute('sftp.listTransfers', {})) as TransferTask[]).find((row) => row.id === id)!
+    if (task.status === status) return task
+    if (task.status === 'failed') throw new Error(task.error_message)
+    await new Promise((resolve) => setTimeout(resolve, 5))
+  }
+  throw new Error(`Expected ${status}`)
+}
+
+test('后台目录准备立即返回任务，扫描期间取消不创建目标目录', async (t) => {
+  const x = await setup(), entered = deferred(), release = deferred()
+  const list = FileEndpoint.prototype.listStats
+  t.mock.method(FileEndpoint.prototype, 'listStats', async function (this: FileEndpoint, path: string) {
+    if (path === displayPath(join(x.root, 'project'))) { entered.resolve(); await release.promise }
+    return list.call(this, path)
+  })
+  try {
+    await mkdir(join(x.root, 'project'))
+    await writeFile(join(x.root, 'project', 'a'), 'new')
+    const created = await x.service.execute('sftp.transfer', {
+      sourceSessionId: x.session, targetSessionId: x.session, paths: [displayPath(join(x.root, 'project'))],
+      destDir: x.dest, directoryMode: 'preserve', conflictResolution: 'ask', background: true,
+    }) as { tasks: TransferTask[] }
+    assert.equal(created.tasks.length, 1)
+    await entered.promise
+    const cancelling = x.service.execute('sftp.cancelTransfer', { taskId: created.tasks[0].id })
+    release.resolve()
+    assert.equal((await cancelling as TransferTask).status, 'cancelled')
+    assert.deepEqual(await readdir(join(x.root, 'dest')), [])
+  } finally {
+    release.resolve()
+    await x.service.close()
+    await rm(x.root, { recursive: true, force: true })
+  }
+})
+
+test('后台冲突持久等待选择，重启后覆盖仅替换同名文件并保留目录其他内容', async () => {
+  const x = await setup()
+  let service = x.service
+  try {
+    await mkdir(join(x.root, 'project'))
+    await writeFile(join(x.root, 'project', 'a'), 'new')
+    await mkdir(join(x.root, 'dest', 'project'))
+    await writeFile(join(x.root, 'dest', 'project', 'a'), 'old')
+    await writeFile(join(x.root, 'dest', 'project', 'keep'), 'retained')
+    const created = await service.execute('sftp.transfer', {
+      sourceSessionId: x.session, targetSessionId: x.session, paths: [displayPath(join(x.root, 'project'))],
+      destDir: x.dest, directoryMode: 'preserve', conflictResolution: 'ask', background: true,
+    }) as { tasks: TransferTask[] }
+    const id = created.tasks[0].id
+    const paused = await waitStatus(service, id, 'paused')
+    assert.equal(paused.conflict_count, 1)
+    assert.equal(await readFile(join(x.root, 'dest', 'project', 'a'), 'utf8'), 'old')
+    await service.close()
+    service = x.make()
+    await service.execute('sftp.createSession', { profileId: 'local' })
+    const conflicts = await service.execute('sftp.getTransferConflicts', { taskId: id }) as { conflicts: unknown[] }
+    assert.equal(conflicts.conflicts.length, 1)
+    await service.execute('sftp.resolveTransferConflicts', { taskId: id, resolution: 'overwrite' })
+    assert.equal((await terminal(service, id)).status, 'completed')
+    assert.equal(await readFile(join(x.root, 'dest', 'project', 'a'), 'utf8'), 'new')
+    assert.equal(await readFile(join(x.root, 'dest', 'project', 'keep'), 'utf8'), 'retained')
+  } finally {
+    await service.close()
+    await rm(x.root, { recursive: true, force: true })
+  }
+})
+
+test('目录重新开始仅重传未完成文件，保留已提交文件及其后续外部修改', async (t) => {
+  const x = await setup(), open = FileEndpoint.prototype.open, list = FileEndpoint.prototype.listStats
+  let changed = false
+  t.mock.method(FileEndpoint.prototype, 'listStats', async function (this: FileEndpoint, path: string) {
+    return (await list.call(this, path)).sort((a, b) => a.path.localeCompare(b.path))
+  })
+  t.mock.method(FileEndpoint.prototype, 'open', async function (this: FileEndpoint, path: string, ...args: [boolean?, boolean?]) {
+    if (!changed && path === displayPath(join(x.root, 'project', 'b')) && !args[0]) {
+      changed = true
+      await writeFile(join(x.root, 'project', 'b'), 'changed-source')
+    }
+    return open.call(this, path, ...args)
+  })
+  try {
+    await mkdir(join(x.root, 'project'))
+    await writeFile(join(x.root, 'project', 'a'), 'first')
+    await writeFile(join(x.root, 'project', 'b'), 'old')
+    const created = await x.service.execute('sftp.transfer', {
+      sourceSessionId: x.session, targetSessionId: x.session, paths: [displayPath(join(x.root, 'project'))],
+      destDir: x.dest, directoryMode: 'preserve', conflictResolution: 'ask', background: true,
+    }) as { tasks: TransferTask[] }
+    const id = created.tasks[0].id
+    assert.equal((await terminal(x.service, id)).status, 'failed')
+    assert.equal(await readFile(join(x.root, 'dest', 'project', 'a'), 'utf8'), 'first')
+    await writeFile(join(x.root, 'dest', 'project', 'a'), 'external-change')
+    await x.service.execute('sftp.retryTransfer', { taskId: id, restart: true })
+    assert.equal((await terminal(x.service, id)).status, 'completed')
+    assert.equal(await readFile(join(x.root, 'dest', 'project', 'a'), 'utf8'), 'external-change')
+    assert.equal(await readFile(join(x.root, 'dest', 'project', 'b'), 'utf8'), 'changed-source')
+  } finally {
+    await x.service.close()
+    await rm(x.root, { recursive: true, force: true })
+  }
+})
+
+test('下载与系统拖出共用后台扫描，目录 ZIP 和原目录树分别保持正确', async () => {
+  const x = await setup()
+  try {
+    await mkdir(join(x.root, 'project', 'empty'), { recursive: true })
+    await writeFile(join(x.root, 'project', 'a.txt'), 'directory-bytes')
+    const paths = [displayPath(join(x.root, 'project'))]
+    const downloaded = await x.service.execute('sftp.download', { sessionId: x.session, paths }) as { tasks: TransferTask[] }
+    assert.equal((await terminal(x.service, downloaded.tasks[0].id)).status, 'completed')
+    const zip = await x.service.downloadPath(downloaded.tasks[0].id)
+    assert.equal(zip.name, 'project.zip')
+    const bytes = await readFile(zip.path)
+    assert.equal(bytes.readUInt32LE(0), 0x04034b50)
+    assert.ok(bytes.includes(Buffer.from('directory-bytes')))
+    const dragged = await x.service.execute('sftp.prepareDrag', { sessionId: x.session, paths }) as { tasks: TransferTask[] }
+    assert.equal((await terminal(x.service, dragged.tasks[0].id)).status, 'completed')
+    const directory = await x.service.downloadPath(dragged.tasks[0].id)
+    assert.equal(await readFile(join(directory.path, 'a.txt'), 'utf8'), 'directory-bytes')
+    assert.deepEqual(await readdir(join(directory.path, 'empty')), [])
+    await x.service.execute('sftp.releaseDrag', { taskIds: [dragged.tasks[0].id] })
+  } finally {
+    await x.service.close()
+    await rm(x.root, { recursive: true, force: true })
+  }
+})
 test('上传按序确认，暂停保留检查点，重启手动恢复并校验原文件', async () => {
   const x = await setup()
   let service = x.service
@@ -214,13 +350,83 @@ test('并发发起上传仍严格限制五路，篡改暂存文件禁止拼接',
   }
 })
 async function terminal(service: SftpService, id: string) {
-  for (let i = 0; i < 200; i++) {
+  for (let i = 0; i < 1500; i++) {
     const t = ((await service.execute('sftp.listTransfers', {})) as TransferTask[]).find((t) => t.id === id)!
     if (['completed', 'failed'].includes(t.status)) return t
     await new Promise((resolve) => setTimeout(resolve, 5))
   }
   throw new Error('Task timeout')
 }
+
+test('大量小文件和空目录保持结构，目录计划仅写一次，进度检查点大小不随目录增长', async (t) => {
+  const x = await setup()
+  try {
+    await mkdir(join(x.root, 'project', 'nested', 'empty'), { recursive: true })
+    for (let index = 0; index < 160; index++)
+      await writeFile(join(x.root, 'project', 'nested', `${index}.txt`), `content:${index}`)
+    const copied = await x.service.execute('sftp.transfer', {
+      sourceSessionId: x.session, targetSessionId: x.session,
+      paths: [displayPath(join(x.root, 'project'))], destDir: x.dest,
+      directoryMode: 'preserve', conflictResolution: 'ask',
+    }) as { task_id: string; tasks: TransferTask[] }
+    assert.equal(copied.task_id, copied.tasks[0].id)
+    const result = await terminal(x.service, copied.task_id)
+    assert.equal(result.status, 'completed')
+    assert.equal(result.items_total, 163)
+    assert.equal(result.items_completed, 163)
+    assert.equal((await readdir(join(x.root, 'dest', 'project', 'nested', 'empty'))).length, 0)
+    for (let index = 0; index < 160; index++)
+      assert.equal(await readFile(join(x.root, 'dest', 'project', 'nested', `${index}.txt`), 'utf8'), `content:${index}`)
+    const plans = x.writes.filter((write) => write.operation.endsWith('.save'))
+    const checkpoints = x.writes.filter((write) => write.operation.endsWith('.checkpoint'))
+    assert.equal(plans.length, 1)
+    assert.ok(Math.max(...checkpoints.map((write) => write.bytes)) < plans[0].bytes / 10)
+    t.diagnostic(`160 个小文件：清单 ${plans[0].bytes} B，仅写一次；最大进度检查点 ${Math.max(...checkpoints.map((write) => write.bytes))} B`)
+  } finally {
+    await x.service.close()
+    await rm(x.root, { recursive: true, force: true })
+  }
+})
+
+test('目录暂停后重启恢复压缩检查点，不重复提交已完成文件', async (t) => {
+  const x = await setup()
+  const rename = FileEndpoint.prototype.rename
+  const entered = deferred(), release = deferred()
+  const commits: string[] = []
+  t.mock.method(FileEndpoint.prototype, 'rename', async function (this: FileEndpoint, ...args: Parameters<typeof rename>) {
+    if (commits.length === 2) { entered.resolve(); await release.promise }
+    await rename.apply(this, args)
+    commits.push(args[1])
+  })
+  let service = x.service
+  try {
+    await mkdir(join(x.root, 'project'))
+    for (let i = 0; i < 8; i++) await writeFile(join(x.root, 'project', `${i}.txt`), `file:${i}`)
+    const copied = await service.execute('sftp.transfer', {
+      sourceSessionId: x.session, targetSessionId: x.session,
+      paths: [displayPath(join(x.root, 'project'))], destDir: x.dest,
+      directoryMode: 'preserve', conflictResolution: 'ask',
+    }) as { tasks: TransferTask[] }
+    await entered.promise
+    const pausing = service.execute('sftp.pauseTransfer', { taskId: copied.tasks[0].id })
+    release.resolve()
+    assert.equal((await pausing as TransferTask).status, 'paused')
+    await service.close()
+    service = x.make()
+    await service.execute('sftp.createSession', { profileId: 'local' })
+    const recovered = await service.execute('sftp.listTransfers', {}) as TransferTask[]
+    assert.equal(recovered[0].status, 'recoverable')
+    await service.execute('sftp.resumeTransfer', { taskId: recovered[0].id })
+    assert.equal((await terminal(service, recovered[0].id)).status, 'completed')
+    assert.equal(commits.length, 8)
+    assert.equal(new Set(commits).size, 8)
+    for (let i = 0; i < 8; i++) assert.equal(await readFile(join(x.root, 'dest', 'project', `${i}.txt`), 'utf8'), `file:${i}`)
+  } finally {
+    release.resolve()
+    await service.close()
+    await rm(x.root, { recursive: true, force: true })
+  }
+})
 test('重名目录整体重命名，保留原目标并拒绝同一文件系统的自身复制', async () => {
   const x = await setup()
   try {

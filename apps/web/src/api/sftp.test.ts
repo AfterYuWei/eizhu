@@ -27,6 +27,11 @@ afterEach(() => {
 })
 
 describe('sftpApi', () => {
+  it('未指定目录模式时按原目录结构复制', async () => {
+    invoke.mockResolvedValue({ tasks: [] })
+    await sftpApi.transfer('s', 't', ['/project'], '/dest')
+    expect(invoke).toHaveBeenCalledWith('sftp.transfer', expect.objectContaining({ directoryMode: 'preserve' }))
+  })
   it('后端写入失败后保留失败状态，不再用暂停覆盖错误', async () => {
     setWorkspaceGeneration(1)
     const file = new File(['abc'], 'a')

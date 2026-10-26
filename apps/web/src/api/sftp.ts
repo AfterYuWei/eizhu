@@ -59,8 +59,7 @@ export const sftpApi = {
 
   // --- Transfers ---
 
-  /** Cross-session transfer: tries direct server-to-server copy first, falls
-   *  back to backend relay if direct is not possible.
+  /** Cross-session transfer streams through the business process with bounded memory.
    *  If conflictResolution is "ask" (default) and the target has existing
    *  files, resolves with a `conflicts` array instead of starting a transfer.
    *  Pass "overwrite" | "rename" | "skip" to proceed without prompting. */
@@ -70,7 +69,8 @@ export const sftpApi = {
     paths: string[],
     destDir: string,
     conflictResolution: ConflictResolution = 'ask',
-    directoryMode: DirectoryTransferMode = 'archive',
+    directoryMode: DirectoryTransferMode = 'preserve',
+    background = false,
   ): Promise<SftpTransferResponse> => {
     return bridge().sftp.transfer({
       sourceSessionId,
@@ -79,6 +79,7 @@ export const sftpApi = {
       destDir,
       conflictResolution,
       directoryMode,
+      ...(background ? { background: true } : {}),
     })
   },
 
@@ -155,6 +156,8 @@ export const sftpApi = {
   },
 
   pauseTransfer: (taskId: string) => bridge().sftp.pauseTransfer({ taskId }),
+  getTransferConflicts: (taskId: string) => bridge().sftp.getTransferConflicts({ taskId }),
+  resolveTransferConflicts: (taskId: string, resolution: Exclude<ConflictResolution, 'ask'>) => bridge().sftp.resolveTransferConflicts({ taskId, resolution }),
   resumeTransfer: (taskId: string) => bridge().sftp.resumeTransfer({ taskId }),
   retryTransfer: (taskId: string, restart = false) => bridge().sftp.retryTransfer({ taskId, restart }),
 

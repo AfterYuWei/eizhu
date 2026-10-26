@@ -182,6 +182,10 @@ export class FileEndpoint {
     }
   }
   async list(path: string): Promise<SftpEntry[]> {
+    return (await this.listStats(path)).map((row) => entry(row.path, row.stat))
+  }
+  /** Keep READDIR attributes so recursive planning does not LSTAT every child again. */
+  async listStats(path: string): Promise<Array<{ path: string; stat: FileStat }>> {
     path = cleanPath(path)
     await this.localPolicy(path)
     if (this.local && process.platform === 'win32' && path === '/') {
@@ -189,7 +193,7 @@ export class FileEndpoint {
       for (const drive of 'ABCDEFGHIJKLMNOPQRSTUVWXYZ') {
         const p = `/${drive}:/`
         const s = await this.optional(p)
-        if (s) roots.push(entry(p, s))
+        if (s) roots.push({ path: p, stat: s })
       }
       return roots
     }
@@ -219,16 +223,16 @@ export class FileEndpoint {
             !r.filename.includes('/') &&
             !r.filename.includes('\0'),
         )
-        .map((r) => entry(posix.join(path, r.filename), convert(r.attrs)))
+        .map((r) => ({ path: posix.join(path, r.filename), stat: convert(r.attrs) }))
     }
     const dir = await fs.opendir(nativePath(path)),
-      rows: SftpEntry[] = []
+      rows: Array<{ path: string; stat: FileStat }> = []
     try {
       for await (const row of dir) {
         if (rows.length >= 10000) fail('DIRECTORY_LIMIT', '目录条目超过 10000 项，请缩小范围')
         const p = posix.join(path, row.name)
         try {
-          rows.push(entry(p, await this.stat(p)))
+          rows.push({ path: p, stat: await this.stat(p) })
         } catch (e) {
           if ((e as { error?: { code?: string } }).error?.code !== 'FORBIDDEN') throw e
         }

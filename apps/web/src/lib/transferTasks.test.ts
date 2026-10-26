@@ -16,6 +16,7 @@ describe('任务检查点合并', () => {
     expect(transferProgress(task({ status: 'transferring', transferred: 8 }))).toBe(99)
     expect(transferProgress(task({ status: 'completed', transferred: 8 }))).toBe(100)
     expect(transferProgress(task({ status: 'completed', size: 0, transferred: 0 }))).toBe(100)
+    expect(transferProgress(task({ status: 'transferring', size: 0, items_total: 4, items_completed: 2 }))).toBe(50)
   })
   it('丢弃旧执行代次、结束后的迟到进度和回退偏移', () => {
     const current = task()

@@ -10,6 +10,7 @@ import type {
   SftpDeleteResponse,
   DirectoryTransferMode,
   SftpMoveResponse,
+  SftpConflictInfo,
 } from './models/sftp.ts'
 import type { SftpSessionInfo } from './models/api.ts'
 import type { Session, SessionCreateRequest, SessionCreateResponse } from './models/session.ts'
@@ -246,9 +247,12 @@ export interface DomainOperations {
       destDir: string
       conflictResolution: ConflictResolution
       directoryMode: DirectoryTransferMode
+      background?: boolean
     }
     output: SftpTransferResponse
   }
+  'sftp.getTransferConflicts': { input: { taskId: string }; output: { conflicts: SftpConflictInfo[]; directoryMode?: DirectoryTransferMode } }
+  'sftp.resolveTransferConflicts': { input: { taskId: string; resolution: Exclude<ConflictResolution, 'ask'> }; output: TransferTask }
   'sftp.move': {
     input: { sessionId: string; paths: string[]; destDir: string; conflictResolution: ConflictResolution }
     output: SftpMoveResponse
@@ -400,6 +404,8 @@ export const reservedOperations = [
   'sftp.retryTransfer',
   'sftp.stat',
   'sftp.transfer',
+  'sftp.getTransferConflicts',
+  'sftp.resolveTransferConflicts',
   'sftp.tree',
   'sftp.uploadBegin',
   'sftp.uploadCheckpoint',

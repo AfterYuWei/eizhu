@@ -552,46 +552,116 @@ body.ptr-dragging * {
   cursor: grabbing !important;
 }
 
-.sftp-dir-mode {
-  width: min(460px, calc(100vw - 32px));
-  padding: 16px;
-}
-.sftp-dir-mode > p {
-  margin: 12px 0;
-  color: var(--fg-3);
+.sftp-dir-mode[data-slot='dialog-content'] {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  width: min(520px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  padding: 0;
+  overflow: hidden;
+  color: var(--fg);
   font: 400 var(--sans-size) / 1.5 var(--sans);
 }
-.sftp-dir-mode > p strong {
-  color: var(--fg);
-}
-.sftp-dir-mode-actions {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-  margin-bottom: 12px;
-}
-.sftp-dir-mode-card {
+.sftp-dir-mode-form { display: flex; flex: 1; flex-direction: column; min-height: 0; }
+.sftp-dir-mode-header {
   display: flex;
-  min-height: 112px;
-  flex-direction: column;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 16px 12px 20px;
+}
+.sftp-dir-mode-header > svg { flex-shrink: 0; color: var(--sftp-muted); }
+.sftp-dir-mode-header [data-slot='dialog-title'] {
+  flex: 1;
+  min-width: 0;
+  font: 600 max(16px, var(--sans-size)) / 1.5 var(--sans);
+  overflow-wrap: anywhere;
+}
+.sftp-dir-mode .sftp-dir-mode-close {
+  flex-shrink: 0;
+  color: var(--sftp-muted);
+  border-radius: var(--r-sm);
+}
+.sftp-dir-mode .sftp-dir-mode-close:hover { background: var(--bg-hover); color: var(--fg); }
+.sftp-dir-mode-body {
+  min-height: 0;
+  padding: 0 20px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.sftp-dir-mode [data-slot='dialog-description'],
+.sftp-dir-mode-label,
+.sftp-dir-mode-option-description {
+  color: var(--sftp-muted);
+  font: 400 max(12px, calc(var(--sans-size) - 2px)) / 1.6 var(--sans);
+  overflow-wrap: anywhere;
+}
+.sftp-dir-mode [data-slot='dialog-description'] { margin: 0 0 16px; }
+.sftp-dir-mode-target {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: baseline;
+  gap: 4px 12px;
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  border: 1px solid var(--edge-soft);
+  border-radius: var(--r-lg);
+  background: var(--surface-app);
+}
+.sftp-dir-mode-selection { min-width: 0; overflow-wrap: anywhere; }
+.sftp-dir-mode-server { overflow: hidden; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+.sftp-dir-mode-path {
+  grid-column: 2;
+  min-width: 0;
+  color: var(--sftp-muted);
+  font: 400 max(12px, calc(var(--sans-size) - 2px)) / 1.6 var(--mono);
+  max-height: 4.8em;
+  overflow-y: auto;
+  overflow-wrap: anywhere;
+  scrollbar-width: thin;
+  user-select: text;
+}
+.sftp-dir-mode-options {
+  display: flex;
   align-items: flex-start;
-  gap: 7px;
-  padding: 12px;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--edge-soft);
+  border-radius: var(--r-lg);
+  background: var(--surface-app);
+}
+.sftp-dir-mode-options [data-slot='checkbox'] {
+  margin-top: max(2px, calc((var(--sans-size) * 1.5 - 16px) / 2));
+  border-color: var(--border);
+  background: var(--bg-panel);
+  color: var(--fg);
+  box-shadow: none;
+}
+.sftp-dir-mode-options [data-slot='checkbox'][data-state='checked'] {
+  border-color: var(--fg);
+  background: var(--fg);
+  color: var(--bg-panel);
+}
+.sftp-dir-mode-option-copy { display: flex; flex: 1; flex-direction: column; gap: 5px; min-width: 0; }
+.sftp-dir-mode-option-copy [data-slot='label'] { font: inherit; font-weight: 500; cursor: pointer; overflow-wrap: anywhere; }
+.sftp-dir-mode-option-description { margin: 0; }
+.sftp-dir-mode-footer { display: flex; flex-shrink: 0; flex-wrap: wrap; gap: 8px; justify-content: flex-end; padding: 16px 20px 20px; }
+.sftp-dir-mode-footer [data-slot='button'] {
+  min-height: 30px;
+  height: auto;
+  padding: 4px 12px;
   border: 1px solid var(--border);
   border-radius: var(--r-sm);
-  background: var(--bg);
-  color: var(--fg-2);
-  text-align: left;
+  background: var(--bg-active);
+  color: var(--fg);
+  font: inherit;
+  box-shadow: none;
 }
-.sftp-dir-mode-card:hover,
-.sftp-dir-mode-card.primary {
-  border-color: var(--accent);
-  background: var(--accent-bg);
-}
-.sftp-dir-mode-card small {
-  color: var(--fg-4);
-  font: 400 11px / 1.4 var(--sans);
-}
+.sftp-dir-mode-footer [data-slot='button']:hover { background: var(--bg-hover); }
+.sftp-dir-mode-footer [data-slot='button'][type='submit'] { border-color: var(--fg); background: var(--fg); color: var(--bg-panel); }
+.sftp-dir-mode-footer [data-slot='button'][type='submit']:hover { background: color-mix(in srgb, var(--fg) 85%, var(--bg-panel)); }
+.sftp-dir-mode :is([data-slot='button'], [data-slot='checkbox'], .sftp-dir-mode-path):focus-visible { outline: 1px solid var(--desktop-focus-border, var(--border)); outline-offset: 2px; box-shadow: none; }
 .sftp-trow[draggable="true"] {
   cursor: grab;
 }
@@ -727,12 +797,16 @@ body.ptr-dragging * {
 .sftp-tx-item:hover { background: var(--bg-hover); }
 .sftp-tx-dir { display: flex; align-items: center; justify-content: center; color: var(--sftp-muted); }
 .sftp-tx-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg); font: 400 var(--sans-size) / 1.5 var(--sans); }
+.sftp-tx-name > :is(span, small) { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sftp-tx-name > small { color: var(--sftp-muted); font-size: max(11px, calc(var(--sans-size) - 2px)); }
 .sftp-tx-progress { display: flex; align-items: center; min-width: 0; gap: 8px; }
 .sftp-tx-bar { display: block; flex: 1; height: 3px; overflow: hidden; border-radius: 2px; background: var(--bg-active); }
 .sftp-tx-fill { display: block; height: 100%; border-radius: inherit; background: var(--sftp-muted); transition: width 200ms; }
 .sftp-tx-fill.transferring { background: var(--accent); }
 .sftp-tx-fill.completed { background: var(--green); }
 .sftp-tx-fill.failed { background: var(--red); }
+.sftp-tx-bar.is-indeterminate .sftp-tx-fill { animation: sftp-scan-progress 1.3s ease-in-out infinite alternate; }
+@keyframes sftp-scan-progress { from { transform: translateX(0); } to { transform: translateX(185%); } }
 .sftp-tx-pct { width: 4ch; flex-shrink: 0; text-align: right; color: var(--sftp-muted); font: 400 max(10px, calc(var(--sans-size) - 2px)) / 1.5 var(--mono); font-variant-numeric: tabular-nums; }
 .sftp-tx-size { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: right; color: var(--sftp-muted); font: 400 max(10px, calc(var(--sans-size) - 2px)) / 1.5 var(--mono); font-variant-numeric: tabular-nums; }
 .sftp-tx-status { display: flex; align-items: center; gap: 5px; color: var(--sftp-muted); font: 400 max(11px, calc(var(--sans-size) - 1px)) / 1.4 var(--sans); }

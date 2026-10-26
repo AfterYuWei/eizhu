@@ -385,6 +385,7 @@ export async function verifyStage4(
       destDir: localPath,
       conflictResolution: 'ask',
       directoryMode: 'preserve',
+      background: true,
     })
     await completed(transfer.tasks[0].id)
     assert.equal(await readFile(join(local, 'source', '配置.json'), 'utf8'), '安全保存\r\n')
@@ -397,6 +398,21 @@ export async function verifyStage4(
       directoryMode: 'preserve',
     })
     assert.ok(conflict.conflicts.length >= 2)
+    const waiting = await call<{ tasks: Array<{ id: string }> }>('sftp.transfer', {
+      sourceSessionId: sessionId, targetSessionId: localId, paths: [source], destDir: localPath,
+      conflictResolution: 'ask', directoryMode: 'preserve', background: true,
+    })
+    const waitingId = waiting.tasks[0].id
+    await wait(async () => {
+      const tasks = await call<Array<{ id: string; status: string; conflict_count?: number }>>('sftp.listTransfers', {})
+      const task = tasks.find((item) => item.id === waitingId)
+      return task?.status === 'paused' && task.conflict_count ? true : undefined
+    })
+    const waitingConflicts = await call<{ conflicts: unknown[] }>('sftp.getTransferConflicts', { taskId: waitingId })
+    assert.ok(waitingConflicts.conflicts.length >= 2)
+    await call('sftp.resolveTransferConflicts', { taskId: waitingId, resolution: 'skip' })
+    await completed(waitingId)
+    step('background-directory-conflicts')
     const tar = await call<{ tasks: Array<{ id: string }> }>('sftp.transfer', {
       sourceSessionId: sessionId,
       targetSessionId: localId,
@@ -404,6 +420,7 @@ export async function verifyStage4(
       destDir: localPath,
       conflictResolution: 'ask',
       directoryMode: 'archive',
+      background: true,
     })
     await completed(tar.tasks[0].id)
     assert.ok(gunzipSync(await readFile(join(local, 'source.tar.gz'))).includes(Buffer.from('安全保存')))

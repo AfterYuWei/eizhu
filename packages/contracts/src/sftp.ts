@@ -30,7 +30,7 @@ export const transferTaskSchema = z.strictObject({
   size: uint,
   transferred: uint,
   status: z.enum(['queued', 'transferring', 'completed', 'failed', 'cancelled', 'paused', 'recoverable']),
-  phase: z.enum(['preparing', 'transferring', 'verifying', 'committing']).optional(),
+  phase: z.enum(['scanning', 'archiving', 'preparing', 'transferring', 'verifying', 'committing']).optional(),
   speed: z.number().finite().nonnegative(),
   started_at: uint,
   finished_at: uint.optional(),
@@ -41,6 +41,10 @@ export const transferTaskSchema = z.strictObject({
   confirmed_offset: uint.optional(),
   source_profile: id.optional(),
   target_profile: id.optional(),
+  items_total: uint.optional(),
+  items_completed: uint.optional(),
+  current_file: path.optional(),
+  conflict_count: uint.optional(),
 })
 export const fileSessionSchema = z.strictObject({
   id,
@@ -137,6 +141,7 @@ export const sftp = {
       destDir: path,
       conflictResolution: resolution,
       directoryMode: z.enum(['preserve', 'archive']),
+      background: z.boolean().optional(),
     }),
     output: z.strictObject({
       task_id: id.optional(),
@@ -144,6 +149,10 @@ export const sftp = {
       tasks: z.array(transferTaskSchema).optional(),
       conflicts: z.array(conflict).optional(),
     }),
+  },
+  'sftp.getTransferConflicts': { input: task, output: z.strictObject({ conflicts: z.array(conflict).max(10000), directoryMode: z.enum(['preserve', 'archive']).optional() }) },
+  'sftp.resolveTransferConflicts': {
+    input: task.extend({ resolution: z.enum(['overwrite', 'rename', 'skip']) }), output: transferTaskSchema,
   },
   'sftp.uploadBegin': {
     input: z.strictObject({

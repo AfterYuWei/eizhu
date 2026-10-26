@@ -27,6 +27,7 @@ function isSending(task: TransferTask) {
   return task.status === 'transferring' && (!task.phase || task.phase === 'transferring') && task.transferred < task.size
 }
 function statusMeta(task: TransferTask) {
+  if (task.conflict_count && ['paused', 'recoverable'].includes(task.status)) return { icon: <AlertCircle size={12} />, label: '等待处理冲突' }
   switch (task.status) {
     case 'transferring': return { icon: <Loader2 size={12} className="sftp-tx-spin" />, label: transferPhaseLabel(task) }
     case 'paused': return { icon: <Pause size={12} />, label: '已暂停' }
@@ -90,7 +91,7 @@ export function TransferQueue() {
       <Dialog open={restartTarget !== null} onOpenChange={(open) => { if (!open) setRestartTarget(null) }}>
         <DialogContent className="sftp-dialog">
           <DialogHeader><DialogTitle>重新开始传输</DialogTitle>
-            <DialogDescription>重新读取源文件并舍弃本任务的旧检查点和暂存内容。已提交的目录文件不会回滚；新的覆盖仍需通过目标冲突检查。</DialogDescription>
+            <DialogDescription>重新读取未完成的源文件并舍弃对应检查点和暂存内容。已提交的目录文件保持原样，只重传剩余部分；新的覆盖仍需通过目标冲突检查。</DialogDescription>
           </DialogHeader>
           <DialogFooter><Button variant="outline" onClick={() => setRestartTarget(null)}>取消</Button>
             <Button onClick={() => { const task = restartTarget; setRestartTarget(null); if (task) void run(task.id, () => resumeTransfer(task.id, true), true) }}>重新开始</Button></DialogFooter>
@@ -118,13 +119,17 @@ export function TransferQueue() {
         {visible.map((task) => {
           const meta = statusMeta(task)
           const pct = transferProgress(task)
+          const preparing = task.status === 'transferring' && ['scanning', 'archiving'].includes(task.phase ?? '')
           const direction = task.direction === 'upload' ? '上传' : task.direction === 'download' ? '下载' : '传输'
           return <div key={task.id} className={`sftp-tx-item ${task.status}`}>
             <span className="sftp-tx-dir" title={direction} aria-label={direction}>{task.direction === 'upload' ? <ArrowUp size={14} /> : task.direction === 'download' ? <ArrowDown size={14} /> : <Copy size={14} />}</span>
-            <span className="sftp-tx-name" title={`${task.file_name}\n${direction} · ${formatSize(task.transferred)} / ${formatSize(task.size)}`}>{task.file_name}</span>
+            <span className="sftp-tx-name" title={`${task.file_name}\n${task.current_file ?? ''}\n${direction} · ${formatSize(task.transferred)} / ${formatSize(task.size)}`}>
+              <span>{task.file_name}</span>
+              {task.items_total !== undefined && (task.items_total > 1 || task.phase === 'scanning') && <small>{task.phase === 'scanning' ? `已扫描 ${task.items_total} 项` : `${task.items_completed ?? 0} / ${task.items_total} 项`}{task.current_file && ` · ${task.current_file.split('/').pop()}`}</small>}
+            </span>
             <span className="sftp-tx-progress">
-              <span className="sftp-tx-bar" role="progressbar" aria-label={`${task.file_name} 传输进度`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct} aria-valuetext={`${pct}% · ${meta.label}`}><span className={`sftp-tx-fill ${task.status}`} style={{ width: `${pct}%` }} /></span>
-              <span className="sftp-tx-pct">{pct}%</span>
+              <span className={`sftp-tx-bar${preparing ? ' is-indeterminate' : ''}`} role="progressbar" aria-label={`${task.file_name} 传输进度`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={preparing ? undefined : pct} aria-valuetext={preparing ? meta.label : `${pct}% · ${meta.label}`}><span className={`sftp-tx-fill ${task.status}`} style={{ width: preparing ? '35%' : `${pct}%` }} /></span>
+              <span className="sftp-tx-pct">{preparing ? '—' : `${pct}%`}</span>
             </span>
             <span className="sftp-tx-size">{formatSize(task.transferred)} / {formatSize(task.size)}</span>
             <span className={`sftp-tx-status ${task.status}`}>{meta.icon}<span>{meta.label}{isSending(task) && task.speed > 0 && <small>{formatSpeed(task.speed)}</small>}</span></span>
@@ -132,7 +137,7 @@ export function TransferQueue() {
               {taskGroup(task) === 'active' && <Button variant="ghost" size="icon-xs" title="暂停" aria-label={`暂停 ${task.file_name}`} disabled={busy.has(task.id)} onClick={() => void run(task.id, () => pauseTransfer(task.id))}><Pause size={12} /></Button>}
               {(task.status === 'paused' || task.status === 'recoverable' || task.status === 'failed' && task.retryable) && <Button variant="ghost" size="icon-xs" title={task.status === 'failed' ? '重试' : '继续'} aria-label={`${task.status === 'failed' ? '重试' : '继续'} ${task.file_name}`} disabled={busy.has(task.id)} onClick={() => void run(task.id, () => resumeTransfer(task.id))}><Play size={12} /></Button>}
               {taskGroup(task) === 'attention' && <Button variant="ghost" size="icon-xs" title="重新开始" aria-label={`重新开始 ${task.file_name}`} disabled={busy.has(task.id)} onClick={() => setRestartTarget(task)}><RotateCcw size={12} /></Button>}
-              {task.direction === 'download' && task.status === 'completed' && <Button variant="ghost" size="icon-xs" title="保存下载文件" aria-label={`保存 ${task.file_name}`} disabled={busy.has(task.id)} onClick={() => void run(task.id, () => sftpApi.exportDownload(task.id))}><Save size={12} /></Button>}
+              {task.direction === 'download' && task.target_profile === '__staging__' && task.status === 'completed' && <Button variant="ghost" size="icon-xs" title="保存下载文件" aria-label={`保存 ${task.file_name}`} disabled={busy.has(task.id)} onClick={() => void run(task.id, () => sftpApi.exportDownload(task.id))}><Save size={12} /></Button>}
               {taskGroup(task) !== 'finished' && <Button variant="ghost" size="icon-xs" className="sftp-tx-cancel" title="取消并清理暂存" aria-label={`取消并清理 ${task.file_name}`} disabled={busy.has(task.id)} onClick={() => void run(task.id, () => cancelTransfer(task.id))}><X size={12} /></Button>}
             </div>
             {(task.error_message || errors[task.id]) && <details className="sftp-tx-error"><summary>错误详情 {task.error_code && `· ${task.error_code}`}</summary>

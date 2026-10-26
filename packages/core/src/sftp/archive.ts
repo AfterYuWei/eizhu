@@ -3,6 +3,7 @@ import { createGzip } from 'node:zlib'
 import { posix } from 'node:path'
 import { fail } from '@eizhu/contracts'
 import { FileEndpoint } from './endpoint.ts'
+import type { FileStat } from './endpoint.ts'
 export interface ArchiveEntry {
   path: string
   name: string
@@ -13,19 +14,28 @@ export interface ArchiveEntry {
   link: boolean
   identity: string
 }
-export async function collect(endpoint: FileEndpoint, paths: string[]): Promise<ArchiveEntry[]> {
+export async function collect(endpoint: FileEndpoint, paths: string[], signal?: AbortSignal, onEntry?: (row: ArchiveEntry) => void): Promise<ArchiveEntry[]> {
   const rows: ArchiveEntry[] = []
-  const walk = async (path: string, name: string, depth: number) => {
+  const walk = async (path: string, name: string, depth: number, known?: FileStat) => {
+    signal?.throwIfAborted()
     if (depth > 64 || rows.length >= 10000) fail('DIRECTORY_LIMIT', '目录层数或文件数超过安全限制')
-    await endpoint.guard(path)
-    const s = await endpoint.stat(path)
+    if (!known) await endpoint.guard(path)
+    const s = known ?? await endpoint.stat(path)
     if (s.link) fail('SYMLINK_UNSAFE', '传输不跟随符号链接')
     if (!s.dir && (s.mode & 0o170000) !== 0o100000) fail('NOT_A_FILE', '不能传输设备、套接字或管道')
     rows.push({ ...s, path, name })
-    if (s.dir)
-      for (const row of await endpoint.list(path)) await walk(row.path, posix.join(name, row.name), depth + 1)
+    onEntry?.(rows[rows.length - 1])
+    if (s.dir) {
+      if (known) await endpoint.guard(path)
+      for (const row of await endpoint.listStats(path)) {
+        signal?.throwIfAborted()
+        await walk(row.path, posix.join(name, posix.basename(row.path)), depth + 1, row.stat)
+      }
+    }
   }
-  for (const path of paths) await walk(path, posix.basename(path), 0)
+  const roots = [...new Set(paths)]
+    .filter((path, _index, all) => !all.some((parent) => parent !== path && path.startsWith(parent.replace(/\/$/, '') + '/')))
+  for (const path of roots) await walk(path, posix.basename(path), 0)
   return rows
 }
 export async function* fileBytes(

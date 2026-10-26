@@ -2,6 +2,8 @@ import type { TransferTask } from '@/types/sftp'
 
 export function transferPhaseLabel(task: TransferTask): string {
   switch (task.phase) {
+    case 'scanning': return '扫描目录'
+    case 'archiving': return '打包文件'
     case 'preparing': return '准备文件'
     case 'verifying': return '检查文件'
     case 'committing': return '提交文件'
@@ -12,7 +14,9 @@ export function transferPhaseLabel(task: TransferTask): string {
 /** 100% means the staging file has actually been committed. */
 export function transferProgress(task: TransferTask): number {
   if (task.status === 'completed') return 100
-  return task.size > 0 ? Math.min(99, Math.floor((task.transferred / task.size) * 100)) : 0
+  const ratio = task.size > 0 ? task.transferred / task.size
+    : task.items_total ? (task.items_completed ?? 0) / task.items_total : 0
+  return Math.min(99, Math.floor(ratio * 100))
 }
 
 /** The business process owns execution generations and confirmed offsets. Ignore delayed events. */
@@ -28,6 +32,7 @@ export function mergeTransferTasks(current: TransferTask[], incoming: TransferTa
         if (['completed', 'cancelled', 'failed', 'paused', 'recoverable'].includes(previous.status)
           && ['queued', 'transferring'].includes(task.status)) continue
         if (task.transferred < previous.transferred && task.status === previous.status) continue
+        if ((task.items_completed ?? 0) < (previous.items_completed ?? 0) && task.status === previous.status) continue
       }
     }
     tasks.set(task.id, task)
