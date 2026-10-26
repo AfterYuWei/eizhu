@@ -13,6 +13,7 @@ import { gunzipSync } from 'node:zlib'
 import { displayPath } from '@eizhu/core/sftp/endpoint'
 import type { RuntimeHost } from './runtime-host.ts'
 import type { Windows } from './windows.ts'
+import { verifyEditorLayout } from './editor-layout-smoke.ts'
 
 function legacyFiles(sftp: SFTPWrapper) {
   const files = new Map<string, Buffer>([['/legacy.txt', Buffer.from('原文件必须保留')]])
@@ -495,6 +496,7 @@ export async function verifyStage4(
     await editor.webContents.executeJavaScript(
       `Promise.race([document.fonts.ready.then(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))),new Promise(resolve=>setTimeout(resolve,250))])`,
     )
+    const editorLayout = await verifyEditorLayout(editor, window, root)
     await writeFile(join(root, 'stage4-editor.png'), (await editor.webContents.capturePage()).toPNG())
     windows.closeEditor(true)
     step('editor-ownership-and-dirty-close')
@@ -589,6 +591,7 @@ export async function verifyStage4(
       safeSave: true,
       unsupportedAtomicReplacePreservesOriginal: true,
       editorOwnership: true,
+      editorLayout,
       dirtyCloseCancelled: true,
       staleWindowCloseRejected: true,
       encryptedCheckpoints: true,

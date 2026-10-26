@@ -21,6 +21,7 @@ import { CodeEditor } from './CodeEditor'
 import { EditorToolbar } from './EditorToolbar'
 import { EditorStatusBar } from './EditorStatusBar'
 import { EditorTabs } from './EditorTabs'
+import { cn } from '@/lib/utils'
 
 
 type PendingClose = EditorCloseRequest
@@ -231,11 +232,24 @@ export function EditorWindowPage() {
   return (
     <div className="editor-window" role="application" aria-label="文件编辑器">
       <header
-        className={`eizhu-header titlebar editor-window-header ${desktop ? 'is-desktop' : ''} ${mac ? 'is-mac' : ''}`}
+        className={cn('editor-titlebar', desktop && 'is-desktop', mac && desktop && 'is-mac')}
+        data-eizhu-drag-region={desktop ? '' : undefined}
+        aria-label="编辑器窗口栏"
       >
-        <div className="editor-window-drag-region" data-eizhu-drag-region={desktop ? '' : undefined}>
-          <span>eizhu · 文件编辑器</span>
-        </div>
+        <EditorToolbar
+          path={activeTab?.path ?? null}
+          dirty={activeDirty}
+          saving={activeTab?.saving ?? false}
+          readOnly={activeTab?.readOnly ?? false}
+          loading={activeTab?.loading ?? false}
+          conflict={activeTab?.conflict ?? false}
+          hasSession={!!activeTab?.sessionId}
+          onSave={() => { if (activeTab) void saveFile(activeTab.id) }}
+          onCompare={activeTab ? () => void useEditorStore.getState().compareFile(activeTab.id) : undefined}
+          onSaveAs={activeTab ? () => setSaveAsId(activeTab.id) : undefined}
+          onReload={() => { if (activeTab) { if (isDirty(activeTab)) setReloadId(activeTab.id); else void reloadFile(activeTab.id) } }}
+          onClose={!desktop ? requestCloseWindow : undefined}
+        />
         {showControls && (
           <WindowControls
             maximized={maximized}
@@ -243,6 +257,7 @@ export function EditorWindowPage() {
             onToggleMaximize={toggleMaximize}
             onClose={requestCloseWindow}
             closeLabel="关闭编辑器窗口"
+            className="editor-window-controls"
           />
         )}
       </header>
@@ -251,20 +266,6 @@ export function EditorWindowPage() {
         {activeTab ? (
           <>
             <EditorTabs tabs={tabItems} onSelect={setActiveTab} onClose={requestCloseTab} />
-            <EditorToolbar
-              path={activeTab.path}
-              dirty={activeDirty}
-              saving={activeTab.saving}
-              readOnly={activeTab.readOnly}
-              loading={activeTab.loading}
-              conflict={activeTab.conflict}
-              hasSession={!!activeTab.sessionId}
-              onSave={() => void saveFile(activeTab.id)}
-              onCompare={() => void useEditorStore.getState().compareFile(activeTab.id)}
-              onSaveAs={() => setSaveAsId(activeTab.id)}
-              onReload={() => { if (isDirty(activeTab)) setReloadId(activeTab.id); else void reloadFile(activeTab.id) }}
-              onClose={requestCloseWindow}
-            />
             <div className="editor-body">
               {activeTab.loading ? (
                 <Loading />

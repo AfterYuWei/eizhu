@@ -1,6 +1,7 @@
 /* ═══════════════════ UNIFIED EDITOR ═══════════════════ */
 
 .editor-window {
+  --editor-muted: color-mix(in srgb, var(--fg) 62%, var(--surface-workspace));
   display: flex;
   flex-direction: column;
   width: 100vw;
@@ -11,24 +12,35 @@
   color: var(--fg);
 }
 
-.editor-window-header {
-  flex: none;
-}
-
-.editor-window-drag-region {
+.editor-titlebar {
   display: flex;
   align-items: center;
-  flex: 1;
-  align-self: stretch;
+  flex-shrink: 0;
   min-width: 0;
-  padding-left: 14px;
-  color: var(--fg-2);
-  font: 500 12px/1 var(--sans);
+  min-height: 64px;
+  background: var(--surface-app);
   user-select: none;
 }
-
-.editor-window-drag-region span {
-  pointer-events: none;
+.editor-titlebar.is-mac {
+  padding-left: 88px;
+}
+.editor-titlebar .editor-toolbar {
+  flex: 1;
+  min-width: 0;
+  min-height: 64px;
+  background: transparent;
+  border: 0;
+}
+.editor-titlebar .editor-toolbar-right {
+  -webkit-app-region: no-drag;
+}
+.editor-titlebar .editor-window-controls {
+  height: 64px;
+  align-self: flex-start;
+  margin-left: 0;
+}
+.editor-titlebar:has(.editor-window-controls) .editor-toolbar {
+  padding-right: 12px;
 }
 
 .editor-window-content {
@@ -38,7 +50,10 @@
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  background: var(--surface-overlay);
+  margin: 0 8px 8px;
+  border: 1px solid var(--edge-soft);
+  border-radius: var(--r-lg);
+  background: var(--surface-workspace);
 }
 
 .editor-window-content > .editor-body {
@@ -53,11 +68,12 @@
   align-items: center;
   justify-content: center;
   gap: 10px;
-  color: var(--fg-4);
-  font: 400 13px/1.4 var(--sans);
+  color: var(--editor-muted);
+  font: 400 var(--sans-size)/1.5 var(--sans);
 }
 
 .editor-dialog {
+  --editor-muted: color-mix(in srgb, var(--fg) 62%, var(--surface-workspace));
   display: flex;
   flex-direction: column;
   background: var(--surface-overlay);
@@ -76,10 +92,10 @@
   display: flex;
   align-items: center;
   gap: 5px;
-  height: 32px;
-  padding: 0 10px;
-  background: var(--bg-elevated);
-  border-bottom: 1px solid var(--border-subtle);
+  min-height: 44px;
+  padding: 5px 10px;
+  background: var(--surface-workspace);
+  border-bottom: 1px solid var(--edge-soft);
   overflow-x: auto;
   flex-shrink: 0;
 }
@@ -87,28 +103,27 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  height: 26px;
+  min-height: 32px;
   padding: 0 9px;
   border: 1px solid transparent;
   border-radius: var(--r-sm);
   cursor: pointer;
   font: 400 var(--sans-size) / 1 var(--sans);
-  color: var(--fg-3);
+  color: var(--editor-muted);
   transition: background 0.12s, border-color 0.12s, color 0.12s, box-shadow 0.12s;
   white-space: nowrap;
 }
 .editor-tab:hover {
   background: var(--bg-hover);
-  color: var(--fg-2);
+  color: var(--fg);
 }
 .editor-tab.active {
-  background: var(--bg-panel);
-  border-color: var(--border-subtle);
-  color: var(--fg-1);
-  box-shadow: 0 1px 2px color-mix(in srgb, var(--fg) 6%, transparent);
+  background: var(--surface-panel);
+  border-color: var(--edge-soft);
+  color: var(--fg);
 }
 .editor-tab:focus-within {
-  outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  outline: 1px solid var(--editor-muted);
   outline-offset: 1px;
 }
 .editor-tab-icon {
@@ -124,18 +139,18 @@
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--accent);
+  background: var(--fg);
   flex-shrink: 0;
 }
 .editor-tab-close {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 18px;
-  height: 18px;
+  width: 24px;
+  height: 24px;
   border: none;
   background: transparent;
-  color: var(--fg-4);
+  color: var(--editor-muted);
   cursor: pointer;
   border-radius: var(--r-xs);
   opacity: 0;
@@ -156,16 +171,17 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: 36px;
-  padding: 0 10px;
-  background: var(--bg-elevated);
-  border-bottom: 1px solid var(--border-subtle);
+  min-height: 64px;
+  padding: 8px 16px;
+  gap: 24px;
+  background: var(--surface-app);
+  border-bottom: 1px solid var(--edge-soft);
   flex-shrink: 0;
 }
 .editor-toolbar-left {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 10px;
   min-width: 0;
   flex: 1;
 }
@@ -176,15 +192,34 @@
   flex-shrink: 0;
 }
 .editor-toolbar-icon {
-  color: var(--fg-4);
+  color: var(--editor-muted);
   flex-shrink: 0;
 }
+.editor-toolbar-file {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.editor-toolbar-filename {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
 .editor-toolbar-path {
-  font: 400 var(--sans-size) / 1 var(--sans);
-  color: var(--fg-2);
+  font: 500 var(--sans-size) / 1.4 var(--sans);
+  color: var(--fg);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.editor-toolbar-directory {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--editor-muted);
+  font: 400 max(11px, calc(var(--sans-size) - 2px))/1.4 var(--mono);
 }
 
 /* Dirty dot */
@@ -192,7 +227,7 @@
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--accent);
+  background: var(--fg);
   flex-shrink: 0;
 }
 
@@ -204,7 +239,7 @@
   padding: 1px 6px;
   border-radius: var(--r-xs);
   background: var(--bg-active);
-  color: var(--fg-4);
+  color: var(--editor-muted);
   font: 400 var(--sans-size) / 1 var(--sans);
   flex-shrink: 0;
 }
@@ -216,8 +251,8 @@
   gap: 4px;
   padding: 2px 8px;
   border-radius: var(--r-xs);
-  background: rgba(245, 158, 11, 0.12);
-  color: var(--yellow, #d97706);
+  background: var(--yellow-bg);
+  color: var(--fg);
   font: 500 var(--sans-size) / 1 var(--sans);
   flex-shrink: 0;
 }
@@ -227,11 +262,11 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  height: 26px;
+  min-height: 30px;
   padding: 0 10px;
   border: 1px solid var(--border);
   background: var(--bg-panel);
-  color: var(--fg-2);
+  color: var(--fg);
   font: 500 var(--sans-size) / 1 var(--sans);
   border-radius: var(--r-sm);
   cursor: pointer;
@@ -241,40 +276,43 @@
 }
 .editor-btn:hover:not(:disabled) {
   background: var(--bg-hover);
-  border-color: var(--accent);
-  color: var(--fg-1);
+  border-color: var(--border);
+  color: var(--fg);
 }
 .editor-btn:disabled {
   opacity: 0.4;
   cursor: default;
 }
 .editor-btn.primary {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: #fff;
+  background: var(--fg);
+  border-color: transparent;
+  color: var(--surface-panel);
 }
 .editor-btn.primary:hover:not(:disabled) {
-  filter: brightness(1.08);
-  color: #fff;
+  background: color-mix(in srgb, var(--fg) 85%, var(--surface-panel));
+  border-color: transparent;
+  color: var(--surface-panel);
 }
 .editor-btn.ghost {
   padding: 0 6px;
   background: transparent;
   border-color: transparent;
-  color: var(--fg-4);
+  color: var(--editor-muted);
 }
 .editor-btn.ghost:hover:not(:disabled) {
   background: var(--bg-hover);
-  color: var(--fg-2);
+  color: var(--fg);
   border-color: transparent;
 }
-.editor-btn.danger {
-  color: var(--red);
-  border-color: var(--red);
+.editor-btn:focus-visible {
+  outline: 1px solid var(--editor-muted);
+  outline-offset: 2px;
+  box-shadow: none;
 }
-.editor-btn.danger:hover:not(:disabled) {
-  background: var(--red-bg);
-  color: var(--red);
+.editor-save-shortcut {
+  margin-left: 6px;
+  opacity: 0.65;
+  font: 400 11px/1 var(--sans);
 }
 
 /* Editor body */
@@ -282,6 +320,7 @@
   flex: 1;
   min-height: 0;
   position: relative;
+  background: var(--surface-workspace);
 }
 
 /* Monaco container */
@@ -295,19 +334,20 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  height: 24px;
-  padding: 0 10px;
-  background: var(--bg-elevated);
-  border-top: 1px solid var(--border-subtle);
-  font: 400 var(--sans-size) / 1 var(--sans);
-  color: var(--fg-4);
+  min-height: 28px;
+  padding: 4px 14px;
+  background: var(--surface-workspace);
+  border-top: 1px solid var(--edge-soft);
+  font: 400 max(11px, calc(var(--sans-size) - 2px)) / 1.4 var(--sans);
+  color: var(--editor-muted);
   flex-shrink: 0;
+  flex-wrap: wrap;
 }
 .editor-status-item {
   white-space: nowrap;
 }
 .editor-status-item.dirty {
-  color: var(--accent);
+  color: var(--fg);
 }
 .editor-status-item.error {
   color: var(--red);
@@ -317,4 +357,13 @@
 }
 .editor-status-sep {
   opacity: 0.4;
+}
+
+@media (max-width: 1000px) {
+  .editor-toolbar { gap: 12px; padding-inline: 12px; }
+  .editor-save-shortcut { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .editor-tab, .editor-tab-close, .editor-btn { transition: none; }
 }

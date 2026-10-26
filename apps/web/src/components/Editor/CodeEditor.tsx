@@ -1,61 +1,10 @@
 import { Loading } from '@/components/ui/loading'
 import { useRef,useCallback,useLayoutEffect } from 'react'
-import { loader, type EditorReady } from '@/lib/monaco'
+import '@/lib/monaco'
+import { type monaco, type EditorReady } from '@/lib/monaco'
+import { applyEditorTheme } from '@/lib/editorTheme'
 import MonacoEditor from '@monaco-editor/react'
-import { useSettingsStore } from '@/store/settings'
-
-// Define custom themes once when the module loads.
-loader.init().then((monaco) => {
-  monaco.editor.defineTheme('eizhu-dark', {
-    base: 'vs-dark',
-    inherit: true,
-    rules: [],
-    colors: {
-      'editor.background': '#0A0A0A',
-      'editor.foreground': '#E5E5E5',
-      'editorLineNumber.foreground': '#525252',
-      'editorLineNumber.activeForeground': '#A3A3A3',
-      'editor.lineHighlightBackground': '#171717',
-      'editor.lineHighlightBorder': '#00000000',
-      'editorCursor.foreground': '#E5E5E5',
-      'editor.selectionBackground': '#264F78AA',
-      'editor.inactiveSelectionBackground': '#3A3D41AA',
-      'editorWidget.background': '#0F0F0F',
-      'editorWidget.border': '#262626',
-      'editorSuggestWidget.background': '#0F0F0F',
-      'editorSuggestWidget.border': '#262626',
-      'editorSuggestWidget.selectedBackground': '#264F78',
-      'input.background': '#0F0F0F',
-      'input.border': '#262626',
-      'editorGutter.background': '#0A0A0A',
-      'scrollbarSlider.background': '#40404080',
-      'scrollbarSlider.hoverBackground': '#52525280',
-      'scrollbarSlider.activeBackground': '#525252AA',
-    },
-  })
-  monaco.editor.defineTheme('eizhu-light', {
-    base: 'vs',
-    inherit: true,
-    rules: [],
-    colors: {
-      'editor.background': '#FFFFFF',
-      'editor.foreground': '#171717',
-      'editorLineNumber.foreground': '#A3A3A3',
-      'editorLineNumber.activeForeground': '#404040',
-      'editor.lineHighlightBackground': '#F5F5F5',
-      'editor.lineHighlightBorder': '#00000000',
-      'editorCursor.foreground': '#171717',
-      'editor.selectionBackground': '#ADD6FF',
-      'editor.inactiveSelectionBackground': '#CCE5FF99',
-      'editorWidget.background': '#FAFAFA',
-      'editorWidget.border': '#E5E5E5',
-      'editorGutter.background': '#FFFFFF',
-      'scrollbarSlider.background': '#D4D4D480',
-      'scrollbarSlider.hoverBackground': '#A3A3A380',
-      'scrollbarSlider.activeBackground': '#A3A3A3AA',
-    },
-  })
-})
+import { useResolvedTheme } from '@/store/settings'
 
 interface CodeEditorProps {
   content: string
@@ -83,13 +32,23 @@ export function CodeEditor({
     onSaveRef.current = onSave
   }, [onSave])
 
-  const theme = useSettingsStore((s) => s.theme)
-  const systemRevision = useSettingsStore((s) => s.systemRevision)
-  void systemRevision
-  const resolvedTheme: 'light' | 'dark' =
-    theme === 'system'
-      ? window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
-      : theme
+  const resolvedTheme = useResolvedTheme()
+  const monacoRef = useRef<typeof monaco | null>(null)
+  const beforeMount = useCallback((api: typeof monaco) => {
+    monacoRef.current = api
+    applyEditorTheme(api, resolvedTheme)
+  }, [resolvedTheme])
+
+  useLayoutEffect(() => {
+    const syncTheme = () => {
+      if (monacoRef.current) applyEditorTheme(monacoRef.current, resolvedTheme)
+    }
+    syncTheme()
+    // Cross-window settings hydration also updates root tokens after the store.
+    const observer = new MutationObserver(syncTheme)
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class', 'style'] })
+    return () => observer.disconnect()
+  }, [resolvedTheme])
 
   const handleMount: EditorReady = useCallback((inst, monaco) => {
     // @monaco-editor/react owns the model change subscription and suppresses
@@ -107,6 +66,7 @@ export function CodeEditor({
       theme={resolvedTheme === 'dark' ? 'eizhu-dark' : 'eizhu-light'}
       value={content}
       onChange={(value: string | undefined) => onChange(value ?? '')}
+      beforeMount={beforeMount}
       onMount={handleMount}
       loading={
         <Loading />

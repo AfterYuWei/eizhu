@@ -73,7 +73,7 @@ if (report.stage5.passed)
   await copyFile(join(root, 'stage5-backup.png'), join(evidenceRoot, 'stage5-backup.png'))
 await copyFile(join(root, 'stage6-update.png'), join(evidenceRoot, 'stage6-update.png'))
 if (report.stage4.passed)
-  for (const name of ['stage4-editor.png', 'stage4-sftp.png'])
+  for (const name of ['stage4-editor.png', 'stage4-sftp.png', ...report.stage4.editorLayout.screenshots])
     await copyFile(join(root, name), join(evidenceRoot, name))
 await writeFile(
   `artifacts/smoke/${process.platform}-${process.arch}.json`,
