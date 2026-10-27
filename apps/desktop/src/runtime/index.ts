@@ -10,17 +10,18 @@ const port = process.parentPort!
 let service: RuntimeService | undefined
 let closing = false
 const pendingNetwork = new Map<string,{resolve:(value:HttpResponse)=>void;reject:(error:unknown)=>void;cleanup:()=>void}>()
-const transport: Transport = (request, signal) => new Promise((resolve,reject)=>{
+const networkTransport = (kind: 'cloud' | 'account'): Transport => (request, signal) => new Promise((resolve,reject)=>{
   if(signal.aborted)return reject(new Error('Aborted'))
-  const id=randomUUID(), abort=()=>{pendingNetwork.delete(id);port.postMessage({type:'cloud.abort',id});reject(new DesktopError({code:'BACKUP_STOPPED',message:'备份任务已停止'}))}
+  const id=randomUUID(), abort=()=>{pendingNetwork.delete(id);signal.removeEventListener('abort',abort);port.postMessage({type:`${kind}.abort`,id,context:service!.context});reject(new DesktopError({code:'CANCELLED',message:'网络任务已停止'}))}
   signal.addEventListener('abort',abort,{once:true})
   pendingNetwork.set(id,{resolve,reject,cleanup:()=>signal.removeEventListener('abort',abort)})
-  port.postMessage({type:'cloud.request',id,context:service!.context,request})
+  port.postMessage({type:`${kind}.request`,id,context:service!.context,request})
 })
+const transport = networkTransport('cloud'), accountTransport = networkTransport('account')
 port.on('message', async ({ data, ports }) => {
   try {
-    if(data.type==='cloud.response'){
-      const p=pendingNetwork.get(data.id);if(!p)return
+    if(data.type==='cloud.response'||data.type==='account.response'){
+      const p=pendingNetwork.get(data.id);if(!p){data.value?.body?.fill(0);return}
       pendingNetwork.delete(data.id);p.cleanup()
       if(data.error)p.reject(new DesktopError({code:'CLOUD_REQUEST_FAILED',message:'云存储网络请求失败或超时，请检查网络、系统代理和 TLS 配置'}));else p.resolve(data.value)
       return
@@ -53,6 +54,7 @@ port.on('message', async ({ data, ports }) => {
         input.localHome,
         transport,
         input.workspace,
+        accountTransport,
       )
       input.key.fill(0)
       const workspace = await service.initialize()
@@ -63,6 +65,7 @@ port.on('message', async ({ data, ports }) => {
         input: undefined,
       })
       port.postMessage({ type: 'ready', context: service.context, workspace })
+      service.startBackground()
       return
     }
     if (data.type === 'terminal.bind') {

@@ -39,8 +39,8 @@ it.each(['appearance', 'account'] as const)('账号设置从 %s 入口打开后�
   for (let attempt = 0; attempt < 2; attempt++) {
     await act(async () => selectTab('账号'))
     const panel = document.querySelector('[role="tabpanel"][data-state="active"]')!
-    expect(panel.textContent).toContain('正在开发中')
-    expect(panel.querySelector('input')).toBeNull()
+    expect(panel.textContent).toContain('登录账号')
+    expect(panel.querySelector('input[type="email"]')).not.toBeNull()
     expect(document.querySelector('main')?.textContent).toBe('工作区')
 
     await act(async () => selectTab('外观'))

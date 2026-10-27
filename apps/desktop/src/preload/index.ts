@@ -20,21 +20,32 @@ import {
   isDesktopEvent,
   acceptBootstrapUpdate,
   acceptWorkspaceTransition,
+  account,
+  isAccountOperation,
 } from '@eizhu/contracts'
 import type { Bootstrap, DesktopApi, DesktopEvents, RuntimeContext } from '@eizhu/contracts'
 
 let context: RuntimeContext
 let currentBootstrap: Bootstrap
+let pendingBootstrap: Bootstrap | undefined
 const initial = ipcRenderer.invoke('eizhu:bootstrap').then((value: unknown) => {
   const result = foundation['app.bootstrap'].output.parse(value)
-  context = result.context
   currentBootstrap = result
+  if (pendingBootstrap) {
+    try { currentBootstrap = acceptBootstrapUpdate(currentBootstrap, pendingBootstrap) } catch { /* Keep the newest valid context. */ }
+    pendingBootstrap = undefined
+  }
+  context = currentBootstrap.context
   return result
 })
 const listeners = new Map<string, Set<(payload: unknown) => void>>()
 ipcRenderer.on('eizhu:context', (_event, value) => {
   const parsed = foundation['app.bootstrap'].output.safeParse(value)
   if (parsed.success) {
+    if (!currentBootstrap) {
+      if (!pendingBootstrap || parsed.data.context.generation > pendingBootstrap.context.generation) pendingBootstrap = parsed.data
+      return
+    }
     try {
       currentBootstrap = acceptBootstrapUpdate(currentBootstrap, parsed.data)
       context = currentBootstrap.context
@@ -63,14 +74,15 @@ ipcRenderer.on('eizhu:event', (_event, envelope) => {
 
 async function call(operation: string, input?: unknown): Promise<unknown> {
   await initial
-  if (!isFoundationOperation(operation) && !isLocalOperation(operation) && !isSshOperation(operation)&&!isSftpOperation(operation)&&!isArchiveOperation(operation))
-    throw new DesktopError({ code: 'STAGE_NOT_READY', message: (operation.startsWith('account.') || operation.startsWith('sync.') || operation === 'backup.previewLegacyAccount') ? '官方账号、同步和官方备份待开发，后端部署后再接入' : '该业务能力将在后续实施阶段开放' })
+  if (!isFoundationOperation(operation) && !isLocalOperation(operation) && !isSshOperation(operation)&&!isSftpOperation(operation)&&!isArchiveOperation(operation)&&!isAccountOperation(operation))
+    throw new DesktopError({ code: 'STAGE_NOT_READY', message: (operation.startsWith('account.') || operation.startsWith('sync.') || operation === 'backup.previewLegacyAccount') ? '账号条目同步将在后续批次开放；完整版本与第三方备份独立使用' : '该业务能力将在后续实施阶段开放' })
   const sentContext = context
   if (isFoundationOperation(operation)) input = foundation[operation].input.parse(input)
   else if (isLocalOperation(operation)) input = local[operation].input.parse(input)
   else if (isSshOperation(operation)) input = ssh[operation].input.parse(input)
   else if(isSftpOperation(operation))input=sftp[operation].input.parse(input)
   else if(isArchiveOperation(operation)) input=archive[operation].input.parse(input)
+  else if(isAccountOperation(operation)) input=account[operation].input.parse(input)
   const id = crypto.randomUUID()
   const response = await ipcRenderer.invoke('eizhu:request', { id, context: sentContext, operation, input })
   if (response.id !== id) throw new DesktopError({ code: 'STALE_RESPONSE', message: '响应标识不匹配' })
@@ -99,7 +111,7 @@ async function call(operation: string, input?: unknown): Promise<unknown> {
       ? local[operation].output.parse(response.value)
       : isSshOperation(operation)
         ? ssh[operation].output.parse(response.value)
-        : isSftpOperation(operation)?sftp[operation].output.parse(response.value):isArchiveOperation(operation)?archive[operation].output.parse(response.value):response.value
+        : isSftpOperation(operation)?sftp[operation].output.parse(response.value):isArchiveOperation(operation)?archive[operation].output.parse(response.value):isAccountOperation(operation)?account[operation].output.parse(response.value):response.value
 }
 const api: Record<string, Record<string, unknown>> = Object.create(null)
 for (const operation of new Set([
@@ -108,6 +120,7 @@ for (const operation of new Set([
   ...Object.keys(ssh),
   ...Object.keys(sftp),
   ...Object.keys(archive),
+  ...Object.keys(account),
   ...reservedOperations,
 ])) {
   const [domain, method] = operation.split('.')

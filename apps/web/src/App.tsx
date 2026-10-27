@@ -19,6 +19,9 @@ function App() {
         void useAccountStore.getState().hydrate();
         let disposed = false;
         const listeners = Promise.all([
+            listen('eizhu-account-message', ({ payload }) => {
+                useAccountStore.setState({ status: payload.status, loading: false, error: null });
+            }),
             listen('eizhu-runtime-state', ({ payload }) => {
               if (payload.status === 'ready') { toast.dismiss('runtime-unavailable'); return }
               toast.error(payload.message ?? '业务进程不可用', { id: 'runtime-unavailable', duration: Infinity, action: { label: '恢复服务', onClick: () => { void bridge().runtime.restart().catch(error => toast.error(error instanceof Error ? error.message : String(error))) } } })

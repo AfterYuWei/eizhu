@@ -9,6 +9,8 @@ import {
   syncCapabilitiesSchema,
   syncPushSchema,
   eventSchemas,
+  accountHttpRequestSchema,
+  isAccountOperation,
 } from '../index.ts'
 
 const user = {
@@ -19,6 +21,16 @@ const user = {
   emailVerified: false,
   verificationRequired: true,
 }
+test('account network permits only fixed-origin auth routes and never exposes admin initialization or sync settings', () => {
+  const request = { url: 'https://eizhu.yuweinfo.com/api/auth/me', method: 'GET', headers: { accept: 'application/json', authorization: 'Bearer synthetic' } }
+  assert.equal(accountHttpRequestSchema.safeParse(request).success, true)
+  for (const url of ['http://eizhu.yuweinfo.com/api/auth/me', 'https://other.invalid/api/auth/me', 'https://eizhu.yuweinfo.com/api/admin/users', 'https://eizhu.yuweinfo.com/api/auth/me?token=synthetic'])
+    assert.equal(accountHttpRequestSchema.safeParse({ ...request, url }).success, false)
+  assert.equal(accountHttpRequestSchema.safeParse({ ...request, method: 'POST', url: 'https://eizhu.yuweinfo.com/api/auth/setup' }).success, false)
+  assert.equal(accountHttpRequestSchema.safeParse({ ...request, headers: { ...request.headers, host: 'other.invalid' } }).success, false)
+  assert.equal(isAccountOperation('account.login'), true)
+  assert.equal(isAccountOperation('account.setSyncEnabled'), false)
+})
 test('account schemas reject unsafe identities, leaked tokens and contradictory session states', () => {
   const value = { loggedIn: true, sessionState: 'reauth_required', user, syncEnabled: true }
   assert.equal(accountStatusSchema.safeParse(value).success, true)

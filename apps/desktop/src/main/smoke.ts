@@ -9,8 +9,10 @@ import { join } from 'node:path'
 import { writeFile } from 'node:fs/promises'
 import assert from 'node:assert/strict'
 import { verifyAccountFoundation } from './account-foundation-smoke.ts'
+import { verifyAccountClosure } from './account-closure-smoke.ts'
 import type { Windows } from './windows.ts'
 import type { RuntimeHost } from './runtime-host.ts'
+import type { AccountFixture } from './account-fixture-server.ts'
 import updater from 'electron-updater'
 
 async function shown(window: BrowserWindow): Promise<void> {
@@ -59,6 +61,7 @@ export async function runSmoke(options: {
   keyMode: string
   startedAt: number
   assets:string
+  accountFixture?: AccountFixture
 }): Promise<void> {
   const { windows, root } = options,
     window = windows.main
@@ -75,7 +78,8 @@ export async function runSmoke(options: {
   const renderer = await window.webContents.executeJavaScript(`(async () => ({
     node: typeof process, require: typeof require, bridge: typeof window.eizhu.app.bootstrap,
     health: await window.eizhu.runtime.health(), text: document.body.innerText.includes('新建连接'),
-    reserved: await window.eizhu.account.status().then(() => 'unexpected-success', e => e.code),
+    account: await window.eizhu.account.status(),
+    reserved: await window.eizhu.sync.status().then(() => 'unexpected-success', e => e.code),
     local: await window.eizhu.group.list(),
     arbitraryPath: await window.eizhu.backup.preview({ filePath: '/etc/passwd' }).then(() => 'unexpected-success', e => e.code),
     inputValidation: await window.eizhu.settings.write({ key: 'credential', value: 'synthetic' }).then(() => 'unexpected-success', e => e.code)
@@ -84,6 +88,7 @@ export async function runSmoke(options: {
   assert.equal(renderer.require, 'undefined')
   assert.equal(renderer.text, true)
   assert.equal(renderer.reserved, 'STAGE_NOT_READY')
+  assert.deepEqual(renderer.account, { loggedIn: false, sessionState: 'anonymous', syncEnabled: false })
   assert.equal(renderer.inputValidation, 'BAD_REQUEST')
   assert.deepEqual(renderer.local, [])
   assert.equal(renderer.arbitraryPath, 'FORBIDDEN')
@@ -123,6 +128,9 @@ export async function runSmoke(options: {
   step('stage4-native-passed')
   const stage5=await verifyStage5(window,options.runtime(),root)
   step('stage5-native-passed')
+  assert.ok(options.accountFixture)
+  const accountClosure = await verifyAccountClosure(window, windows, options.accountFixture, root, options.assets)
+  step('account-closure-passed')
   // An occluded smoke window can suspend animation frames. Keep only this test window drawing.
   // This setting is limited to this synthetic smoke window; normal application throttling is unchanged.
   window.webContents.backgroundThrottling = false
@@ -270,6 +278,7 @@ export async function runSmoke(options: {
     renderer,
     stage2,
     accountFoundation,
+    accountClosure,
     stage3,
     stage3Storage,
     stage4,
@@ -289,7 +298,7 @@ export async function runSmoke(options: {
     monaco,
     firstWindowMs,
     processMetrics: app.getAppMetrics().map(({ type, memory, cpu }) => ({ type, memory, cpu })),
-    screenshots: ['home-light.png', 'home-dark.png', 'editor-empty.png', ...workspaceTabs.screenshots],
+    screenshots: ['home-light.png', 'home-dark.png', 'editor-empty.png', ...workspaceTabs.screenshots, ...accountClosure.screenshots],
     screenshotContrast,
   }
   await writeFile(join(root, 'smoke.json'), JSON.stringify(report, null, 2))

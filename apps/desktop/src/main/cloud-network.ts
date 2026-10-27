@@ -9,39 +9,47 @@ const request = z.strictObject({
   body: z.instanceof(Uint8Array).optional(),
 })
 /** Internal business-process transport. Electron supplies system proxy/TLS; redirects never forward credentials. */
-export async function cloudRequest(raw: unknown, signal: AbortSignal): Promise<HttpResponse> {
+export async function cloudRequest(
+  raw: unknown,
+  signal: AbortSignal,
+  maxBytes = MAX_NETWORK_BYTES,
+  networkSession?: Electron.Session,
+): Promise<HttpResponse> {
   const d = request.parse(raw),
     url = new URL(d.url)
   if (
     !['https:', 'http:'].includes(url.protocol) ||
     url.username ||
     url.password ||
-    (d.body?.byteLength ?? 0) > MAX_NETWORK_BYTES
+    (d.body?.byteLength ?? 0) > maxBytes
   )
     throw new Error('Invalid cloud request')
   // Chromium derives Host from the URL; SigV4 signs that same host without overriding a forbidden header.
   const headers = { ...d.headers }
   delete headers.host
-  const response = await net.fetch(url.href, {
-    method: d.method,
-    headers,
-    body: d.body ? Buffer.from(d.body) : undefined,
-    signal,
-    redirect: 'manual',
-    cache: 'no-store',
-    credentials: 'omit',
-  })
+  const body = d.body ? Buffer.from(d.body) : undefined
   const chunks: Uint8Array[] = []
   let total = 0
-  const reader = response.body?.getReader()
+  let reader: ReadableStreamDefaultReader<Uint8Array> | undefined
   try {
-    if (Number(response.headers.get('content-length')) > MAX_NETWORK_BYTES)
+    const fetch = networkSession ? networkSession.fetch.bind(networkSession) : net.fetch.bind(net)
+    const response = await fetch(url.href, {
+      method: d.method,
+      headers,
+      body,
+      signal,
+      redirect: 'manual',
+      cache: 'no-store',
+      credentials: 'omit',
+    })
+    reader = response.body?.getReader()
+    if (Number(response.headers.get('content-length')) > maxBytes)
       throw new Error('Cloud response exceeds limit')
     while (reader) {
       const part = await reader.read()
       if (part.done) break
       total += part.value.byteLength
-      if (total > MAX_NETWORK_BYTES) throw new Error('Cloud response exceeds limit')
+      if (total > maxBytes) throw new Error('Cloud response exceeds limit')
       chunks.push(part.value)
     }
     return {
@@ -50,6 +58,8 @@ export async function cloudRequest(raw: unknown, signal: AbortSignal): Promise<H
       body: Buffer.concat(chunks, total),
     }
   } finally {
+    body?.fill(0)
+    for (const chunk of chunks) chunk.fill(0)
     await reader?.cancel().catch(() => undefined)
   }
 }

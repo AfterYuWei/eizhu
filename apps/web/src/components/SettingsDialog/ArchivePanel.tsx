@@ -94,7 +94,7 @@ export function ArchivePanel() {
     const message =
       errorCode === 'STAGE_NOT_READY' ? (
         <p className="backup-description">
-          备份服务尚未就绪，请恢复业务进程后重试。官方账号、账号同步与官方云备份待开发，后端部署后再接入。
+          备份服务尚未就绪，请恢复业务进程后重试。完整版本与第三方备份独立于账号使用。
         </p>
       ) : errorCode ? (
         <ErrorRecovery code={errorCode} onRetry={() => void refresh()} />
@@ -308,7 +308,7 @@ export function ArchivePanel() {
               ) : null
             })}
             <p className="backup-description backup-cloud-note">
-              第三方云备份无需登录账号。官方账号、同步和官方云备份待开发。
+              第三方云备份无需登录账号；账号用于条目同步。
             </p>
           </section>
         </div>

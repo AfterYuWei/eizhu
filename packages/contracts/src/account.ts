@@ -53,6 +53,65 @@ export const account = {
   'account.setSyncEnabled': { input: z.strictObject({ enabled: z.boolean() }), output: accountStatusSchema },
 } as const
 
+export type AccountOperation = Exclude<keyof typeof account, 'account.setSyncEnabled'>
+export function isAccountOperation(value: string): value is AccountOperation {
+  return value !== 'account.setSyncEnabled' && Object.hasOwn(account, value)
+}
+export const accountMessageSchema = z.strictObject({
+  workspaceGeneration: z.int().positive(),
+  status: accountStatusSchema,
+})
+export const accountSetupSchema = z.strictObject({
+  required: z.boolean(),
+  passwordMinLength: z.int().min(8).max(128),
+})
+
+/** The renderer cannot invoke this transport. Both sides independently pin the origin and routes. */
+export const accountHttpRequestSchema = z
+  .strictObject({
+    url: z.url().max(512),
+    method: z.enum(['GET', 'POST']),
+    headers: z.strictObject({
+      accept: z.literal('application/json'),
+      'content-type': z.literal('application/json').optional(),
+      authorization: z
+        .string()
+        .regex(/^Bearer [^\r\n]+$/)
+        .max(32775)
+        .optional(),
+    }),
+    body: z
+      .instanceof(Uint8Array)
+      .refine((value) => value.byteLength <= 65536)
+      .optional(),
+  })
+  .superRefine((request, ctx) => {
+    const url = new URL(request.url)
+    const paths =
+      request.method === 'GET'
+        ? ['setup', 'me']
+        : [
+            'login',
+            'register',
+            'refresh',
+            'logout',
+            'email/send',
+            'email/verify',
+            'password/forgot',
+            'password/reset',
+          ]
+    if (
+      url.origin !== new URL(ACCOUNT_SERVER).origin ||
+      url.username ||
+      url.password ||
+      url.search ||
+      url.hash ||
+      !paths.some((path) => url.pathname === `/api/auth/${path}`) ||
+      (request.method === 'GET' && request.body !== undefined)
+    )
+      ctx.addIssue({ code: 'custom', message: '账号网络请求未授权' })
+  })
+
 export const offlineWorkspace = { id: 'offline', userId: 0 } as const
 export const workspaceIdentitySchema = z.union([
   z.strictObject({ id: z.literal('offline'), userId: z.literal(0) }),

@@ -153,8 +153,17 @@ async function verify() {
     inspect.prepare('UPDATE account_sessions SET data=? WHERE workspace_id=?').run(savedA, b.id)
     assert.throws(() => store!.accounts.session(b), code('DATA_DECRYPT_FAILED'))
     inspect.prepare('UPDATE account_sessions SET data=? WHERE workspace_id=?').run(savedB, b.id)
+    assert.throws(() => store!.accounts.update(a, 'stale-refresh', { tokens: null }), code('ACCOUNT_SESSION_CHANGED'))
+    const rotated = store.accounts.update(a, session(42).tokens!.refreshToken, { tokens: { ...session(42).tokens!, refreshToken: 'SYNTHETIC-ROTATED-REFRESH' } })
+    assert.equal(rotated.tokens?.refreshToken, 'SYNTHETIC-ROTATED-REFRESH')
+    assert.throws(() => store!.accounts.update(a, session(42).tokens!.refreshToken, { tokens: null }), code('ACCOUNT_SESSION_CHANGED'))
+    inspect.exec("CREATE TRIGGER account_smoke_fail_logout BEFORE DELETE ON account_sessions BEGIN SELECT RAISE(ABORT,'synthetic logout failure'); END")
+    assert.throws(() => store!.accounts.commitTransition(offlineWorkspace, a))
+    assert.equal(store.accounts.active().id, a.id)
+    assert.ok(store.accounts.session(a)?.tokens)
+    inspect.exec('DROP TRIGGER account_smoke_fail_logout')
     inspect.close()
-    store.accounts.forget(a)
+    store.accounts.commitTransition(offlineWorkspace, a)
     assert.equal(store.accounts.active().id, 'offline')
     assert.equal(store.accounts.session(a), null)
     assert.ok(store.accounts.session(b)?.tokens)
@@ -168,6 +177,7 @@ async function verify() {
     store = undefined
     assert.throws(() => new FoundationStore(root, randomBytes(32)), code('DATA_DECRYPT_FAILED'))
     checks.push('跨账号搬移密文不能解密；退出清除本账号会话和缓存，保留业务库及其他账号')
+    checks.push('刷新令牌 CAS 拒绝旧结果；活动空间切换与退出清理在同一 SQLite 事务，中途失败整体回滚')
 
     // A DDL failure must not leave a partially upgraded business database.
     const brokenRoot = join(root, 'migration-failure')

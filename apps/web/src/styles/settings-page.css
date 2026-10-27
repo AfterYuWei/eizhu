@@ -57,6 +57,7 @@
 .desktop-shell .settings-page .settings-stack > .backup-card > [data-slot='button'] { align-self: flex-end; }
 .desktop-shell .settings-page .settings-status { display: inline-flex; align-items: center; flex-shrink: 0; padding: 4px 10px; border: 1px solid var(--edge-soft); border-radius: var(--r-sm); background: var(--bg-active); color: var(--settings-muted); font-size: max(12px, calc(var(--sans-size) - 2px)); }
 .desktop-shell .settings-page .settings-card-footer { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--edge-soft); }
+.desktop-shell .settings-page .account-form-card { width: min(100%, 480px); padding: 16px; }
 .desktop-shell .settings-page .settings-card-toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; padding: 16px; }
 .desktop-shell .settings-page .settings-empty { margin: 0; padding: 20px 16px; color: var(--settings-muted); font-size: max(12px, calc(var(--sans-size) - 2px)); line-height: 1.6; }
 .desktop-shell .settings-page .about-version-value { max-width: 100%; padding: 4px 10px; border-color: var(--border); border-radius: var(--r-sm); background: var(--bg-active); color: var(--fg); font-size: var(--sans-size); line-height: 1.5; overflow-wrap: anywhere; }

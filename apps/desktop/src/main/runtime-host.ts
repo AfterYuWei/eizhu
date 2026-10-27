@@ -1,4 +1,6 @@
 import { cloudRequest } from './cloud-network.ts'
+import { accountRequest } from './account-network.ts'
+import type { Transport } from '@eizhu/core/archive/network'
 import { utilityProcess } from 'electron'
 import type { UtilityProcess, MessagePortMain } from 'electron'
 import { join } from 'node:path'
@@ -14,7 +16,7 @@ export class RuntimeHost {
   private child?: UtilityProcess
   private pending = new Map<string, Pending>()
   private stopping?: Promise<void>
-  onEvent?: (name: 'eizhu-session-message'|'eizhu-sftp-message', payload: unknown) => void
+  onEvent?: (name: 'eizhu-session-message'|'eizhu-sftp-message'|'eizhu-account-message', payload: unknown) => void
   readonly context: RuntimeContext
   workspace: WorkspaceIdentity
   private requestedWorkspace?: WorkspaceIdentity
@@ -22,11 +24,13 @@ export class RuntimeHost {
   private directory: string
   private failed: () => void
   private key: Buffer
-  constructor(root: string, directory: string, generation: number, failed: () => void, key: Buffer, workspace?: WorkspaceIdentity) {
+  private fixtureAccountTransport?: Transport
+  constructor(root: string, directory: string, generation: number, failed: () => void, key: Buffer, workspace?: WorkspaceIdentity, fixtureAccountTransport?: Transport) {
     this.root = root
     this.directory = directory
     this.failed = failed
     this.key = key
+    this.fixtureAccountTransport = fixtureAccountTransport
     this.requestedWorkspace = workspace === undefined ? undefined : validateWorkspace(workspace)
     this.workspace = this.requestedWorkspace ?? offlineWorkspace
     this.context = { runtimeId: randomUUID(), workspaceId: this.workspace.id, generation }
@@ -47,15 +51,18 @@ export class RuntimeHost {
         child.kill()
       }, 30_000)
       child.on('message', (message) => {
-        if (message.type === 'cloud.abort') { this.network.get(message.id)?.abort(); return }
-        if (message.type === 'cloud.request') {
+        if (message.type === 'cloud.abort'||message.type==='account.abort') { if(sameContext(message.context,this.context))this.network.get(message.id)?.abort(); return }
+        if (message.type === 'cloud.request'||message.type==='account.request') {
           if (!sameContext(message.context,this.context) || typeof message.id !== 'string') return
-          if(this.network.size>=8){child.postMessage({type:'cloud.response',id:message.id,error:true});return}
+          const responseType = message.type === 'account.request' ? 'account.response' : 'cloud.response'
+          if(this.network.size>=8||this.network.has(message.id)){child.postMessage({type:responseType,id:message.id,error:true});return}
           const controller = new AbortController(); this.network.set(message.id,controller)
           const timeout = setTimeout(()=>controller.abort(),20000)
-          void cloudRequest(message.request,controller.signal).then(value=>{
-            if(this.child===child)child.postMessage({type:'cloud.response',id:message.id,value})
-          },()=>{if(this.child===child)child.postMessage({type:'cloud.response',id:message.id,error:true})}).finally(()=>{clearTimeout(timeout);this.network.delete(message.id)})
+          const task = message.type === 'account.request' ? accountRequest(message.request, controller.signal, this.fixtureAccountTransport) : cloudRequest(message.request,controller.signal)
+          void task.then(value=>{
+            if(this.child===child)child.postMessage({type:responseType,id:message.id,value})
+            if(responseType==='account.response')value.body.fill(0)
+          },()=>{if(this.child===child)child.postMessage({type:responseType,id:message.id,error:true})}).catch(()=>undefined).finally(()=>{clearTimeout(timeout);this.network.delete(message.id)})
           return
         }
 
@@ -63,9 +70,9 @@ export class RuntimeHost {
           message.type === 'event' &&
           sameContext(message.context, this.context) &&
           isDesktopEvent(message.name) &&
-          ['eizhu-session-message','eizhu-sftp-message'].includes(message.name)
+          ['eizhu-session-message','eizhu-sftp-message','eizhu-account-message'].includes(message.name)
         ) {
-          const parsed = eventSchemas[message.name as 'eizhu-session-message'|'eizhu-sftp-message'].safeParse(message.payload)
+          const parsed = eventSchemas[message.name as 'eizhu-session-message'|'eizhu-sftp-message'|'eizhu-account-message'].safeParse(message.payload)
           if (parsed.success) this.onEvent?.(message.name, parsed.data)
         }
         if (message.type === 'ready') {
@@ -125,7 +132,7 @@ export class RuntimeHost {
         reject(
           new DesktopError({ code: 'REQUEST_TIMEOUT', message: '请求超时，操作结果未知；请检查当前状态' }),
         )
-      }, 30_000)
+      }, operation.startsWith('account.') ? 60_000 : 30_000)
       this.pending.set(id, { resolve: (value) => resolve(value as T), reject, timer })
       this.child!.postMessage({ id, context: this.context, operation, input })
     })

@@ -1,4 +1,3 @@
-import { confirmAccountEditorChange } from '@/lib/accountEditorGuard'
 import { refreshWorkspace } from '@/lib/workspace'
 import { create } from 'zustand'
 import { accountApi } from '@/api/account'
@@ -29,25 +28,25 @@ export const useAccountStore = create<AccountStore>((set) => ({
     }
   },
   login: async (email, password) => {
-    if (!await confirmAccountEditorChange()) return
     set({ loading: true, error: null })
     try {
       const status = await accountApi.login(email, password)
       await refreshWorkspace()
       set({ status, loading: false })
     } catch (cause) {
+      if (isCancelled(cause)) { set({ loading: false, error: null }); return }
       set({ error: errorMessage(cause), loading: false })
       throw cause
     }
   },
   register: async (email, password) => {
-    if (!await confirmAccountEditorChange()) return
     set({ loading: true, error: null })
     try {
       const status = await accountApi.register(email, password)
       await refreshWorkspace()
       set({ status, loading: false })
     } catch (cause) {
+      if (isCancelled(cause)) { set({ loading: false, error: null }); return }
       set({ error: errorMessage(cause), loading: false })
       throw cause
     }
@@ -57,22 +56,23 @@ export const useAccountStore = create<AccountStore>((set) => ({
     try {
       const user = await accountApi.me()
       set((state) => ({
-        status: { loggedIn: true, sessionState: 'authenticated', syncEnabled: state.status?.syncEnabled ?? true, user },
+        status: { loggedIn: true, sessionState: 'authenticated', syncEnabled: state.status?.syncEnabled ?? false, user },
         loading: false,
       }))
     } catch (cause) {
-      set({ error: errorMessage(cause), loading: false })
+      const status = await accountApi.status().catch(() => null)
+      set((state) => ({ status: status ?? state.status, error: errorMessage(cause), loading: false }))
       throw cause
     }
   },
   logout: async () => {
-    if (!await confirmAccountEditorChange()) return
     set({ loading: true, error: null })
     try {
       await accountApi.logout()
       await refreshWorkspace()
       set({ status: { loggedIn: false, sessionState: 'anonymous', syncEnabled: false }, loading: false })
     } catch (cause) {
+      if (isCancelled(cause)) { set({ loading: false, error: null }); return }
       // 空间切换或退出失败时，重新读取真实状态；读取也失败则保留原展示，不能伪造退出成功。
       await refreshWorkspace().catch(() => {})
       const status = await accountApi.status().catch(() => null)
@@ -90,9 +90,14 @@ export const useAccountStore = create<AccountStore>((set) => ({
   },
 }))
 
+function isCancelled(cause: unknown): boolean {
+  const value = cause as { code?: string; error?: { code?: string } }
+  return (value?.code ?? value?.error?.code) === 'CANCELLED'
+}
+
 function errorMessage(cause: unknown): string {
-  const value = cause as { error?: { code?: string; message?: string } }
-  const code = value?.error?.code
+  const value = cause as { code?: string; message?: string; error?: { code?: string; message?: string } }
+  const code = value?.code ?? value?.error?.code
   const known: Record<string, string> = {
     ACCOUNT_INVALID_CREDENTIALS: '邮箱或密码不正确',
     ACCOUNT_EMAIL_TAKEN: '该邮箱已被注册',
@@ -100,5 +105,5 @@ function errorMessage(cause: unknown): string {
     ACCOUNT_NOT_LOGGED_IN: '登录已失效，请重新登录',
     ACCOUNT_QUOTA_EXCEEDED: '账号云存储空间不足',
   }
-  return (code && known[code]) || value?.error?.message || (cause instanceof Error ? cause.message : '账号操作失败')
+  return (code && known[code]) || value?.error?.message || value?.message || '账号操作失败'
 }

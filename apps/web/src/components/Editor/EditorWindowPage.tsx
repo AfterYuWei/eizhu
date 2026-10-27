@@ -2,7 +2,7 @@ import { Loading } from '@/components/ui/loading'
 import { EditorMergeDialog } from './EditorMergeDialog'
 import { EditorSaveAsDialog } from './EditorSaveAsDialog'
 import { isEditorDirty as isDirty,saveBeforeEditorClose,type EditorCloseRequest } from '@/lib/editorCloseGuard'
-import { useCallback,useEffect,useState } from 'react'
+import { useCallback,useEffect,useState,useRef } from 'react'
 import { listen } from '@/lib/bridge'
 import { bridge,desktopBootstrap } from '@/lib/bridge'
 import { FileText } from 'lucide-react'
@@ -40,6 +40,8 @@ export function EditorWindowPage() {
   const saveFile = useEditorStore((state) => state.saveFile)
   const reloadFile = useEditorStore((state) => state.reloadFile)
   const [pendingClose, setPendingClose] = useState<PendingClose | null>(null)
+  const [accountBusy, setAccountBusy] = useState(false)
+  const accountTransition = useRef<string | null>(null)
   const [saveAsId, setSaveAsId] = useState<string | null>(null)
   const [reloadId, setReloadId] = useState<string | null>(null)
   const [closingBusy, setClosingBusy] = useState(false)
@@ -70,6 +72,7 @@ export function EditorWindowPage() {
     let unlistenOpen: (() => void) | undefined
     let unlistenTransition: (() => void) | undefined
     let unlistenAppClose: (() => void) | undefined
+    let unlistenAccount: (() => void) | undefined
 
     void Promise.all([
       listen('eizhu-editor-open-file', ({ payload }) => {
@@ -78,18 +81,28 @@ export function EditorWindowPage() {
       listen('eizhu-app-close-request', handleAppCloseRequest),
       listen('eizhu-editor-transition', ({ payload }) => {
         if (useEditorStore.getState().tabs.some(isDirty)) setPendingClose({ kind: 'workspace', requestId: payload.requestId })
-        else void bridge().editor.resolveTransition( { requestId: payload.requestId, accepted: true }).catch((e) => toast.error(String(e)))
+        else {
+          if (accountTransition.current !== null) setAccountBusy(true)
+          void bridge().editor.resolveTransition( { requestId: payload.requestId, accepted: true }).catch((e) => { setAccountBusy(false); toast.error(String(e)) })
+        }
       }),
-    ]).then(([stopOpen, stopAppClose, stopTransition]) => {
+      listen('eizhu-account-transition', ({ payload }) => {
+        if (payload.phase === 'confirming') accountTransition.current = payload.requestId
+        else if (payload.phase === 'pending') { accountTransition.current = payload.requestId; setAccountBusy(true) }
+        else if (accountTransition.current === null || accountTransition.current === payload.requestId) { accountTransition.current = null; setAccountBusy(false) }
+      }),
+    ]).then(([stopOpen, stopAppClose, stopTransition, stopAccount]) => {
       if (disposed) {
         stopOpen()
         stopAppClose()
         stopTransition()
+        stopAccount()
         return
       }
       unlistenTransition = stopTransition
       unlistenOpen = stopOpen
       unlistenAppClose = stopAppClose
+      unlistenAccount = stopAccount
       return desktopBootstrap()?.window === 'editor' ? bridge().editor.ready() : undefined
     }).catch((error: unknown) => {
       const message = error instanceof Error ? error.message : String(error)
@@ -100,6 +113,7 @@ export function EditorWindowPage() {
       disposed = true
       unlistenOpen?.()
       unlistenAppClose?.()
+      unlistenAccount?.()
       unlistenTransition?.()
     }
   }, [handleAppCloseRequest, openFile])
@@ -167,7 +181,10 @@ export function EditorWindowPage() {
     const request = pendingClose
     if (!request) return
     if (request.kind === 'workspace') {
-      void bridge().editor.resolveTransition( { requestId: request.requestId, accepted: true }).catch((e) => toast.error(String(e)))
+      if (accountTransition.current !== null) setAccountBusy(true)
+      void bridge().editor.resolveTransition( { requestId: request.requestId, accepted: true }).then(() => {
+        setPendingClose((current) => current?.kind === 'workspace' && current.requestId === request.requestId ? null : current)
+      }).catch((e) => { setAccountBusy(false); toast.error(String(e)) })
       return
     }
     if (request.kind === 'application') {
@@ -194,7 +211,9 @@ export function EditorWindowPage() {
         setPendingClose(null)
         await closeFileTab(request.tabId)
       } else if (request.kind === 'workspace') {
+        if (accountTransition.current !== null) setAccountBusy(true)
         await bridge().editor.resolveTransition( { requestId: request.requestId, accepted: true })
+        setPendingClose(null)
       } else if (request.kind === 'application') {
         await resolveAppClose(true, request.requestId)
       } else {
@@ -273,10 +292,10 @@ export function EditorWindowPage() {
                 <CodeEditor
                   content={activeTab.content}
                   language={activeTab.language}
-                  readOnly={activeTab.readOnly}
+                  readOnly={activeTab.readOnly || accountBusy}
                   loading={activeTab.loading}
-                  onChange={(value) => setContent(activeTab.id, value)}
-                  onSave={() => void saveFile(activeTab.id)}
+                  onChange={(value) => { if (!accountBusy) setContent(activeTab.id, value) }}
+                  onSave={() => { if (!accountBusy) void saveFile(activeTab.id) }}
                 />
               )}
             </div>

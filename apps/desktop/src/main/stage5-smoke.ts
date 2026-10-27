@@ -318,7 +318,7 @@ export async function verifyStage5(window: BrowserWindow, runtime: RuntimeHost, 
     }
     assert.equal(
       await window.webContents.executeJavaScript(
-        `document.body.innerText.includes('官方账号、同步和官方云备份待开发')`,
+        `document.body.innerText.includes('第三方云备份无需登录账号')`,
       ),
       true,
     )
@@ -326,7 +326,7 @@ export async function verifyStage5(window: BrowserWindow, runtime: RuntimeHost, 
     await window.webContents.executeJavaScript(`document.querySelector('.settings-page-back').click()`)
     assert.ok(s3Requests > 0)
     const legacy = await window.webContents.executeJavaScript(
-      "Promise.all([window.eizhu.account.status(),window.eizhu.sync.status(),window.eizhu.backup.previewLegacyAccount({password:'synthetic'})].map(p=>p.then(()=>false,e=>e.code==='STAGE_NOT_READY')))",
+      "Promise.all([window.eizhu.account.setSyncEnabled({enabled:true}),window.eizhu.sync.status(),window.eizhu.backup.previewLegacyAccount({password:'synthetic'})].map(p=>p.then(()=>false,e=>e.code==='STAGE_NOT_READY')))",
     )
     assert.deepEqual(legacy, [true, true, true])
     return {

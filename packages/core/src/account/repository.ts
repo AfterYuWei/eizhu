@@ -118,6 +118,27 @@ export class AccountRepository {
     if (identity.id !== 'offline') this.metadata(identity)
     this.db.transaction(() => this.writeActive(identity))()
   }
+  update(
+    identity: WorkspaceIdentity,
+    expectedRefreshToken: string,
+    patch: { user?: AccountSession['user']; tokens?: AccountSession['tokens'] },
+  ): AccountSession {
+    return this.db.transaction(() => {
+      const current = this.session(identity)
+      if (!current?.tokens || current.tokens.refreshToken !== expectedRefreshToken)
+        fail('ACCOUNT_SESSION_CHANGED', '账号会话已变化，请重试')
+      const next = accountSessionSchema.parse({ ...current, ...patch })
+      this.save(identity, next)
+      return next
+    })()
+  }
+  commitTransition(target: WorkspaceIdentity, logoutSource?: WorkspaceIdentity): void {
+    if (logoutSource && target.id !== 'offline') fail('WORKSPACE_INVALID', '退出必须回到离线空间')
+    this.db.transaction(() => {
+      this.activate(target)
+      if (logoutSource) this.forget(logoutSource)
+    })()
+  }
   private writeActive(identity: WorkspaceIdentity): void {
     this.db
       .prepare(

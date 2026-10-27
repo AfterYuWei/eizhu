@@ -6,9 +6,11 @@ import { SftpService } from '../sftp/service.ts'
 import { sftp,isSftpOperation } from '@eizhu/contracts'
 import type { BinaryPort } from '../ssh/stream.ts'
 import { ssh, isSshOperation } from '@eizhu/contracts'
-import { foundation, fail, sameContext, local, isLocalOperation, offlineWorkspace } from '@eizhu/contracts'
+import { foundation, fail, sameContext, local, isLocalOperation, offlineWorkspace, account, isAccountOperation } from '@eizhu/contracts'
 import type { RpcRequest, RuntimeContext, WorkspaceIdentity } from '@eizhu/contracts'
 import { validateWorkspace } from '../account/workspace.ts'
+import { AccountService } from '../account/service.ts'
+import { workerAccountStorage, accountStorage } from '../account/storage.ts'
 import { WorkerClient } from '../workers/client.ts'
 import { ResourceScope } from './scope.ts'
 import { Client } from 'ssh2'
@@ -33,18 +35,24 @@ export class RuntimeService {
   private verification: { root: string; path: string; path3: string; account: string }
   private workspace: WorkspaceIdentity = offlineWorkspace
   private initialized = false
+  private account!: AccountService
+  private emitAccount: (status: import('@eizhu/contracts').AccountStatus) => void
+  private accountTransport: Transport
   readonly context: RuntimeContext
   constructor(
     context: RuntimeContext,
     root: string,
     paths: { database: string; compute: string; verification: string; verification3: string; verificationAccount: string },
     key: Uint8Array,
-    emit: (name: 'eizhu-session-message'|'eizhu-sftp-message', payload: unknown) => void = () => undefined,
+    emit: (name: 'eizhu-session-message'|'eizhu-sftp-message'|'eizhu-account-message', payload: unknown) => void = () => undefined,
     localHome?:string,
     transport:Transport=async()=>fail('CLOUD_UNAVAILABLE','云存储网络不可用'),
     workspace?: WorkspaceIdentity,
+    accountTransport: Transport = async () => fail('ACCOUNT_UNAVAILABLE', '账号网络不可用'),
   ) {
     this.context = context
+    this.accountTransport = accountTransport
+    this.emitAccount = (status) => emit('eizhu-account-message', { workspaceGeneration: this.context.generation, status })
     this.verification = {
       root: join(root, 'stage2-integration'),
       path: paths.verification,
@@ -66,13 +74,17 @@ export class RuntimeService {
     if (this.initialized) fail('RUNTIME_INIT_FAILED', '业务进程已经初始化')
     this.workspace = validateWorkspace(await this.database.call('workspace.identity'))
     this.context.workspaceId = this.workspace.id
+    this.account = new AccountService(workerAccountStorage(this.database), this.accountTransport, this.workspace, this.emitAccount)
+    this.scope.own(() => this.account.close())
     this.initialized = true
     return this.workspace
   }
+  startBackground(): void { this.account.start() }
   async execute(request: RpcRequest): Promise<unknown> {
     if (!this.initialized) fail('RUNTIME_INIT_FAILED', '业务进程尚未初始化')
     if (!sameContext(request.context, this.context)) fail('WORKSPACE_CHANGED', '数据空间已变化，请重试')
     if (this.scope.controller.signal.aborted) fail('RUNTIME_CLOSED', '业务进程正在关闭')
+    if (isAccountOperation(request.operation)) return account[request.operation].output.parse(await this.account.execute(request.operation, request.input))
     if(isArchiveOperation(request.operation)) return archive[request.operation].output.parse(await this.archive.execute(request.operation,request.input))
     if (isSshOperation(request.operation))
       return ssh[request.operation].output.parse(await this.ssh.execute(request.operation, request.input))
@@ -80,6 +92,18 @@ export class RuntimeService {
     if(request.operation==='sftp.authorizeEditor'){const d=request.input as {sessionId:string;path:string};return this.sftp.authorizeEditor(d.sessionId,d.path)}
     if(request.operation==='sftp.downloadPath')return this.sftp.downloadPath((request.input as {taskId:string}).taskId)
     switch (request.operation) {
+      case 'account.authenticate': {
+        const d = request.input as { operation: string; input: unknown }
+        if (!d || (d.operation !== 'account.login' && d.operation !== 'account.register')) fail('BAD_REQUEST', '账号操作无效')
+        return this.account.authenticate(d.operation, d.input)
+      }
+      case 'account.prepareLogout': return this.account.prepareLogout()
+      case 'account.commitTransition': {
+        const d = accountStorage['account.storage.commit'].parse(request.input)
+        if (d.target.id !== this.workspace.id) fail('WORKSPACE_CHANGED', '目标空间尚未打开')
+        await this.database.call('account.storage.commit', d)
+        return this.account.execute('account.status', undefined)
+      }
       case 'runtime.beforeQuit': return this.archive.beforeQuit()
       case 'runtime.health':
         await this.database.call('health')

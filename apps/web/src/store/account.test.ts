@@ -1,10 +1,8 @@
-import { confirmAccountEditorChange } from '@/lib/accountEditorGuard'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { accountApi } from '@/api/account'
 import { useAccountStore } from './account'
 import type { AccountStatus } from '@/types/account'
 
-vi.mock('@/lib/accountEditorGuard', () => ({ confirmAccountEditorChange: vi.fn().mockResolvedValue(true) }))
 
 vi.mock('@/lib/workspace', () => ({ refreshWorkspace: vi.fn().mockResolvedValue(undefined) }))
 
@@ -60,14 +58,24 @@ describe('account store', () => {
 
 })
 
-it('account changes are cancelled before authentication or workspace mutation when editor declines', async () => {
-  vi.mocked(confirmAccountEditorChange).mockResolvedValueOnce(false).mockResolvedValueOnce(false).mockResolvedValueOnce(false)
+it('main-process cancellation preserves the current account without showing a failure', async () => {
+  const cancelled = { code: 'CANCELLED', message: '已取消账号切换' }
+  vi.mocked(accountApi.login).mockRejectedValueOnce(cancelled)
+  vi.mocked(accountApi.register).mockRejectedValueOnce(cancelled)
+  vi.mocked(accountApi.logout).mockRejectedValueOnce(cancelled)
   useAccountStore.setState({ status: loggedIn })
   await useAccountStore.getState().login('email', 'password')
   await useAccountStore.getState().register('email', 'password')
   await useAccountStore.getState().logout()
-  expect(accountApi.login).not.toHaveBeenCalled()
-  expect(accountApi.register).not.toHaveBeenCalled()
-  expect(accountApi.logout).not.toHaveBeenCalled()
+  expect(accountApi.login).toHaveBeenCalledTimes(1)
+  expect(accountApi.register).toHaveBeenCalledTimes(1)
+  expect(accountApi.logout).toHaveBeenCalledTimes(1)
   expect(useAccountStore.getState().status).toEqual(loggedIn)
+  expect(useAccountStore.getState().error).toBeNull()
+})
+
+it('displays normalized errors crossing contextBridge as plain failure DTOs', async () => {
+  vi.mocked(accountApi.login).mockRejectedValueOnce({ code: 'ACCOUNT_SETUP_REQUIRED', message: '账号服务尚未初始化' })
+  await expect(useAccountStore.getState().login('u@example.com', 'password')).rejects.toBeDefined()
+  expect(useAccountStore.getState().error).toBe('账号服务尚未初始化')
 })

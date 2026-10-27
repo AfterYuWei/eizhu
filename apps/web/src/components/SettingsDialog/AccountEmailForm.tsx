@@ -25,8 +25,8 @@ export function AccountEmailForm({ purpose, email: initialEmail = '', onComplete
     lock.current = true; setBusy(true); setError(''); setMessage('')
     try { await action() }
     catch (cause) {
-      const value = cause as { error?: { message?: string } }
-      setError(value?.error?.message || (cause instanceof Error ? cause.message : '账号操作失败'))
+      const value = cause as { message?: string; error?: { message?: string } }
+      setError(value?.error?.message || value?.message || '账号操作失败')
     } finally { lock.current = false; setBusy(false) }
   }
   const send = () => void run(async () => {
@@ -40,6 +40,7 @@ export function AccountEmailForm({ purpose, email: initialEmail = '', onComplete
     event.preventDefault()
     void run(async () => {
       if (!verify && password !== confirm) { setError('两次输入的密码不一致'); return }
+      if (!verify && new TextEncoder().encode(password).byteLength > 72) { setError('登录密码不能超过 72 个 UTF-8 字节'); return }
       if (verify) await accountApi.verifyEmail(code)
       else await accountApi.resetPassword(email.trim(), code, password)
       setCode(''); setPassword(''); setConfirm('')
@@ -48,7 +49,7 @@ export function AccountEmailForm({ purpose, email: initialEmail = '', onComplete
   }
   return <form className="backup-card account-form-card" onSubmit={submit}>
     <h3>{verify ? '验证邮箱' : '找回登录密码'}</h3>
-    <p className="settings-field-desc">{verify ? '验证后可使用云同步和官方备份。' : '仅重置账号登录密码，无法恢复同步密码、备份密码或解密云端数据。'}</p>
+    <p className="settings-field-desc">{verify ? '验证邮箱用于账号条目同步。条目同步将在后续批次开放。' : '仅重置账号登录密码，无法恢复同步密码、备份密码或解密云端数据。'}</p>
     <div className="account-form-field"><Label htmlFor={`email-${purpose}`}>邮箱</Label><Input id={`email-${purpose}`} type="email" value={email} readOnly={verify} onChange={(e) => setEmail(e.target.value)} required /></div>
     <Button type="button" variant="outline" disabled={busy} onClick={send}>发送验证码</Button>
     <div className="account-form-field"><Label htmlFor={`code-${purpose}`}>验证码</Label><Input id={`code-${purpose}`} value={code} onChange={(e) => setCode(e.target.value)} inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} required /></div>

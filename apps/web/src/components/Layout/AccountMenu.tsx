@@ -46,7 +46,7 @@ export function AccountMenu({ onSettings }: { onSettings: (tab: SettingsTab) => 
       <DropdownMenuItem onSelect={() => openSettings('sync')}><CloudSync />云同步
         {cloud && sync && <span className="ml-auto text-xs text-muted-foreground">{sync.conflictCount ? `${sync.conflictCount} 个冲突` : SYNC_STATUS_LABELS[sync.status] ?? sync.status}</span>}
       </DropdownMenuItem>
-      <DropdownMenuItem onSelect={() => openSettings('account')}><UserRound />账号<span className="ml-auto text-xs text-muted-foreground">开发中</span></DropdownMenuItem>
+      <DropdownMenuItem onSelect={() => openSettings('account')}><UserRound />账号<span className="ml-auto text-xs text-muted-foreground">{account?.loggedIn ? account.sessionState === 'reauth_required' ? '需登录' : '已登录' : '未登录'}</span></DropdownMenuItem>
       <DropdownMenuSeparator />
       <DropdownMenuItem onSelect={() => openSettings('about')}><Info />关于 eizhu</DropdownMenuItem>
     </DropdownMenuContent>

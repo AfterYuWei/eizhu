@@ -42,6 +42,8 @@ type FoundationClient = {
   }
 }
 export interface DesktopEvents {
+  'eizhu-account-message': { workspaceGeneration: number; status: import('./account.ts').AccountStatus }
+  'eizhu-account-transition': { requestId: string; phase: 'confirming' | 'pending' | 'idle' }
   'eizhu-update-progress': import('./update.ts').UpdateProgress
   'eizhu-workspace-changed': WorkspaceStatus
   'eizhu-sync-message': { workspaceGeneration: number; status: SyncStatus }
