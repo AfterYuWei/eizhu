@@ -6,6 +6,11 @@ import { accountSessionSchema } from './repository.ts'
 import type { AccountSession } from './repository.ts'
 
 export const accountStorage = {
+  'account.storage.acceptLogin': z.strictObject({
+    workspace: workspaceIdentitySchema,
+    user: accountUserSchema,
+    tokens: accountSessionSchema.shape.tokens.unwrap(),
+  }),
   'account.storage.session': workspaceIdentitySchema,
   'account.storage.save': z.strictObject({
     workspace: workspaceIdentitySchema,
@@ -26,6 +31,11 @@ export interface AccountStorage {
   status(): Promise<AccountStatus>
   session(workspace: WorkspaceIdentity): Promise<AccountSession | null>
   save(workspace: WorkspaceIdentity, session: AccountSession): Promise<void>
+  acceptLogin(
+    workspace: WorkspaceIdentity,
+    user: AccountSession['user'],
+    tokens: NonNullable<AccountSession['tokens']>,
+  ): Promise<AccountSession>
   update(
     workspace: WorkspaceIdentity,
     expectedRefreshToken: string,
@@ -37,6 +47,8 @@ export function workerAccountStorage(worker: WorkerClient): AccountStorage {
     status: () => worker.call('account.storage.status'),
     session: (workspace) => worker.call('account.storage.session', workspace),
     save: (workspace, session) => worker.call('account.storage.save', { workspace, session }),
+    acceptLogin: (workspace, user, tokens) =>
+      worker.call('account.storage.acceptLogin', { workspace, user, tokens }),
     update: (workspace, expectedRefreshToken, patch) =>
       worker.call('account.storage.update', { workspace, expectedRefreshToken, ...patch }),
   }

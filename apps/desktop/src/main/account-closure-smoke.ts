@@ -243,8 +243,8 @@ export async function verifyAccountClosure(
     ),
     false,
   )
-  await expectCode('window.eizhu.sync.status()', 'STAGE_NOT_READY')
-  await expectCode('window.eizhu.account.setSyncEnabled({enabled:true})', 'STAGE_NOT_READY')
+  assert.equal((await js<{initialized:boolean}>('window.eizhu.sync.status()')).initialized,false)
+  assert.equal((await js<{syncEnabled:boolean}>('window.eizhu.account.setSyncEnabled({enabled:false})')).syncEnabled,false)
   await js('window.eizhu.account.logout()')
   await js(`window.eizhu.group.delete({id:${JSON.stringify(sentinel.id)}})`)
   if (await js(`Boolean(document.querySelector('.settings-page-back'))`))
@@ -271,7 +271,7 @@ export async function verifyAccountClosure(
     offlineRestart: true,
     accountIsolation: true,
     publicTokenRedaction: true,
-    syncRemainsReserved: true,
+    syncRequiresConfirmation: true,
     screenshots: ['account-login-light.png', 'account-signed-in-dark.png', 'account-signed-in-narrow.png'],
   }
 }

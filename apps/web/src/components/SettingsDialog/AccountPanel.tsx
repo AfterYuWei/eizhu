@@ -1,12 +1,15 @@
+import { runDesktopAction } from '@/lib/desktopActions'
 import { UserRound } from 'lucide-react'
 import { useRef, useState, type FormEvent } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { useSyncStore } from '@/store/sync'
 import { useAccountStore } from '@/store/account'
 import { AccountEmailForm } from './AccountEmailForm'
 
 export function AccountPanel() {
+  const syncInitialized = useSyncStore(state=>state.status?.initialized)
   const { status, loading, error, login, register, logout, refresh } = useAccountStore()
   const [mode, setMode] = useState<'login' | 'register' | 'reset' | 'verify' | null>(null)
   const [email, setEmail] = useState(status?.user?.email ?? '')
@@ -244,10 +247,10 @@ export function AccountPanel() {
           <div className="settings-field-info">
             <span className="settings-field-label">账号条目同步</span>
             <p className="settings-field-desc">
-              条目同步与首次接入预览将在后续批次开放。当前不上传本地数据，原离线空间仍保留；完整版本与第三方备份独立使用。
+              首次接入会预览离线与云端数据，确认前不上传本地条目。完整版本与第三方备份独立使用。
             </p>
           </div>
-          <span className="settings-status">待接入</span>
+          <Button size="sm" variant="outline" onClick={()=>runDesktopAction('sync-settings')}>{loggedIn && !syncInitialized ? '开始同步接入' : '同步设置'}</Button>
         </div>
       </div>
     </section>

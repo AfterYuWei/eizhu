@@ -29,7 +29,7 @@ test('account network permits only fixed-origin auth routes and never exposes ad
   assert.equal(accountHttpRequestSchema.safeParse({ ...request, method: 'POST', url: 'https://eizhu.yuweinfo.com/api/auth/setup' }).success, false)
   assert.equal(accountHttpRequestSchema.safeParse({ ...request, headers: { ...request.headers, host: 'other.invalid' } }).success, false)
   assert.equal(isAccountOperation('account.login'), true)
-  assert.equal(isAccountOperation('account.setSyncEnabled'), false)
+  assert.equal(isAccountOperation('account.setSyncEnabled'), true)
 })
 test('account schemas reject unsafe identities, leaked tokens and contradictory session states', () => {
   const value = { loggedIn: true, sessionState: 'reauth_required', user, syncEnabled: true }

@@ -44,6 +44,7 @@ export function SnippetDialog({ open, onOpenChange }: { open: boolean; onOpenCha
       .finally(() => { if (active) setLoading(false) })
     return () => { active = false }
   }, [open, attempt])
+  useEffect(() => {const refresh=()=>setAttempt(value=>value+1);window.addEventListener('eizhu-items-changed',refresh);return()=>window.removeEventListener('eizhu-items-changed',refresh)},[])
   const save = async () => {
     if (!draft?.name.trim() || !draft.content.trim()) throw new Error('请填写片段名称和内容')
     const payload = { name: draft.name.trim(), content: draft.content, description: draft.description, tags: draft.tags.split(/[,，]/).map((s) => s.trim()).filter(Boolean) }

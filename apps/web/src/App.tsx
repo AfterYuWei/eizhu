@@ -35,14 +35,15 @@ function App() {
                 useSyncStore.setState({ status: payload.status });
                 if (payload.status.conflictCount !== previous?.conflictCount || (payload.status.conflictCount > 0 && payload.status.cursor !== previous?.cursor))
                     void useSyncStore.getState().refresh();
-                if (payload.status.cursor !== previous?.cursor) {
+                if (payload.refresh || payload.status.cursor !== previous?.cursor) {
                     void useProfileStore.getState().refreshAll();
                     void useVaultStore.getState().fetchList();
+                    window.dispatchEvent(new Event('eizhu-items-changed'));
                 }
             }),
         ]).then((unlisten) => { if (disposed)
             unlisten.forEach((fn) => fn()); return unlisten; }).catch(() => []);
-        const online = () => { void import('@/api/sync').then(({ syncApi }) => syncApi.syncNow()).catch(() => { }); };
+        const online = () => { const status=useSyncStore.getState().status;if(status?.status!=='offline'&&status?.lastErrorCode!=='ACCOUNT_UNAVAILABLE')return;void import('@/api/sync').then(({ syncApi }) => syncApi.syncNow()).catch(() => { }); };
         window.addEventListener('online', online);
         return () => { disposed = true; window.removeEventListener('online', online); void listeners.then((unlisten) => unlisten.forEach((fn) => fn())); };
     }, []);

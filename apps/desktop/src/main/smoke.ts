@@ -9,6 +9,7 @@ import { join } from 'node:path'
 import { writeFile } from 'node:fs/promises'
 import assert from 'node:assert/strict'
 import { verifyAccountFoundation } from './account-foundation-smoke.ts'
+import { verifySyncDesktop } from './sync-smoke.ts'
 import { verifyAccountClosure } from './account-closure-smoke.ts'
 import type { Windows } from './windows.ts'
 import type { RuntimeHost } from './runtime-host.ts'
@@ -16,14 +17,14 @@ import type { AccountFixture } from './account-fixture-server.ts'
 import updater from 'electron-updater'
 
 async function shown(window: BrowserWindow): Promise<void> {
-  if (window.isVisible()) return
-  await new Promise<void>((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error('Renderer bootstrap timed out')), 30000)
-    window.once('show', () => {
-      clearTimeout(timer)
-      resolve()
-    })
-  })
+  // macOS can report a visible window without delivering the one-shot show event to this waiter.
+  // Still require the real native visibility state; renderer readiness is checked immediately below.
+  for (let attempt = 0; attempt < 600; attempt++) {
+    if (window.isDestroyed()) throw new Error('Smoke window closed before readiness')
+    if (window.isVisible()) return
+    await new Promise((resolve) => setTimeout(resolve, 50))
+  }
+  throw new Error('Renderer bootstrap timed out')
 }
 async function prepareCapture(window: BrowserWindow, theme: 'light' | 'dark'): Promise<void> {
   let timer: ReturnType<typeof setTimeout> | undefined
@@ -79,7 +80,7 @@ export async function runSmoke(options: {
     node: typeof process, require: typeof require, bridge: typeof window.eizhu.app.bootstrap,
     health: await window.eizhu.runtime.health(), text: document.body.innerText.includes('新建连接'),
     account: await window.eizhu.account.status(),
-    reserved: await window.eizhu.sync.status().then(() => 'unexpected-success', e => e.code),
+    reserved: await window.eizhu.backup.previewLegacyAccount({password:'synthetic'}).then(() => 'unexpected-success', e => e.code),
     local: await window.eizhu.group.list(),
     arbitraryPath: await window.eizhu.backup.preview({ filePath: '/etc/passwd' }).then(() => 'unexpected-success', e => e.code),
     inputValidation: await window.eizhu.settings.write({ key: 'credential', value: 'synthetic' }).then(() => 'unexpected-success', e => e.code)
@@ -120,6 +121,9 @@ export async function runSmoke(options: {
   const accountFoundation = await verifyAccountFoundation(options.runtime(), options.assets)
   assert.equal(accountFoundation.passed, true)
   step('account-foundation-native-passed')
+  const syncEngine=await options.runtime().call<{passed:boolean}>('runtime.verifySyncEngine',{fixtures:process.env.EIZHU_SMOKE_FIXTURES})
+  assert.equal(syncEngine.passed,true)
+  step('sync-engine-native-passed')
   const stage3=await verifyStage3(window,options.runtime(),root)
   const stage3Storage=await options.runtime().call<{passed:boolean}>('runtime.verifyStage3Storage')
   assert.equal(stage3Storage.passed,true)
@@ -131,6 +135,8 @@ export async function runSmoke(options: {
   assert.ok(options.accountFixture)
   const accountClosure = await verifyAccountClosure(window, windows, options.accountFixture, root, options.assets)
   step('account-closure-passed')
+  const syncDesktop=await verifySyncDesktop(window,windows,options.accountFixture,root)
+  step('sync-desktop-passed')
   // An occluded smoke window can suspend animation frames. Keep only this test window drawing.
   // This setting is limited to this synthetic smoke window; normal application throttling is unchanged.
   window.webContents.backgroundThrottling = false
@@ -279,6 +285,8 @@ export async function runSmoke(options: {
     stage2,
     accountFoundation,
     accountClosure,
+    syncEngine,
+    syncDesktop,
     stage3,
     stage3Storage,
     stage4,
@@ -298,7 +306,7 @@ export async function runSmoke(options: {
     monaco,
     firstWindowMs,
     processMetrics: app.getAppMetrics().map(({ type, memory, cpu }) => ({ type, memory, cpu })),
-    screenshots: ['home-light.png', 'home-dark.png', 'editor-empty.png', ...workspaceTabs.screenshots, ...accountClosure.screenshots],
+    screenshots: ['home-light.png', 'home-dark.png', 'editor-empty.png', ...workspaceTabs.screenshots, ...accountClosure.screenshots, ...syncDesktop.screenshots],
     screenshotContrast,
   }
   await writeFile(join(root, 'smoke.json'), JSON.stringify(report, null, 2))

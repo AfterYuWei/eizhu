@@ -139,6 +139,35 @@ export class AccountRepository {
       if (logoutSource) this.forget(logoutSource)
     })()
   }
+  syncSettings(
+    identity: WorkspaceIdentity,
+    patch: { syncEnabled?: boolean; cachedSyncKey?: AccountSession['cachedSyncKey'] },
+  ): void {
+    this.db.transaction(() => {
+      const current = this.session(identity)
+      if (!current) fail('ACCOUNT_NOT_LOGGED_IN', '请先登录账号')
+      this.save(identity, { ...current, ...patch })
+    })()
+  }
+  acceptLogin(
+    identity: WorkspaceIdentity,
+    user: AccountSession['user'],
+    tokens: NonNullable<AccountSession['tokens']>,
+  ): AccountSession {
+    return this.db.transaction(() => {
+      let current: AccountSession | null = null
+      const exists = this.db.prepare('SELECT 1 FROM accounts WHERE id=?').get(identity.id)
+      if (exists) current = this.session(identity)
+      const next = accountSessionSchema.parse({
+        ...current,
+        user,
+        tokens,
+        syncEnabled: current?.syncEnabled ?? false,
+      })
+      this.save(identity, next)
+      return next
+    })()
+  }
   private writeActive(identity: WorkspaceIdentity): void {
     this.db
       .prepare(

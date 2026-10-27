@@ -326,7 +326,7 @@ export async function verifyStage5(window: BrowserWindow, runtime: RuntimeHost, 
     await window.webContents.executeJavaScript(`document.querySelector('.settings-page-back').click()`)
     assert.ok(s3Requests > 0)
     const legacy = await window.webContents.executeJavaScript(
-      "Promise.all([window.eizhu.account.setSyncEnabled({enabled:true}),window.eizhu.sync.status(),window.eizhu.backup.previewLegacyAccount({password:'synthetic'})].map(p=>p.then(()=>false,e=>e.code==='STAGE_NOT_READY')))",
+      "Promise.all([window.eizhu.account.setSyncEnabled({enabled:true}).then(()=>false,e=>e.code==='ACCOUNT_NOT_LOGGED_IN'),window.eizhu.sync.status().then(s=>!s.initialized),window.eizhu.backup.previewLegacyAccount({password:'synthetic'}).then(()=>false,e=>e.code==='STAGE_NOT_READY')])",
     )
     assert.deepEqual(legacy, [true, true, true])
     return {

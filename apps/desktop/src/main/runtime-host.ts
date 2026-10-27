@@ -1,3 +1,6 @@
+import { SyncEventRelay } from '@eizhu/core/sync/relay'
+import { syncEventStream } from './sync-events.ts'
+import type { EventStream } from '@eizhu/core/sync/service'
 import { cloudRequest } from './cloud-network.ts'
 import { accountRequest } from './account-network.ts'
 import type { Transport } from '@eizhu/core/archive/network'
@@ -16,7 +19,7 @@ export class RuntimeHost {
   private child?: UtilityProcess
   private pending = new Map<string, Pending>()
   private stopping?: Promise<void>
-  onEvent?: (name: 'eizhu-session-message'|'eizhu-sftp-message'|'eizhu-account-message', payload: unknown) => void
+  onEvent?: (name: 'eizhu-session-message'|'eizhu-sftp-message'|'eizhu-account-message'|'eizhu-sync-message', payload: unknown) => void
   readonly context: RuntimeContext
   workspace: WorkspaceIdentity
   private requestedWorkspace?: WorkspaceIdentity
@@ -24,8 +27,10 @@ export class RuntimeHost {
   private directory: string
   private failed: () => void
   private key: Buffer
+  private events:SyncEventRelay
   private fixtureAccountTransport?: Transport
-  constructor(root: string, directory: string, generation: number, failed: () => void, key: Buffer, workspace?: WorkspaceIdentity, fixtureAccountTransport?: Transport) {
+  constructor(root: string, directory: string, generation: number, failed: () => void, key: Buffer, workspace?: WorkspaceIdentity, fixtureAccountTransport?: Transport, fixtureEventStream?:EventStream) {
+    this.events=new SyncEventRelay(message=>this.child?.postMessage({...message as object,context:this.context}),fixtureEventStream??syncEventStream)
     this.root = root
     this.directory = directory
     this.failed = failed
@@ -51,6 +56,13 @@ export class RuntimeHost {
         child.kill()
       }, 30_000)
       child.on('message', (message) => {
+        if (['sync.events.open','sync.events.ack','sync.events.abort'].includes(message.type)) {
+          if(!sameContext(message.context,this.context)||typeof message.id!=='string')return
+          if(message.type==='sync.events.open')this.events.open(message.id,message.request)
+          else if(message.type==='sync.events.ack')this.events.acknowledge(message.id,message.sequence)
+          else this.events.abort(message.id)
+          return
+        }
         if (message.type === 'cloud.abort'||message.type==='account.abort') { if(sameContext(message.context,this.context))this.network.get(message.id)?.abort(); return }
         if (message.type === 'cloud.request'||message.type==='account.request') {
           if (!sameContext(message.context,this.context) || typeof message.id !== 'string') return
@@ -70,9 +82,9 @@ export class RuntimeHost {
           message.type === 'event' &&
           sameContext(message.context, this.context) &&
           isDesktopEvent(message.name) &&
-          ['eizhu-session-message','eizhu-sftp-message','eizhu-account-message'].includes(message.name)
+          ['eizhu-session-message','eizhu-sftp-message','eizhu-account-message','eizhu-sync-message'].includes(message.name)
         ) {
-          const parsed = eventSchemas[message.name as 'eizhu-session-message'|'eizhu-sftp-message'|'eizhu-account-message'].safeParse(message.payload)
+          const parsed = eventSchemas[message.name as 'eizhu-session-message'|'eizhu-sftp-message'|'eizhu-account-message'|'eizhu-sync-message'].safeParse(message.payload)
           if (parsed.success) this.onEvent?.(message.name, parsed.data)
         }
         if (message.type === 'ready') {
@@ -132,7 +144,7 @@ export class RuntimeHost {
         reject(
           new DesktopError({ code: 'REQUEST_TIMEOUT', message: '请求超时，操作结果未知；请检查当前状态' }),
         )
-      }, operation.startsWith('account.') ? 60_000 : 30_000)
+      }, (operation.startsWith('account.')||operation.startsWith('sync.')) ? 60_000 : 30_000)
       this.pending.set(id, { resolve: (value) => resolve(value as T), reject, timer })
       this.child!.postMessage({ id, context: this.context, operation, input })
     })
@@ -157,6 +169,7 @@ export class RuntimeHost {
     this.pending.clear()
     for(const controller of this.network.values())controller.abort()
     this.network.clear()
+    void this.events.close()
   }
   close(): Promise<void> {
     if (this.stopping) return this.stopping
@@ -165,7 +178,7 @@ export class RuntimeHost {
         this.stopping = undefined
         throw cause
       })
-      .finally(() => this.rejectPending())
+      .finally(async () => {this.rejectPending();await this.events.close()})
     return this.stopping
   }
 }

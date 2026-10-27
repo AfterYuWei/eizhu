@@ -72,3 +72,67 @@ export const syncSnapshotPageSchema = z.strictObject({
   offset: integer,
   hasMore: z.boolean(),
 })
+
+/** Internal fixed-origin finite sync transport. SSE has its own flow-controlled channel. */
+export const syncHttpRequestSchema = z
+  .strictObject({
+    url: z.url().max(768),
+    method: z.enum(['GET', 'POST', 'PUT']),
+    headers: z.strictObject({
+      accept: z.literal('application/json'),
+      'content-type': z.literal('application/json').optional(),
+      authorization: z
+        .string()
+        .regex(/^Bearer [^\r\n]+$/)
+        .max(32775),
+    }),
+    body: z
+      .instanceof(Uint8Array)
+      .refine((v) => v.byteLength <= 50 * 1024 * 1024)
+      .optional(),
+  })
+  .superRefine((request, ctx) => {
+    const url = new URL(request.url),
+      base = '/api/sync/v2/',
+      route = url.pathname.slice(base.length)
+    const uuid = '[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}'
+    const allowed =
+      request.method === 'GET'
+        ? ['capabilities', 'keys', 'changes'].includes(route) ||
+          new RegExp(`^(snapshots|requests)/${uuid}$`).test(route)
+        : request.method === 'PUT'
+          ? route === 'keys'
+          : ['devices', 'snapshots', 'push'].includes(route)
+    const params = [...url.searchParams]
+    const query =
+      route === 'changes'
+        ? params.every(
+            ([k, v]) =>
+              ['after', 'until'].includes(k) &&
+              /^(0|[1-9][0-9]*)$/.test(v) &&
+              Number.isSafeInteger(Number(v)),
+          )
+        : route.startsWith('snapshots/')
+          ? params.every(
+              ([k, v]) => k === 'offset' && /^(0|[1-9][0-9]*)$/.test(v) && Number.isSafeInteger(Number(v)),
+            )
+          : params.length === 0
+    if (
+      url.origin !== 'https://eizhu.yuweinfo.com' ||
+      !url.pathname.startsWith(base) ||
+      url.username ||
+      url.password ||
+      url.hash ||
+      !allowed ||
+      !query ||
+      new Set(params.map(([k]) => k)).size !== params.length ||
+      (request.method === 'GET' && request.body !== undefined)
+    )
+      ctx.addIssue({ code: 'custom', message: '同步网络请求未授权' })
+  })
+export const syncEventRequestSchema = z.strictObject({
+  authorization: z
+    .string()
+    .regex(/^Bearer [^\r\n]+$/)
+    .max(32775),
+})

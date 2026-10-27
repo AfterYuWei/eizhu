@@ -47,6 +47,7 @@ export const syncConflictSchema = z.strictObject({
   remoteRevision: integer,
   localDeleted: z.boolean(),
   remoteDeleted: z.boolean(),
+  remoteSource: z.enum(['cloud', 'offline']).optional(),
   local: syncSummarySchema.nullable().optional(),
   remote: syncSummarySchema.nullable().optional(),
 })
@@ -80,10 +81,12 @@ export const syncPreviewSchema = z.strictObject({
   accountCount: integer,
   cloudCount: integer,
   conflictCount: integer,
+  conflicts: z.array(syncConflictSchema).max(10000).optional(),
 })
 export const syncMessageSchema = z.strictObject({
   workspaceGeneration: z.int().positive(),
   status: syncStatusSchema,
+  refresh: z.boolean().optional(),
 })
 const password = z.string().min(6).max(1024)
 export const sync = {
@@ -107,6 +110,10 @@ export const sync = {
     output: z.void(),
   },
 } as const
+export type SyncOperation = keyof typeof sync
+export function isSyncOperation(value: string): value is SyncOperation {
+  return Object.hasOwn(sync, value)
+}
 export type SyncStatus = z.infer<typeof syncStatusSchema>
 export type ItemSyncStatus = SyncStatus['items'][number]
 export type SyncConflict = z.infer<typeof syncConflictSchema>

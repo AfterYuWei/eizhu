@@ -7,6 +7,7 @@ import type { Payload } from '../local/model.ts'
 import { FoundationStore } from './store.ts'
 import { answerWorker } from '../workers/client.ts'
 import { accountStorage } from '../account/storage.ts'
+import { accountSessionSchema } from '../account/repository.ts'
 
 const { root, key, workspace } = z
   .strictObject({ root: z.string().min(1), key: z.instanceof(Uint8Array), workspace: workspaceIdentitySchema.optional() })
@@ -34,6 +35,10 @@ parentPort!.on('message', async (message) => {
       case 'account.storage.save': {
         const d = accountStorage['account.storage.save'].parse(input)
         return store.accounts.save(d.workspace, d.session)
+      }
+      case 'account.storage.acceptLogin': {
+        const d = accountStorage['account.storage.acceptLogin'].parse(input)
+        return store.accounts.acceptLogin(d.workspace, d.user, d.tokens)
       }
       case 'account.storage.update': {
         const d = accountStorage['account.storage.update'].parse(input)
@@ -65,6 +70,11 @@ parentPort!.on('message', async (message) => {
         clearInterval(historySweep)
         return store.close()
       default:
+        if (operation === 'account.storage.syncSettings') {
+          const d = z.strictObject({syncEnabled:z.boolean().optional(),cachedSyncKey:accountSessionSchema.shape.cachedSyncKey}).parse(input)
+          return store.accounts.syncSettings(store.identity, d)
+        }
+        if (operation.startsWith('sync.storage.')) return store.sync.execute(operation, input)
         if(operation.startsWith('archive.')) return archiveStore.execute(operation,input)
         if(isArchiveOperation(operation)) return archive[operation].output.parse(archiveStore.execute(operation,archive[operation].input.parse(input)))
         if(operation.startsWith('sftp.storage.'))return store.local.transferState(operation,input)

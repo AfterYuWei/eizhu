@@ -46,7 +46,7 @@ export interface DesktopEvents {
   'eizhu-account-transition': { requestId: string; phase: 'confirming' | 'pending' | 'idle' }
   'eizhu-update-progress': import('./update.ts').UpdateProgress
   'eizhu-workspace-changed': WorkspaceStatus
-  'eizhu-sync-message': { workspaceGeneration: number; status: SyncStatus }
+  'eizhu-sync-message': { workspaceGeneration: number; status: SyncStatus; refresh?: boolean }
   'eizhu-session-message': (
     | SessionMessage
     | {

@@ -48,6 +48,10 @@ function storage(identity: WorkspaceIdentity, initial?: AccountSession) {
         throw new DesktopError({ code: 'ACCOUNT_NOT_FOUND', message: 'missing synthetic account' })
       return structuredClone(rows.get(workspace.id)!)
     },
+    acceptLogin: async (workspace, user, tokens) => {
+      const current=rows.get(workspace.id),next={...current,user,tokens,syncEnabled:current?.syncEnabled??false}
+      rows.set(workspace.id,structuredClone(next));return structuredClone(next)
+    },
     save: async (workspace, value) => {
       rows.set(workspace.id, structuredClone(value))
     },

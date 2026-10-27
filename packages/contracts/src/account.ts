@@ -53,9 +53,9 @@ export const account = {
   'account.setSyncEnabled': { input: z.strictObject({ enabled: z.boolean() }), output: accountStatusSchema },
 } as const
 
-export type AccountOperation = Exclude<keyof typeof account, 'account.setSyncEnabled'>
+export type AccountOperation = keyof typeof account
 export function isAccountOperation(value: string): value is AccountOperation {
-  return value !== 'account.setSyncEnabled' && Object.hasOwn(account, value)
+  return Object.hasOwn(account, value)
 }
 export const accountMessageSchema = z.strictObject({
   workspaceGeneration: z.int().positive(),

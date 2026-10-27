@@ -77,6 +77,7 @@ export function SnippetQuickPicker({ target, onClose, onManage }: Props) {
     else input.current?.focus()
   }, [preview])
 
+  useEffect(() => {const refresh=()=>setAttempt(value=>value+1);window.addEventListener('eizhu-items-changed',refresh);return()=>window.removeEventListener('eizhu-items-changed',refresh)},[])
   const copy = async (snippet: Snippet) => {
     if (copyPending.current || generation !== workspaceGeneration()) return
     copyPending.current = true

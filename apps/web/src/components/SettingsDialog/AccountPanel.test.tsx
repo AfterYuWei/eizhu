@@ -55,13 +55,13 @@ it('locks duplicate submissions and clears credential inputs after the account a
   await act(async () => finish(signedIn))
   expect(host.querySelector('input[type="password"]')).toBeNull()
   expect(host.textContent).toContain('已登录')
-  expect(host.textContent).toContain('待接入')
+  expect(host.textContent).toContain('首次接入')
   expect(accountApi.setSyncEnabled).not.toHaveBeenCalled()
 })
 
-it('retains account identity while requesting reauthentication and explains deferred item sync', async () => {
+it('retains account identity while requesting reauthentication and explains initial sync confirmation', async () => {
   await act(async () => useAccountStore.setState({ status: { ...signedIn, sessionState: 'reauth_required' } }))
   expect(host.textContent).toContain('账号空间和本地修改仍保留')
   expect([...host.querySelectorAll('button')].some((button) => button.textContent === '重新登录')).toBe(true)
-  expect(host.textContent).toContain('当前不上传本地数据')
+  expect(host.textContent).toContain('确认前不上传本地条目')
 })

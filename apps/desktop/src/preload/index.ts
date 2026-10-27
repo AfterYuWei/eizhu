@@ -22,6 +22,7 @@ import {
   acceptWorkspaceTransition,
   account,
   isAccountOperation,
+  sync, isSyncOperation,
 } from '@eizhu/contracts'
 import type { Bootstrap, DesktopApi, DesktopEvents, RuntimeContext } from '@eizhu/contracts'
 
@@ -74,8 +75,8 @@ ipcRenderer.on('eizhu:event', (_event, envelope) => {
 
 async function call(operation: string, input?: unknown): Promise<unknown> {
   await initial
-  if (!isFoundationOperation(operation) && !isLocalOperation(operation) && !isSshOperation(operation)&&!isSftpOperation(operation)&&!isArchiveOperation(operation)&&!isAccountOperation(operation))
-    throw new DesktopError({ code: 'STAGE_NOT_READY', message: (operation.startsWith('account.') || operation.startsWith('sync.') || operation === 'backup.previewLegacyAccount') ? '账号条目同步将在后续批次开放；完整版本与第三方备份独立使用' : '该业务能力将在后续实施阶段开放' })
+  if (!isFoundationOperation(operation) && !isLocalOperation(operation) && !isSshOperation(operation)&&!isSftpOperation(operation)&&!isArchiveOperation(operation)&&!isAccountOperation(operation)&&!isSyncOperation(operation))
+    throw new DesktopError({ code: 'STAGE_NOT_READY', message: (operation.startsWith('account.') || operation.startsWith('sync.') || operation === 'backup.previewLegacyAccount') ? '官方备份未接入；完整版本与第三方备份独立使用' : '该业务能力将在后续实施阶段开放' })
   const sentContext = context
   if (isFoundationOperation(operation)) input = foundation[operation].input.parse(input)
   else if (isLocalOperation(operation)) input = local[operation].input.parse(input)
@@ -83,6 +84,7 @@ async function call(operation: string, input?: unknown): Promise<unknown> {
   else if(isSftpOperation(operation))input=sftp[operation].input.parse(input)
   else if(isArchiveOperation(operation)) input=archive[operation].input.parse(input)
   else if(isAccountOperation(operation)) input=account[operation].input.parse(input)
+  else if(isSyncOperation(operation)) input=sync[operation].input.parse(input)
   const id = crypto.randomUUID()
   const response = await ipcRenderer.invoke('eizhu:request', { id, context: sentContext, operation, input })
   if (response.id !== id) throw new DesktopError({ code: 'STALE_RESPONSE', message: '响应标识不匹配' })
@@ -111,7 +113,7 @@ async function call(operation: string, input?: unknown): Promise<unknown> {
       ? local[operation].output.parse(response.value)
       : isSshOperation(operation)
         ? ssh[operation].output.parse(response.value)
-        : isSftpOperation(operation)?sftp[operation].output.parse(response.value):isArchiveOperation(operation)?archive[operation].output.parse(response.value):isAccountOperation(operation)?account[operation].output.parse(response.value):response.value
+        : isSftpOperation(operation)?sftp[operation].output.parse(response.value):isArchiveOperation(operation)?archive[operation].output.parse(response.value):isAccountOperation(operation)?account[operation].output.parse(response.value):isSyncOperation(operation)?sync[operation].output.parse(response.value):response.value
 }
 const api: Record<string, Record<string, unknown>> = Object.create(null)
 for (const operation of new Set([
@@ -121,6 +123,7 @@ for (const operation of new Set([
   ...Object.keys(sftp),
   ...Object.keys(archive),
   ...Object.keys(account),
+  ...Object.keys(sync),
   ...reservedOperations,
 ])) {
   const [domain, method] = operation.split('.')

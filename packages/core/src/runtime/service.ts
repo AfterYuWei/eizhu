@@ -1,3 +1,6 @@
+import { SyncService } from '../sync/service.ts'
+import type { EventStream } from '../sync/service.ts'
+import { sync, isSyncOperation } from '@eizhu/contracts'
 import { ArchiveService } from '../archive/service.ts'
 import type { Transport } from '../archive/network.ts'
 import { archive, isArchiveOperation } from '@eizhu/contracts'
@@ -32,9 +35,12 @@ export class RuntimeService {
   private archive: ArchiveService
   private ssh: SshService
   private sftp:SftpService
-  private verification: { root: string; path: string; path3: string; account: string }
+  private verification: { root: string; path: string; path3: string; account: string; sync: string }
   private workspace: WorkspaceIdentity = offlineWorkspace
   private initialized = false
+  private sync!: SyncService
+  private stream?: EventStream
+  private emitSync: (status: import('@eizhu/contracts').SyncStatus, refresh:boolean) => void
   private account!: AccountService
   private emitAccount: (status: import('@eizhu/contracts').AccountStatus) => void
   private accountTransport: Transport
@@ -42,22 +48,26 @@ export class RuntimeService {
   constructor(
     context: RuntimeContext,
     root: string,
-    paths: { database: string; compute: string; verification: string; verification3: string; verificationAccount: string },
+    paths: { database: string; compute: string; verification: string; verification3: string; verificationAccount: string; verificationSync: string },
     key: Uint8Array,
-    emit: (name: 'eizhu-session-message'|'eizhu-sftp-message'|'eizhu-account-message', payload: unknown) => void = () => undefined,
+    emit: (name: 'eizhu-session-message'|'eizhu-sftp-message'|'eizhu-account-message'|'eizhu-sync-message', payload: unknown) => void = () => undefined,
     localHome?:string,
     transport:Transport=async()=>fail('CLOUD_UNAVAILABLE','云存储网络不可用'),
     workspace?: WorkspaceIdentity,
     accountTransport: Transport = async () => fail('ACCOUNT_UNAVAILABLE', '账号网络不可用'),
+    stream?: EventStream,
   ) {
     this.context = context
     this.accountTransport = accountTransport
-    this.emitAccount = (status) => emit('eizhu-account-message', { workspaceGeneration: this.context.generation, status })
+    this.stream = stream
+    this.emitSync = (status, refresh) => emit('eizhu-sync-message', { workspaceGeneration:this.context.generation, status, refresh })
+    this.emitAccount = (status) => {emit('eizhu-account-message', { workspaceGeneration: this.context.generation, status });this.sync?.credentialsChanged()}
     this.verification = {
       root: join(root, 'stage2-integration'),
       path: paths.verification,
       path3: paths.verification3,
       account: paths.verificationAccount,
+      sync: paths.verificationSync,
     }
     this.database = new WorkerClient(paths.database, { root, key, workspace }, 64)
     this.compute = new WorkerClient(paths.compute, undefined, 8)
@@ -76,14 +86,22 @@ export class RuntimeService {
     this.context.workspaceId = this.workspace.id
     this.account = new AccountService(workerAccountStorage(this.database), this.accountTransport, this.workspace, this.emitAccount)
     this.scope.own(() => this.account.close())
+    this.sync = new SyncService(this.database,this.compute,this.account,this.workspace,this.context,this.emitSync,this.stream)
+    this.scope.own(()=>this.sync.close())
     this.initialized = true
     return this.workspace
   }
-  startBackground(): void { this.account.start() }
+  startBackground(): void { this.account.start();this.sync.start() }
   async execute(request: RpcRequest): Promise<unknown> {
     if (!this.initialized) fail('RUNTIME_INIT_FAILED', '业务进程尚未初始化')
     if (!sameContext(request.context, this.context)) fail('WORKSPACE_CHANGED', '数据空间已变化，请重试')
     if (this.scope.controller.signal.aborted) fail('RUNTIME_CLOSED', '业务进程正在关闭')
+    if (request.operation === 'account.setSyncEnabled') {const d=account[request.operation].input.parse(request.input);const status=await this.sync.setEnabled(d.enabled);this.emitAccount(status);return status}
+    if (isSyncOperation(request.operation)) {
+      const result = sync[request.operation].output.parse(await this.sync.execute(request.operation, request.input))
+      if (request.operation === 'sync.bootstrap') this.emitAccount(await this.database.call('account.storage.status'))
+      return result
+    }
     if (isAccountOperation(request.operation)) return account[request.operation].output.parse(await this.account.execute(request.operation, request.input))
     if(isArchiveOperation(request.operation)) return archive[request.operation].output.parse(await this.archive.execute(request.operation,request.input))
     if (isSshOperation(request.operation))
@@ -125,6 +143,10 @@ export class RuntimeService {
         }
       }
       default:
+        if (request.operation === 'runtime.verifySyncEngine') {
+          const verifier=new WorkerClient(this.verification.sync,{root:join(this.verification.root,'sync-engine'),fixtures:(request.input as {fixtures:string}).fixtures},1)
+          try{return await verifier.call('verify')}finally{await verifier.close()}
+        }
         if (request.operation === 'runtime.verifyAccountFoundation') {
           const verifier = new WorkerClient(this.verification.account, { root: join(this.verification.root, 'account-foundation') }, 1)
           try { return await verifier.call('verify') } finally { await verifier.close() }
@@ -167,7 +189,7 @@ export class RuntimeService {
           })
         if (request.operation === 'backup.granted') {
           const d = request.input as { operation: keyof typeof local; input: unknown; identity: FileIdentity }
-          return this.executeLocal(d.operation, d.input, d.identity)
+          const result = await this.executeLocal(d.operation, d.input, d.identity);if(d.operation==='backup.import')this.sync.wake();return result
         }
         if (request.operation === 'backup.releaseSource') {
           const { path } = request.input as { path: string }
@@ -176,8 +198,8 @@ export class RuntimeService {
           this.filePreviews.delete(path)
           return
         }
-        if (isLocalOperation(request.operation)) return this.executeLocal(request.operation, request.input)
-        return fail('STAGE_NOT_READY', '该业务能力待开发；官方账号、同步和官方备份在后端部署后再接入')
+        if (isLocalOperation(request.operation)) {const result=await this.executeLocal(request.operation, request.input);if(/\.(create|update|delete)$/.test(request.operation)||['backup.applyRestore','backup.import'].includes(request.operation))this.sync.wake();return result}
+        return fail('STAGE_NOT_READY', '该业务能力尚未开放；官方备份不在本轮账号同步范围')
     }
   }
   private async executeLocal(

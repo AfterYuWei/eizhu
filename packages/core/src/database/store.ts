@@ -8,15 +8,23 @@ import { LocalCipher } from '../local/crypto.ts'
 import { AccountRepository } from '../account/repository.ts'
 import { validateWorkspace } from '../account/workspace.ts'
 import { preserveBeforeMigration } from './migrations.ts'
+import { SyncRepository } from '../sync/repository.ts'
+import { emptyPayload, kinds, payloadSchema } from '../local/model.ts'
+import type { Payload, Kind } from '../local/model.ts'
 
 /** Global metadata and one isolated business workspace. Only used by database Workers. */
 export class FoundationStore {
   readonly local!: LocalStore
   readonly accounts!: AccountRepository
+  readonly sync!: SyncRepository
   readonly identity: WorkspaceIdentity
   private global: Database.Database
   private workspace!: Database.Database
+  private deviceKey: Buffer
+  private root: string
   constructor(root: string, key: Uint8Array, requested?: WorkspaceIdentity) {
+    this.root = root
+    this.deviceKey = Buffer.from(key)
     mkdirSync(root, { recursive: true, mode: 0o700 })
     const globalPath = join(root, 'global.sqlite'),
       globalExisted = existsSync(globalPath)
@@ -86,15 +94,38 @@ export class FoundationStore {
       this.local = new LocalStore(this.workspace, key, this.identity.id, () => {
         if (workspaceExisted) preserveBeforeMigration(this.workspace, root, this.identity.id, 2, 3)
       })
+      this.sync = new SyncRepository(this.workspace, this.local, key, this.identity.id, () => this.offlineSnapshot())
       if (!metadata)
         this.workspace.prepare("INSERT INTO workspace_metadata VALUES ('id',?)").run(this.identity.id)
     } catch (cause) {
+      this.sync?.close()
+      this.deviceKey.fill(0)
       this.accounts?.close()
       this.local?.close()
       this.workspace?.close()
       this.global.close()
       throw cause
     }
+  }
+  private offlineSnapshot(): { payload: Payload; revision: number } {
+    if (this.identity.id === 'offline') return { payload: this.local.snapshot(), revision: this.local.archiveRevision() }
+    const path = join(this.root, 'workspaces', 'offline', 'workspace.sqlite')
+    if (!existsSync(path)) return { payload: emptyPayload(), revision: 0 }
+    const db = new Database(path, { readonly: true, fileMustExist: true }), cipher = new LocalCipher(this.deviceKey, 'offline')
+    try {
+      const version = Number(db.pragma('user_version', { simple: true }))
+      if (![2, 3].includes(version)) fail('SCHEMA_UNSUPPORTED', '离线空间版本不受支持，原数据已保留')
+      const marker = db.prepare('SELECT data FROM key_check WHERE id=1').get() as {data:Buffer}|undefined
+      if (!marker || cipher.open(marker.data, 'key-check') !== 'eizhu-local-v2') fail('KEY_INVALID', '离线空间密钥无效')
+      return db.transaction(() => {
+        const payload = emptyPayload()
+        for (const kind of kinds) {
+          const rows = db.prepare('SELECT id,data FROM entities WHERE kind=? ORDER BY id').all(kind) as Array<{id:string;data:Buffer}>
+          for (const row of rows) (payload[kind] as Payload[Kind][number][]).push(cipher.open(row.data, `entity:${kind}:${row.id}`))
+        }
+        return { payload: payloadSchema.parse(payload), revision: (db.prepare('SELECT revision FROM revisions WHERE id=1').get() as {revision:number}).revision }
+      })()
+    } finally { cipher.close(); db.close() }
   }
   private open(path: string, schema: string): Database.Database {
     const db = new Database(path)
@@ -133,6 +164,8 @@ export class FoundationStore {
     })()
   }
   close(): void {
+    this.sync.close()
+    this.deviceKey.fill(0)
     this.local.close()
     this.accounts.close()
     this.workspace.close()

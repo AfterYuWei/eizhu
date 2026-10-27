@@ -1,4 +1,4 @@
-import { accountHttpRequestSchema } from '@eizhu/contracts'
+import { accountHttpRequestSchema, syncHttpRequestSchema } from '@eizhu/contracts'
 import type { HttpResponse, Transport } from '@eizhu/core/archive/network'
 import { cloudRequest } from './cloud-network.ts'
 import { session } from 'electron'
@@ -16,9 +16,9 @@ export function accountHttp(
     networkSession ??= session.fromPartition('eizhu-account-network', { cache: false })
     // Chromium may resend a POST on a reused connection if its response was lost.
     // A fresh connection prevents that replay while retaining system proxy/TLS handling.
-    if (request.method === 'POST') await networkSession.closeAllConnections()
+    if (request.method !== 'GET') await networkSession.closeAllConnections()
     if (signal.aborted) throw new Error('Account request cancelled')
-    return cloudRequest(request, signal, 131072, networkSession)
+    return cloudRequest(request, signal, request.url.includes('/api/sync/v2/') ? 50*1024*1024 : 131072, networkSession)
   })
   queue = task.then(
     () => undefined,
@@ -37,7 +37,7 @@ export async function accountRequest(
   signal: AbortSignal,
   fixture?: Transport,
 ): Promise<HttpResponse> {
-  const request = accountHttpRequestSchema.parse(raw)
+  const request = accountHttpRequestSchema.safeParse(raw).success ? accountHttpRequestSchema.parse(raw) : syncHttpRequestSchema.parse(raw)
   try {
     return await (fixture ? fixture(request, signal) : accountHttp(request, signal))
   } finally {

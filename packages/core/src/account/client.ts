@@ -1,9 +1,24 @@
 import { z } from 'zod'
-import { ACCOUNT_SERVER, accountHttpRequestSchema, DesktopError, fail } from '@eizhu/contracts'
+import { ACCOUNT_SERVER, accountHttpRequestSchema, syncHttpRequestSchema, DesktopError, fail } from '@eizhu/contracts'
 import type { HttpResponse, Transport } from '../archive/network.ts'
 
 const remoteError = z.object({ code: z.string().max(100) })
 const messages: Record<string, [string, string]> = {
+  KEY_NOT_FOUND: ['KEY_NOT_FOUND', '尚未设置同步密码'],
+  KEY_CONFLICT: ['KEY_CONFLICT', '同步密码包装已变化，请重新解锁或重试'],
+  KEY_REQUIRED: ['KEY_REQUIRED', '请先设置同步密码'],
+  ITEM_CONFLICT: ['ITEM_CONFLICT', '云端条目已变化，正在重新核对'],
+  WATERMARK_CHANGED: ['WATERMARK_CHANGED', '云端关联数据已变化，请重新核对'],
+  EPOCH_CHANGED: ['EPOCH_CHANGED', '云端已整体替换，请重新核对'],
+  CURSOR_EXPIRED: ['CURSOR_EXPIRED', '云端增量已过期，正在重新取得快照'],
+  SNAPSHOT_EXPIRED: ['SNAPSHOT_EXPIRED', '云端快照已过期，请重新预览'],
+  REQUEST_NOT_FOUND: ['REQUEST_NOT_FOUND', '提交结果尚不存在'],
+  REQUEST_REUSED: ['REQUEST_REUSED', '请求内容不一致，已停止自动提交'],
+  INVALID_REPLACEMENT: ['INVALID_REPLACEMENT', '整体替换集合不完整，未修改云端'],
+  INVALID_BATCH: ['INVALID_BATCH', '同步批次无效，未修改云端'],
+  INVALID_CIPHERTEXT: ['INVALID_CIPHERTEXT', '云端拒绝无效密文，未修改数据'],
+  INVALID_CURSOR: ['INVALID_CURSOR', '同步游标无效，请重新核对'],
+  QUOTA_EXCEEDED: ['ACCOUNT_QUOTA_EXCEEDED', '账号云存储空间不足，本地修改已保留'],
   INVALID_CREDENTIALS: ['ACCOUNT_INVALID_CREDENTIALS', '邮箱或密码不正确'],
   EMAIL_TAKEN: ['ACCOUNT_EMAIL_TAKEN', '该邮箱已被注册'],
   ACCOUNT_DISABLED: ['ACCOUNT_DISABLED', '账号已被禁用，请联系管理员'],
@@ -38,6 +53,7 @@ function responseError(response: HttpResponse): DesktopError {
     const seconds = Number(response.headers['retry-after'])
     return new DesktopError({
       code: 'RATE_LIMITED',
+      retryable: true,
       message: '请求过于频繁，请稍后重试',
       details: {
         retryAfterSeconds: Number.isFinite(seconds) && seconds > 0 ? Math.min(3600, Math.ceil(seconds)) : 60,
@@ -58,17 +74,18 @@ export class AccountClient {
   }
   async request<T>(
     path: string,
-    method: 'GET' | 'POST',
+    method: 'GET' | 'POST' | 'PUT',
     signal: AbortSignal,
     schema?: z.ZodType<T>,
     body?: unknown,
     accessToken?: string,
+    scope: 'auth'|'sync' = 'auth',
   ): Promise<T> {
-    const bytes = body === undefined ? undefined : Buffer.from(JSON.stringify(body))
+    const bytes = body === undefined ? undefined : Buffer.from(typeof body === 'string' ? body : JSON.stringify(body))
     let response: HttpResponse | undefined
     try {
-      const request = accountHttpRequestSchema.parse({
-        url: new URL(`api/auth/${path}`, ACCOUNT_SERVER).href,
+      const request = (scope === 'auth' ? accountHttpRequestSchema : syncHttpRequestSchema).parse({
+        url: new URL(`api/${scope==='auth'?'auth':'sync/v2'}/${path}`, ACCOUNT_SERVER).href,
         method,
         headers: {
           accept: 'application/json',
@@ -86,7 +103,7 @@ export class AccountClient {
           retryable: !signal.aborted,
         })
       }
-      if (response.body.byteLength > 131072) fail('ACCOUNT_PROTOCOL', '账号响应超出大小限制')
+      if (response.body.byteLength > (scope === 'auth' ? 131072 : 50*1024*1024)) fail('ACCOUNT_PROTOCOL', '账号响应超出大小限制')
       if (response.status < 200 || response.status >= 300) throw responseError(response)
       if (!schema) return undefined as T
       try {

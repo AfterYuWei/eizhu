@@ -120,9 +120,11 @@ export class AccountService {
   }
   private async authorized<T>(
     path: string,
-    method: 'GET' | 'POST',
+    method: 'GET' | 'POST' | 'PUT',
     schema?: z.ZodType<T>,
     body?: unknown,
+    scope: 'auth' | 'sync' = 'auth',
+    signal: AbortSignal = this.controller.signal,
   ): Promise<{ value: T; session: AccountSession }> {
     if (this.loggingOut) fail('ACCOUNT_BUSY', '账号正在退出')
     let session = await this.current()
@@ -132,10 +134,11 @@ export class AccountService {
         value: await this.client.request(
           path,
           method,
-          this.controller.signal,
+          signal,
           schema,
           body,
           session.tokens!.accessToken,
+          scope,
         ),
         session,
       }
@@ -153,10 +156,11 @@ export class AccountService {
           value: await this.client.request(
             path,
             method,
-            this.controller.signal,
+            signal,
             schema,
             body,
             session.tokens!.accessToken,
+            scope,
           ),
           session,
         }
@@ -168,6 +172,34 @@ export class AccountService {
         throw retry
       }
     }
+  }
+  syncRequest<T>(
+    path: string,
+    method: 'GET' | 'POST' | 'PUT',
+    schema?: z.ZodType<T>,
+    body?: unknown,
+    signal?: AbortSignal,
+  ): Promise<T> {
+    return this.run(
+      async () =>
+        (
+          await this.authorized(
+            path,
+            method,
+            schema,
+            body,
+            'sync',
+            signal ? AbortSignal.any([signal, this.controller.signal]) : this.controller.signal,
+          )
+        ).value,
+    )
+  }
+  syncToken(): Promise<{ token: string; expiresAt: number }> {
+    return this.run(async () => {
+      let session = await this.current()
+      if (session.tokens!.expiresAt <= Date.now() + 30_000) session = await this.refreshAfter(session)
+      return { token: session.tokens!.accessToken, expiresAt: session.tokens!.expiresAt }
+    })
   }
   authenticate(
     operation: 'account.login' | 'account.register',
@@ -185,19 +217,7 @@ export class AccountService {
         credentials,
       )
       const workspace = accountWorkspace(response.user.id)
-      let previous: AccountSession | null
-      try {
-        previous = await this.storage.session(workspace)
-      } catch (cause) {
-        if (errorCode(cause) !== 'ACCOUNT_NOT_FOUND') throw cause
-        previous = null
-      }
-      await this.storage.save(workspace, {
-        ...previous,
-        user: response.user,
-        tokens: this.tokenExpiry(response),
-        syncEnabled: previous?.syncEnabled ?? false,
-      })
+      const saved = await this.storage.acceptLogin(workspace, response.user, this.tokenExpiry(response))
       if (workspace.id === this.workspace.id) {
         await this.publish()
         await this.schedule()
@@ -208,7 +228,7 @@ export class AccountService {
           loggedIn: true,
           sessionState: 'authenticated',
           user: response.user,
-          syncEnabled: previous?.syncEnabled ?? false,
+          syncEnabled: saved.syncEnabled,
         },
       }
     })

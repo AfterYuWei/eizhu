@@ -43,6 +43,7 @@ import {
   workspaceTransitionSchema,
 } from '@eizhu/contracts'
 import type { AccountStatus, Bootstrap, PlatformCapabilities, RuntimeContext, WorkspaceIdentity, WorkspaceTransitionResult } from '@eizhu/contracts'
+import {sync,isSyncOperation} from '@eizhu/contracts'
 import type { AccountFixture } from './account-fixture-server.ts'
 import { loadDeviceKey } from '@eizhu/core/runtime/device-key'
 import { RuntimeHost } from './runtime-host.ts'
@@ -125,7 +126,7 @@ async function restartRuntime(): Promise<RuntimeContext> {
     documents.revoke()
     editorGrants.clear();editorBorrowed.clear();deferredFileCloses.clear()
     await replaceWorkspaceRuntime(runtime, runtime.workspace,
-      (workspace, generation) => new RuntimeHost(dataRoot, __dirname, generation, runtimeFailed, deviceKey!, workspace, accountFixture?.transport),
+      (workspace, generation) => new RuntimeHost(dataRoot, __dirname, generation, runtimeFailed, deviceKey!, workspace, accountFixture?.transport,accountFixture?.events),
       async (host) => {
         const nextSettings = await host.call<Bootstrap['settings']>('settings.read')
         const accountStatus = await host.call<AccountStatus>('account.status')
@@ -183,7 +184,7 @@ async function changeAccount(operation: 'account.login' | 'account.register' | '
     editorGrants.clear(); editorBorrowed.clear(); deferredFileCloses.clear()
     let status: AccountStatus | undefined
     await replaceWorkspaceRuntime(previous, target,
-      (workspace, generation) => new RuntimeHost(dataRoot, __dirname, generation, runtimeFailed, deviceKey!, workspace, accountFixture?.transport),
+      (workspace, generation) => new RuntimeHost(dataRoot, __dirname, generation, runtimeFailed, deviceKey!, workspace, accountFixture?.transport,accountFixture?.events),
       async (host) => {
         const nextSettings = await host.call<Bootstrap['settings']>('settings.read')
         status = await host.call<AccountStatus>('account.commitTransition', {
@@ -288,6 +289,11 @@ async function load(window: BrowserWindow): Promise<void> {
   else await window.loadURL('eizhu://app/index.html' + suffix)
 }
 async function execute(window: BrowserWindow, operation: string, input: unknown): Promise<unknown> {
+  if (isSyncOperation(operation)) {
+    if(window!==windows.main)fail('FORBIDDEN','仅主窗口可管理账号同步')
+    if(!healthy)fail('RUNTIME_UNAVAILABLE','业务进程不可用，请先恢复')
+    return sync[operation].output.parse(await runtime.call(operation,sync[operation].input.parse(input)))
+  }
   if (isAccountOperation(operation)) {
     if (window !== windows.main) fail('FORBIDDEN', '仅主窗口可管理账号')
     if (!healthy) fail('RUNTIME_UNAVAILABLE', '业务进程不可用，请先恢复')
@@ -445,7 +451,7 @@ async function execute(window: BrowserWindow, operation: string, input: unknown)
     }
     return local[operation].output.parse(result)
   }
-  if (!isFoundationOperation(operation)) return fail('STAGE_NOT_READY', (operation.startsWith('account.') || operation.startsWith('sync.') || operation === 'backup.previewLegacyAccount') ? '账号条目同步将在后续批次开放；完整版本与第三方备份独立使用' : '该业务能力将在后续实施阶段开放')
+  if (!isFoundationOperation(operation)) return fail('STAGE_NOT_READY', (operation.startsWith('account.') || operation.startsWith('sync.') || operation === 'backup.previewLegacyAccount') ? '官方备份未接入；完整版本与第三方备份独立使用' : '该业务能力将在后续实施阶段开放')
   const value = foundation[operation].input.parse(input)
   switch (operation) {
     case 'update.check':
@@ -656,7 +662,7 @@ async function start(): Promise<void> {
     const { createAccountFixture } = await import('./account-fixture-server.ts')
     accountFixture = await createAccountFixture()
   }
-  runtime = new RuntimeHost(dataRoot, __dirname, 1, runtimeFailed, deviceKey, undefined, accountFixture?.transport)
+  runtime = new RuntimeHost(dataRoot, __dirname, 1, runtimeFailed, deviceKey, undefined, accountFixture?.transport,accountFixture?.events)
   await runtime.start()
   healthy = true
   settings = await runtime.call('settings.read')

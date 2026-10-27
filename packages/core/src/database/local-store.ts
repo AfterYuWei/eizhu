@@ -119,6 +119,13 @@ export class LocalStore {
   archiveTransaction<T>(work: () => T): T { return this.db.transaction(work)() }
   archiveDelete(key: string): void { this.db.prepare('DELETE FROM local_state WHERE key=?').run(`archive:${key}`) }
   archiveRevision(): number { return this.revision() }
+  syncApply(payload: Payload, action: string, safety = false, capture = false): void {
+    this.db.transaction(() => this.commit(this.snapshot(), payload, action, '', safety, capture))()
+  }
+  syncPending(): Array<{ kind: Kind; itemId: string; revision: number; value: Entity | null }> {
+    const rows = this.db.prepare('SELECT kind,item_id,revision,deleted,payload FROM outbox WHERE sequence IN (SELECT max(sequence) FROM outbox GROUP BY kind,item_id) ORDER BY sequence').all() as Array<{kind:Kind;item_id:string;revision:number;deleted:number;payload:Buffer}>
+    return rows.map(row => ({ kind:row.kind,itemId:row.item_id,revision:row.revision,value:row.deleted?null:this.cipher.open<Entity>(row.payload,`outbox:${row.kind}:${row.item_id}:${row.revision}`) }))
+  }
   snapshot(): Payload {
     const result = emptyPayload()
     for (const kind of kinds) {
@@ -168,7 +175,7 @@ export class LocalStore {
       if (profile.vault_id) references.set(profile.vault_id, (references.get(profile.vault_id) ?? 0) + 1)
     return references
   }
-  private commit(before: Payload, after: Payload, action: string, id = '', safety = false): void {
+  private commit(before: Payload, after: Payload, action: string, id = '', safety = false, capture = true): void {
     payloadSchema.parse(after)
     validateGraph(after)
     const revision = this.revision() + 1
@@ -191,7 +198,7 @@ export class LocalStore {
             )
             .run(kind, itemId, this.cipher.seal(item, `entity:${kind}:${itemId}`))
         else this.db.prepare('DELETE FROM entities WHERE kind=? AND id=?').run(kind, itemId)
-        this.db
+        if (capture) this.db
           .prepare('INSERT INTO outbox(kind,item_id,revision,deleted,payload) VALUES (?,?,?,?,?)')
           .run(
             kind,

@@ -1,88 +1,412 @@
-import { Loading } from '@/components/ui/loading'
-import { conflictDependencies,syncDiagnostic } from '@/lib/syncExperience'
-import { writeClipboardText } from '@/lib/clipboard'
-import { ErrorRecovery } from './ErrorRecovery'
-import { normalizeCommandError } from '@eizhu/contracts'
-import { useEffect,useState } from 'react'
-import { CloudSync,RefreshCw } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { CloudSync, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
+import { normalizeCommandError } from '@eizhu/contracts'
+import { conflictDependencies, syncDiagnostic } from '@/lib/syncExperience'
+import { writeClipboardText } from '@/lib/clipboard'
+import { runDesktopAction } from '@/lib/desktopActions'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/switch'
 import { syncApi } from '@/api/sync'
 import { useAccountStore } from '@/store/account'
 import { useSyncStore } from '@/store/sync'
-import { SYNC_STATUS_LABELS,SYNC_ITEM_LABELS,type SyncConflict,type SyncPreview } from '@/types/sync'
-import { AlertDialog,AlertDialogAction,AlertDialogCancel,AlertDialogContent,AlertDialogDescription,AlertDialogFooter,AlertDialogHeader,AlertDialogTitle } from '@/components/ui/alert-dialog'
+import { SYNC_STATUS_LABELS, SYNC_ITEM_LABELS, type SyncConflict, type SyncPreview } from '@/types/sync'
+import { ErrorRecovery } from './ErrorRecovery'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 
 export function SyncPanel() {
-  const status = useSyncStore((s) => s.status)
-  const conflicts = useSyncStore((s) => s.conflicts)
-  const focusItem = useSyncStore((s) => s.focusItem)
-  const loggedIn = useAccountStore((s) => s.status?.loggedIn)
-  const [password, setPassword] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [operationError, setOperationError] = useState('')
-  const [preview, setPreview] = useState<SyncPreview | null>(null)
-  const [mode, setMode] = useState<'merge' | 'use_local' | 'use_cloud' | null>(null)
-  useEffect(() => { void useSyncStore.getState().refresh() }, [])
+  const { status, conflicts, focusItem } = useSyncStore()
+  const account = useAccountStore((s) => s.status)
+  const [password, setPassword] = useState(''),
+    [busy, setBusy] = useState(false),
+    [error, setError] = useState<{ code: string; message: string } | null>(null)
+  const [includeOffline, setIncludeOffline] = useState(true)
+  const [preview, setPreview] = useState<SyncPreview | null>(null),
+    [mode, setMode] = useState<'merge' | 'use_local' | 'use_cloud' | null>(null)
+  const lock = useRef(false)
   useEffect(() => {
-    if (focusItem) document.getElementById(`sync-item-${focusItem.type}:${focusItem.id}`)?.scrollIntoView?.({ block: 'center' })
+    void useSyncStore.getState().refresh()
+  }, [])
+  useEffect(() => {
+    if (focusItem)
+      document
+        .getElementById(`sync-item-${focusItem.type}:${focusItem.id}`)
+        ?.scrollIntoView?.({ block: 'center' })
   }, [focusItem, conflicts])
   async function run(work: () => Promise<unknown>, message?: string) {
-    setBusy(true); setOperationError('')
-    try { await work(); setPassword(''); await useSyncStore.getState().refresh(); if (message) toast.success(message) }
-    catch (e) { setOperationError(normalizeCommandError(e).error.code); toast.error(e instanceof Error ? e.message : String(e)); await useSyncStore.getState().refresh() }
-    finally { setBusy(false) }
+    if (lock.current) return
+    lock.current = true
+    setBusy(true)
+    setError(null)
+    try {
+      await work()
+      setPassword('')
+      await useSyncStore.getState().refresh()
+      if (message) toast.success(message)
+    } catch (cause) {
+      const e = normalizeCommandError(cause)
+      setError(e.error)
+      if (['PREVIEW_CHANGED', 'PREVIEW_EXPIRED'].includes(e.error.code)) setPreview(null)
+    } finally {
+      lock.current = false
+      setBusy(false)
+    }
   }
-  if (!loggedIn || !status) return <div className="settings-section"><div className="settings-section-title"><CloudSync size={14} />云同步</div><div className="settings-card"><div className="settings-field" role="status"><div className="settings-field-info"><span className="settings-field-label">账号条目同步</span><p className="settings-field-desc">账号功能已接通，条目同步与首次接入预览将在后续批次开放。当前不上传本地数据；完整版本和第三方备份可独立使用。</p></div><span className="settings-status">待接入</span></div></div></div>
-  return <div className="settings-section settings-stack">
-    <div className="settings-section-title"><CloudSync size={14} />账号实时同步</div>
-    <div className="backup-card">
-      <div className="backup-row">{status ? SYNC_STATUS_LABELS[status.status] ?? status.status : <Loading inline />}</div>
-      <p className="settings-field-desc">修改立即保存到本地，并异步提交云端。离线时修改保留；同条目冲突需逐条选择。</p>
-      <div className="backup-row">待同步 {status?.pendingCount ?? 0} 条 · 冲突 {status?.conflictCount ?? 0} 条</div>
-      {status?.lastConfirmed && <p className="settings-field-desc">最近云端确认：{new Date(status.lastConfirmed).toLocaleString()}</p>}
-      {status?.lastError && <p role="alert" className="backup-warning">{status.lastError}</p>}
-      {(operationError || status?.lastError || status?.status === 'locked') && <ErrorRecovery code={operationError || status?.lastErrorCode} status={status?.status} onRetry={() => { if (!busy) void run(() => syncApi.syncNow()) }} />}
-      <Button size="sm" disabled={busy} onClick={() => void run(() => syncApi.syncNow(), '已请求刷新和重试')}><RefreshCw size={14} />刷新／重试</Button>
-    </div>
-    <div className="backup-card">
-      <label htmlFor="sync-password">独立同步密码</label>
-      <Input id="sync-password" type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder={status?.unlocked ? '输入新密码' : '首次设置或输入已有密码'} />
-      <p className="settings-field-desc">密码用于解锁账号数据；各设备使用相同密码。备份密码单独管理。</p>
-      <Button disabled={busy || password.length < 6} onClick={() => void run(() => status?.unlocked ? syncApi.changePassword(password) : syncApi.unlock(password), status?.unlocked ? '同步密码已更换' : '账号数据已解锁')}>{status?.unlocked ? '更换同步密码' : '设置／解锁'}</Button>
-    </div>
-    {status?.unlocked && !status.initialized && <div className="backup-card">
-      <Button variant="outline" disabled={busy} onClick={() => void run(() => Promise.reject(new Error('工作区合并将在阶段 5 开放')), '本地空间数据已合并到当前账号空间')}>导入原本地空间</Button>
-      <Button disabled={busy} onClick={() => void run(async () => setPreview(await syncApi.preview()))}>预览首次接入</Button>
-      {preview && <><p>本地 {preview.localCount} 条 · 云端 {preview.cloudCount} 条</p><div className="backup-row">
-        <Button disabled={busy} onClick={() => setMode('merge')}>合并</Button>
-        <Button variant="outline" disabled={busy} onClick={() => setMode('use_local')}>使用本地</Button>
-        <Button variant="outline" disabled={busy} onClick={() => setMode('use_cloud')}>使用云端</Button>
-      </div></>}
-    </div>}
-    <Button variant="outline" size="sm" onClick={() => void run(async () => { await writeClipboardText(syncDiagnostic(status)); toast.success('已复制脱敏诊断，不含条目内容、凭据或原始错误') })}>复制脱敏诊断</Button>
-    {conflicts.map((c) => <div id={`sync-item-${c.itemType}:${c.itemId}`} tabIndex={-1} className={`backup-card ${focusItem?.type === c.itemType && focusItem.id === c.itemId ? 'ring-2 ring-ring' : ''}`} key={`${c.itemType}:${c.itemId}`}>
-      <p>{c.name || c.itemId} · {SYNC_ITEM_LABELS[c.itemType] ?? c.itemType}</p>
-      <p className="settings-field-desc">{c.reason === 'dependency' ? '关联关系无法应用，请先处理依赖条目' : '本地与云端存在不同修改'}{c.localDeleted ? ' · 本地已删除' : ''}{c.remoteDeleted ? ' · 云端已删除' : ''}</p>
-      <ConflictDiff conflict={c} />
-      {conflictDependencies(c).map((dep) => {
-        const target = conflicts.find((item) => item.itemType === dep.type && item.itemId === dep.id)
-        return <Button key={`${dep.type}:${dep.id}`} variant="link" size="sm" disabled={!target} onClick={() => useSyncStore.getState().focusConflict(dep.type, dep.id)}>{SYNC_ITEM_LABELS[dep.type]}：{target?.name || dep.id}{target ? ' · 跳转处理' : ' · 依赖尚无可处理冲突'}</Button>
-      })}
-      <div className="backup-row"><Button disabled={busy} onClick={() => void run(() => syncApi.resolveConflict(c.itemType, c.itemId, 'keep_local', c.remoteRevision), '已保留本地，等待云端确认')}>保留本地</Button><Button variant="outline" disabled={busy} onClick={() => void run(() => syncApi.resolveConflict(c.itemType, c.itemId, 'use_cloud', c.remoteRevision), '已采用云端内容')}>使用云端</Button></div>
-    </div>)}
-    {status && status.items.filter((i) => i.status !== 'synced').map((i) => <div id={`sync-queue-${i.itemType}:${i.itemId}`} className="backup-row" key={`${i.itemType}:${i.itemId}`}>{SYNC_ITEM_LABELS[i.itemType] ?? i.itemType} · {i.name || i.itemId}{i.deleted ? '（删除）' : ''} · {SYNC_STATUS_LABELS[i.status] ?? i.status}</div>)}
-    <AlertDialog open={mode !== null} onOpenChange={(open) => { if (!open) setMode(null) }}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>确认首次接入</AlertDialogTitle><AlertDialogDescription>{mode === 'use_cloud' ? '使用云端内容替换当前账号空间。应用前会保存加密安全快照。' : mode === 'use_local' ? '以当前账号空间的本地内容更新云端。其他设备将重新核对变化。' : '合并不同条目，同条目差异保留双方并提示处理。'}</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>取消</AlertDialogCancel><AlertDialogAction onClick={() => { const selected = mode; setMode(null); if (selected && preview) void run(() => syncApi.bootstrap(preview.token, selected), '接入已完成') }}>确认接入</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
-  </div>
+  const enabled = account?.syncEnabled ?? false
+  return (
+    <section className="settings-section settings-stack" aria-label="账号条目同步">
+      <div className="settings-section-title">
+        <CloudSync size={14} />
+        账号条目同步
+      </div>
+      {!account?.loggedIn ? (
+        <div className="settings-card">
+          <div className="settings-field">
+            <div className="settings-field-info">
+              <span className="settings-field-label">登录后同步条目</span>
+              <p className="settings-field-desc">
+                在多台设备间同步服务器、分组、凭据和命令片段。完整版本与第三方备份可独立使用。
+              </p>
+            </div>
+            <Button size="sm" variant="outline" onClick={() => runDesktopAction('account-settings')}>
+              前往登录
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <>
+          <div className="settings-card">
+            <div className="settings-field">
+              <div className="settings-field-info">
+                <Label htmlFor="account-sync-enabled" className="settings-field-label">
+                  自动同步
+                </Label>
+                <p className="settings-field-desc">
+                  暂停期间仍可本地保存，待同步修改会保留。首次接入确认前不上传条目。
+                </p>
+              </div>
+              <Switch
+                id="account-sync-enabled"
+                checked={enabled}
+                disabled={busy}
+                onCheckedChange={(value) => void run(() => useAccountStore.getState().setSyncEnabled(value))}
+              />
+            </div>
+            <div className="settings-field">
+              <div className="settings-field-info">
+                <span className="settings-field-label">
+                  {status ? SYNC_STATUS_LABELS[status.status] : '正在读取同步状态…'}
+                </span>
+                <p className="settings-field-desc">
+                  待同步 {status?.pendingCount ?? 0} 条 · 冲突 {status?.conflictCount ?? 0} 条
+                  {status?.lastConfirmed
+                    ? ` · 最近确认 ${new Date(status.lastConfirmed).toLocaleString()}`
+                    : ''}
+                </p>
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={busy || !enabled || !status?.initialized || !status.unlocked}
+                onClick={() => void run(() => syncApi.syncNow())}
+              >
+                <RefreshCw size={14} />
+                立即同步
+              </Button>
+            </div>
+          </div>
+          {(error || status?.lastError || account.sessionState === 'reauth_required') && (
+            <div className="backup-card">
+              <p role="alert" className="account-error">
+                {error?.message ||
+                  status?.lastError ||
+                  (account.sessionState === 'reauth_required' ? '登录已失效，账号本地数据仍保留' : '')}
+              </p>
+              <ErrorRecovery
+                code={
+                  account.sessionState === 'reauth_required'
+                    ? 'ACCOUNT_NOT_LOGGED_IN'
+                    : error?.code || status?.lastErrorCode
+                }
+                status={status?.status}
+                onRetry={() => void run(() => syncApi.syncNow())}
+              />
+            </div>
+          )}
+          <form
+            className="settings-card account-form-card"
+            onSubmit={(event) => {
+              event.preventDefault()
+              void run(
+                () => (status?.unlocked ? syncApi.changePassword(password) : syncApi.unlock(password)),
+                status?.unlocked ? '同步密码已更换' : '同步数据已解锁',
+              )
+            }}
+          >
+            <Label htmlFor="sync-password">独立同步密码</Label>
+            <Input
+              id="sync-password"
+              type="password"
+              minLength={6}
+              maxLength={1024}
+              required
+              autoComplete="new-password"
+              value={password}
+              disabled={busy}
+              onChange={(event) => setPassword(event.target.value)}
+              placeholder={status?.unlocked ? '输入新的同步密码' : '首次设置或输入已有同步密码'}
+            />
+            <p className="settings-field-desc">
+              登录密码、同步密码与备份密码分别管理。本机记住解锁密钥；退出账号会清除解锁缓存。找回登录密码不会解密云端数据，已有本机密钥时可重新设置同步密码。
+            </p>
+            <Button type="submit" disabled={busy || password.length < 6}>
+              {status?.unlocked ? '更换同步密码' : '设置／解锁'}
+            </Button>
+          </form>
+          {status?.unlocked && !status.initialized && (
+            <div className="backup-card" aria-label="首次接入预览">
+              <div className="backup-row">
+                <Label htmlFor="sync-include-offline">合并原离线空间</Label>
+                <Switch
+                  id="sync-include-offline"
+                  checked={includeOffline}
+                  disabled={busy}
+                  onCheckedChange={(value) => {
+                    setIncludeOffline(value)
+                    setPreview(null)
+                  }}
+                />
+              </div>
+              <p className="settings-field-desc">
+                原离线数据始终保留。预览只读取数据，取消后仍保持登录，确认后才开始同步。
+              </p>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={busy}
+                onClick={() => void run(async () => setPreview(await syncApi.preview(includeOffline)))}
+              >
+                预览首次接入
+              </Button>
+              {preview && (
+                <>
+                  <p>
+                    离线 {preview.offlineCount} 条 · 账号本地 {preview.accountCount} 条 · 云端{' '}
+                    {preview.cloudCount} 条 · 冲突 {preview.conflictCount} 条
+                  </p>
+                  {preview.conflicts?.map((c, index) => (
+                    <p key={`${c.itemType}:${c.itemId}:${index}`} className="settings-field-desc">
+                      {SYNC_ITEM_LABELS[c.itemType]} · {c.name} ·{' '}
+                      {c.remoteSource === 'offline' ? '离线副本存在差异' : '本地与云端存在差异'}
+                      {c.local?.credential_changed ? ' · 敏感内容已变化' : ''}
+                    </p>
+                  ))}
+                  <div className="backup-row">
+                    <Button size="sm" disabled={busy} onClick={() => setMode('merge')}>
+                      确认合并
+                    </Button>
+                    <Button size="sm" variant="outline" disabled={busy} onClick={() => setMode('use_cloud')}>
+                      使用云端
+                    </Button>
+                    <Button size="sm" variant="outline" disabled={busy} onClick={() => setMode('use_local')}>
+                      使用本地
+                    </Button>
+                    <Button size="sm" variant="ghost" disabled={busy} onClick={() => setPreview(null)}>
+                      取消预览
+                    </Button>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+          {conflicts.map((c) => (
+            <div
+              id={`sync-item-${c.itemType}:${c.itemId}`}
+              tabIndex={-1}
+              className="backup-card"
+              key={`${c.itemType}:${c.itemId}`}
+            >
+              <p>
+                {c.name || c.itemId} · {SYNC_ITEM_LABELS[c.itemType]}
+              </p>
+              <p className="settings-field-desc">
+                {c.reason === 'dependency' ? '关联关系无法应用，请先处理依赖条目' : '同一条目存在不同修改'}
+                {c.localDeleted ? ' · 本地已删除' : ''}
+                {c.remoteDeleted ? ' · 云端已删除' : ''}
+              </p>
+              <ConflictDiff conflict={c} />
+              {conflictDependencies(c).map((dep) => {
+                const target = conflicts.find((item) => item.itemType === dep.type && item.itemId === dep.id)
+                return (
+                  <Button
+                    key={`${dep.type}:${dep.id}`}
+                    variant="link"
+                    size="sm"
+                    disabled={!target}
+                    onClick={() => useSyncStore.getState().focusConflict(dep.type, dep.id)}
+                  >
+                    {SYNC_ITEM_LABELS[dep.type]}：{target?.name || dep.id}
+                    {target ? ' · 跳转处理' : ''}
+                  </Button>
+                )
+              })}
+              <div className="backup-row">
+                <Button
+                  size="sm"
+                  disabled={busy}
+                  onClick={() =>
+                    void run(() =>
+                      syncApi.resolveConflict(c.itemType, c.itemId, 'keep_local', c.remoteRevision),
+                    )
+                  }
+                >
+                  保留本地
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={busy}
+                  onClick={() =>
+                    void run(() =>
+                      syncApi.resolveConflict(c.itemType, c.itemId, 'use_cloud', c.remoteRevision),
+                    )
+                  }
+                >
+                  {c.remoteSource === 'offline' ? '使用离线副本' : '使用云端'}
+                </Button>
+              </div>
+            </div>
+          ))}
+          {!!status?.items.length && (
+            <details className="backup-card">
+              <summary>查看待同步条目</summary>
+              {status.items.map((item) => (
+                <p className="settings-field-desc" key={`${item.itemType}:${item.itemId}`}>
+                  {SYNC_ITEM_LABELS[item.itemType]} · {item.name || item.itemId}
+                  {item.deleted ? '（删除）' : ''} · {SYNC_STATUS_LABELS[item.status]}
+                </p>
+              ))}
+            </details>
+          )}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() =>
+              void run(async () => {
+                await writeClipboardText(syncDiagnostic(status))
+                toast.success('已复制脱敏诊断')
+              })
+            }
+          >
+            复制脱敏诊断
+          </Button>
+        </>
+      )}
+      <AlertDialog
+        open={mode !== null}
+        onOpenChange={(open) => {
+          if (!open) setMode(null)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>确认首次接入</AlertDialogTitle>
+            <AlertDialogDescription>
+              {mode === 'use_cloud'
+                ? '使用云端内容替换当前账号空间，应用前保存加密安全快照。原离线库保留。'
+                : mode === 'use_local'
+                  ? '将预览中的本地集合整体替换云端，云端独有条目将提交删除标记。其他设备会重新核对；超出单批上限时会拒绝替换。'
+                  : '合并不同条目；同 ID 的不同内容保留为冲突，待你选择。原离线库保留。'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                const selected = mode
+                setMode(null)
+                if (selected && preview)
+                  void run(async () => {
+                    await syncApi.bootstrap(preview.token, selected)
+                    setPreview(null)
+                  }, '首次接入已确认')
+              }}
+            >
+              确认接入
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </section>
+  )
 }
 
-const FIELD_LABELS: Record<string, string> = { name: '名称', host: '主机', port: '端口', username: '用户名', auth_type: '认证方式', group_id: '分组', vault_id: '凭据', jump_profile_id: '跳板服务器', parent_id: '父分组', icon: '图标', sort_order: '排序', type: '类型', remark: '备注', fingerprint: '指纹', tags: '标签', note: '备注', content: '命令内容', description: '描述', is_global: '全局片段' }
+const FIELD_LABELS: Record<string, string> = {
+  name: '名称',
+  host: '主机',
+  port: '端口',
+  username: '用户名',
+  auth_type: '认证方式',
+  group_id: '分组',
+  vault_id: '凭据',
+  jump_profile_id: '跳板服务器',
+  parent_id: '父分组',
+  icon: '图标',
+  sort_order: '排序',
+  type: '类型',
+  remark: '备注',
+  fingerprint: '指纹',
+  tags: '标签',
+  note: '备注',
+  content: '命令内容',
+  description: '描述',
+  is_global: '全局片段',
+}
 function ConflictDiff({ conflict }: { conflict: SyncConflict }) {
-  const fields = [...new Set([...Object.keys(conflict.local ?? {}), ...Object.keys(conflict.remote ?? {})])] as Array<keyof NonNullable<SyncConflict['local']>>
-  const display = (value: unknown) => value === null || value === undefined ? '—' : typeof value === 'string' ? value || '空' : JSON.stringify(value)
-  return <details><summary>查看本地与云端差异</summary>
-    <table className="w-full text-xs table-fixed"><thead><tr><th>字段</th><th>本地{conflict.localDeleted ? '（已删除）' : ''}</th><th>云端{conflict.remoteDeleted ? '（已删除）' : ''}</th></tr></thead><tbody>{fields.map((field) => <tr key={field}><td>{FIELD_LABELS[field] ?? field}</td><td className="break-all whitespace-pre-wrap">{display(conflict.local?.[field])}</td><td className="break-all whitespace-pre-wrap">{display(conflict.remote?.[field])}</td></tr>)}</tbody></table>
-    {(conflict.itemType === 'vault' || conflict.itemType === 'profile') && <p className="settings-field-desc">密码、私钥及代理密码不在摘要中显示。</p>}
-  </details>
+  const fields = [
+    ...new Set([...Object.keys(conflict.local ?? {}), ...Object.keys(conflict.remote ?? {})]),
+  ] as Array<keyof NonNullable<SyncConflict['local']>>
+  const display = (value: unknown) =>
+    value === null || value === undefined
+      ? '—'
+      : typeof value === 'string'
+        ? value || '空'
+        : JSON.stringify(value)
+  return (
+    <details>
+      <summary>查看本地与云端差异</summary>
+      <table className="w-full text-xs table-fixed">
+        <thead>
+          <tr>
+            <th>字段</th>
+            <th>本地{conflict.localDeleted ? '（已删除）' : ''}</th>
+            <th>云端{conflict.remoteDeleted ? '（已删除）' : ''}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {fields.map((field) => (
+            <tr key={field}>
+              <td>{FIELD_LABELS[field] ?? field}</td>
+              <td className="break-all whitespace-pre-wrap">{display(conflict.local?.[field])}</td>
+              <td className="break-all whitespace-pre-wrap">{display(conflict.remote?.[field])}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {(conflict.itemType === 'vault' || conflict.itemType === 'profile') && (
+        <p className="settings-field-desc">密码、私钥及代理密码不在摘要中显示。</p>
+      )}
+    </details>
+  )
 }
