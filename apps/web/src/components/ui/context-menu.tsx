@@ -75,7 +75,7 @@ function ContextMenuSubTrigger({ className, inset, children, ...props }: React.C
 }
 
 function ContextMenuSubContent({ className, ...props }: React.ComponentProps<typeof ContextMenuPrimitive.SubContent>) {
-  return <ContextMenuPrimitive.SubContent className={cn("z-50 min-w-[8rem] overflow-hidden rounded-[var(--r)] border border-[var(--edge-panel-strong)] bg-[var(--surface-overlay)] p-1 text-[var(--fg)] shadow-[var(--shadow-floating)]", className)} {...props} />
+  return <ContextMenuPrimitive.SubContent data-slot="context-menu-sub-content" className={cn("z-50 min-w-[8rem] overflow-hidden rounded-[var(--r)] border border-[var(--edge-panel-strong)] bg-[var(--surface-overlay)] p-1 text-[var(--fg)] shadow-[var(--shadow-floating)]", className)} {...props} />
 }
 
 export {

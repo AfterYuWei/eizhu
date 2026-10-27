@@ -247,6 +247,18 @@ body:has(.desktop-shell) [role="menu"] :is([role="menuitem"], [role="menuitemche
   height: var(--desktop-menu-icon-size);
   flex-shrink: 0;
 }
+body:has(.desktop-shell) :is([data-slot="context-menu-content"], [data-slot="context-menu-sub-content"]) {
+  min-width: 200px;
+  max-width: calc(100vw - 16px);
+  border: 1px solid var(--edge-soft);
+  border-radius: var(--r-lg);
+  padding: 6px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.08);
+}
+body:has(.desktop-shell) :is([data-slot="context-menu-content"], [data-slot="context-menu-sub-content"]) [role="separator"] {
+  margin: 6px 8px;
+  background: var(--edge-soft);
+}
 
 /* Keyboard focus stays visible without the thick blue shadcn ring. This also
    covers portals (settings selectors, dialogs and menus) in the main window. */

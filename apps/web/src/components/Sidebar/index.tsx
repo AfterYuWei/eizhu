@@ -288,7 +288,7 @@ export function Sidebar({ collapsed = false, onToggle, onAddServer }: {
     return (<div className="shell-server-list">
       <div className="shell-section-heading">
         <Button variant="ghost" className="shell-section-toggle" aria-expanded={!collapsed} onClick={onToggle}>
-          <ChevronDown className={collapsed ? 'is-collapsed' : ''} size={12}/><span>服务器分组</span><span className="shell-count">{profiles.length}</span>
+          <ChevronDown className={collapsed ? 'is-collapsed' : ''} size={12}/><span>服务器</span><span className="shell-count">{profiles.length}</span>
         </Button>
         <DropdownMenu>
           <DropdownMenuTrigger asChild><ShellIconButton label="新增服务器或分组"><Plus size={15}/></ShellIconButton></DropdownMenuTrigger>
@@ -324,7 +324,6 @@ export function Sidebar({ collapsed = false, onToggle, onAddServer }: {
       {/* Profile context menu */}
       {profileMenu && (<SftpContextMenu sidebarPopover x={profileMenu.x} y={profileMenu.y} onClose={() => setProfileMenu(null)} items={[
                 { id: 'connect', label: '连接', icon: <Server size={13}/>, onClick: () => handleConnect(profileMenu.profile) },
-                { id: 'divider-edit', label: '', divider: true },
                 { id: 'edit', label: '编辑', icon: <Edit size={13}/>, onClick: () => handleEditProfile(profileMenu.profile) },
                 { id: 'divider-delete', label: '', divider: true },
                 { id: 'delete', label: '删除', icon: <Trash2 size={13}/>, danger: true, onClick: () => void handleDeleteProfile(profileMenu.profile) },

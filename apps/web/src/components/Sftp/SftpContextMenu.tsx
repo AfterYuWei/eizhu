@@ -69,7 +69,7 @@ export function SftpContextMenu({ x, y, items, onClose, sidebarPopover = false }
               disabled={item.disabled}
               onSelect={item.onClick}
             >
-              {item.icon && <span className="flex shrink-0 items-center justify-center text-muted-foreground">{item.icon}</span>}
+              {item.icon}
               {item.label}
             </ContextMenuItem>
           )

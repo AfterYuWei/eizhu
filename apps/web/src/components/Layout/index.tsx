@@ -171,7 +171,7 @@ export function Layout() {
           <Button variant="ghost" onClick={() => runDesktopAction('snippets')}><SquareTerminal size={16} /><span>命令片段</span></Button>
         </nav>
         <div className="shell-lists">
-          <section className="shell-servers" aria-label="服务器分组" style={{ flex: serversCollapsed ? '0 0 auto' : '1 1 0' }}>
+          <section className="shell-servers" aria-label="服务器" style={{ flex: serversCollapsed ? '0 0 auto' : '1 1 0' }}>
             <Sidebar visible={sidebarInteractive && !settingsOpen} collapsed={serversCollapsed} onToggle={toggleServers} onAddServer={() => setProfileFormOpen(true)} />
           </section>
         </div>
