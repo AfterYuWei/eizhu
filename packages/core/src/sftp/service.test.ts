@@ -1,11 +1,11 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtemp, mkdir, readFile, writeFile, readdir, rm } from 'node:fs/promises'
+import { mkdtemp, mkdir, readFile, writeFile, readdir, rm, utimes } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { SftpService } from './service.ts'
-import { FileEndpoint, displayPath } from './endpoint.ts'
+import { FileEndpoint, displayPath, nativePath } from './endpoint.ts'
 import type { WorkerClient } from '../workers/client.ts'
 import type { SshService } from '../ssh/service.ts'
 import type { TransferTask, SftpUploadBeginResponse } from '@eizhu/contracts/models/sftp'
@@ -166,14 +166,14 @@ test('下载与系统拖出共用后台扫描，目录 ZIP 和原目录树分别
     assert.equal((await terminal(x.service, downloaded.tasks[0].id)).status, 'completed')
     const zip = await x.service.downloadPath(downloaded.tasks[0].id)
     assert.equal(zip.name, 'project.zip')
-    const bytes = await readFile(zip.path)
+    const bytes = await readFile(nativePath(zip.path))
     assert.equal(bytes.readUInt32LE(0), 0x04034b50)
     assert.ok(bytes.includes(Buffer.from('directory-bytes')))
     const dragged = await x.service.execute('sftp.prepareDrag', { sessionId: x.session, paths }) as { tasks: TransferTask[] }
     assert.equal((await terminal(x.service, dragged.tasks[0].id)).status, 'completed')
     const directory = await x.service.downloadPath(dragged.tasks[0].id)
-    assert.equal(await readFile(join(directory.path, 'a.txt'), 'utf8'), 'directory-bytes')
-    assert.deepEqual(await readdir(join(directory.path, 'empty')), [])
+    assert.equal(await readFile(join(nativePath(directory.path), 'a.txt'), 'utf8'), 'directory-bytes')
+    assert.deepEqual(await readdir(join(nativePath(directory.path), 'empty')), [])
     await x.service.execute('sftp.releaseDrag', { taskIds: [dragged.tasks[0].id] })
   } finally {
     await x.service.close()
@@ -253,6 +253,9 @@ test('上传仅在校验与提交后替换目标；目标变化和取消均保�
   const x = await setup()
   try {
     await writeFile(join(x.root, 'dest', 'a'), 'original')
+    // Distinct whole-second mtimes avoid depending on the filesystem clock's
+    // resolution when an external write keeps the same byte length.
+    await utimes(join(x.root, 'dest', 'a'), 1_700_000_000, 1_700_000_000)
     const b = (await x.service.execute('sftp.uploadBegin', {
       sessionId: x.session,
       name: 'a',
@@ -268,6 +271,7 @@ test('上传仅在校验与提交后替换目标；目标变化和取消均保�
     })
     assert.equal(await readFile(join(x.root, 'dest', 'a'), 'utf8'), 'original')
     await writeFile(join(x.root, 'dest', 'a'), 'external')
+    await utimes(join(x.root, 'dest', 'a'), 1_700_000_002, 1_700_000_002)
     await x.service.execute('sftp.uploadFinish', { uploadId: b.upload_id })
     assert.equal((await terminal(x.service, b.tasks[0].id)).error_code, 'TARGET_CHANGED')
     await x.service.execute('sftp.cancelTransfer', { taskId: b.tasks[0].id })

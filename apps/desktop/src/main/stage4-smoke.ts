@@ -10,7 +10,7 @@ import { mkdir, writeFile, readFile, stat, readdir, realpath, chmod } from 'node
 import { join } from 'node:path'
 import { createHash } from 'node:crypto'
 import { gunzipSync } from 'node:zlib'
-import { displayPath } from '@eizhu/core/sftp/endpoint'
+import { displayPath, nativePath } from '@eizhu/core/sftp/endpoint'
 import type { RuntimeHost } from './runtime-host.ts'
 import type { Windows } from './windows.ts'
 import { verifyEditorLayout } from './editor-layout-smoke.ts'
@@ -373,7 +373,7 @@ export async function verifyStage4(
     })
     await completed(download.tasks[0].id)
     const staged = await runtime.call<{ path: string }>('sftp.downloadPath', { taskId: download.tasks[0].id })
-    assert.equal((await readFile(staged.path)).length, 2 * 1024 * 1024 + 17)
+    assert.equal((await readFile(nativePath(staged.path))).length, 2 * 1024 * 1024 + 17)
     const pulled = await window.webContents.executeJavaScript(
       `(async()=>{let offset=0;while(true){const b=await window.eizhu.sftp.downloadChunk({taskId:${JSON.stringify(download.tasks[0].id)},offset,maxBytes:524288});if(!b.length)break;offset+=b.length}return offset})()`,
     )
@@ -433,8 +433,9 @@ export async function verifyStage4(
     const zip = await call<{ tasks: Array<{ id: string }> }>('sftp.download', { sessionId, paths: [source] })
     await completed(zip.tasks[0].id)
     const zipPath = await runtime.call<{ path: string }>('sftp.downloadPath', { taskId: zip.tasks[0].id })
-    assert.equal((await readFile(zipPath.path)).readUInt32LE(0), 0x04034b50)
-    if (existsSync('/usr/bin/unzip')) await promisify(execFile)('/usr/bin/unzip', ['-t', zipPath.path])
+    const zipNativePath = nativePath(zipPath.path)
+    assert.equal((await readFile(zipNativePath)).readUInt32LE(0), 0x04034b50)
+    if (existsSync('/usr/bin/unzip')) await promisify(execFile)('/usr/bin/unzip', ['-t', zipNativePath])
     step('streaming-relay-archives')
     await call('editor.open', { sessionId, sessionType: 'sftp', path: file })
     await wait(async () =>
