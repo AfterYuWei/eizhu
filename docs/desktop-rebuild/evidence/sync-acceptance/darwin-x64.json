@@ -1,0 +1,127 @@
+{
+  "verifiedAt": "2026-10-27T17:50:33.736Z",
+  "sourceBase": "ad76f0b7086331b5b43e4e6a33fc6193f543c1ad",
+  "sourceDigest": "c9b86ced21cb2f9047c346af26b41da23feff03302c293d5bde00961d73be65a",
+  "sourceState": "uncommitted batch 4 verification tooling",
+  "platform": "darwin",
+  "arch": "x64",
+  "version": "0.5.0-test.341.ad76f0b7",
+  "toolSelfCheckPassed": true,
+  "realAcceptance": "pending dedicated test email",
+  "artifact": {
+    "path": "artifacts/desktop/eizhu-0.5.0-test.341.ad76f0b7-mac-x64.dmg",
+    "bytes": 158151374,
+    "sha256": "108d0efc3784ffabe4f7b0bf065883123afbcda67e35a89441385c89321faaf4",
+    "signed": false,
+    "notarized": false
+  },
+  "checks": {
+    "types": true,
+    "lint": true,
+    "baselineVerify": true,
+    "architecture": true,
+    "foundationTests": 114,
+    "webTests": 293,
+    "baselineTests": 10
+  },
+  "tool": {
+    "passed": true,
+    "checks": [
+      "注册、发送验证请求与验证码验证",
+      "客户端注入过期响应后调用刷新接口；轮换后的旧 refresh token 被服务端拒绝",
+      "密钥包装、设备登记、固定水位快照；确认前不上传，离线合并保留，第二目录拉取成功",
+      "四类条目、分组与凭据关联和敏感正文加密往返；SSE 通知触发另一端增量拉取",
+      "服务端双端并发修改、修订冲突和保留本地选择；旧修订选择被拒绝",
+      "服务端提交后在客户端丢弃响应；进程重启查询原请求恢复，未再次提交",
+      "服务端整体替换与下一 epoch；另一端重取快照并保留替换期间的本地修改",
+      "密钥包装 CAS 与同步密码轮换，业务密文仍可解密",
+      "刷新轮换后丢弃响应要求重新登录，账号空间、本地数据与记住解锁保留",
+      "找回邮件与登录密码重置使另一端会话失效；重新登录后保留本机解锁与条目数据"
+    ],
+    "realBackend": false,
+    "mailVerification": false,
+    "mailPasswordReset": false,
+    "independentDirectories": 2,
+    "realSse": false,
+    "realKeyRotation": false,
+    "logicalCloudItemsAfterCleanup": 0,
+    "clientFaultInjection": [
+      "me401",
+      "lostPushResponse",
+      "lostRefreshResponse"
+    ],
+    "remaining": [
+      "服务端游标保留过期/配额耗尽/限流",
+      "实际 HTTPS/代理断链",
+      "其他目标平台",
+      "真实系统密钥库",
+      "8 小时运行"
+    ],
+    "synthetic": true,
+    "version": "0.5.0-test.341.ad76f0b7",
+    "platform": "darwin",
+    "arch": "x64",
+    "packaged": false,
+    "keyMode": "restricted-file",
+    "startedAt": "2026-10-27T17:47:29.308Z",
+    "verifiedAt": "2026-10-27T17:47:32.870Z",
+    "clients": [
+      {
+        "actor": "device-a",
+        "generation": 4,
+        "events": {
+          "opened": 5,
+          "closed": 5,
+          "hints": 8
+        },
+        "pushCount": 6,
+        "refreshCount": 2,
+        "pushHashes": [
+          "1a9fe7caa2519c21b5961b1ca9658417065ac1e8633ced41a9f4cef4cff93e37",
+          "8c7e56f8ec1a3c9c2438c6625e55fe1ff03b3f89212868fcf3fa5144eb608f55",
+          "4886059f88f1218df7360c6cf2daabb0c6ac9a88085fc133e7bbcaf7d79f2ec5",
+          "e6c327e348fe79cb0f8accf38612ebee2bc57e2c6d45f4643ff688cfc4cf1e5b",
+          "b7f5e71237a2bec06d9275f745fe83df2a3dc832d2d30ee59b16249583c64b4b",
+          "50eeb09266abd06610f2dff4c7354fa95f9866dd7e311e7500d4064f0a8410a6"
+        ]
+      },
+      {
+        "actor": "device-b",
+        "generation": 4,
+        "events": {
+          "opened": 5,
+          "closed": 5,
+          "hints": 8
+        },
+        "pushCount": 2,
+        "refreshCount": 1,
+        "pushHashes": [
+          "ef9f918451f4b86634aeedf47e7500622064f92a29a99f95c3316c3229540376",
+          "9e6af2deac8fa0cef5207836c52c523c71512dab5ac02d928f4d8ce13d8ad095"
+        ]
+      }
+    ]
+  },
+  "packagedSmoke": {
+    "packaged": true,
+    "electron": "44.9.0",
+    "node": "24.22.0",
+    "keyMode": "restricted-file",
+    "sandbox": true,
+    "accountFoundation": true,
+    "accountClosure": true,
+    "syncEngine": true,
+    "syncDesktop": true,
+    "stage2": true,
+    "stage3": true,
+    "stage4": true,
+    "stage5": true,
+    "stage6": true,
+    "monaco": {
+      "typescript": true,
+      "json": true,
+      "model": true
+    }
+  },
+  "packagedSmokeReportSha256": "443b285b39ead89ab1374b22c4416ba0164bfd450fa409c1bf5aa57efa23cc27"
+}

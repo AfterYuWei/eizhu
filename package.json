@@ -28,7 +28,8 @@
     "desktop:smoke:package": "node scripts/smoke-package.mjs",
     "format": "prettier --write apps/desktop/src packages apps/web/src/api apps/web/src/lib/bridge.ts apps/web/src/lib/platform.ts apps/web/src/lib/settingsStorage.ts scripts/{build-desktop,package-desktop,smoke-desktop,smoke-package}.mjs",
     "architecture:verify": "node scripts/verify-desktop-architecture.mjs",
-    "desktop:delivery:verify": "node scripts/verify-desktop-delivery.mjs"
+    "desktop:delivery:verify": "node scripts/verify-desktop-delivery.mjs",
+    "desktop:accept:sync": "node scripts/accept-sync.mjs"
   },
   "dependencies": {
     "argon2": "0.45.1",
