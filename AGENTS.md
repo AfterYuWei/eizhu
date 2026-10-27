@@ -1,8 +1,8 @@
 # eizhu 桌面仓库规范
 
 eizhu 使用 Electron + React + TypeScript/Node.js，只维护 Windows x64、macOS arm64/x64、Linux x64。
-UI 与文档使用中文。当前执行阶段 6 最终工程交付与发布验收；阶段 5 本地完整版本与第三方云备份已交付。官方账号、账号同步及官方云备份待开发，后端部署后再接入。阶段 6 完成发布验收。
-用户已确认阶段 0–4，阶段 5 已提交，并明确授权完成阶段 6（官方账号同步继续延后）。每阶段提交可审查结果、测试证据和差异清单，经用户确认后进入下一阶段。
+UI 与文档使用中文。当前执行阶段 6 最终工程交付与发布验收；阶段 5 本地完整版本与第三方云备份已交付。账号条目同步按独立批次接入，第一批为契约与空间基础；网络业务未开放。备份服务于离线与第三方，本轮不接入官方备份。阶段 6 完成发布验收。
+用户已确认阶段 0–4，阶段 5 已提交，并明确授权完成阶段 6 及独立账号条目同步对接。每阶段提交可审查结果、测试证据和差异清单，经用户确认后进入下一阶段。
 不将未实现、仅有类型定义或未在目标平台执行的能力标为通过。状态见 `docs/desktop-rebuild/`。
 
 ## 开发入口
@@ -32,7 +32,7 @@ npm run desktop:smoke:package -- <安装包路径>
 - `apps/desktop/src/main`：窗口/关闭协调、系统权限与原生能力、设备密钥保护、业务进程监督、应用资源协议。
 - `apps/desktop/src/runtime`：一个 utilityProcess 装配入口。
 - `packages/core`：不导入 Electron。领域用例、仓储、连接与任务管理归所属业务；不要求所有领域使用相同目录模板。
-- `packages/core/src/database`：数据库 Worker 唯一拥有 SQLite 连接。全局 schema v1；离线业务 schema v2 包含加密实体、本地设置、审计、加密 outbox、恢复预览及安全快照。
+- `packages/core/src/database`：数据库 Worker 唯一拥有 SQLite 连接。全局 schema v2 保存加密账号会话；业务 schema v3 保留加密实体、本地设置、审计、outbox、恢复预览及安全快照，并增加同步基础表。升级前生成一致性副本；账号网络业务仍未开放。
 - `packages/core/src/workers`：有界队列与独立计算线程。禁止在终端事件循环执行 KDF、密钥生成或全量备份处理。
 - `packages/contracts`：唯一 DTO、编译期接口、启用方法的运行时 schema、错误、事件和空间上下文定义。
 

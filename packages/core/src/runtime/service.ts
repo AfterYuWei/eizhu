@@ -6,8 +6,9 @@ import { SftpService } from '../sftp/service.ts'
 import { sftp,isSftpOperation } from '@eizhu/contracts'
 import type { BinaryPort } from '../ssh/stream.ts'
 import { ssh, isSshOperation } from '@eizhu/contracts'
-import { foundation, fail, sameContext, local, isLocalOperation } from '@eizhu/contracts'
-import type { RpcRequest, RuntimeContext } from '@eizhu/contracts'
+import { foundation, fail, sameContext, local, isLocalOperation, offlineWorkspace } from '@eizhu/contracts'
+import type { RpcRequest, RuntimeContext, WorkspaceIdentity } from '@eizhu/contracts'
+import { validateWorkspace } from '../account/workspace.ts'
 import { WorkerClient } from '../workers/client.ts'
 import { ResourceScope } from './scope.ts'
 import { Client } from 'ssh2'
@@ -29,24 +30,28 @@ export class RuntimeService {
   private archive: ArchiveService
   private ssh: SshService
   private sftp:SftpService
-  private verification: { root: string; path: string; path3: string }
+  private verification: { root: string; path: string; path3: string; account: string }
+  private workspace: WorkspaceIdentity = offlineWorkspace
+  private initialized = false
   readonly context: RuntimeContext
   constructor(
     context: RuntimeContext,
     root: string,
-    paths: { database: string; compute: string; verification: string; verification3: string },
+    paths: { database: string; compute: string; verification: string; verification3: string; verificationAccount: string },
     key: Uint8Array,
     emit: (name: 'eizhu-session-message'|'eizhu-sftp-message', payload: unknown) => void = () => undefined,
     localHome?:string,
     transport:Transport=async()=>fail('CLOUD_UNAVAILABLE','云存储网络不可用'),
+    workspace?: WorkspaceIdentity,
   ) {
     this.context = context
     this.verification = {
       root: join(root, 'stage2-integration'),
       path: paths.verification,
       path3: paths.verification3,
+      account: paths.verificationAccount,
     }
-    this.database = new WorkerClient(paths.database, { root, key }, 64)
+    this.database = new WorkerClient(paths.database, { root, key, workspace }, 64)
     this.compute = new WorkerClient(paths.compute, undefined, 8)
     this.scope.own(() => this.database.close())
     this.scope.own(() => this.compute.close())
@@ -57,7 +62,15 @@ export class RuntimeService {
     this.archive=new ArchiveService(this.database,this.compute,transport,token=>this.rememberToken(token))
     this.scope.own(()=>this.archive.close())
   }
+  async initialize(): Promise<WorkspaceIdentity> {
+    if (this.initialized) fail('RUNTIME_INIT_FAILED', '业务进程已经初始化')
+    this.workspace = validateWorkspace(await this.database.call('workspace.identity'))
+    this.context.workspaceId = this.workspace.id
+    this.initialized = true
+    return this.workspace
+  }
   async execute(request: RpcRequest): Promise<unknown> {
+    if (!this.initialized) fail('RUNTIME_INIT_FAILED', '业务进程尚未初始化')
     if (!sameContext(request.context, this.context)) fail('WORKSPACE_CHANGED', '数据空间已变化，请重试')
     if (this.scope.controller.signal.aborted) fail('RUNTIME_CLOSED', '业务进程正在关闭')
     if(isArchiveOperation(request.operation)) return archive[request.operation].output.parse(await this.archive.execute(request.operation,request.input))
@@ -70,9 +83,9 @@ export class RuntimeService {
       case 'runtime.beforeQuit': return this.archive.beforeQuit()
       case 'runtime.health':
         await this.database.call('health')
-        return { context: this.context, schema: 2, workers: 2 }
+        return { context: this.context, schema: 3, workers: 2 }
       case 'workspace.status':
-        return { id: this.context.workspaceId, generation: this.context.generation, userId: 0 }
+        return { id: this.context.workspaceId, generation: this.context.generation, userId: this.workspace.userId }
       case 'settings.read':
         return this.database.call('settings.read')
       case 'settings.write':
@@ -88,6 +101,10 @@ export class RuntimeService {
         }
       }
       default:
+        if (request.operation === 'runtime.verifyAccountFoundation') {
+          const verifier = new WorkerClient(this.verification.account, { root: join(this.verification.root, 'account-foundation') }, 1)
+          try { return await verifier.call('verify') } finally { await verifier.close() }
+        }
         if (request.operation === 'runtime.verifyStage3Storage') {
           const verifier = new WorkerClient(
             this.verification.path3,

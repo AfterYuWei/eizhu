@@ -1,35 +1,96 @@
 import Database from 'better-sqlite3'
-import { mkdirSync } from 'node:fs'
+import { existsSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { fail } from '@eizhu/contracts'
+import type { WorkspaceIdentity } from '@eizhu/contracts'
 import { LocalStore } from './local-store.ts'
+import { LocalCipher } from '../local/crypto.ts'
+import { AccountRepository } from '../account/repository.ts'
+import { validateWorkspace } from '../account/workspace.ts'
+import { preserveBeforeMigration } from './migrations.ts'
 
-/** Global UI metadata and the separately encrypted offline business store. Only used by database Workers. */
+/** Global metadata and one isolated business workspace. Only used by database Workers. */
 export class FoundationStore {
-  readonly local: LocalStore
+  readonly local!: LocalStore
+  readonly accounts!: AccountRepository
+  readonly identity: WorkspaceIdentity
   private global: Database.Database
   private workspace!: Database.Database
-  constructor(root: string, key: Uint8Array) {
-    mkdirSync(join(root, 'workspaces', 'offline'), { recursive: true, mode: 0o700 })
+  constructor(root: string, key: Uint8Array, requested?: WorkspaceIdentity) {
+    mkdirSync(root, { recursive: true, mode: 0o700 })
+    const globalPath = join(root, 'global.sqlite'),
+      globalExisted = existsSync(globalPath)
     this.global = this.open(
-      join(root, 'global.sqlite'),
+      globalPath,
       `
       CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
       CREATE TABLE accounts (id TEXT PRIMARY KEY, metadata TEXT NOT NULL);
     `,
     )
     try {
+      if (this.global.pragma('user_version', { simple: true }) === 1) {
+        // Validate existing offline ciphertext before binding a new global key marker.
+        const offline = join(root, 'workspaces', 'offline', 'workspace.sqlite')
+        if (existsSync(offline)) {
+          const previous = new Database(offline, { readonly: true, fileMustExist: true })
+          const cipher = new LocalCipher(key, 'offline')
+          try {
+            const version = Number(previous.pragma('user_version', { simple: true }))
+            if (![1, 2, 3].includes(version)) fail('SCHEMA_UNSUPPORTED', '业务数据版本不受支持，原数据已保留')
+            if (version >= 2) {
+              const marker = previous.prepare('SELECT data FROM key_check WHERE id=1').get() as
+                { data: Buffer } | undefined
+              if (!marker || cipher.open(marker.data, 'key-check') !== 'eizhu-local-v2')
+                fail('KEY_INVALID', '数据密钥校验失败，原数据已保留')
+            }
+          } finally {
+            cipher.close()
+            previous.close()
+          }
+        }
+        if (globalExisted) preserveBeforeMigration(this.global, root, 'global', 1, 2)
+        const cipher = new LocalCipher(key, 'global')
+        try {
+          this.global.transaction(() => {
+            this.global.exec(`
+              CREATE TABLE account_sessions (workspace_id TEXT PRIMARY KEY REFERENCES accounts(id), data BLOB NOT NULL);
+              CREATE TABLE global_state (key TEXT PRIMARY KEY, data BLOB NOT NULL);
+            `)
+            this.global
+              .prepare("INSERT INTO global_state VALUES ('key-check',?)")
+              .run(cipher.seal('eizhu-global-v2', 'key-check'))
+            this.global.pragma('user_version = 2')
+          })()
+        } finally {
+          cipher.close()
+        }
+      }
+      this.accounts = new AccountRepository(this.global, key)
+      this.identity = validateWorkspace(requested ?? this.accounts.active())
+      if (this.identity.id !== 'offline') this.accounts.status(this.identity)
+      const workspacePath = join(root, 'workspaces', this.identity.id, 'workspace.sqlite')
+      const workspaceExisted = existsSync(workspacePath)
+      mkdirSync(join(root, 'workspaces', this.identity.id), { recursive: true, mode: 0o700 })
       this.workspace = this.open(
-        join(root, 'workspaces', 'offline', 'workspace.sqlite'),
+        workspacePath,
         `
         CREATE TABLE workspace_metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL);
-        INSERT INTO workspace_metadata VALUES ('id', 'offline');
         CREATE TABLE revisions (id INTEGER PRIMARY KEY CHECK (id = 1), revision INTEGER NOT NULL);
         INSERT INTO revisions VALUES (1, 0);
       `,
       )
-      this.local = new LocalStore(this.workspace, key)
+      const metadata = this.workspace.prepare("SELECT value FROM workspace_metadata WHERE key='id'").get() as
+        { value: string } | undefined
+      if (metadata && metadata.value !== this.identity.id)
+        fail('WORKSPACE_INVALID', '业务库不属于当前空间，原数据已保留')
+      this.local = new LocalStore(this.workspace, key, this.identity.id, () => {
+        if (workspaceExisted) preserveBeforeMigration(this.workspace, root, this.identity.id, 2, 3)
+      })
+      if (!metadata)
+        this.workspace.prepare("INSERT INTO workspace_metadata VALUES ('id',?)").run(this.identity.id)
     } catch (cause) {
+      this.accounts?.close()
+      this.local?.close()
       this.workspace?.close()
       this.global.close()
       throw cause
@@ -47,7 +108,7 @@ export class FoundationStore {
           db.exec(schema)
           db.pragma('user_version = 1')
         })()
-      else if (version !== 1 && !(path.endsWith('workspace.sqlite') && version === 2))
+      else if (![1, 2, ...(path.endsWith('workspace.sqlite') ? [3] : [])].includes(Number(version)))
         fail('SCHEMA_UNSUPPORTED', '数据版本高于当前应用支持范围，原数据已保留')
       return db
     } catch (cause) {
@@ -73,6 +134,7 @@ export class FoundationStore {
   }
   close(): void {
     this.local.close()
+    this.accounts.close()
     this.workspace.close()
     this.global.close()
   }

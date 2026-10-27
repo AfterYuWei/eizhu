@@ -18,6 +18,8 @@ import {
   failureOf,
   eventSchemas,
   isDesktopEvent,
+  acceptBootstrapUpdate,
+  acceptWorkspaceTransition,
 } from '@eizhu/contracts'
 import type { Bootstrap, DesktopApi, DesktopEvents, RuntimeContext } from '@eizhu/contracts'
 
@@ -33,8 +35,10 @@ const listeners = new Map<string, Set<(payload: unknown) => void>>()
 ipcRenderer.on('eizhu:context', (_event, value) => {
   const parsed = foundation['app.bootstrap'].output.safeParse(value)
   if (parsed.success) {
-    currentBootstrap = parsed.data
-    context = parsed.data.context
+    try {
+      currentBootstrap = acceptBootstrapUpdate(currentBootstrap, parsed.data)
+      context = currentBootstrap.context
+    } catch { /* A delayed context must not restore an old workspace. */ }
   }
 })
 ipcRenderer.on('eizhu:event', (_event, envelope) => {
@@ -71,6 +75,14 @@ async function call(operation: string, input?: unknown): Promise<unknown> {
   const response = await ipcRenderer.invoke('eizhu:request', { id, context: sentContext, operation, input })
   if (response.id !== id) throw new DesktopError({ code: 'STALE_RESPONSE', message: '响应标识不匹配' })
   if (response.error) throw new DesktopError(response.error)
+  if (response.transition !== undefined) {
+    if (!sameContext(response.context, sentContext))
+      throw new DesktopError({ code: 'STALE_RESPONSE', message: '切换响应的原上下文不匹配' })
+    const transition = acceptWorkspaceTransition(operation, sentContext, context, response.transition)
+    currentBootstrap = acceptBootstrapUpdate(currentBootstrap, transition.bootstrap)
+    context = currentBootstrap.context
+    return transition.account.loggedIn ? transition.account : undefined
+  }
   if (operation === 'runtime.restart') {
     const restored = foundation['runtime.restart'].output.parse(response.value)
     if (!sameContext(restored, context))

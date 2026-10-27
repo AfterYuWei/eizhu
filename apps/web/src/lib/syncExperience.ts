@@ -29,7 +29,7 @@ export function backupDiagnostic(status: BackupStatus | null, events: BackupEven
 export function conflictDependencies(conflict: SyncConflict) {
   const result = new Map<string, { type: string; id: string }>()
   for (const summary of [conflict.local, conflict.remote]) {
-    for (const [field, type] of [['group_id', 'group'], ['parent_id', 'group'], ['vault_id', 'vault'], ['jump_profile_id', 'profile']]) {
+    for (const [field, type] of [['group_id', 'group'], ['parent_id', 'group'], ['vault_id', 'vault'], ['jump_profile_id', 'profile']] as const) {
       const id = summary?.[field]
       if (typeof id === 'string' && id) result.set(`${type}:${id}`, { type, id })
     }

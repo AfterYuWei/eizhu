@@ -8,6 +8,7 @@ import type { BrowserWindow } from 'electron'
 import { join } from 'node:path'
 import { writeFile } from 'node:fs/promises'
 import assert from 'node:assert/strict'
+import { verifyAccountFoundation } from './account-foundation-smoke.ts'
 import type { Windows } from './windows.ts'
 import type { RuntimeHost } from './runtime-host.ts'
 import updater from 'electron-updater'
@@ -111,6 +112,9 @@ export async function runSmoke(options: {
     .call<{ passed: boolean }>('runtime.verifyStage2', { fixtures: process.env.EIZHU_SMOKE_FIXTURES })
   assert.equal(stage2.passed, true)
   step('stage2-native-passed')
+  const accountFoundation = await verifyAccountFoundation(options.runtime(), options.assets)
+  assert.equal(accountFoundation.passed, true)
+  step('account-foundation-native-passed')
   const stage3=await verifyStage3(window,options.runtime(),root)
   const stage3Storage=await options.runtime().call<{passed:boolean}>('runtime.verifyStage3Storage')
   assert.equal(stage3Storage.passed,true)
@@ -265,6 +269,7 @@ export async function runSmoke(options: {
     crypto,
     renderer,
     stage2,
+    accountFoundation,
     stage3,
     stage3Storage,
     stage4,

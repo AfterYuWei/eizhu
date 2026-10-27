@@ -50,9 +50,10 @@ function inUse(references: Array<{ id: string; name: string }>, message: string)
 export class LocalStore {
   private cipher: LocalCipher
   private db: Database.Database
-  constructor(db: Database.Database, key: Uint8Array) {
+  constructor(db: Database.Database, key: Uint8Array, workspace = 'offline', beforeMigration: () => void = () => undefined) {
     this.db = db
-    this.cipher = new LocalCipher(key, 'offline')
+    this.cipher = new LocalCipher(key, workspace)
+    try {
     const version = db.pragma('user_version', { simple: true })
     if (version === 1)
       db.transaction(() => {
@@ -68,11 +69,26 @@ export class LocalStore {
         db.prepare('INSERT INTO key_check VALUES (1, ?)').run(this.cipher.seal('eizhu-local-v2', 'key-check'))
         db.pragma('user_version = 2')
       })()
-    else if (version !== 2) fail('SCHEMA_UNSUPPORTED', '业务数据版本不受支持，原数据已保留')
+    else if (version !== 2 && version !== 3) fail('SCHEMA_UNSUPPORTED', '业务数据版本不受支持，原数据已保留')
     const marker = db.prepare('SELECT data FROM key_check WHERE id=1').get() as { data: Buffer } | undefined
     if (!marker || this.cipher.open(marker.data, 'key-check') !== 'eizhu-local-v2')
       fail('KEY_INVALID', '数据密钥校验失败，原数据已保留')
+    if (db.pragma('user_version', { simple: true }) === 2) {
+      beforeMigration()
+      db.transaction(() => {
+        db.exec(`
+          CREATE TABLE sync_state (key TEXT PRIMARY KEY, data BLOB NOT NULL);
+          CREATE TABLE sync_shadow (kind TEXT NOT NULL, item_id TEXT NOT NULL, data BLOB NOT NULL, PRIMARY KEY(kind,item_id));
+          CREATE TABLE sync_requests (request_id TEXT PRIMARY KEY, data BLOB NOT NULL);
+          CREATE TABLE sync_conflicts (kind TEXT NOT NULL, item_id TEXT NOT NULL, data BLOB NOT NULL, PRIMARY KEY(kind,item_id));
+          CREATE TABLE sync_previews (token TEXT PRIMARY KEY, data BLOB NOT NULL, expires INTEGER NOT NULL);
+          CREATE INDEX outbox_item_revision ON outbox(kind,item_id,revision);
+        `)
+        db.pragma('user_version = 3')
+      })()
+    }
     this.pruneHistory()
+    } catch (cause) { this.cipher.close(); throw cause }
   }
   close(): void {
     this.cipher.close()

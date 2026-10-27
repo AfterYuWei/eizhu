@@ -79,7 +79,7 @@ export function SyncPanel() {
 
 const FIELD_LABELS: Record<string, string> = { name: '名称', host: '主机', port: '端口', username: '用户名', auth_type: '认证方式', group_id: '分组', vault_id: '凭据', jump_profile_id: '跳板服务器', parent_id: '父分组', icon: '图标', sort_order: '排序', type: '类型', remark: '备注', fingerprint: '指纹', tags: '标签', note: '备注', content: '命令内容', description: '描述', is_global: '全局片段' }
 function ConflictDiff({ conflict }: { conflict: SyncConflict }) {
-  const fields = [...new Set([...Object.keys(conflict.local ?? {}), ...Object.keys(conflict.remote ?? {})])]
+  const fields = [...new Set([...Object.keys(conflict.local ?? {}), ...Object.keys(conflict.remote ?? {})])] as Array<keyof NonNullable<SyncConflict['local']>>
   const display = (value: unknown) => value === null || value === undefined ? '—' : typeof value === 'string' ? value || '空' : JSON.stringify(value)
   return <details><summary>查看本地与云端差异</summary>
     <table className="w-full text-xs table-fixed"><thead><tr><th>字段</th><th>本地{conflict.localDeleted ? '（已删除）' : ''}</th><th>云端{conflict.remoteDeleted ? '（已删除）' : ''}</th></tr></thead><tbody>{fields.map((field) => <tr key={field}><td>{FIELD_LABELS[field] ?? field}</td><td className="break-all whitespace-pre-wrap">{display(conflict.local?.[field])}</td><td className="break-all whitespace-pre-wrap">{display(conflict.remote?.[field])}</td></tr>)}</tbody></table>

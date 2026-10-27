@@ -34,7 +34,7 @@ export const editorOpenSchema = z.strictObject({
   sessionType: z.enum(['sftp', 'serverDetail']),
   path: z.string().min(1).max(32768),
 })
-const bootstrapSchema = z.strictObject({
+export const bootstrapSchema = z.strictObject({
   context: contextSchema,
   workspace: workspaceSchema,
   platform: platformSchema,
@@ -51,7 +51,7 @@ export const foundation = {
   'app.ready': { input: empty, output: ready },
   'runtime.health': {
     input: empty,
-    output: z.strictObject({ context: contextSchema, schema: z.literal(2), workers: z.literal(2) }),
+    output: z.strictObject({ context: contextSchema, schema: z.literal(3), workers: z.literal(2) }),
   },
   'runtime.restart': { input: empty, output: contextSchema },
   'workspace.status': { input: empty, output: workspaceSchema },

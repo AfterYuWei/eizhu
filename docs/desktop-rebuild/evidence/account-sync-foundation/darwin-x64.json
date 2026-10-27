@@ -1,0 +1,75 @@
+{
+  "verifiedAt": "2026-10-27T11:00:29.036Z",
+  "sourceBase": "d5766ed511ed753e38a2675d9ff69a524a9a3bb3",
+  "sourceState": "uncommitted workspace changes",
+  "platform": "darwin",
+  "arch": "x64",
+  "version": "0.5.0-test.338.d5766ed5",
+  "channel": "test",
+  "artifact": {
+    "path": "artifacts/desktop/eizhu-0.5.0-test.338.d5766ed5-mac-x64.dmg",
+    "bytes": 158095920,
+    "sha256": "dc2d1f2d3d47204c00336d0b9aec4eef37209c153c8bab4f01222f6885de083c",
+    "signed": false,
+    "notarized": false
+  },
+  "smokeReportSha256": "28d309608f188e80754465f0f64b7fabcbdbb3beacfe7c359f58382cd4230a74",
+  "packaged": true,
+  "electron": "44.9.0",
+  "node": "24.22.0",
+  "schema": {
+    "global": 2,
+    "business": 3
+  },
+  "accountFoundation": {
+    "passed": true,
+    "checks": [
+      "旧库密钥错误：拒绝初始化，原全局 schema 与密文保留",
+      "全局 v1→v2、业务 v2→v3：设置、实体、原 outbox 密文保留；一致性副本可读取",
+      "会话与解锁缓存加密；公开状态不包含令牌/密钥；过期保留账号身份",
+      "重启恢复活动账号；A/B/离线分别存储并派生密钥，未自动导入离线数据",
+      "跨账号搬移密文不能解密；退出清除本账号会话和缓存，保留业务库及其他账号",
+      "业务迁移中途失败整体回滚；修复阻断后可重试"
+    ],
+    "runtime": {
+      "restoredAccountIdentity": true,
+      "explicitAccountIsolation": true,
+      "failedTargetRollback": true,
+      "nativeProcessTree": true
+    }
+  },
+  "isolation": {
+    "rendererNode": "undefined",
+    "rendererRequire": "undefined",
+    "accountPublicOperation": "STAGE_NOT_READY"
+  },
+  "regression": {
+    "stage2": true,
+    "stage3": true,
+    "stage3Storage": true,
+    "stage4": true,
+    "stage5": true,
+    "stage6": true,
+    "workspaceTabs": true
+  },
+  "nativeCrypto": {
+    "kdf": true,
+    "crypto": true,
+    "ssh2": true
+  },
+  "runtimeRecovery": {
+    "failed": "RUNTIME_UNAVAILABLE",
+    "generation": 2,
+    "retainedEditorMemory": true,
+    "persistedSettings": true
+  },
+  "remaining": [
+    "账号网络与邮件业务",
+    "同步密码学和调度引擎",
+    "真实双端同步",
+    "Windows x64 / macOS arm64 / Linux x64",
+    "真实系统密钥库",
+    "签名公证",
+    "8小时稳定性"
+  ]
+}

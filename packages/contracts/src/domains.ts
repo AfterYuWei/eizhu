@@ -200,9 +200,9 @@ export interface DomainOperations {
   'sync.changePassword': { input: { password: string }; output: void }
   'sync.conflicts': { input: void; output: SyncConflict[] }
   'sync.now': { input: void; output: void }
-  'sync.preview': { input: void; output: SyncPreview }
+  'sync.preview': { input: { includeOffline: boolean }; output: SyncPreview }
   'sync.resolveConflict': {
-    input: { itemType: string; itemId: string; choice: 'keep_local' | 'use_cloud'; remoteRevision: number }
+    input: { itemType: SyncConflict['itemType']; itemId: string; choice: 'keep_local' | 'use_cloud'; remoteRevision: number }
     output: void
   }
   'sync.status': { input: void; output: SyncStatus }

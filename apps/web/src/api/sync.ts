@@ -6,12 +6,12 @@ export const syncApi = {
   changePassword: (password: string) => bridge().sync.changePassword({ password }),
   conflicts: () => bridge().sync.conflicts(),
   resolveConflict: (
-    itemType: string,
+    itemType: import('@/types/sync').SyncConflict['itemType'],
     itemId: string,
     choice: 'keep_local' | 'use_cloud',
     remoteRevision: number,
   ) => bridge().sync.resolveConflict({ itemType, itemId, choice, remoteRevision }),
-  preview: () => bridge().sync.preview(),
+  preview: (includeOffline = false) => bridge().sync.preview({ includeOffline }),
   bootstrap: (token: string, mode: 'merge' | 'use_local' | 'use_cloud') =>
     bridge().sync.bootstrap({ token, mode }),
 }

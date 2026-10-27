@@ -40,6 +40,7 @@ import {
 import type { Bootstrap, PlatformCapabilities, RuntimeContext } from '@eizhu/contracts'
 import { loadDeviceKey } from '@eizhu/core/runtime/device-key'
 import { RuntimeHost } from './runtime-host.ts'
+import { replaceWorkspaceRuntime } from './workspace-runtime.ts'
 import { Windows } from './windows.ts'
 import { assetPath, isTrustedPage } from './security.ts'
 import { DocumentGrants, saveAtomically,exportFileAtomically } from './documents.ts'
@@ -113,35 +114,22 @@ async function restartRuntime(): Promise<RuntimeContext> {
     healthy = false
     documents.revoke()
     editorGrants.clear();editorBorrowed.clear();deferredFileCloses.clear()
-    await runtime.close()
-    const candidate = new RuntimeHost(
-      dataRoot,
-      __dirname,
-      runtime.context.generation + 1,
-      runtimeFailed,
-      deviceKey!,
-    )
-    let nextSettings: Bootstrap['settings']
-    try {
-      await candidate.start()
-      nextSettings = await candidate.call('settings.read')
-    } catch (cause) {
-      await candidate.close()
-      throw cause
-    }
-    runtime = candidate
-    attachRuntimeEvents(runtime)
-    settings = nextSettings
-    healthy = true
-    for (const window of [windows.main, windows.editor]) {
-      if (window && !window.isDestroyed()) window.webContents.send('eizhu:context', bootstrap(window))
-    }
-    windows.broadcast('eizhu-workspace-changed', {
-      id: runtime.context.workspaceId,
-      generation: runtime.context.generation,
-      userId: 0,
-    })
-    windows.broadcast('eizhu-runtime-state', { status: 'ready' })
+    await replaceWorkspaceRuntime(runtime, runtime.workspace,
+      (workspace, generation) => new RuntimeHost(dataRoot, __dirname, generation, runtimeFailed, deviceKey!, workspace),
+      async (host) => {
+        const nextSettings = await host.call<Bootstrap['settings']>('settings.read')
+        runtime = host
+        attachRuntimeEvents(runtime)
+        settings = nextSettings
+        healthy = true
+        for (const window of [windows.main, windows.editor]) {
+          if (window && !window.isDestroyed()) window.webContents.send('eizhu:context', bootstrap(window))
+        }
+        windows.broadcast('eizhu-workspace-changed', {
+          id: runtime.context.workspaceId, generation: runtime.context.generation, userId: runtime.workspace.userId,
+        })
+        windows.broadcast('eizhu-runtime-state', { status: 'ready' })
+      })
     return runtime.context
   })().finally(() => {
     restarting = undefined
@@ -183,7 +171,7 @@ function authenticate(event: Electron.IpcMainInvokeEvent): BrowserWindow {
 function bootstrap(window: BrowserWindow): Bootstrap {
   return {
     context: runtime.context,
-    workspace: { id: 'offline', generation: runtime.context.generation, userId: 0 },
+    workspace: { id: runtime.workspace.id, generation: runtime.context.generation, userId: runtime.workspace.userId },
     platform: capabilities(),
     window: windows.kind(window),
     version: __EIZHU_VERSION__,

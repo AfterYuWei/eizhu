@@ -3,8 +3,9 @@ import { utilityProcess } from 'electron'
 import type { UtilityProcess, MessagePortMain } from 'electron'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
-import { DesktopError, sameContext, eventSchemas, isDesktopEvent } from '@eizhu/contracts'
-import type { RuntimeContext, Failure } from '@eizhu/contracts'
+import { DesktopError, sameContext, eventSchemas, isDesktopEvent, offlineWorkspace, contextSchema } from '@eizhu/contracts'
+import type { RuntimeContext, Failure, WorkspaceIdentity } from '@eizhu/contracts'
+import { validateWorkspace } from '@eizhu/core/account/workspace'
 import { stopProcess } from './process-shutdown.ts'
 
 type Pending = { resolve: (value: unknown) => void; reject: (reason: unknown) => void; timer: NodeJS.Timeout }
@@ -15,16 +16,20 @@ export class RuntimeHost {
   private stopping?: Promise<void>
   onEvent?: (name: 'eizhu-session-message'|'eizhu-sftp-message', payload: unknown) => void
   readonly context: RuntimeContext
+  workspace: WorkspaceIdentity
+  private requestedWorkspace?: WorkspaceIdentity
   private root: string
   private directory: string
   private failed: () => void
   private key: Buffer
-  constructor(root: string, directory: string, generation: number, failed: () => void, key: Buffer) {
+  constructor(root: string, directory: string, generation: number, failed: () => void, key: Buffer, workspace?: WorkspaceIdentity) {
     this.root = root
     this.directory = directory
     this.failed = failed
     this.key = key
-    this.context = { runtimeId: randomUUID(), workspaceId: 'offline', generation }
+    this.requestedWorkspace = workspace === undefined ? undefined : validateWorkspace(workspace)
+    this.workspace = this.requestedWorkspace ?? offlineWorkspace
+    this.context = { runtimeId: randomUUID(), workspaceId: this.workspace.id, generation }
   }
   async start(): Promise<void> {
     const child = utilityProcess.fork(join(this.directory, 'runtime.cjs'), [], {
@@ -65,7 +70,15 @@ export class RuntimeHost {
         }
         if (message.type === 'ready') {
           clearTimeout(timer)
-          resolve()
+          try {
+            const context = contextSchema.parse(message.context), workspace = validateWorkspace(message.workspace)
+            if (context.runtimeId !== this.context.runtimeId || context.generation !== this.context.generation
+              || context.workspaceId !== workspace.id || (this.requestedWorkspace && workspace.id !== this.requestedWorkspace.id))
+              throw new Error('Unexpected workspace')
+            this.workspace = workspace
+            this.context.workspaceId = workspace.id
+            resolve()
+          } catch { reject(new Error('Runtime workspace identity mismatch')); child.kill() }
         }
         if (message.type === 'fatal') {
           clearTimeout(timer)
@@ -93,6 +106,7 @@ export class RuntimeHost {
         root: this.root,
         workers: this.directory,
         key: this.key,
+        workspace: this.requestedWorkspace,
         localHome:process.argv.includes('--smoke-test')?join(this.root,'stage4','local'):undefined,
       })
     })

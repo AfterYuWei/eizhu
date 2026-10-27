@@ -2,15 +2,15 @@ import { ArchiveRepository } from '../archive/repository.ts'
 import { isArchiveOperation, archive } from '@eizhu/contracts'
 import { parentPort, workerData } from 'node:worker_threads'
 import { z } from 'zod'
-import { foundation, fail, isLocalOperation, local, isSshOperation, ssh } from '@eizhu/contracts'
+import { foundation, fail, isLocalOperation, local, isSshOperation, ssh, workspaceIdentitySchema } from '@eizhu/contracts'
 import type { Payload } from '../local/model.ts'
 import { FoundationStore } from './store.ts'
 import { answerWorker } from '../workers/client.ts'
 
-const { root, key } = z
-  .strictObject({ root: z.string().min(1), key: z.instanceof(Uint8Array) })
+const { root, key, workspace } = z
+  .strictObject({ root: z.string().min(1), key: z.instanceof(Uint8Array), workspace: workspaceIdentitySchema.optional() })
   .parse(workerData)
-const store = new FoundationStore(root, key)
+const store = new FoundationStore(root, key, workspace)
 const archiveStore = new ArchiveRepository(store.local)
 key.fill(0)
 const historySweep = setInterval(() => store.local.pruneHistory(), 3600000)
@@ -25,7 +25,9 @@ parentPort!.on('message', async (message) => {
         return store.writeSetting(data.key, data.value)
       }
       case 'health':
-        return { schema: 2 }
+        return { schema: 3 }
+      case 'workspace.identity':
+        return store.identity
       case 'local.snapshot':
         return store.local.snapshot()
       case 'backup.prepare':

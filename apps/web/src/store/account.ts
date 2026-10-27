@@ -57,7 +57,7 @@ export const useAccountStore = create<AccountStore>((set) => ({
     try {
       const user = await accountApi.me()
       set((state) => ({
-        status: { loggedIn: true, syncEnabled: state.status?.syncEnabled ?? true, user },
+        status: { loggedIn: true, sessionState: 'authenticated', syncEnabled: state.status?.syncEnabled ?? true, user },
         loading: false,
       }))
     } catch (cause) {
@@ -71,11 +71,12 @@ export const useAccountStore = create<AccountStore>((set) => ({
     try {
       await accountApi.logout()
       await refreshWorkspace()
-      set({ status: { loggedIn: false, syncEnabled: false }, loading: false })
+      set({ status: { loggedIn: false, sessionState: 'anonymous', syncEnabled: false }, loading: false })
     } catch (cause) {
-      // 业务服务即使远端吊销失败也会清除本地会话，界面同步进入退出状态。
+      // 空间切换或退出失败时，重新读取真实状态；读取也失败则保留原展示，不能伪造退出成功。
       await refreshWorkspace().catch(() => {})
-      set({ status: await accountApi.status().catch(() => ({ loggedIn: false, syncEnabled: false })), error: errorMessage(cause), loading: false })
+      const status = await accountApi.status().catch(() => null)
+      set((state) => ({ status: status ?? state.status, error: errorMessage(cause), loading: false }))
     }
   },
   setSyncEnabled: async (enabled) => {

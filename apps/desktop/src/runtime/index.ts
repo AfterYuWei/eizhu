@@ -4,7 +4,7 @@ import { DesktopError } from '@eizhu/contracts'
 import { z } from 'zod'
 import { join } from 'node:path'
 import { RuntimeService } from '@eizhu/core/runtime/service'
-import { contextSchema, requestSchema, failureOf, sameContext } from '@eizhu/contracts'
+import { contextSchema, requestSchema, failureOf, sameContext, workspaceIdentitySchema } from '@eizhu/contracts'
 
 const port = process.parentPort!
 let service: RuntimeService | undefined
@@ -35,6 +35,7 @@ port.on('message', async ({ data, ports }) => {
           workers: z.string(),
           key: z.instanceof(Uint8Array),
           localHome:z.string().optional(),
+          workspace: workspaceIdentitySchema.optional(),
         })
         .parse(data)
       service = new RuntimeService(
@@ -45,20 +46,23 @@ port.on('message', async ({ data, ports }) => {
           compute: join(input.workers, 'compute.cjs'),
           verification: join(input.workers, 'stage2.cjs'),
           verification3: join(input.workers, 'stage3.cjs'),
+          verificationAccount: join(input.workers, 'account-foundation.cjs'),
         },
         input.key,
         (name, payload) => port.postMessage({ type: 'event', context: input.context, name, payload }),
         input.localHome,
         transport,
+        input.workspace,
       )
       input.key.fill(0)
+      const workspace = await service.initialize()
       await service.execute({
         id: crypto.randomUUID(),
         context: input.context,
         operation: 'runtime.health',
         input: undefined,
       })
-      port.postMessage({ type: 'ready', context: input.context })
+      port.postMessage({ type: 'ready', context: service.context, workspace })
       return
     }
     if (data.type === 'terminal.bind') {
