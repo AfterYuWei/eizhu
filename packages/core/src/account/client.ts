@@ -33,13 +33,18 @@ const messages: Record<string, [string, string]> = {
   MAIL_NOT_CONFIGURED: ['ACCOUNT_MAIL_UNAVAILABLE', '邮件服务尚未配置，请联系管理员'],
 }
 
-function responseError(response: HttpResponse): DesktopError {
+function responseError(response: HttpResponse, registration = false): DesktopError {
   let code = ''
   try {
     code = remoteError.parse(JSON.parse(new TextDecoder().decode(response.body))).code
   } catch {
     /* Raw server bodies never reach UI or diagnostics. */
   }
+  if (registration && response.status === 401 && (code === 'UNAUTHENTICATED' || !messages[code]))
+    return new DesktopError({
+      code: 'ACCOUNT_ACCESS_DENIED',
+      message: '账号服务拒绝注册，请联系管理员检查注册权限与受限模式',
+    })
   const known = messages[code]
   if (known) return new DesktopError({ code: known[0], message: known[1] })
   if (response.status === 401)
@@ -104,7 +109,8 @@ export class AccountClient {
         })
       }
       if (response.body.byteLength > (scope === 'auth' ? 131072 : 50*1024*1024)) fail('ACCOUNT_PROTOCOL', '账号响应超出大小限制')
-      if (response.status < 200 || response.status >= 300) throw responseError(response)
+      if (response.status < 200 || response.status >= 300)
+        throw responseError(response, scope === 'auth' && path === 'register')
       if (!schema) return undefined as T
       try {
         return schema.parse(JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(response.body)))

@@ -93,6 +93,7 @@ const getCode = async (kind: 'verify' | 'reset') => {
 }
 let fixture: AccountFixture | undefined
 const actors: Actor[] = []
+let currentPhase = 'startup'
 let finishing = false
 async function finish(code: number) {
   if (finishing) return
@@ -138,6 +139,7 @@ class Actor implements LiveActor {
   private directory: string
   private label: string
   private oldRefresh?: string
+  private responses: Array<{ path: string; method: string; status: number }> = []
   events = { opened: 0, closed: 0, hints: 0 }
   faults = {
     forceMe401: false,
@@ -196,6 +198,8 @@ class Actor implements LiveActor {
       this.faults.pushHashes.push(createHash('sha256').update(request.body!).digest('hex'))
     }
     const response = await this.base(request, signal)
+    this.responses.push({ path, method: request.method, status: response.status })
+    if (this.responses.length > 128) this.responses.shift()
     if (
       response.status >= 200 &&
       response.status < 300 &&
@@ -276,6 +280,7 @@ class Actor implements LiveActor {
       pushCount: this.faults.pushCount,
       refreshCount: this.faults.refreshCount,
       pushHashes: this.faults.pushHashes,
+      responses: this.responses,
     }
   }
 }
@@ -303,7 +308,10 @@ async function main() {
     target: synthetic ? 'local protocol fixture' : ACCOUNT_SERVER,
     root,
   })
-  const result = await acceptLiveSync(a, b, email, getCode, (phase) => output({ event: 'phase', phase }))
+  const result = await acceptLiveSync(a, b, email, getCode, (phase) => {
+    currentPhase = phase
+    output({ event: 'phase', phase })
+  })
   const report = {
     ...result,
     synthetic,
@@ -328,7 +336,22 @@ main().then(
   () => finish(0),
   async (error) => {
     const failure = failureOf(error)
-    output({ event: 'failed', error: { code: failure.code, message: failure.message } })
+    const report = {
+      passed: false,
+      synthetic,
+      mode: synthetic ? 'synthetic' : 'live',
+      version: __EIZHU_VERSION__,
+      platform: process.platform,
+      arch: process.arch,
+      phase: currentPhase,
+      failedAt: new Date().toISOString(),
+      error: { code: failure.code, message: failure.message },
+      clients: actors.map((actor) => actor.diagnostics()),
+    }
+    await writeFile(join(root!, 'failure.json'), JSON.stringify(report, null, 2) + '\n', {
+      mode: 0o600,
+    }).catch(() => output({ event: 'failure_report_unavailable' }))
+    output({ event: 'failed', error: report.error, report: join(root!, 'failure.json') })
     await finish(1)
   },
 )

@@ -1,0 +1,67 @@
+{
+  "observedAt": "2026-10-28T00:50:18.556Z",
+  "platform": "darwin",
+  "arch": "x64",
+  "target": "https://eizhu.yuweinfo.com/",
+  "clientVersion": "0.5.0-test.342.764e37b4",
+  "sourceBase": "764e37b41df6dc17a300ac2fe59e78802a464a69",
+  "sourceDigest": "c9b86ced21cb2f9047c346af26b41da23feff03302c293d5bde00961d73be65a",
+  "result": "blocked at registration",
+  "acceptedAccount": false,
+  "registrationAttempt": {
+    "phase": "register",
+    "errorCode": "ACCOUNT_NOT_LOGGED_IN",
+    "accountWorkspacePersisted": false,
+    "automaticRetry": false
+  },
+  "imap": {
+    "tls": true,
+    "authenticated": true,
+    "readOnly": true,
+    "mailboxStatusRead": true,
+    "messageBodiesRead": false
+  },
+  "probes": [
+    {
+      "method": "GET",
+      "path": "/api/auth/setup",
+      "status": 200,
+      "required": false,
+      "passwordMinLength": 16
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/register",
+      "bodyKind": "empty invalid object",
+      "status": 401,
+      "code": "UNAUTHENTICATED"
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/login",
+      "bodyKind": "empty invalid object",
+      "status": 400,
+      "code": "VALIDATION_FAILED"
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/refresh",
+      "bodyKind": "empty invalid object",
+      "status": 400,
+      "code": "VALIDATION_FAILED"
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/password/forgot",
+      "bodyKind": "empty invalid object",
+      "status": 400,
+      "code": "VALIDATION_FAILED"
+    }
+  ],
+  "realBackendAttempted": true,
+  "realRegistrationPassed": false,
+  "realMailDeliveryPassed": false,
+  "realDualClientSyncPassed": false,
+  "backendConfigurationChanged": false,
+  "pending": "部署方检查并开放注册、关闭受限模式后继续。当前证据不能确定具体配置原因。"
+}

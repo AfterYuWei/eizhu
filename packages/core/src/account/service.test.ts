@@ -96,6 +96,38 @@ test('initialization blocks registration and lost authentication responses never
   }
 })
 
+test('a rejected public registration explains server access limits without invalidating an existing session', async () => {
+  const identity = accountWorkspace(42),
+    initial = session(),
+    store = storage(identity, initial),
+    paths: string[] = []
+  const service = new AccountService(store.api, async (request) => {
+    const path = new URL(request.url).pathname
+    paths.push(path)
+    return path.endsWith('/setup')
+      ? response(200, { required: false, passwordMinLength: 16 })
+      : response(401, { code: 'UNAUTHENTICATED', message: 'SYNTHETIC-RAW-SECRET' })
+  }, identity, () => {})
+  try {
+    await assert.rejects(
+      service.authenticate('account.register', { email: user.email, password: 'synthetic-password' }),
+      (cause: unknown) => cause instanceof DesktopError
+        && cause.error.code === 'ACCOUNT_ACCESS_DENIED'
+        && cause.error.message.includes('注册权限')
+        && !cause.error.message.includes('SYNTHETIC-RAW-SECRET'),
+    )
+    assert.deepEqual(store.rows.get(identity.id), initial)
+    assert.deepEqual(paths, ['/api/auth/setup', '/api/auth/register'])
+    await assert.rejects(
+      service.authenticate('account.login', { email: user.email, password: 'synthetic-password' }),
+      code('ACCOUNT_NOT_LOGGED_IN'),
+    )
+    assert.deepEqual(store.rows.get(identity.id), initial)
+  } finally {
+    await service.close()
+  }
+})
+
 test('concurrent expiry refreshes once, persists rotation and exposes only public account status', async () => {
   const identity = accountWorkspace(42),
     store = storage(identity, session())
