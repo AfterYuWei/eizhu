@@ -29,8 +29,11 @@ const local = process.argv.includes('--local')
 const live = process.argv.includes('--live')
 const mode = synthetic ? 'synthetic' : local ? 'local' : 'live'
 const target = local ? 'http://127.0.0.1:8080/' : ACCOUNT_SERVER
+const resetExisting = process.argv.includes('--reset-existing-account')
 if (!root || Number(synthetic) + Number(local) + Number(live) !== 1)
   throw new Error('Explicit isolated acceptance mode required')
+if (resetExisting && !local)
+  throw new Error('Existing account recovery is restricted to localhost acceptance')
 if (
   lstatSync(root).isSymbolicLink() ||
   !realpathSync(root).startsWith(realpathSync(tmpdir()) + sep) ||
@@ -318,6 +321,7 @@ async function main() {
         .max(255)
         .parse((await readFile(emailPath!, 'utf8')).trim())
   const resumeProfile = process.argv.find((v) => v.startsWith('--resume-profile='))?.slice(17)
+  if (resumeProfile && resetExisting) throw new Error('Choose either profile resume or account recovery')
   if (resumeProfile && synthetic) throw new Error('合成模式不能恢复真实账号目录')
   const resumedFrom = resumeProfile
     ? await cloneAcceptanceProfile(resumeProfile, root!, mode === 'local' ? 'local' : 'live')
@@ -342,7 +346,7 @@ async function main() {
       currentPhase = phase
       output({ event: 'phase', phase })
     },
-    { resume: Boolean(resumedFrom) },
+    { resume: Boolean(resumedFrom), resetExisting },
   )
   const report = {
     ...result,

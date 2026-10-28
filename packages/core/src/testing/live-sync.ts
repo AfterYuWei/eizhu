@@ -36,7 +36,7 @@ export async function acceptLiveSync(
   email: string,
   input: AcceptanceInput,
   phase: (name: string) => void,
-  options: { resume?: boolean } = {},
+  options: { resume?: boolean; resetExisting?: boolean } = {},
 ) {
   const password = randomBytes(36).toString('base64url'),
     syncPassword = randomBytes(32).toString('base64url'),
@@ -114,7 +114,7 @@ export async function acceptLiveSync(
   }
   const offline = await sentinel(a, '同步验收离线哨兵')
   const offlineB = await sentinel(b, '第二端独立离线哨兵')
-  if (options.resume) {
+  if (options.resume || options.resetExisting) {
     phase('recover-owned-test-account')
     await challenge(
       'reset',
@@ -122,7 +122,7 @@ export async function acceptLiveSync(
       (code) => a.call('account.resetPassword', { email, code, newPassword: password }),
     )
     await a.login('account.login', email, password)
-    checks.push('在新目录恢复本次专用测试账号；找回邮件验证后重新登录，原失败目录保留')
+    checks.push('在新隔离目录通过找回邮件恢复已授权的专用测试账号，不重复注册')
   } else {
     phase('register')
     await a.login('account.register', email, password)
@@ -140,7 +140,8 @@ export async function acceptLiveSync(
     assert.equal((await a.call<AccountStatus>('account.status')).user?.emailVerified, true)
     verificationPerformed = true
     checks.push('注册、发送验证请求与验证码验证')
-  } else checks.push('注册；服务端已返回邮箱验证状态')
+  } else
+    checks.push(`${options.resume || options.resetExisting ? '账号恢复' : '注册'}；服务端已返回邮箱验证状态`)
   a.faults.forceMe401 = true
   await a.call('account.me')
   assert.ok(a.faults.refreshCount > 0)
@@ -340,7 +341,8 @@ export async function acceptLiveSync(
   return {
     passed: true,
     resumed: Boolean(options.resume),
-    registrationPerformed: !options.resume,
+    registrationPerformed: !options.resume && !options.resetExisting,
+    existingAccountRecovered: Boolean(options.resetExisting),
     checks,
     realBackend: true,
     mailVerification: verificationPerformed,
