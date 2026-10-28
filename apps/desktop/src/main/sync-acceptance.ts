@@ -13,7 +13,7 @@ import type { WorkspaceIdentity } from '@eizhu/contracts'
 import { loadDeviceKey } from '@eizhu/core/runtime/device-key'
 import { RuntimeHost } from './runtime-host.ts'
 import { accountHttp } from './account-network.ts'
-import { syncEventStream } from './sync-events.ts'
+import { syncEventStream, readSyncEvents } from './sync-events.ts'
 import { SseHints } from '@eizhu/core/sync/sse'
 import type { Transport } from '@eizhu/core/archive/network'
 import type { EventStream } from '@eizhu/core/sync/service'
@@ -25,7 +25,11 @@ import { cloneAcceptanceProfile } from '@eizhu/core/testing/acceptance-profile'
 declare const __EIZHU_VERSION__: string
 const root = process.argv.find((v) => v.startsWith('--acceptance-root='))?.slice(18)
 const synthetic = process.argv.includes('--synthetic')
-if (!root || (!synthetic && !process.argv.includes('--live')))
+const local = process.argv.includes('--local')
+const live = process.argv.includes('--live')
+const mode = synthetic ? 'synthetic' : local ? 'local' : 'live'
+const target = local ? 'http://127.0.0.1:8080/' : ACCOUNT_SERVER
+if (!root || Number(synthetic) + Number(local) + Number(live) !== 1)
   throw new Error('Explicit isolated acceptance mode required')
 if (
   lstatSync(root).isSymbolicLink() ||
@@ -178,8 +182,23 @@ class Actor implements LiveActor {
   constructor(label: string) {
     this.label = label
     this.directory = join(root!, label)
-    this.base = fixture?.transport ?? accountHttp
-    this.stream = fixture?.events ?? syncEventStream
+    this.base =
+      fixture?.transport ??
+      (local
+        ? (request, signal) => {
+            const source = new URL(request.url)
+            return accountHttp(
+              { ...request, url: new URL(source.pathname + source.search, target).href },
+              signal,
+            )
+          }
+        : accountHttp)
+    this.stream =
+      fixture?.events ??
+      (local
+        ? (authorization, signal, consume) =>
+            readSyncEvents(authorization, signal, consume, new URL('api/sync/v2/events', target).href)
+        : syncEventStream)
     actors.push(this)
   }
   private transport: Transport = async (request, signal) => {
@@ -300,7 +319,9 @@ async function main() {
         .parse((await readFile(emailPath!, 'utf8')).trim())
   const resumeProfile = process.argv.find((v) => v.startsWith('--resume-profile='))?.slice(17)
   if (resumeProfile && synthetic) throw new Error('合成模式不能恢复真实账号目录')
-  const resumedFrom = resumeProfile ? await cloneAcceptanceProfile(resumeProfile, root!) : undefined
+  const resumedFrom = resumeProfile
+    ? await cloneAcceptanceProfile(resumeProfile, root!, mode === 'local' ? 'local' : 'live')
+    : undefined
   const a = new Actor('device-a'),
     b = new Actor('device-b')
   await a.start()
@@ -308,8 +329,8 @@ async function main() {
   const startedAt = new Date().toISOString()
   output({
     event: 'started',
-    mode: synthetic ? 'synthetic' : 'live',
-    target: synthetic ? 'local protocol fixture' : ACCOUNT_SERVER,
+    mode,
+    target: synthetic ? 'local protocol fixture' : target,
     root,
   })
   const result = await acceptLiveSync(
@@ -327,6 +348,9 @@ async function main() {
     ...result,
     resumedFrom,
     synthetic,
+    mode,
+    target: synthetic ? 'local protocol fixture' : target,
+    productionBackend: live,
     realBackend: !synthetic,
     mailVerification: !synthetic && result.mailVerification,
     mailPasswordReset: !synthetic && result.mailPasswordReset,
@@ -342,7 +366,7 @@ async function main() {
     clients: actors.map((actor) => actor.diagnostics()),
   }
   await writeFile(join(root!, 'acceptance.json'), JSON.stringify(report, null, 2) + '\n', { mode: 0o600 })
-  output({ event: 'passed', report: join(root!, 'acceptance.json'), mode: synthetic ? 'synthetic' : 'live' })
+  output({ event: 'passed', report: join(root!, 'acceptance.json'), mode })
 }
 main().then(
   () => finish(0),
@@ -351,7 +375,9 @@ main().then(
     const report = {
       passed: false,
       synthetic,
-      mode: synthetic ? 'synthetic' : 'live',
+      mode,
+      target: synthetic ? 'local protocol fixture' : target,
+      productionBackend: live,
       version: __EIZHU_VERSION__,
       platform: process.platform,
       arch: process.arch,

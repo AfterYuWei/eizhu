@@ -33,6 +33,7 @@ test('acceptance resume copies only an identified, stopped pre-key test profile'
     }
     await writeFile(join(source, 'failure.json'), JSON.stringify(report))
     assert.match(await cloneAcceptanceProfile(source, destination), /^[a-f0-9]{64}$/)
+    await assert.rejects(cloneAcceptanceProfile(source, destination, 'local'), /尚未创建同步密钥/)
     assert.equal(
       await readFile(join(destination, 'device-a', 'opaque-test-data'), 'utf8'),
       'synthetic-encrypted-placeholder',

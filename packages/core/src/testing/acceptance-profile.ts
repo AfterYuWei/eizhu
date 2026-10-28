@@ -4,7 +4,11 @@ import { tmpdir } from 'node:os'
 import { createHash } from 'node:crypto'
 
 /** Only resume our stopped, pre-key live acceptance profile. Never accepts application data roots. */
-export async function cloneAcceptanceProfile(source: string, destination: string): Promise<string> {
+export async function cloneAcceptanceProfile(
+  source: string,
+  destination: string,
+  mode: 'live' | 'local' = 'live',
+): Promise<string> {
   if ((await lstat(source)).isSymbolicLink()) throw new Error('验收来源不能是符号链接')
   const resolved = await realpath(source),
     parts = relative(await realpath(tmpdir()), resolved).split(sep)
@@ -15,7 +19,7 @@ export async function cloneAcceptanceProfile(source: string, destination: string
   if (!info.isFile() || info.isSymbolicLink() || info.size > 262144) throw new Error('验收来源报告无效')
   const bytes = await readFile(reportPath),
     report = JSON.parse(bytes.toString())
-  if (report.mode !== 'live' || report.passed !== false || report.phase !== 'initial-preview')
+  if (report.mode !== mode || report.passed !== false || report.phase !== 'initial-preview')
     throw new Error('只能续跑已注册但尚未创建同步密钥的验收')
   if (!Array.isArray(report.clients) || report.clients.length !== 2) throw new Error('验收客户端记录无效')
   for (const [index, label] of ['device-a', 'device-b'].entries()) {

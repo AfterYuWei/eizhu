@@ -1,0 +1,870 @@
+{
+  "verifiedAt": "2026-10-28T08:55:16.900Z",
+  "sourceBase": "c4fde7f1319049459d78b08cdf357fbdeebc2b48",
+  "sourceDigest": "9bc1d660e45f3e86e05aefc0b62d6378ac7de6b85483b81324a8cee08a04dc51",
+  "sourceState": "uncommitted localhost acceptance entry changes",
+  "version": "0.5.0-test.345.c4fde7f1",
+  "platform": "darwin",
+  "arch": "x64",
+  "target": "http://127.0.0.1:8080/",
+  "productionBackend": false,
+  "localBackendAcceptance": "pending existing test account and database isolation confirmation",
+  "localSetup": {
+    "required": false,
+    "passwordMinLength": 8
+  },
+  "localAttempt": {
+    "passed": false,
+    "synthetic": false,
+    "mode": "local",
+    "target": "http://127.0.0.1:8080/",
+    "productionBackend": false,
+    "version": "0.5.0-test.345.c4fde7f1",
+    "platform": "darwin",
+    "arch": "x64",
+    "phase": "register",
+    "failedAt": "2026-10-28T08:46:52.132Z",
+    "error": {
+      "code": "ACCOUNT_EMAIL_TAKEN",
+      "message": "该邮箱已被注册"
+    },
+    "clients": [
+      {
+        "actor": "device-a",
+        "generation": 1,
+        "events": {
+          "opened": 0,
+          "closed": 0,
+          "hints": 0
+        },
+        "pushCount": 0,
+        "refreshCount": 0,
+        "pushHashes": [],
+        "responses": [
+          {
+            "path": "/api/auth/setup",
+            "method": "GET",
+            "status": 200
+          },
+          {
+            "path": "/api/auth/register",
+            "method": "POST",
+            "status": 409
+          }
+        ]
+      },
+      {
+        "actor": "device-b",
+        "generation": 1,
+        "events": {
+          "opened": 0,
+          "closed": 0,
+          "hints": 0
+        },
+        "pushCount": 0,
+        "refreshCount": 0,
+        "pushHashes": [],
+        "responses": []
+      }
+    ]
+  },
+  "toolSelfCheckPassed": true,
+  "tool": {
+    "passed": true,
+    "resumed": false,
+    "registrationPerformed": true,
+    "checks": [
+      "注册、发送验证请求与验证码验证",
+      "客户端注入过期响应后调用刷新接口；轮换后的旧 refresh token 被服务端拒绝",
+      "密钥包装、设备登记、固定水位快照；确认前不上传，离线合并保留，第二目录拉取成功",
+      "四类条目、分组与凭据关联和敏感正文加密往返；SSE 通知触发另一端增量拉取",
+      "服务端双端并发修改、修订冲突和保留本地选择；旧修订选择被拒绝",
+      "服务端提交后在客户端丢弃响应；进程重启查询原请求恢复，未再次提交",
+      "服务端整体替换与下一 epoch；另一端重取快照并保留替换期间的本地修改",
+      "密钥包装 CAS 与同步密码轮换，业务密文仍可解密",
+      "刷新轮换后丢弃响应要求重新登录，账号空间、本地数据与记住解锁保留",
+      "找回邮件与登录密码重置使另一端会话失效；重新登录后保留本机解锁与条目数据"
+    ],
+    "realBackend": false,
+    "mailVerification": false,
+    "mailPasswordReset": false,
+    "independentDirectories": 2,
+    "realSse": false,
+    "realKeyRotation": false,
+    "logicalCloudItemsAfterCleanup": 0,
+    "clientFaultInjection": [
+      "me401",
+      "lostPushResponse",
+      "lostRefreshResponse"
+    ],
+    "remaining": [
+      "服务端游标保留过期/配额耗尽/限流",
+      "实际 HTTPS/代理断链",
+      "其他目标平台",
+      "真实系统密钥库",
+      "8 小时运行"
+    ],
+    "synthetic": true,
+    "mode": "synthetic",
+    "target": "local protocol fixture",
+    "productionBackend": false,
+    "version": "0.5.0-test.345.c4fde7f1",
+    "platform": "darwin",
+    "arch": "x64",
+    "packaged": false,
+    "keyMode": "restricted-file",
+    "startedAt": "2026-10-28T08:50:10.681Z",
+    "verifiedAt": "2026-10-28T08:50:14.359Z",
+    "clients": [
+      {
+        "actor": "device-a",
+        "generation": 4,
+        "events": {
+          "opened": 5,
+          "closed": 5,
+          "hints": 8
+        },
+        "pushCount": 6,
+        "refreshCount": 2,
+        "pushHashes": [
+          "56b4d6f05cf160f25e0f2828644323636c653afeccd2fec73358d5d4a9996dd0",
+          "01064bc8a79df7b116272995c69448fa53023f48d28962fa881f8aa4d16962e1",
+          "344b585837fc93d9dcd109ae990831af974b11cfd893746eeed0987f207cf5cf",
+          "e01f03dfc6693665c09a905e51e147ca8081e3be92edeaa6c17ea6a6bd08ca1f",
+          "d1dd2311d31fa3b97ce289a34fd86e0a4bfc5fc3a96e1246618c57760e8d8b92",
+          "fcf20c74ae1b25d873d1d4a8fa7a410eb0af10c8350f7829716bb27181c84514"
+        ],
+        "responses": [
+          {
+            "path": "/api/auth/setup",
+            "method": "GET",
+            "status": 200
+          },
+          {
+            "path": "/api/auth/register",
+            "method": "POST",
+            "status": 200
+          },
+          {
+            "path": "/api/auth/email/send",
+            "method": "POST",
+            "status": 200
+          },
+          {
+            "path": "/api/auth/email/verify",
+            "method": "POST",
+            "status": 200
+          },
+          {
+            "path": "/api/auth/me",
+            "method": "GET",
+            "status": 200
+          },
+          {
+            "path": "/api/auth/refresh",
+            "method": "POST",
+            "status": 200
+          },
+          {
+            "path": "/api/auth/me",
+            "method": "GET",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/capabilities",
+            "method": "GET",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/devices",
+            "method": "POST",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/keys",
+            "method": "GET",
+            "status": 404
+          },
+          {
+            "path": "/api/sync/v2/keys",
+            "method": "PUT",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/snapshots",
+            "method": "POST",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/snapshots/2309a6af-fd26-4d3a-a42f-ac1e53438606",
+            "method": "GET",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/capabilities",
+            "method": "GET",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/capabilities",
+            "method": "GET",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/devices",
+            "method": "POST",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/changes",
+            "method": "GET",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/push",
+            "method": "POST",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/changes",
+            "method": "GET",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/capabilities",
+            "method": "GET",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/devices",
+            "method": "POST",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/changes",
+            "method": "GET",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/capabilities",
+            "method": "GET",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/devices",
+            "method": "POST",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/changes",
+            "method": "GET",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/push",
+            "method": "POST",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/changes",
+            "method": "GET",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/capabilities",
+            "method": "GET",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/devices",
+            "method": "POST",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/changes",
+            "method": "GET",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/capabilities",
+            "method": "GET",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/devices",
+            "method": "POST",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/changes",
+            "method": "GET",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/push",
+            "method": "POST",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/changes",
+            "method": "GET",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/capabilities",
+            "method": "GET",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/devices",
+            "method": "POST",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/changes",
+            "method": "GET",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/capabilities",
+            "method": "GET",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/devices",
+            "method": "POST",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/changes",
+            "method": "GET",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/push",
+            "method": "POST",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/capabilities",
+            "method": "GET",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/devices",
+            "method": "POST",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/requests/f6a43967-5c10-4669-9bc2-6468c28e9b7e",
+            "method": "GET",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/changes",
+            "method": "GET",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/snapshots",
+            "method": "POST",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/snapshots/2cacc30d-d1b7-42d3-a3f7-e3dea56e9dac",
+            "method": "GET",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/capabilities",
+            "method": "GET",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/capabilities",
+            "method": "GET",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/devices",
+            "method": "POST",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/requests/1dba1743-edf0-42b6-98b2-01a0f5e344f7",
+            "method": "GET",
+            "status": 404
+          },
+          {
+            "path": "/api/sync/v2/push",
+            "method": "POST",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/changes",
+            "method": "GET",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/keys",
+            "method": "GET",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/keys",
+            "method": "PUT",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/capabilities",
+            "method": "GET",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/devices",
+            "method": "POST",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/changes",
+            "method": "GET",
+            "status": 200
+          },
+          {
+            "path": "/api/auth/refresh",
+            "method": "POST",
+            "status": 200
+          },
+          {
+            "path": "/api/auth/setup",
+            "method": "GET",
+            "status": 200
+          },
+          {
+            "path": "/api/auth/login",
+            "method": "POST",
+            "status": 200
+          },
+          {
+            "path": "/api/auth/password/forgot",
+            "method": "POST",
+            "status": 200
+          },
+          {
+            "path": "/api/auth/password/reset",
+            "method": "POST",
+            "status": 200
+          },
+          {
+            "path": "/api/auth/setup",
+            "method": "GET",
+            "status": 200
+          },
+          {
+            "path": "/api/auth/login",
+            "method": "POST",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/capabilities",
+            "method": "GET",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/devices",
+            "method": "POST",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/changes",
+            "method": "GET",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/push",
+            "method": "POST",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/changes",
+            "method": "GET",
+            "status": 200
+          }
+        ]
+      },
+      {
+        "actor": "device-b",
+        "generation": 4,
+        "events": {
+          "opened": 5,
+          "closed": 5,
+          "hints": 8
+        },
+        "pushCount": 2,
+        "refreshCount": 1,
+        "pushHashes": [
+          "0c5e181681c971251cd0c74559ba97436487b984664ff569b6f550d8d74272de",
+          "0d63d527b5a7049d8b3cd2da4f444ef54d382244e4db788d0937bfe12b242844"
+        ],
+        "responses": [
+          {
+            "path": "/api/auth/setup",
+            "method": "GET",
+            "status": 200
+          },
+          {
+            "path": "/api/auth/login",
+            "method": "POST",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/capabilities",
+            "method": "GET",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/devices",
+            "method": "POST",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/keys",
+            "method": "GET",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/snapshots",
+            "method": "POST",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/snapshots/03083494-d29a-43e5-bfcd-a223b3bea6b8",
+            "method": "GET",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/capabilities",
+            "method": "GET",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/capabilities",
+            "method": "GET",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/devices",
+            "method": "POST",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/changes",
+            "method": "GET",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/capabilities",
+            "method": "GET",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/devices",
+            "method": "POST",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/changes",
+            "method": "GET",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/capabilities",
+            "method": "GET",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/devices",
+            "method": "POST",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/changes",
+            "method": "GET",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/changes",
+            "method": "GET",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/changes",
+            "method": "GET",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/capabilities",
+            "method": "GET",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/devices",
+            "method": "POST",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/changes",
+            "method": "GET",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/push",
+            "method": "POST",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/changes",
+            "method": "GET",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/capabilities",
+            "method": "GET",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/devices",
+            "method": "POST",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/changes",
+            "method": "GET",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/capabilities",
+            "method": "GET",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/devices",
+            "method": "POST",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/changes",
+            "method": "GET",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/capabilities",
+            "method": "GET",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/devices",
+            "method": "POST",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/changes",
+            "method": "GET",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/capabilities",
+            "method": "GET",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/devices",
+            "method": "POST",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/changes",
+            "method": "GET",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/snapshots",
+            "method": "POST",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/snapshots/eb7703f5-a3e2-4308-baa4-a9bb16b1ffd8",
+            "method": "GET",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/push",
+            "method": "POST",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/changes",
+            "method": "GET",
+            "status": 200
+          },
+          {
+            "path": "/api/auth/logout",
+            "method": "POST",
+            "status": 200
+          },
+          {
+            "path": "/api/auth/setup",
+            "method": "GET",
+            "status": 200
+          },
+          {
+            "path": "/api/auth/login",
+            "method": "POST",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/capabilities",
+            "method": "GET",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/devices",
+            "method": "POST",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/keys",
+            "method": "GET",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/capabilities",
+            "method": "GET",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/devices",
+            "method": "POST",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/keys",
+            "method": "GET",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/capabilities",
+            "method": "GET",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/devices",
+            "method": "POST",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/changes",
+            "method": "GET",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/capabilities",
+            "method": "GET",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/devices",
+            "method": "POST",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/changes",
+            "method": "GET",
+            "status": 200
+          },
+          {
+            "path": "/api/auth/me",
+            "method": "GET",
+            "status": 401
+          },
+          {
+            "path": "/api/auth/refresh",
+            "method": "POST",
+            "status": 401
+          },
+          {
+            "path": "/api/auth/setup",
+            "method": "GET",
+            "status": 200
+          },
+          {
+            "path": "/api/auth/login",
+            "method": "POST",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/capabilities",
+            "method": "GET",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/devices",
+            "method": "POST",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/changes",
+            "method": "GET",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/capabilities",
+            "method": "GET",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/devices",
+            "method": "POST",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/changes",
+            "method": "GET",
+            "status": 200
+          }
+        ]
+      }
+    ]
+  },
+  "checks": {
+    "types": true,
+    "lint": true,
+    "baselineVerify": true,
+    "architecture": true,
+    "foundationTests": 116,
+    "webTests": 293,
+    "baselineTests": 10
+  },
+  "artifact": {
+    "path": "artifacts/desktop/eizhu-0.5.0-test.345.c4fde7f1-mac-x64.dmg",
+    "bytes": 158153877,
+    "sha256": "5b259587a56f79b55121aea2457ad77f2bf5670d66ebd9ff6245ef6900a818dc",
+    "signed": false,
+    "notarized": false
+  },
+  "packagedSmoke": {
+    "packaged": true,
+    "keyMode": "restricted-file",
+    "account": true,
+    "syncEngine": true,
+    "syncDesktop": true,
+    "stage2": true,
+    "stage3": true,
+    "stage4": true,
+    "stage5": true,
+    "stage6": true,
+    "synthetic": true,
+    "realBackend": false
+  },
+  "packagedSmokeReportSha256": "1064ff59c4047137f0a7cd0553f81ff3c219fb397fedf38d72127976d881c008"
+}
