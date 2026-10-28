@@ -10,6 +10,8 @@ const args = process.argv.slice(2),
 if (synthetic === live)
   throw new Error('使用 --synthetic 验证本机验收工具，或 --live --email-file=<专用邮箱文件> 执行真实服务验收')
 const emailFile = args.find((value) => value.startsWith('--email-file='))?.slice(13)
+const resumeProfile = args.find((value) => value.startsWith('--resume-profile='))?.slice(17)
+if (resumeProfile && !live) throw new Error('续跑仅用于已注册、尚未创建同步密钥的真实验收')
 if (live && !emailFile)
   throw new Error('真实服务验收需要 --email-file；只保存未注册的专用测试邮箱，不需要密码')
 if (emailFile) {
@@ -22,7 +24,7 @@ await mkdir(profile, { mode: 0o700 })
 console.log(`已创建两个隔离客户端目录，验收根目录：${root}`)
 if (live)
   console.log(
-    '将对固定官方 HTTPS 服务创建专用测试账号并发送验证/找回邮件；测试密码不会输出。收到 input_required 后输入 {"code":"六位验证码"}，或 {"action":"resend"}。',
+    `${resumeProfile ? '将恢复本轮已创建的专用测试账号' : '将对固定官方 HTTPS 服务创建专用测试账号'}并发送验证/找回邮件；测试密码不会输出。收到 input_required 后输入 {"code":"六位验证码"}，或 {"action":"resend"}。`,
   )
 const entry = resolve('apps/desktop/out/main/sync-acceptance.cjs')
 await stat(entry)
@@ -34,6 +36,7 @@ const exitCode = await new Promise((accept, reject) => {
       `--acceptance-root=${profile}`,
       synthetic ? '--synthetic' : '--live',
       ...(emailFile ? [`--email-file=${resolve(emailFile)}`] : []),
+      ...(resumeProfile ? [`--resume-profile=${resolve(resumeProfile)}`] : []),
     ],
     { stdio: 'inherit' },
   )

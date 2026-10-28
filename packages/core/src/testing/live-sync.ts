@@ -36,6 +36,7 @@ export async function acceptLiveSync(
   email: string,
   input: AcceptanceInput,
   phase: (name: string) => void,
+  options: { resume?: boolean } = {},
 ) {
   const password = randomBytes(36).toString('base64url'),
     syncPassword = randomBytes(32).toString('base64url'),
@@ -45,12 +46,28 @@ export async function acceptLiveSync(
     send: () => Promise<unknown>,
     apply: (code: string) => Promise<unknown>,
   ) => {
-    await send()
+    const deliver = async () => {
+      for (let attempt = 0; ; attempt++) {
+        try {
+          await send()
+          return
+        } catch (error) {
+          if (!code('RATE_LIMITED')(error) || attempt >= 2) throw error
+          const seconds =
+            Number(((error as DesktopError).details as { retryAfterSeconds?: number })?.retryAfterSeconds) ||
+            60
+          if (seconds > 120) throw error
+          phase('mail-rate-limited')
+          await sleep(Math.max(1000, seconds * 1000))
+        }
+      }
+    }
+    await deliver()
     for (;;) {
       const value = await input(kind)
       if (value === 'resend') {
         try {
-          await send()
+          await deliver()
         } catch (error) {
           if (!code('RATE_LIMITED')(error)) throw error
           phase('mail-rate-limited')
@@ -83,10 +100,33 @@ export async function acceptLiveSync(
     await settled(actor)
     return preview
   }
-  const offline = await a.call<{ id: string }>('group.create', { request: { name: '同步验收离线哨兵' } })
-  const offlineB = await b.call<{ id: string }>('group.create', { request: { name: '第二端独立离线哨兵' } })
-  phase('register')
-  await a.login('account.register', email, password)
+  if (options.resume) {
+    const previous = await a.call<AccountStatus>('account.status')
+    if (!previous.loggedIn || previous.user.email.toLowerCase() !== email.trim().toLowerCase())
+      throw new DesktopError({ code: 'ACCEPTANCE_IDENTITY', message: '验收来源账号与专用邮箱不匹配' })
+    await a.logout()
+  }
+  const sentinel = async (actor: LiveActor, name: string) => {
+    const rows = await actor.call<Array<{ id: string; name: string }>>('group.list')
+    if (options.resume && rows.length === 1 && rows[0].name === name) return rows[0]
+    if (rows.length) throw new DesktopError({ code: 'ACCEPTANCE_NONEMPTY', message: '验收离线空间状态不符' })
+    return actor.call<{ id: string }>('group.create', { request: { name } })
+  }
+  const offline = await sentinel(a, '同步验收离线哨兵')
+  const offlineB = await sentinel(b, '第二端独立离线哨兵')
+  if (options.resume) {
+    phase('recover-owned-test-account')
+    await challenge(
+      'reset',
+      () => a.call('account.requestPasswordReset', { email }),
+      (code) => a.call('account.resetPassword', { email, code, newPassword: password }),
+    )
+    await a.login('account.login', email, password)
+    checks.push('在新目录恢复本次专用测试账号；找回邮件验证后重新登录，原失败目录保留')
+  } else {
+    phase('register')
+    await a.login('account.register', email, password)
+  }
   const registered = await a.call<AccountStatus>('account.status')
   assert.equal(registered.loggedIn, true)
   if (!registered.loggedIn) throw new Error()
@@ -299,6 +339,8 @@ export async function acceptLiveSync(
   await toggle(b, false)
   return {
     passed: true,
+    resumed: Boolean(options.resume),
+    registrationPerformed: !options.resume,
     checks,
     realBackend: true,
     mailVerification: verificationPerformed,

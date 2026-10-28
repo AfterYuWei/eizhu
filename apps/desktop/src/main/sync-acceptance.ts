@@ -20,6 +20,7 @@ import type { EventStream } from '@eizhu/core/sync/service'
 import { acceptLiveSync } from '@eizhu/core/testing/live-sync'
 import type { LiveActor } from '@eizhu/core/testing/live-sync'
 import type { AccountFixture } from './account-fixture-server.ts'
+import { cloneAcceptanceProfile } from '@eizhu/core/testing/acceptance-profile'
 
 declare const __EIZHU_VERSION__: string
 const root = process.argv.find((v) => v.startsWith('--acceptance-root='))?.slice(18)
@@ -297,6 +298,9 @@ async function main() {
         .email()
         .max(255)
         .parse((await readFile(emailPath!, 'utf8')).trim())
+  const resumeProfile = process.argv.find((v) => v.startsWith('--resume-profile='))?.slice(17)
+  if (resumeProfile && synthetic) throw new Error('合成模式不能恢复真实账号目录')
+  const resumedFrom = resumeProfile ? await cloneAcceptanceProfile(resumeProfile, root!) : undefined
   const a = new Actor('device-a'),
     b = new Actor('device-b')
   await a.start()
@@ -308,12 +312,20 @@ async function main() {
     target: synthetic ? 'local protocol fixture' : ACCOUNT_SERVER,
     root,
   })
-  const result = await acceptLiveSync(a, b, email, getCode, (phase) => {
-    currentPhase = phase
-    output({ event: 'phase', phase })
-  })
+  const result = await acceptLiveSync(
+    a,
+    b,
+    email,
+    getCode,
+    (phase) => {
+      currentPhase = phase
+      output({ event: 'phase', phase })
+    },
+    { resume: Boolean(resumedFrom) },
+  )
   const report = {
     ...result,
+    resumedFrom,
     synthetic,
     realBackend: !synthetic,
     mailVerification: !synthetic && result.mailVerification,

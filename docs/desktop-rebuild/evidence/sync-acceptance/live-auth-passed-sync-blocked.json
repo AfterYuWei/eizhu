@@ -1,0 +1,211 @@
+{
+  "observedAt": "2026-10-28T02:49:05.052Z",
+  "target": "https://eizhu.yuweinfo.com/",
+  "platform": "darwin",
+  "arch": "x64",
+  "overall": "partial; sync access denied",
+  "realChecks": {
+    "registration": true,
+    "emailVerificationMail": true,
+    "emailVerification": true,
+    "refreshRotation": true,
+    "oldRefreshRejected": true,
+    "passwordRecoveryMail": true,
+    "passwordReset": true,
+    "relogin": true,
+    "dualClientSync": false
+  },
+  "mailAccess": {
+    "imapTls": true,
+    "readOnly": true,
+    "mailboxPasswordPersisted": false,
+    "codesLogged": false,
+    "connectionClosed": true,
+    "temporaryPipesRemoved": true
+  },
+  "sync": {
+    "capabilitiesStatus": 403,
+    "capabilitiesCode": "ACCESS_DENIED",
+    "devicesWritten": 0,
+    "keysWritten": 0,
+    "pushRequests": 0
+  },
+  "registrationRun": {
+    "passed": false,
+    "synthetic": false,
+    "mode": "live",
+    "version": "0.5.0-test.343.e1157906",
+    "platform": "darwin",
+    "arch": "x64",
+    "phase": "initial-preview",
+    "failedAt": "2026-10-28T02:31:21.080Z",
+    "error": {
+      "code": "ACCOUNT_ACCESS_DENIED",
+      "message": "账号服务暂未开放此操作，请联系管理员"
+    },
+    "clients": [
+      {
+        "actor": "device-a",
+        "generation": 2,
+        "events": {
+          "opened": 0,
+          "closed": 0,
+          "hints": 0
+        },
+        "pushCount": 0,
+        "refreshCount": 1,
+        "pushHashes": [],
+        "responses": [
+          {
+            "path": "/api/auth/setup",
+            "method": "GET",
+            "status": 200
+          },
+          {
+            "path": "/api/auth/register",
+            "method": "POST",
+            "status": 200
+          },
+          {
+            "path": "/api/auth/email/send",
+            "method": "POST",
+            "status": 200
+          },
+          {
+            "path": "/api/auth/email/verify",
+            "method": "POST",
+            "status": 200
+          },
+          {
+            "path": "/api/auth/me",
+            "method": "GET",
+            "status": 200
+          },
+          {
+            "path": "/api/auth/refresh",
+            "method": "POST",
+            "status": 200
+          },
+          {
+            "path": "/api/auth/me",
+            "method": "GET",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/capabilities",
+            "method": "GET",
+            "status": 403
+          }
+        ]
+      },
+      {
+        "actor": "device-b",
+        "generation": 1,
+        "events": {
+          "opened": 0,
+          "closed": 0,
+          "hints": 0
+        },
+        "pushCount": 0,
+        "refreshCount": 0,
+        "pushHashes": [],
+        "responses": []
+      }
+    ]
+  },
+  "recoveryRun": {
+    "passed": false,
+    "synthetic": false,
+    "mode": "live",
+    "version": "0.5.0-test.343.e1157906",
+    "platform": "darwin",
+    "arch": "x64",
+    "phase": "initial-preview",
+    "failedAt": "2026-10-28T02:41:09.306Z",
+    "error": {
+      "code": "ACCOUNT_ACCESS_DENIED",
+      "message": "账号服务暂未开放此操作，请联系管理员"
+    },
+    "clients": [
+      {
+        "actor": "device-a",
+        "generation": 3,
+        "events": {
+          "opened": 0,
+          "closed": 0,
+          "hints": 0
+        },
+        "pushCount": 0,
+        "refreshCount": 1,
+        "pushHashes": [],
+        "responses": [
+          {
+            "path": "/api/auth/logout",
+            "method": "POST",
+            "status": 200
+          },
+          {
+            "path": "/api/auth/password/forgot",
+            "method": "POST",
+            "status": 200
+          },
+          {
+            "path": "/api/auth/password/reset",
+            "method": "POST",
+            "status": 200
+          },
+          {
+            "path": "/api/auth/setup",
+            "method": "GET",
+            "status": 200
+          },
+          {
+            "path": "/api/auth/login",
+            "method": "POST",
+            "status": 200
+          },
+          {
+            "path": "/api/auth/refresh",
+            "method": "POST",
+            "status": 200
+          },
+          {
+            "path": "/api/auth/me",
+            "method": "GET",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/capabilities",
+            "method": "GET",
+            "status": 403
+          }
+        ]
+      },
+      {
+        "actor": "device-b",
+        "generation": 1,
+        "events": {
+          "opened": 0,
+          "closed": 0,
+          "hints": 0
+        },
+        "pushCount": 0,
+        "refreshCount": 0,
+        "pushHashes": [],
+        "responses": []
+      }
+    ]
+  },
+  "readOnlyCapabilityProbe": [
+    {
+      "path": "/api/sync/v2/capabilities",
+      "status": 403,
+      "code": "ACCESS_DENIED"
+    }
+  ],
+  "continuationSourceSha256": "752b6fb3a52571a168ca2a9b5f502d92ce99d5da5feb49123718a7ed48082452",
+  "pending": "用户检查服务端同步权限；不自动重试永久拒绝。",
+  "backendConfigurationChanged": false,
+  "registrationSourceDigest": "2707ae79c1812b634788130fb95052457787855d7b99f826c6df5ce8edfcd734",
+  "recoverySourceDigest": "561044a232b12c389868f2a3cfe3445f0e59461910de301ac553e811b161f7c9"
+}
