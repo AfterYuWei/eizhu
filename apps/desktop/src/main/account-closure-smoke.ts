@@ -29,7 +29,7 @@ async function openAccount(window: BrowserWindow): Promise<void> {
 }
 async function capture(window: BrowserWindow, root: string, name: string, theme: string): Promise<void> {
   await window.webContents.executeJavaScript(
-    `(async()=>{document.documentElement.classList.remove('light','dark');document.documentElement.classList.add(${JSON.stringify(theme)});await document.fonts.ready;await new Promise(r=>setTimeout(r,100))})()`,
+    `(async()=>{document.documentElement.classList.remove('light','dark');document.documentElement.classList.add(${JSON.stringify(theme)});await document.fonts.ready;let style=document.getElementById('account-evidence-motion');if(!style){style=document.createElement('style');style.id='account-evidence-motion';style.textContent='*,*::before,*::after{animation:none!important;transition:none!important}';document.head.append(style)}await new Promise(r=>setTimeout(r,250));await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))})()`,
   )
   await writeFile(
     join(root, name),
@@ -54,22 +54,46 @@ export async function verifyAccountClosure(
   const expectCode = async (script: string, code: string) =>
     assert.equal(await js(`(${script}).then(()=> 'unexpected-success', e=>e.code)`), code)
   const credentials = (email: string, pass = password) => JSON.stringify({ email, password: pass })
-  const count = (name: string) => fixture.requests[`/api/auth/${name}`] ?? 0
+  const registerScript = (email: string) =>
+    `(async()=>{const c=await window.eizhu.account.requestRegistrationCode({email:${JSON.stringify(email)}});const v=await window.eizhu.account.verifyRegistrationCode({email:${JSON.stringify(email)},challengeId:c.challengeId,code:'123456'});return window.eizhu.account.register({...${credentials(email)},ticket:v.ticket})})()`
+  const count = (name: string) =>
+    fixture.requests[`/api/auth/${name === 'register' ? 'master/register' : name}`] ?? 0
   const step = (name: string) => console.log('EIZHU_ACCOUNT_STEP', name)
   // Existing editor evidence has already completed; all windows/data here are isolated synthetic smoke state.
   windows.editor?.destroy()
   const offline = await js<{ id: string; generation: number }>('window.eizhu.workspace.status()')
   const sentinel = await js<{ id: string }>(`window.eizhu.group.create({request:{name:'账号闭环离线哨兵'}})`)
   await openAccount(window)
-  assert.equal(await js(`Boolean(document.querySelector('#account-email'))`), true)
+  await js(`[...document.querySelectorAll('button')].find(b=>b.textContent==='登录').click()`)
+  await waitFor(window, `Boolean(document.querySelector('#account-email'))`)
   await capture(window, root, 'account-login-light.png', 'light')
+  await js(`[...document.querySelectorAll('button')].find(b=>b.textContent==='创建账号').click()`)
+  await waitFor(
+    window,
+    `document.body.innerText.includes('先验证邮箱') && !document.querySelector('#account-password')`,
+  )
+  await capture(window, root, 'account-register-email.png', 'light')
+  await js(
+    `(()=>{const input=document.querySelector('#account-email');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,'ui-only@example.invalid');input.dispatchEvent(new Event('input',{bubbles:true}))})()`,
+  )
+  await js(`document.querySelector('.account-dialog form').requestSubmit()`)
+  await waitFor(window, `Boolean(document.querySelector('#account-code'))`)
+  await capture(window, root, 'account-register-code.png', 'light')
+  await js(
+    `(()=>{const input=document.querySelector('#account-code');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,'123456');input.dispatchEvent(new Event('input',{bubbles:true}))})()`,
+  )
+  await js(`document.querySelector('.account-dialog form').requestSubmit()`)
+  await waitFor(window, `Boolean(document.querySelector('#account-confirm'))`)
+  await capture(window, root, 'account-register-password-dark.png', 'dark')
+  await js(`document.querySelector('[aria-label="关闭账号窗口"]').click()`)
+
   fixture.setupRequired = true
   const registerBefore = count('register')
-  await expectCode(`window.eizhu.account.register(${credentials(emailA)})`, 'ACCOUNT_SETUP_REQUIRED')
+  await expectCode(registerScript(emailA), 'ACCOUNT_SETUP_REQUIRED')
   assert.equal(count('register'), registerBefore)
   fixture.setupRequired = false
   fixture.denyRegister = true
-  await expectCode(`window.eizhu.account.register(${credentials(emailA)})`, 'ACCOUNT_ACCESS_DENIED')
+  await expectCode(registerScript(emailA), 'ACCOUNT_ACCESS_DENIED')
   fixture.denyRegister = false
   step('setup-and-restricted-gates')
 
@@ -96,9 +120,7 @@ export async function verifyAccountClosure(
     'FORBIDDEN',
   )
   const beforeCancel = count('register')
-  const cancelled = js<string>(
-    `window.eizhu.account.register(${credentials(emailA)}).then(()=> 'unexpected-success',e=>e.code)`,
-  )
+  const cancelled = js<string>(`(${registerScript(emailA)}).then(()=> 'unexpected-success',e=>e.code)`)
   await waitFor(editor, `Boolean(document.querySelector('[role="alertdialog"][data-state="open"]'))`)
   await editor.webContents.executeJavaScript(
     `[...document.querySelector('[role="alertdialog"][data-state="open"]').querySelectorAll('button')].find(b=>b.textContent==='继续编辑').click()`,
@@ -127,7 +149,7 @@ export async function verifyAccountClosure(
 
   fixture.authDelayMs = 300
   const loggingIn = js<{ loggedIn: boolean; syncEnabled: boolean; user: { emailVerified: boolean } }>(
-    `window.eizhu.account.register(${credentials(emailA)})`,
+    registerScript(emailA),
   )
   await waitFor(editor, `Boolean(document.querySelector('[role="alertdialog"][data-state="open"]'))`)
   await editor.webContents.executeJavaScript(
@@ -139,7 +161,7 @@ export async function verifyAccountClosure(
   assert.equal(editor.isDestroyed(), true)
   assert.equal(logged.loggedIn, true)
   assert.equal(logged.syncEnabled, false)
-  assert.equal(logged.user.emailVerified, false)
+  assert.equal(logged.user.emailVerified, true)
   const accountA = await js<{ id: string; generation: number }>('window.eizhu.workspace.status()')
   assert.notEqual(accountA.id, offline.id)
   assert.ok(accountA.generation > offline.generation)
@@ -147,9 +169,6 @@ export async function verifyAccountClosure(
   const accountGroup = await js<{ id: string }>(
     `window.eizhu.group.create({request:{name:'账号 A 私有分组'}})`,
   )
-  await js('window.eizhu.account.sendVerificationEmail()')
-  await expectCode(`window.eizhu.account.verifyEmail({code:'000000'})`, 'INVALID_EMAIL_CODE')
-  await js(`window.eizhu.account.verifyEmail({code:'123456'})`)
   assert.equal(await js(`window.eizhu.account.status().then(s=>s.user.emailVerified)`), true)
   await openAccount(window)
   await waitFor(window, `document.body.innerText.includes('邮箱已验证')`)
@@ -220,13 +239,13 @@ export async function verifyAccountClosure(
     (await js<Array<{ id: string }>>('window.eizhu.group.list()')).some((group) => group.id === sentinel.id),
   )
 
-  await js(`window.eizhu.account.register(${credentials(emailB)})`)
+  await js(registerScript(emailB))
   assert.deepEqual(await js('window.eizhu.group.list()'), [])
   await js('window.eizhu.account.logout()')
-  await expectCode(`window.eizhu.account.register(${credentials(emailA)})`, 'ACCOUNT_EMAIL_TAKEN')
+  await expectCode(registerScript(emailA), 'ACCOUNT_EMAIL_TAKEN')
   fixture.dropNextAuth = true
   const beforeLostAuth = count('register')
-  await expectCode(`window.eizhu.account.register(${credentials(emailC)})`, 'ACCOUNT_UNAVAILABLE')
+  await expectCode(registerScript(emailC), 'ACCOUNT_UNAVAILABLE')
   assert.equal(count('register') - beforeLostAuth, 1)
   assert.equal(await js(`window.eizhu.account.status().then(s=>s.loggedIn)`), false)
   await js(`window.eizhu.account.login(${credentials(emailC)})`)
@@ -243,8 +262,11 @@ export async function verifyAccountClosure(
     ),
     false,
   )
-  assert.equal((await js<{initialized:boolean}>('window.eizhu.sync.status()')).initialized,false)
-  assert.equal((await js<{syncEnabled:boolean}>('window.eizhu.account.setSyncEnabled({enabled:false})')).syncEnabled,false)
+  assert.equal((await js<{ initialized: boolean }>('window.eizhu.sync.status()')).initialized, false)
+  assert.equal(
+    (await js<{ syncEnabled: boolean }>('window.eizhu.account.setSyncEnabled({enabled:false})')).syncEnabled,
+    false,
+  )
   await js('window.eizhu.account.logout()')
   await js(`window.eizhu.group.delete({id:${JSON.stringify(sentinel.id)}})`)
   if (await js(`Boolean(document.querySelector('.settings-page-back'))`))
@@ -272,6 +294,13 @@ export async function verifyAccountClosure(
     accountIsolation: true,
     publicTokenRedaction: true,
     syncRequiresConfirmation: true,
-    screenshots: ['account-login-light.png', 'account-signed-in-dark.png', 'account-signed-in-narrow.png'],
+    screenshots: [
+      'account-login-light.png',
+      'account-register-email.png',
+      'account-register-code.png',
+      'account-register-password-dark.png',
+      'account-signed-in-dark.png',
+      'account-signed-in-narrow.png',
+    ],
   }
 }

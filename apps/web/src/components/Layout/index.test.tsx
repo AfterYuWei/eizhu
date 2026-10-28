@@ -50,7 +50,7 @@ beforeEach(async () => {
   settings.sidebarWidth = 300
   vi.clearAllMocks()
   settings.setSidebarWidth.mockImplementation((width: number) => { settings.sidebarWidth = width })
-  useDesktopShellStore.setState({ serversCollapsed: false })
+  useDesktopShellStore.setState({ serversCollapsed: false, settingsPage: null })
   resetTerminalLayout()
   useSessionStore.setState(useSessionStore.getInitialState(), true)
   useProfileStore.setState({ fetchProfiles: async () => {}, fetchGroups: async () => {} })
@@ -436,11 +436,11 @@ it('设置整页覆盖时保留终端节点、阻止后台快捷键，返回后�
   const terminal = host.querySelector('.shell-workspace-content main')!
   const account = host.querySelector<HTMLButtonElement>('.shell-account')!
   account.focus()
-  await act(async () => executeDesktopAction('account-settings'))
+  await act(async () => executeDesktopAction('sync-settings'))
   expect(host.querySelector('.settings-page')).not.toBeNull()
   expect(host.querySelector('.shell-session-view')?.hasAttribute('inert')).toBe(true)
   expect(host.querySelector('[role="dialog"]')).toBeNull()
-  expect(host.querySelector('.settings-page-heading')?.textContent).toBe('账号')
+  expect(host.querySelector('.settings-page-heading')?.textContent).toBe('云同步')
   await act(async () => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'W', ctrlKey: true, shiftKey: true, bubbles: true, cancelable: true })))
   expect(useSessionStore.getState().tabs).toHaveLength(1)
   await act(async () => host.querySelector<HTMLButtonElement>('.settings-page-back')!.click())
@@ -485,4 +485,13 @@ it('Windows 窗口控制位于窗口层而非圆角工作区，按钮独立响�
   expect(controls.querySelector('[aria-label="还原"]')).not.toBeNull()
   await act(async () => toggle().click())
   expect(host.querySelector('.shell-window-controls')).toBe(controls)
+})
+
+it('账号空间更换重挂载后保留设置分类', async () => {
+  await import('@/components/SettingsDialog')
+  await render()
+  await act(async () => executeDesktopAction('sync-settings'))
+  expect(host.querySelector('.settings-page-heading')?.textContent).toBe('云同步')
+  await act(async () => root.render(<TooltipProvider><Layout key="next-workspace" /></TooltipProvider>))
+  expect(host.querySelector('.settings-page-heading')?.textContent).toBe('云同步')
 })

@@ -5,9 +5,14 @@ import type { AccountStatus, WorkspaceIdentity } from '@eizhu/contracts'
 import type { AccountSession } from './repository.ts'
 import type { AccountStorage } from './storage.ts'
 import type { Transport } from '../archive/network.ts'
+import { masterCrypto } from './crypto.ts'
+import type { WorkerClient } from '../workers/client.ts'
 import { AccountService } from './service.ts'
 import { accountWorkspace } from './workspace.ts'
 
+const compute: Pick<WorkerClient, 'call'> = {
+  call: async <T>(operation: string, input: unknown) => (await masterCrypto(operation, input)) as T,
+}
 const user = {
   id: 42,
   email: 'synthetic@example.invalid',
@@ -49,8 +54,10 @@ function storage(identity: WorkspaceIdentity, initial?: AccountSession) {
       return structuredClone(rows.get(workspace.id)!)
     },
     acceptLogin: async (workspace, user, tokens) => {
-      const current=rows.get(workspace.id),next={...current,user,tokens,syncEnabled:current?.syncEnabled??false}
-      rows.set(workspace.id,structuredClone(next));return structuredClone(next)
+      const current = rows.get(workspace.id),
+        next = { ...current, user, tokens, syncEnabled: current?.syncEnabled ?? false }
+      rows.set(workspace.id, structuredClone(next))
+      return structuredClone(next)
     },
     save: async (workspace, value) => {
       rows.set(workspace.id, structuredClone(value))
@@ -77,16 +84,24 @@ test('initialization blocks registration and lost authentication responses never
     writes++
     throw new Error('synthetic lost response')
   }
-  const service = new AccountService(store.api, transport, offlineWorkspace, () => {})
+  const service = new AccountService(store.api, transport, offlineWorkspace, () => {}, compute)
   try {
     await assert.rejects(
-      service.authenticate('account.register', { email: user.email, password: 'password123' }),
+      service.authenticate('account.register', {
+        email: user.email,
+        password: 'password12345',
+        ticket: 't'.repeat(64),
+      }),
       code('ACCOUNT_SETUP_REQUIRED'),
     )
     assert.equal(writes, 0)
     initialized = true
     await assert.rejects(
-      service.authenticate('account.register', { email: user.email, password: 'password123' }),
+      service.authenticate('account.register', {
+        email: user.email,
+        password: 'password12345',
+        ticket: 't'.repeat(64),
+      }),
       code('ACCOUNT_UNAVAILABLE'),
     )
     assert.equal(writes, 1)
@@ -101,23 +116,34 @@ test('a rejected public registration explains server access limits without inval
     initial = session(),
     store = storage(identity, initial),
     paths: string[] = []
-  const service = new AccountService(store.api, async (request) => {
-    const path = new URL(request.url).pathname
-    paths.push(path)
-    return path.endsWith('/setup')
-      ? response(200, { required: false, passwordMinLength: 16 })
-      : response(401, { code: 'UNAUTHENTICATED', message: 'SYNTHETIC-RAW-SECRET' })
-  }, identity, () => {})
+  const service = new AccountService(
+    store.api,
+    async (request) => {
+      const path = new URL(request.url).pathname
+      paths.push(path)
+      return path.endsWith('/setup')
+        ? response(200, { required: false, passwordMinLength: 16 })
+        : response(401, { code: 'UNAUTHENTICATED', message: 'SYNTHETIC-RAW-SECRET' })
+    },
+    identity,
+    () => {},
+    compute,
+  )
   try {
     await assert.rejects(
-      service.authenticate('account.register', { email: user.email, password: 'synthetic-password' }),
-      (cause: unknown) => cause instanceof DesktopError
-        && cause.error.code === 'ACCOUNT_ACCESS_DENIED'
-        && cause.error.message.includes('注册权限')
-        && !cause.error.message.includes('SYNTHETIC-RAW-SECRET'),
+      service.authenticate('account.register', {
+        email: user.email,
+        password: 'synthetic-password',
+        ticket: 't'.repeat(64),
+      }),
+      (cause: unknown) =>
+        cause instanceof DesktopError &&
+        cause.error.code === 'ACCOUNT_ACCESS_DENIED' &&
+        cause.error.message.includes('注册权限') &&
+        !cause.error.message.includes('SYNTHETIC-RAW-SECRET'),
     )
     assert.deepEqual(store.rows.get(identity.id), initial)
-    assert.deepEqual(paths, ['/api/auth/setup', '/api/auth/register'])
+    assert.deepEqual(paths, ['/api/auth/setup', '/api/auth/master/register'])
     await assert.rejects(
       service.authenticate('account.login', { email: user.email, password: 'synthetic-password' }),
       code('ACCOUNT_NOT_LOGGED_IN'),
@@ -192,54 +218,100 @@ test('lost refresh response invalidates that session without clearing cached dat
 })
 
 test('a delayed unauthorized response reuses a completed refresh instead of rotating again', async () => {
-  const identity = accountWorkspace(42), initial = session()
+  const identity = accountWorkspace(42),
+    initial = session()
   initial.tokens!.expiresAt = Date.now() + 3600000
   const store = storage(identity, initial)
   const replies: Array<() => void> = []
-  let arrived!: () => void, refreshed = 0
-  const allArrived = new Promise<void>((resolve) => { arrived = resolve })
-  const service = new AccountService(store.api, async (request) => {
-    if (request.url.endsWith('/refresh')) {
-      refreshed++
-      return response(200, { accessToken: 'new-access', refreshToken: 'new-refresh', expiresIn: 1800, user })
-    }
-    if (request.headers.authorization === 'Bearer old-access') return new Promise((resolve) => {
-      replies.push(() => resolve(response(401, { code: 'UNAUTHENTICATED' })))
-      if (replies.length === 2) arrived()
-    })
-    return response(200, user)
-  }, identity, () => {})
+  let arrived!: () => void,
+    refreshed = 0
+  const allArrived = new Promise<void>((resolve) => {
+    arrived = resolve
+  })
+  const service = new AccountService(
+    store.api,
+    async (request) => {
+      if (request.url.endsWith('/refresh')) {
+        refreshed++
+        return response(200, {
+          accessToken: 'new-access',
+          refreshToken: 'new-refresh',
+          expiresIn: 1800,
+          user,
+        })
+      }
+      if (request.headers.authorization === 'Bearer old-access')
+        return new Promise((resolve) => {
+          replies.push(() => resolve(response(401, { code: 'UNAUTHENTICATED' })))
+          if (replies.length === 2) arrived()
+        })
+      return response(200, user)
+    },
+    identity,
+    () => {},
+    compute,
+  )
   try {
-    const first = service.execute('account.me', undefined), second = service.execute('account.me', undefined)
+    const first = service.execute('account.me', undefined),
+      second = service.execute('account.me', undefined)
     await allArrived
-    replies[0](); await first
-    replies[1](); await second
+    replies[0]()
+    await first
+    replies[1]()
+    await second
     assert.equal(refreshed, 1)
-  } finally { await service.close() }
+  } finally {
+    await service.close()
+  }
 })
 
 test('logout never refreshes expired credentials and leaves key deletion to the atomic space commit', async () => {
-  const identity = accountWorkspace(42), store = storage(identity, session())
+  const identity = accountWorkspace(42),
+    store = storage(identity, session())
   const paths: string[] = []
-  const service = new AccountService(store.api, async (request) => { paths.push(request.url); throw new Error('synthetic lost logout') }, identity, () => {})
+  const service = new AccountService(
+    store.api,
+    async (request) => {
+      paths.push(request.url)
+      throw new Error('synthetic lost logout')
+    },
+    identity,
+    () => {},
+    compute,
+  )
   try {
     await service.prepareLogout()
     assert.equal(paths.length, 1)
     assert.ok(paths[0].endsWith('/logout'))
     assert.equal(store.rows.get(identity.id)?.tokens, null)
     assert.ok(store.rows.get(identity.id)?.cachedSyncKey)
-  } finally { await service.close() }
+  } finally {
+    await service.close()
+  }
 })
 
 test('closing cancels and waits for in-flight refresh without emitting a late account event', async () => {
-  const identity = accountWorkspace(42), store = storage(identity, session()), statuses: AccountStatus[] = []
+  const identity = accountWorkspace(42),
+    store = storage(identity, session()),
+    statuses: AccountStatus[] = []
   let started!: () => void
-  const ready = new Promise<void>((resolve) => { started = resolve })
-  const service = new AccountService(store.api, async (_request, signal) => new Promise((_resolve, reject) => {
-    signal.addEventListener('abort', () => reject(new Error('synthetic aborted')), { once: true }); started()
-  }), identity, (status) => statuses.push(status))
+  const ready = new Promise<void>((resolve) => {
+    started = resolve
+  })
+  const service = new AccountService(
+    store.api,
+    async (_request, signal) =>
+      new Promise((_resolve, reject) => {
+        signal.addEventListener('abort', () => reject(new Error('synthetic aborted')), { once: true })
+        started()
+      }),
+    identity,
+    (status) => statuses.push(status),
+  )
   const rejected = assert.rejects(service.execute('account.me', undefined), code('CANCELLED'))
-  await ready; await service.close(); await rejected
+  await ready
+  await service.close()
+  await rejected
   assert.equal(statuses.length, 0)
   await assert.rejects(service.execute('account.me', undefined), code('RUNTIME_CLOSED'))
 })

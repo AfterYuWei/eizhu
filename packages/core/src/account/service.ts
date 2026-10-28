@@ -1,6 +1,8 @@
 import { z } from 'zod'
 import {
   account,
+  masterKeyEnvelopeSchema,
+  masterParametersSchema,
   accountSetupSchema,
   accountTokenSchema,
   accountUserSchema,
@@ -12,9 +14,14 @@ import type { Transport } from '../archive/network.ts'
 import type { AccountSession } from './repository.ts'
 import type { AccountStorage } from './storage.ts'
 import { AccountClient } from './client.ts'
+import type { WorkerClient } from '../workers/client.ts'
+import { recoveryCredential, type MasterKeys } from './crypto.ts'
+import { randomBytes } from 'node:crypto'
 import { accountWorkspace } from './workspace.ts'
 
 const userWire = z.object(accountUserSchema.shape)
+const masterSession = z.strictObject({ tokens: accountTokenSchema, keys: masterKeyEnvelopeSchema })
+type Created = { credential: string; recoveryHash: string; key: Uint8Array; keys: MasterKeys }
 const errorCode = (cause: unknown) => (cause instanceof DesktopError ? cause.error.code : '')
 
 /** One account provider per workspace/runtime; no login password or tokens enter renderer state. */
@@ -29,12 +36,15 @@ export class AccountService {
   private closed = false
   private loggingOut = false
   private emit: (status: AccountStatus) => void
+  private compute?: Pick<WorkerClient, 'call'>
   constructor(
     storage: AccountStorage,
     transport: Transport,
     workspace: WorkspaceIdentity,
     emit: (status: AccountStatus) => void,
+    compute?: Pick<WorkerClient, 'call'>,
   ) {
+    this.compute = compute
     this.storage = storage
     this.client = new AccountClient(transport)
     this.workspace = workspace
@@ -209,29 +219,105 @@ export class AccountService {
       const credentials = account[operation].input.parse(input)
       const setup = await this.client.request('setup', 'GET', this.controller.signal, accountSetupSchema)
       if (setup.required) fail('ACCOUNT_SETUP_REQUIRED', '账号服务尚未初始化，请管理员先在管理后台完成初始化')
-      const response = await this.client.request(
-        operation === 'account.login' ? 'login' : 'register',
-        'POST',
-        this.controller.signal,
-        accountTokenSchema,
-        credentials,
-      )
-      const workspace = accountWorkspace(response.user.id)
-      const saved = await this.storage.acceptLogin(workspace, response.user, this.tokenExpiry(response))
-      if (workspace.id === this.workspace.id) {
-        await this.publish()
-        await this.schedule()
-      }
-      return {
-        workspace,
-        account: {
-          loggedIn: true,
-          sessionState: 'authenticated',
-          user: response.user,
-          syncEnabled: saved.syncEnabled,
-        },
+      let key: Uint8Array | undefined
+      let response: z.infer<typeof masterSession>
+      try {
+        if (operation === 'account.register') {
+          const registration = account['account.register'].input.parse(input)
+          const created = await this.crypto<Created>('create', { password: registration.password })
+          key = created.key
+          response = await this.client.request(
+            'master/register',
+            'POST',
+            this.controller.signal,
+            masterSession,
+            {
+              email: registration.email,
+              ticket: registration.ticket,
+              credential: created.credential,
+              keys: created.keys,
+              recoveryHash: created.recoveryHash,
+            },
+          )
+        } else {
+          const parameters = await this.client.request(
+            'master/parameters',
+            'POST',
+            this.controller.signal,
+            masterParametersSchema,
+            { email: credentials.email },
+          )
+          const derived = await this.crypto<{ credential: string }>('credential', {
+            password: credentials.password,
+            parameters,
+          })
+          response = await this.client.request(
+            'master/login',
+            'POST',
+            this.controller.signal,
+            masterSession,
+            { email: credentials.email, credential: derived.credential },
+          )
+          if (response.keys.cryptoId !== parameters.cryptoId || response.keys.salt !== parameters.salt)
+            fail('ACCOUNT_PROTOCOL', '登录期间加密参数已变化，请重新登录')
+          key = (
+            await this.crypto<{ key: Uint8Array }>('open', {
+              password: credentials.password,
+              keys: response.keys,
+            })
+          ).key
+        }
+        const workspace = accountWorkspace(response.tokens.user.id)
+        const saved = await this.storage.acceptLogin(
+          workspace,
+          response.tokens.user,
+          this.tokenExpiry(response.tokens),
+          {
+            cachedSyncKey: {
+              key: Buffer.from(key.buffer, key.byteOffset, key.byteLength).toString('hex'),
+              revision: response.keys.revision,
+            },
+            masterKeys: response.keys,
+          },
+        )
+        if (workspace.id === this.workspace.id) {
+          await this.publish()
+          await this.schedule()
+        }
+        return {
+          workspace,
+          account: {
+            loggedIn: true,
+            sessionState: 'authenticated',
+            user: response.tokens.user,
+            syncEnabled: saved.syncEnabled,
+          },
+        }
+      } finally {
+        key?.fill(0)
       }
     })
+  }
+  private async crypto<T>(
+    operation: string,
+    input: Record<string, unknown> & { key?: Uint8Array },
+  ): Promise<T> {
+    if (!this.compute) fail('ACCOUNT_PROTOCOL', '主密码计算 Worker 不可用')
+    try {
+      return await this.compute.call<T>(`master.${operation}`, input, { signal: this.controller.signal })
+    } finally {
+      input.key?.fill(0)
+    }
+  }
+  private async recoverable(email: string): Promise<AccountSession> {
+    const session = await this.storage.session(this.workspace)
+    if (
+      !session?.cachedSyncKey ||
+      !session.masterKeys ||
+      session.user.email.toLowerCase() !== email.trim().toLowerCase()
+    )
+      fail('DEVICE_RECOVERY_REQUIRED', '请在仍可解锁数据的设备上恢复主密码；邮箱验证码不能单独恢复云端数据')
+    return session
   }
   prepareLogout(): Promise<void> {
     return this.run(async () => {
@@ -275,29 +361,103 @@ export class AccountService {
           await this.publish()
           return result.value
         }
-        case 'account.sendVerificationEmail':
-          await this.authorized('email/send', 'POST')
-          return
-        case 'account.verifyEmail': {
-          await this.authorized('email/verify', 'POST', undefined, data)
-          const result = await this.authorized('me', 'GET', userWire)
-          if (result.value.id !== this.workspace.userId) fail('ACCOUNT_PROTOCOL', '账号响应身份不匹配')
-          await this.storage.update(this.workspace, result.session.tokens!.refreshToken, {
-            user: result.value,
-          })
-          await this.publish()
-          return
+        case 'account.requestRegistrationCode':
+          return this.client.request(
+            'master/registration/send',
+            'POST',
+            this.controller.signal,
+            account[operation].output,
+            data,
+          )
+        case 'account.verifyRegistrationCode':
+          return this.client.request(
+            'master/registration/verify',
+            'POST',
+            this.controller.signal,
+            account[operation].output,
+            data,
+          )
+        case 'account.recoveryAvailable': {
+          const { email } = account[operation].input.parse(input)
+          const session = await this.storage.session(this.workspace)
+          return Boolean(
+            session?.cachedSyncKey &&
+            session.masterKeys &&
+            session.user.email.toLowerCase() === email.trim().toLowerCase(),
+          )
         }
-        case 'account.requestPasswordReset':
-          await this.client.request('password/forgot', 'POST', this.controller.signal, undefined, data)
-          return
+        case 'account.requestPasswordReset': {
+          const { email } = account[operation].input.parse(input)
+          await this.recoverable(email)
+          return this.client.request(
+            'master/recovery/send',
+            'POST',
+            this.controller.signal,
+            account[operation].output,
+            { email },
+          )
+        }
+        case 'account.changePassword':
         case 'account.resetPassword': {
-          await this.client.request('password/reset', 'POST', this.controller.signal, undefined, data)
-          const reset = account['account.resetPassword'].input.parse(data)
-          const current = await this.storage.session(this.workspace)
-          if (current?.tokens && current.user.email.toLowerCase() === reset.email.trim().toLowerCase()) {
-            await this.storage.update(this.workspace, current.tokens.refreshToken, { tokens: null })
+          const reset =
+            operation === 'account.resetPassword' ? account[operation].input.parse(input) : undefined
+          const change =
+            operation === 'account.changePassword' ? account[operation].input.parse(input) : undefined
+          const current = reset ? await this.recoverable(reset.email) : await this.current()
+          if (!current.masterKeys || !current.cachedSyncKey)
+            fail('DEVICE_RECOVERY_REQUIRED', '需要本机已解锁的数据密钥')
+          const key = Buffer.from(current.cachedSyncKey.key, 'hex')
+          let created: Created | undefined
+          try {
+            const latest = await this.client.request(
+              'master/parameters',
+              'POST',
+              this.controller.signal,
+              masterParametersSchema,
+              { email: current.user.email },
+            )
+            if (latest.cryptoId !== current.masterKeys.cryptoId || latest.revision === undefined)
+              fail('ACCOUNT_PROTOCOL', '账号加密身份已变化，原本地数据已保留')
+            const parameters = {
+              cryptoId: current.masterKeys.cryptoId,
+              salt: randomBytes(16).toString('base64'),
+            }
+            created = await this.crypto<Created>('create', {
+              password: reset?.newPassword ?? change!.newPassword,
+              parameters,
+              keys: { ...current.masterKeys, revision: latest.revision },
+              key: Buffer.from(key),
+            })
+            if (reset)
+              await this.client.request('master/recovery/reset', 'POST', this.controller.signal, undefined, {
+                email: reset.email,
+                code: reset.code,
+                recoveryCredential: recoveryCredential(key, current.masterKeys.cryptoId),
+                newCredential: created.credential,
+                keys: created.keys,
+              })
+            else {
+              const old = await this.crypto<{ credential: string }>('credential', {
+                password: change!.password,
+                parameters: { cryptoId: current.masterKeys.cryptoId, salt: current.masterKeys.salt },
+              })
+              await this.authorized('master/change', 'POST', undefined, {
+                credential: old.credential,
+                newCredential: created.credential,
+                keys: created.keys,
+              })
+            }
+            // Keep DEK for local recovery, invalidate session and require the new password for authentication.
+            await this.storage.save(this.workspace, {
+              ...current,
+              tokens: null,
+              masterKeys: { ...created.keys, revision: created.keys.revision + 1 },
+              cachedSyncKey: { ...current.cachedSyncKey, revision: created.keys.revision + 1 },
+            })
             await this.publish()
+          } finally {
+            key.fill(0)
+            created?.key.fill(0)
           }
           return
         }

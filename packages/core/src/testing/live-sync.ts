@@ -5,7 +5,12 @@ import type { AccountStatus, SyncStatus, SyncPreview, SyncConflict } from '@eizh
 
 export interface LiveActor {
   call<T = unknown>(operation: string, input?: unknown): Promise<T>
-  login(operation: 'account.register' | 'account.login', email: string, password: string): Promise<void>
+  login(
+    operation: 'account.register' | 'account.login',
+    email: string,
+    password: string,
+    ticket?: string,
+  ): Promise<void>
   restart(): Promise<void>
   logout(): Promise<void>
   faults: {
@@ -38,9 +43,13 @@ export async function acceptLiveSync(
   phase: (name: string) => void,
   options: { resume?: boolean; resetExisting?: boolean } = {},
 ) {
-  const password = randomBytes(36).toString('base64url'),
-    syncPassword = randomBytes(32).toString('base64url'),
-    nextSyncPassword = randomBytes(32).toString('base64url')
+  let password = randomBytes(36).toString('base64url')
+  const nextPassword = randomBytes(32).toString('base64url')
+  if (options.resume || options.resetExisting)
+    throw new DesktopError({
+      code: 'ACCEPTANCE_NEW_ACCOUNT_REQUIRED',
+      message: '新主密码验收仅使用全新隔离账号，不支持旧会话续跑或邮箱单独重置',
+    })
   const challenge = async (
     kind: 'verify' | 'reset',
     send: () => Promise<unknown>,
@@ -83,7 +92,6 @@ export async function acceptLiveSync(
       }
     }
   }
-  let verificationPerformed = false
   const checks: string[] = [],
     status = (actor: LiveActor) => actor.call<SyncStatus>('sync.status')
   const settled = (actor: LiveActor) =>
@@ -114,41 +122,38 @@ export async function acceptLiveSync(
   }
   const offline = await sentinel(a, '同步验收离线哨兵')
   const offlineB = await sentinel(b, '第二端独立离线哨兵')
-  if (options.resume || options.resetExisting) {
-    phase('recover-owned-test-account')
-    await challenge(
-      'reset',
-      () => a.call('account.requestPasswordReset', { email }),
-      (code) => a.call('account.resetPassword', { email, code, newPassword: password }),
-    )
-    await a.login('account.login', email, password)
-    checks.push('在新隔离目录通过找回邮件恢复已授权的专用测试账号，不重复注册')
-  } else {
-    phase('register')
-    await a.login('account.register', email, password)
-  }
+  phase('registration-mail')
+  let challengeId = '',
+    ticket = ''
+  await challenge(
+    'verify',
+    async () => {
+      const result = await a.call<{ challengeId: string }>('account.requestRegistrationCode', { email })
+      challengeId = result.challengeId
+    },
+    async (code) => {
+      const result = await a.call<{ ticket: string }>('account.verifyRegistrationCode', {
+        email,
+        challengeId,
+        code,
+      })
+      ticket = result.ticket
+    },
+  )
+  phase('register')
+  await a.login('account.register', email, password, ticket)
   const registered = await a.call<AccountStatus>('account.status')
   assert.equal(registered.loggedIn, true)
-  if (!registered.loggedIn) throw new Error()
-  if (!registered.user.emailVerified) {
-    phase('verification-mail')
-    await challenge(
-      'verify',
-      () => a.call('account.sendVerificationEmail'),
-      (code) => a.call('account.verifyEmail', { code }),
-    )
-    assert.equal((await a.call<AccountStatus>('account.status')).user?.emailVerified, true)
-    verificationPerformed = true
-    checks.push('注册、发送验证请求与验证码验证')
-  } else
-    checks.push(`${options.resume || options.resetExisting ? '账号恢复' : '注册'}；服务端已返回邮箱验证状态`)
+  assert.equal(registered.user?.emailVerified, true)
+  const verificationPerformed = true
+  checks.push('注册前发送真实验证码并验证邮箱，验证通过后创建账号与主密码密钥包')
   a.faults.forceMe401 = true
   await a.call('account.me')
   assert.ok(a.faults.refreshCount > 0)
   assert.equal(await a.faults.revokeOldRefresh(), true)
   checks.push('客户端注入过期响应后调用刷新接口；轮换后的旧 refresh token 被服务端拒绝')
   phase('initial-preview')
-  await a.call('sync.unlock', { password: syncPassword })
+  assert.equal((await status(a)).unlocked, true)
   const preview = await a.call<SyncPreview>('sync.preview', { includeOffline: true })
   if (preview.cloudCount !== 0)
     throw new DesktopError({ code: 'ACCEPTANCE_NONEMPTY', message: '测试账号已有云端条目，已停止写入' })
@@ -157,7 +162,7 @@ export async function acceptLiveSync(
   await a.call('sync.bootstrap', { token: preview.token, mode: 'merge' })
   await settled(a)
   await b.login('account.login', email, password)
-  await b.call('sync.unlock', { password: syncPassword })
+  assert.equal((await status(b)).unlocked, true)
   await bootstrap(b, false)
   assert.ok((await b.call<Array<{ id: string }>>('group.list')).some((g) => g.id === offline.id))
   checks.push('密钥包装、设备登记、固定水位快照；确认前不上传，离线合并保留，第二目录拉取成功')
@@ -279,22 +284,23 @@ export async function acceptLiveSync(
   )
   checks.push('服务端整体替换与下一 epoch；另一端重取快照并保留替换期间的本地修改')
 
-  phase('sync-password-rotation')
-  await a.call('sync.changePassword', { password: nextSyncPassword })
+  phase('master-password-rotation')
+  await a.call('account.changePassword', { password, newPassword: nextPassword })
+  await a.login('account.login', email, nextPassword)
   await b.logout()
   assert.deepEqual(
     (await b.call<Array<{ id: string }>>('group.list')).map((g) => g.id),
     [offlineB.id],
   )
   assert.equal(await b.faults.revokeOldRefresh(), true)
+  await assert.rejects(b.login('account.login', email, password), code('ACCOUNT_INVALID_CREDENTIALS'))
+  password = nextPassword
   await b.login('account.login', email, password)
-  assert.equal((await status(b)).unlocked, false)
-  await assert.rejects(b.call('sync.unlock', { password: syncPassword }), code('SYNC_CRYPTO'))
-  await b.call('sync.unlock', { password: nextSyncPassword })
+  assert.equal((await status(b)).unlocked, true)
   await toggle(b, true)
   await b.call('sync.now')
   await settled(b)
-  checks.push('密钥包装 CAS 与同步密码轮换，业务密文仍可解密')
+  checks.push('主密码轮换撤销旧会话，新设备以新主密码登录自动解锁，原业务密文继续可读')
 
   phase('lost-refresh-result')
   await toggle(a, false)

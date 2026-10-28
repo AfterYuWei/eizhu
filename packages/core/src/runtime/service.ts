@@ -84,7 +84,7 @@ export class RuntimeService {
     if (this.initialized) fail('RUNTIME_INIT_FAILED', '业务进程已经初始化')
     this.workspace = validateWorkspace(await this.database.call('workspace.identity'))
     this.context.workspaceId = this.workspace.id
-    this.account = new AccountService(workerAccountStorage(this.database), this.accountTransport, this.workspace, this.emitAccount)
+    this.account = new AccountService(workerAccountStorage(this.database), this.accountTransport, this.workspace, this.emitAccount, this.compute)
     this.scope.own(() => this.account.close())
     this.sync = new SyncService(this.database,this.compute,this.account,this.workspace,this.context,this.emitSync,this.stream)
     this.scope.own(()=>this.sync.close())

@@ -5,7 +5,8 @@ export function recoveryFor(code = '', status = '') {
   if (code === 'EMAIL_NOT_VERIFIED') return { kind: 'account', label: '验证邮箱', explanation: '请在账号设置中完成邮箱验证，再继续同步。' }
   if (code === 'RATE_LIMITED') return { kind: 'retry', label: '稍后重试', explanation: '请求过于频繁，自动同步会等待限流时间后重试。本地修改已保留。' }
   if (['ACCOUNT_NOT_LOGGED_IN', 'ACCOUNT_DISABLED', 'ACCOUNT_UNAUTHORIZED', 'ACCOUNT_SESSION_EXPIRED'].includes(code)) return { kind: 'account', label: '重新登录', explanation: '登录状态已失效，请在账号设置中重新登录。本地修改仍然保留。' }
-  if (status === 'locked' || ['SYNC_LOCKED', 'SYNC_CRYPTO', 'SYNC_PASSWORD', 'PASSWORD_REQUIRED', 'INVALID_PASSWORD', 'BACKUP_PASSWORD_REQUIRED'].includes(code)) return { kind: 'unlock', label: '设置或解锁密码', explanation: '需要解锁加密数据。同步密码与备份密码分别管理。' }
+  if (status === 'locked' || ['SYNC_LOCKED', 'SYNC_CRYPTO'].includes(code)) return { kind: 'account', label: '重新登录', explanation: '使用主密码登录后会自动解锁同步数据。' }
+  if ( [ 'PASSWORD_REQUIRED', 'INVALID_PASSWORD', 'BACKUP_PASSWORD_REQUIRED'].includes(code)) return { kind: 'unlock', label: '设置或解锁密码', explanation: '请使用对应备份的密码解锁备份数据。' }
   if (code === 'ACCOUNT_QUOTA_EXCEEDED') return { kind: 'quota', label: '查看账号用量', explanation: '云端配额不足，请查看账号空间用量并处理配额后重试。本地保存已完成。' }
   if (status === 'offline' || ['NETWORK', 'NETWORK_ERROR', 'ACCOUNT_NETWORK', 'ACCOUNT_REQUEST_FAILED', 'ACCOUNT_UNAVAILABLE', 'ACCOUNT_FAILED'].includes(code)) return { kind: 'network', label: '联网后重试', explanation: '请检查网络连接后重试。尚未确认的修改会保留在本地队列。' }
   return { kind: 'retry', label: '重试', explanation: '处理错误后可以重试；本地修改与云端确认分别记录。' }

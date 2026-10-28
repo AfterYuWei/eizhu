@@ -9,7 +9,7 @@ interface AccountStore {
   error: string | null
   hydrate: () => Promise<void>
   login: (email: string, password: string) => Promise<void>
-  register: (email: string, password: string) => Promise<void>
+  register: (email: string, password: string, ticket: string) => Promise<void>
   refresh: () => Promise<void>
   logout: () => Promise<void>
   setSyncEnabled: (enabled: boolean) => Promise<void>
@@ -34,19 +34,25 @@ export const useAccountStore = create<AccountStore>((set) => ({
       await refreshWorkspace()
       set({ status, loading: false })
     } catch (cause) {
-      if (isCancelled(cause)) { set({ loading: false, error: null }); return }
+      if (isCancelled(cause)) {
+        set({ loading: false, error: null })
+        throw cause
+      }
       set({ error: errorMessage(cause), loading: false })
       throw cause
     }
   },
-  register: async (email, password) => {
+  register: async (email, password, ticket) => {
     set({ loading: true, error: null })
     try {
-      const status = await accountApi.register(email, password)
+      const status = await accountApi.register(email, password, ticket)
       await refreshWorkspace()
       set({ status, loading: false })
     } catch (cause) {
-      if (isCancelled(cause)) { set({ loading: false, error: null }); return }
+      if (isCancelled(cause)) {
+        set({ loading: false, error: null })
+        throw cause
+      }
       set({ error: errorMessage(cause), loading: false })
       throw cause
     }
@@ -56,7 +62,12 @@ export const useAccountStore = create<AccountStore>((set) => ({
     try {
       const user = await accountApi.me()
       set((state) => ({
-        status: { loggedIn: true, sessionState: 'authenticated', syncEnabled: state.status?.syncEnabled ?? false, user },
+        status: {
+          loggedIn: true,
+          sessionState: 'authenticated',
+          syncEnabled: state.status?.syncEnabled ?? false,
+          user,
+        },
         loading: false,
       }))
     } catch (cause) {
@@ -72,7 +83,10 @@ export const useAccountStore = create<AccountStore>((set) => ({
       await refreshWorkspace()
       set({ status: { loggedIn: false, sessionState: 'anonymous', syncEnabled: false }, loading: false })
     } catch (cause) {
-      if (isCancelled(cause)) { set({ loading: false, error: null }); return }
+      if (isCancelled(cause)) {
+        set({ loading: false, error: null })
+        return
+      }
       // 空间切换或退出失败时，重新读取真实状态；读取也失败则保留原展示，不能伪造退出成功。
       await refreshWorkspace().catch(() => {})
       const status = await accountApi.status().catch(() => null)
@@ -99,7 +113,7 @@ function errorMessage(cause: unknown): string {
   const value = cause as { code?: string; message?: string; error?: { code?: string; message?: string } }
   const code = value?.code ?? value?.error?.code
   const known: Record<string, string> = {
-    ACCOUNT_INVALID_CREDENTIALS: '邮箱或密码不正确',
+    ACCOUNT_INVALID_CREDENTIALS: '邮箱或主密码不正确',
     ACCOUNT_EMAIL_TAKEN: '该邮箱已被注册',
     ACCOUNT_DISABLED: '账号已被禁用，请联系管理员',
     ACCOUNT_NOT_LOGGED_IN: '登录已失效，请重新登录',

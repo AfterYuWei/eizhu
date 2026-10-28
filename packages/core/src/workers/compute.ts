@@ -7,6 +7,7 @@ import { decodeBackup, encodeBackup, readBounded } from '../local/backup.ts'
 import type { FileIdentity } from '../local/backup.ts'
 import { generateKeyPair, prepareCredential, unlockPrivateKey } from '../local/keys.ts'
 import { payloadSchema } from '../local/model.ts'
+import { masterCrypto } from '../account/crypto.ts'
 import { executeCrypto } from '../sync/crypto.ts'
 import type { LocalInput } from '@eizhu/contracts'
 import type { StoredVault } from '../local/model.ts'
@@ -55,6 +56,7 @@ async function smoke(): Promise<{ kdf: boolean; crypto: boolean }> {
 }
 parentPort!.on('message', async (message) => {
   const response = await answerWorker(message, async (operation, input) => {
+    if (operation.startsWith('master.')) return masterCrypto(operation, input)
     if (operation.startsWith('sync.')) return executeCrypto(operation, input)
     if (operation === 'ssh.decryptKey')
       return unlockPrivateKey(input as { private_key: string; passphrase?: string })
@@ -101,6 +103,9 @@ parentPort!.on('message', async (message) => {
   try {
     parentPort!.postMessage(response)
   } finally {
+    const secret = response.value
+    if (secret && typeof secret === 'object' && 'key' in secret && secret.key instanceof Uint8Array)
+      secret.key.fill(0)
     if (message.operation === 'sync.unwrap' && response.value instanceof Uint8Array) response.value.fill(0)
   }
 })

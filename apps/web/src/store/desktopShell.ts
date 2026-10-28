@@ -1,3 +1,4 @@
+import type { SettingsTab } from '@/components/SettingsDialog'
 import { create } from 'zustand'
 import { settingsStorage } from '@/lib/settingsStorage'
 import { createJSONStorage,persist } from 'zustand/middleware'
@@ -5,6 +6,8 @@ import { createJSONStorage,persist } from 'zustand/middleware'
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value))
 
 interface DesktopShellStore {
+  settingsPage: SettingsTab | null
+  setSettingsPage: (tab: SettingsTab | null) => void
   serversCollapsed: boolean
   inspectorWidth: number
   collapsedGroups: Record<string, boolean>
@@ -15,6 +18,8 @@ interface DesktopShellStore {
 
 /** Only geometry is persisted; account-specific group IDs remain in memory. */
 export const useDesktopShellStore = create<DesktopShellStore>()(persist((set) => ({
+  settingsPage: null,
+  setSettingsPage: (settingsPage) => set({ settingsPage }),
   serversCollapsed: false,
   inspectorWidth: 320,
   collapsedGroups: {},

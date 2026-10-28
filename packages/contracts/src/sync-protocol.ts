@@ -8,7 +8,7 @@ export const syncCapabilitiesSchema = z.strictObject({
   epoch: z.int().positive(),
   keysReady: z.boolean(),
 })
-export const syncKeyEnvelopeSchema = z.strictObject({
+export const legacySyncKeyEnvelopeSchema = z.strictObject({
   salt: z.string().min(1).max(64),
   time: z.int().min(1).max(100),
   memory: z.int().min(8192).max(1048576),
@@ -17,6 +17,17 @@ export const syncKeyEnvelopeSchema = z.strictObject({
   version: z.literal(1),
   revision: integer,
 })
+export const masterParametersSchema = z.strictObject({
+  cryptoId: z.uuid(),
+  salt: z.string().regex(/^[A-Za-z0-9+/]{22}==$/),
+  revision: integer.optional(),
+})
+export const masterKeyEnvelopeSchema = masterParametersSchema.extend({
+  version: z.literal(2),
+  revision: integer,
+  wrappedKey: z.string().regex(/^[A-Za-z0-9+/]{80}$/),
+})
+export const syncKeyEnvelopeSchema = z.union([legacySyncKeyEnvelopeSchema, masterKeyEnvelopeSchema])
 export const syncWireItemSchema = z.strictObject({
   itemType: syncItemTypeSchema,
   itemId: z.string().min(1).max(200),

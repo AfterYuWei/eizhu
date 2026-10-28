@@ -66,9 +66,9 @@ import type {
 
 /** Reserved domain contracts. Each operation is enabled with its runtime schema in its delivery stage. */
 export interface DomainOperations {
-  'sftp.startDrag':{input:{taskIds:string[]};output:void}
-  'sftp.releaseDrag':{input:{taskIds:string[]};output:void}
-  'sftp.prepareDrag':{input:{sessionId:string;paths:string[]};output:{tasks:TransferTask[]}}
+  'sftp.startDrag': { input: { taskIds: string[] }; output: void }
+  'sftp.releaseDrag': { input: { taskIds: string[] }; output: void }
+  'sftp.prepareDrag': { input: { sessionId: string; paths: string[] }; output: { tasks: TransferTask[] } }
   'audit.list': {
     input: { limit: number }
     output: Array<{ id: string; action: string; entity_id: string; created_at: string }>
@@ -76,15 +76,23 @@ export interface DomainOperations {
   'audit.clear': { input: void; output: void }
   'backup.prepareRestore': { input: { filePath: string; password?: string }; output: RestorePreview }
   'account.login': { input: { email: string; password: string }; output: AccountStatus }
+  'account.requestRegistrationCode': {
+    input: { email: string }
+    output: { challengeId: string; retryAfterSeconds: number; expiresAt: string }
+  }
+  'account.verifyRegistrationCode': {
+    input: { email: string; challengeId: string; code: string }
+    output: { ticket: string }
+  }
+  'account.recoveryAvailable': { input: { email: string }; output: boolean }
+  'account.changePassword': { input: { password: string; newPassword: string }; output: void }
   'account.logout': { input: void; output: void }
   'account.me': { input: void; output: AccountUser }
-  'account.register': { input: { email: string; password: string }; output: AccountStatus }
-  'account.requestPasswordReset': { input: { email: string }; output: void }
+  'account.register': { input: { email: string; password: string; ticket: string }; output: AccountStatus }
+  'account.requestPasswordReset': { input: { email: string }; output: { retryAfterSeconds: number } }
   'account.resetPassword': { input: { email: string; code: string; newPassword: string }; output: void }
-  'account.sendVerificationEmail': { input: void; output: void }
   'account.setSyncEnabled': { input: { enabled: boolean }; output: AccountStatus }
   'account.status': { input: void; output: AccountStatus }
-  'account.verifyEmail': { input: { code: string }; output: void }
   'backup.applyRestore': { input: { token: string; mode: 'merge' | 'replace' }; output: void }
   'backup.backupNow': { input: void; output: { created: boolean; message?: string; version?: BackupVersion } }
   'backup.cloudVersions': {
@@ -155,9 +163,15 @@ export interface DomainOperations {
   'profile.testExisting': { input: { id: string; request: ProfileUpdateRequest }; output: ProfileTestResult }
   'profile.testNew': { input: { request: ProfileCreateRequest }; output: ProfileTestResult }
   'profile.update': { input: { id: string; request: ProfileUpdateRequest }; output: Profile }
-  'serverDetail.create': { input: {profileId:string}; output: {session_id:string;status:string;home_dir?:string} }
-  'serverDetail.close': {input:{sessionId:string};output:void}
-  'serverDetail.listFiles': {input:{sessionId:string;path:string;showHidden:boolean};output:SftpListResponse}
+  'serverDetail.create': {
+    input: { profileId: string }
+    output: { session_id: string; status: string; home_dir?: string }
+  }
+  'serverDetail.close': { input: { sessionId: string }; output: void }
+  'serverDetail.listFiles': {
+    input: { sessionId: string; path: string; showHidden: boolean }
+    output: SftpListResponse
+  }
   'serverDetail.getInfo': { input: { sessionId: string }; output: ServerInfo }
   'serverDetail.getMetrics': { input: { sessionId: string }; output: ServerMetrics }
   'session.attach': { input: { id: string }; output: SessionMessage[] }
@@ -197,16 +211,19 @@ export interface DomainOperations {
   'snippet.list': { input: void; output: Snippet[] }
   'snippet.update': { input: { id: string; request: SnippetUpdateRequest }; output: Snippet }
   'sync.bootstrap': { input: { token: string; mode: 'use_cloud' | 'merge' | 'use_local' }; output: void }
-  'sync.changePassword': { input: { password: string }; output: void }
   'sync.conflicts': { input: void; output: SyncConflict[] }
   'sync.now': { input: void; output: void }
   'sync.preview': { input: { includeOffline: boolean }; output: SyncPreview }
   'sync.resolveConflict': {
-    input: { itemType: SyncConflict['itemType']; itemId: string; choice: 'keep_local' | 'use_cloud'; remoteRevision: number }
+    input: {
+      itemType: SyncConflict['itemType']
+      itemId: string
+      choice: 'keep_local' | 'use_cloud'
+      remoteRevision: number
+    }
     output: void
   }
   'sync.status': { input: void; output: SyncStatus }
-  'sync.unlock': { input: { password: string }; output: void }
   'tunnel.delete': { input: { id: string }; output: void }
   'tunnel.list': { input: void; output: TunnelConfig[] }
   'tunnel.save': { input: { config: TunnelConfig }; output: TunnelConfig }
@@ -251,8 +268,14 @@ export interface DomainOperations {
     }
     output: SftpTransferResponse
   }
-  'sftp.getTransferConflicts': { input: { taskId: string }; output: { conflicts: SftpConflictInfo[]; directoryMode?: DirectoryTransferMode } }
-  'sftp.resolveTransferConflicts': { input: { taskId: string; resolution: Exclude<ConflictResolution, 'ask'> }; output: TransferTask }
+  'sftp.getTransferConflicts': {
+    input: { taskId: string }
+    output: { conflicts: SftpConflictInfo[]; directoryMode?: DirectoryTransferMode }
+  }
+  'sftp.resolveTransferConflicts': {
+    input: { taskId: string; resolution: Exclude<ConflictResolution, 'ask'> }
+    output: TransferTask
+  }
   'sftp.move': {
     input: { sessionId: string; paths: string[]; destDir: string; conflictResolution: ConflictResolution }
     output: SftpMoveResponse
@@ -273,12 +296,12 @@ export interface DomainOperations {
     output: {
       size: number
       last_modified?: number | null
-      prefix_hash?:string
-      prefix_bytes?:number
+      prefix_hash?: string
+      prefix_bytes?: number
     }
   }
   'sftp.resumeUpload': {
-    input: { taskId: string; size: number; lastModified: number; restart: boolean;prefixHash?:string }
+    input: { taskId: string; size: number; lastModified: number; restart: boolean; prefixHash?: string }
     output: SftpUploadBeginResponse
   }
   'sftp.pauseTransfer': { input: { taskId: string }; output: TransferTask }
@@ -304,16 +327,18 @@ export interface DomainOperations {
 }
 
 export const reservedOperations = [
+  'account.requestRegistrationCode',
+  'account.verifyRegistrationCode',
+  'account.recoveryAvailable',
+  'account.changePassword',
   'account.login',
   'account.logout',
   'account.me',
   'account.register',
   'account.requestPasswordReset',
   'account.resetPassword',
-  'account.sendVerificationEmail',
   'account.setSyncEnabled',
   'account.status',
-  'account.verifyEmail',
   'backup.applyRestore',
   'backup.backupNow',
   'backup.cloudVersions',
@@ -417,13 +442,11 @@ export const reservedOperations = [
   'snippet.list',
   'snippet.update',
   'sync.bootstrap',
-  'sync.changePassword',
   'sync.conflicts',
   'sync.now',
   'sync.preview',
   'sync.resolveConflict',
   'sync.status',
-  'sync.unlock',
   'tunnel.delete',
   'tunnel.list',
   'tunnel.save',

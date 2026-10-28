@@ -1,11 +1,15 @@
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto'
 import argon2 from 'argon2'
-import { fail, syncKeyEnvelopeSchema, syncWireItemSchema } from '@eizhu/contracts'
+import {
+  fail,
+  legacySyncKeyEnvelopeSchema as syncKeyEnvelopeSchema,
+  syncWireItemSchema,
+} from '@eizhu/contracts'
 import type { z } from 'zod'
 import { fromPortable, portable } from './model.ts'
 import type { Entity, ItemType, PlainItem, WireItem } from './model.ts'
 type Envelope = z.infer<typeof syncKeyEnvelopeSchema>
-const error = () => fail('SYNC_CRYPTO', '同步密码错误或加密数据已损坏')
+const error = () => fail('SYNC_CRYPTO', '主密码错误或加密数据已损坏')
 function base64(value: string): Buffer {
   const bytes = Buffer.from(value, 'base64')
   if (bytes.toString('base64') !== value) error()

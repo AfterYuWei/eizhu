@@ -88,12 +88,9 @@ export const syncMessageSchema = z.strictObject({
   status: syncStatusSchema,
   refresh: z.boolean().optional(),
 })
-const password = z.string().min(6).max(1024)
 export const sync = {
   'sync.status': { input: z.undefined(), output: syncStatusSchema },
   'sync.now': { input: z.undefined(), output: z.void() },
-  'sync.unlock': { input: z.strictObject({ password }), output: z.void() },
-  'sync.changePassword': { input: z.strictObject({ password }), output: z.void() },
   'sync.conflicts': { input: z.undefined(), output: z.array(syncConflictSchema).max(10000) },
   'sync.resolveConflict': {
     input: z.strictObject({

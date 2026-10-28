@@ -4,7 +4,7 @@ import type { BackupStatus } from '@/types/backup'
 import type { SyncConflict, SyncStatus } from '@/types/sync'
 it('routes authentication, encryption, quota and network errors to distinct actions', () => {
   expect(recoveryFor('ACCOUNT_NOT_LOGGED_IN').kind).toBe('account')
-  expect(recoveryFor('', 'locked').kind).toBe('unlock')
+  expect(recoveryFor('', 'locked').kind).toBe('account')
   expect(recoveryFor('ACCOUNT_QUOTA_EXCEEDED').kind).toBe('quota')
   expect(recoveryFor('', 'offline').kind).toBe('network')
   expect(recoveryFor('UNKNOWN').kind).toBe('retry')

@@ -3,14 +3,32 @@ import { accountApi } from '@/api/account'
 import { useAccountStore } from './account'
 import type { AccountStatus } from '@/types/account'
 
-
 vi.mock('@/lib/workspace', () => ({ refreshWorkspace: vi.fn().mockResolvedValue(undefined) }))
 
-vi.mock('@/api/account', () => ({ accountApi: {
-  status: vi.fn(), login: vi.fn(), register: vi.fn(), logout: vi.fn(), me: vi.fn(), setSyncEnabled: vi.fn(),
-} }))
+vi.mock('@/api/account', () => ({
+  accountApi: {
+    status: vi.fn(),
+    login: vi.fn(),
+    register: vi.fn(),
+    logout: vi.fn(),
+    me: vi.fn(),
+    setSyncEnabled: vi.fn(),
+  },
+}))
 
-const loggedIn: AccountStatus = { loggedIn: true, sessionState: 'authenticated', syncEnabled: true, user: { id: 42, emailVerified: true, verificationRequired: true, email: 'u@example.com', storageUsed: 2, storageQuota: 10 } }
+const loggedIn: AccountStatus = {
+  loggedIn: true,
+  sessionState: 'authenticated',
+  syncEnabled: true,
+  user: {
+    id: 42,
+    emailVerified: true,
+    verificationRequired: true,
+    email: 'u@example.com',
+    storageUsed: 2,
+    storageQuota: 10,
+  },
+}
 
 beforeEach(() => {
   vi.mocked(accountApi.status).mockReset()
@@ -32,12 +50,20 @@ describe('account store', () => {
     useAccountStore.setState({ status: loggedIn })
     vi.mocked(accountApi.logout).mockResolvedValue(undefined)
     await useAccountStore.getState().logout()
-    expect(useAccountStore.getState().status).toEqual({ loggedIn: false, sessionState: 'anonymous', syncEnabled: false })
+    expect(useAccountStore.getState().status).toEqual({
+      loggedIn: false,
+      sessionState: 'anonymous',
+      syncEnabled: false,
+    })
   })
   it('退出远端失败后核对真实本地登录状态', async () => {
     useAccountStore.setState({ status: loggedIn })
     vi.mocked(accountApi.logout).mockRejectedValue(new Error('离线'))
-    vi.mocked(accountApi.status).mockResolvedValue({ loggedIn: false, sessionState: 'anonymous', syncEnabled: false })
+    vi.mocked(accountApi.status).mockResolvedValue({
+      loggedIn: false,
+      sessionState: 'anonymous',
+      syncEnabled: false,
+    })
     await useAccountStore.getState().logout()
     expect(useAccountStore.getState().status?.loggedIn).toBe(false)
   })
@@ -55,7 +81,6 @@ describe('account store', () => {
     expect(useAccountStore.getState().status).toEqual(loggedIn)
     expect(useAccountStore.getState().error).toBe('空间切换失败')
   })
-
 })
 
 it('main-process cancellation preserves the current account without showing a failure', async () => {
@@ -64,8 +89,10 @@ it('main-process cancellation preserves the current account without showing a fa
   vi.mocked(accountApi.register).mockRejectedValueOnce(cancelled)
   vi.mocked(accountApi.logout).mockRejectedValueOnce(cancelled)
   useAccountStore.setState({ status: loggedIn })
-  await useAccountStore.getState().login('email', 'password')
-  await useAccountStore.getState().register('email', 'password')
+  await expect(useAccountStore.getState().login('email', 'password')).rejects.toEqual(cancelled)
+  await expect(useAccountStore.getState().register('email', 'password', 't'.repeat(64))).rejects.toEqual(
+    cancelled,
+  )
   await useAccountStore.getState().logout()
   expect(accountApi.login).toHaveBeenCalledTimes(1)
   expect(accountApi.register).toHaveBeenCalledTimes(1)
@@ -75,7 +102,10 @@ it('main-process cancellation preserves the current account without showing a fa
 })
 
 it('displays normalized errors crossing contextBridge as plain failure DTOs', async () => {
-  vi.mocked(accountApi.login).mockRejectedValueOnce({ code: 'ACCOUNT_SETUP_REQUIRED', message: '账号服务尚未初始化' })
+  vi.mocked(accountApi.login).mockRejectedValueOnce({
+    code: 'ACCOUNT_SETUP_REQUIRED',
+    message: '账号服务尚未初始化',
+  })
   await expect(useAccountStore.getState().login('u@example.com', 'password')).rejects.toBeDefined()
   expect(useAccountStore.getState().error).toBe('账号服务尚未初始化')
 })

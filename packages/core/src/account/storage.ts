@@ -10,6 +10,7 @@ export const accountStorage = {
     workspace: workspaceIdentitySchema,
     user: accountUserSchema,
     tokens: accountSessionSchema.shape.tokens.unwrap(),
+    secrets: accountSessionSchema.pick({ cachedSyncKey: true, masterKeys: true }).optional(),
   }),
   'account.storage.session': workspaceIdentitySchema,
   'account.storage.save': z.strictObject({
@@ -35,6 +36,7 @@ export interface AccountStorage {
     workspace: WorkspaceIdentity,
     user: AccountSession['user'],
     tokens: NonNullable<AccountSession['tokens']>,
+    secrets?: Pick<AccountSession, 'cachedSyncKey' | 'masterKeys'>,
   ): Promise<AccountSession>
   update(
     workspace: WorkspaceIdentity,
@@ -47,8 +49,8 @@ export function workerAccountStorage(worker: WorkerClient): AccountStorage {
     status: () => worker.call('account.storage.status'),
     session: (workspace) => worker.call('account.storage.session', workspace),
     save: (workspace, session) => worker.call('account.storage.save', { workspace, session }),
-    acceptLogin: (workspace, user, tokens) =>
-      worker.call('account.storage.acceptLogin', { workspace, user, tokens }),
+    acceptLogin: (workspace, user, tokens, secrets) =>
+      worker.call('account.storage.acceptLogin', { workspace, user, tokens, secrets }),
     update: (workspace, expectedRefreshToken, patch) =>
       worker.call('account.storage.update', { workspace, expectedRefreshToken, ...patch }),
   }

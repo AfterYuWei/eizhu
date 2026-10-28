@@ -97,28 +97,7 @@ it('uploads only after explicit merge confirmation and explains full replacement
   await click('确认接入')
   expect(syncApi.bootstrap).toHaveBeenCalledWith('22222222-2222-4222-8222-222222222222', 'merge')
 })
-it('keeps wrong unlock passwords in transient form state and blocks duplicate submissions', async () => {
-  await act(async () => useSyncStore.setState({ status: { ...initial, status: 'locked', unlocked: false } }))
-  let reject!: (error: unknown) => void
-  vi.mocked(syncApi.unlock).mockImplementation(
-    () =>
-      new Promise((_resolve, fail) => {
-        reject = fail
-      }),
-  )
-  await act(async () => {
-    const input = host.querySelector<HTMLInputElement>('#sync-password')!
-    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, 'temporary-secret')
-    input.dispatchEvent(new Event('input', { bubbles: true }))
-  })
-  await act(async () => {
-    host.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
-    host.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
-  })
-  expect(syncApi.unlock).toHaveBeenCalledTimes(1)
-  await act(async () => reject({ code: 'SYNC_CRYPTO', message: '同步密码错误或加密数据已损坏' }))
-  expect(host.textContent).toContain('同步密码错误或加密数据已损坏')
-  expect(host.querySelector<HTMLInputElement>('#sync-password')!.value).toBe('temporary-secret')
-  expect(JSON.stringify(useSyncStore.getState())).not.toContain('temporary-secret')
-  expect(JSON.stringify(useAccountStore.getState())).not.toContain('temporary-secret')
+it('uses the login key and offers no independent sync-password input', async () => {
+  expect(host.querySelector('#sync-password')).toBeNull()
+  expect(host.textContent).toContain('预览首次接入')
 })

@@ -56,9 +56,8 @@ export async function verifySyncDesktop(
 
   const before = await js<Array<{ id: string }>>('window.eizhu.group.list()')
   await js(
-    `window.eizhu.account.register({email:'sync-desktop@example.invalid',password:'synthetic-sync-123'})`,
+    `(async()=>{const email='sync-desktop@example.invalid';const c=await window.eizhu.account.requestRegistrationCode({email});const v=await window.eizhu.account.verifyRegistrationCode({email,challengeId:c.challengeId,code:'123456'});return window.eizhu.account.register({email,password:'synthetic-sync-123',ticket:v.ticket})})()`,
   )
-  await js(`window.eizhu.account.verifyEmail({code:'123456'})`)
   const user = await js<{ user: { id: number } }>('window.eizhu.account.status()'),
     peer = fixture.sync(user.user.id)
   assert.equal(peer.seq, 0)
@@ -71,11 +70,6 @@ export async function verifySyncDesktop(
   await js(
     `(()=>{const tab=[...document.querySelectorAll('[role="tab"]')].find(t=>t.textContent==='云同步');tab.focus();tab.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}))})()`,
   )
-  await wait(() => js(`Boolean(document.querySelector('#sync-password'))`))
-  await js(
-    `(()=>{const input=document.querySelector('#sync-password');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,'desktop 同步密码 123');input.dispatchEvent(new Event('input',{bubbles:true}))})()`,
-  )
-  await js(`document.querySelector('#sync-password').closest('form').requestSubmit()`)
   await wait(async () => (await status()).unlocked)
   assert.equal(peer.seq, 0)
   step('unlock-ready')
@@ -94,8 +88,7 @@ export async function verifySyncDesktop(
     return s.initialized && s.pendingCount === 0 && s.status === 'synced'
   })
   await wait(async () => fixture.subscribers === 1)
-  await wait(() => js(`!document.querySelector('#sync-password').disabled`))
-  assert.equal(await js(`document.querySelector('#sync-password').value`), '')
+  assert.equal(await js(`Boolean(document.querySelector('#sync-password'))`), false)
   assert.equal(
     await js(
       `([...document.querySelectorAll('button')].find(b=>b.textContent.includes('立即同步'))).disabled`,
@@ -169,7 +162,7 @@ export async function verifySyncDesktop(
   await js(
     `(()=>{const tab=[...document.querySelectorAll('[role="tab"]')].find(t=>t.textContent==='云同步');tab.focus();tab.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}))})()`,
   )
-  await wait(() => js(`Boolean(document.querySelector('#sync-password'))`))
+  await wait(() => js(`Boolean(document.querySelector('#account-sync-enabled'))`))
   const previousSize = window.getContentSize()
   window.setContentSize(900, 720)
   await js(`document.documentElement.style.setProperty('--sans-size','18px')`)
@@ -188,8 +181,18 @@ export async function verifySyncDesktop(
     (await js<Array<{ id: string }>>('window.eizhu.group.list()')).map((g) => g.id).sort(),
     before.map((g) => g.id).sort(),
   )
-  await js(`window.eizhu.account.login({email:'sync-desktop@example.invalid',password:'synthetic-sync-123'})`)
-  assert.equal((await status()).unlocked, false)
+  await click('前往登录')
+  await wait(() => js(`Boolean(document.querySelector('#account-email'))`))
+  await js(
+    `(()=>{for(const [id,value] of [['account-email','sync-desktop@example.invalid'],['account-password','synthetic-sync-123']]){const input=document.getElementById(id);Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,value);input.dispatchEvent(new Event('input',{bubbles:true}))}})()`,
+  )
+  await js(`document.querySelector('.account-dialog form').requestSubmit()`)
+  await wait(() =>
+    js(
+      `!document.querySelector('[role="dialog"]') && document.querySelector('.settings-page-heading')?.textContent==='云同步'`,
+    ),
+  )
+  assert.equal((await status()).unlocked, true)
   assert.equal((await status()).initialized, true)
   await js('window.eizhu.account.logout()')
   if (await js(`Boolean(document.querySelector('.settings-page-back'))`))

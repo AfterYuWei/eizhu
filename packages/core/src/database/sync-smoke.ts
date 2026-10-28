@@ -6,6 +6,8 @@ import { randomBytes, randomUUID } from 'node:crypto'
 import Database from 'better-sqlite3'
 import { DesktopError, offlineWorkspace } from '@eizhu/contracts'
 import { FoundationStore } from './store.ts'
+import { masterCrypto } from '../account/crypto.ts'
+import type { MasterKeys } from '../account/crypto.ts'
 import { AccountService } from '../account/service.ts'
 import { workerAccountStorage } from '../account/storage.ts'
 import { accountWorkspace } from '../account/workspace.ts'
@@ -53,6 +55,13 @@ async function verify() {
   again.fill(0)
   vectorKey.fill(0)
   checks.push('固定 Rust 包装、条目与墓碑向量；错误密码/身份篡改拒绝；密码轮换保留数据密钥')
+  const master = (await masterCrypto('master.create', { password: 'synthetic-master-password' })) as {
+    key: Uint8Array
+    keys: MasterKeys
+  }
+  const sharedKey = Buffer.from(master.key).toString('hex')
+  peer.envelope = { ...master.keys, revision: 1 }
+  master.key.fill(0)
   const create = (name: string, key = randomBytes(32)) => {
     const directory = join(root, name)
     let initial = new FoundationStore(directory, key, offlineWorkspace)
@@ -76,6 +85,8 @@ async function verify() {
           expiresAt: Date.now() + 86400000,
         },
         syncEnabled: false,
+        cachedSyncKey: { key: sharedKey, revision: 1 },
+        masterKeys: { ...master.keys, revision: 1 },
       })
     }
     initial.accounts.activate(workspace)
@@ -128,10 +139,8 @@ async function verify() {
     const offlineBefore = new FoundationStore(a.directory, a.key, offlineWorkspace)
     const original = offlineBefore.local.snapshot()
     offlineBefore.close()
-    await Promise.all([
-      a.sync.execute('sync.unlock', { password: 'sync 密码 123' }),
-      b.sync.execute('sync.unlock', { password: 'sync 密码 123' }),
-    ])
+    assert.equal((await a.sync.status()).unlocked, true)
+    assert.equal((await b.sync.status()).unlocked, true)
     assert.equal(
       a.store.accounts.session(workspace)!.cachedSyncKey!.key,
       b.store.accounts.session(workspace)!.cachedSyncKey!.key,
@@ -149,13 +158,12 @@ async function verify() {
     const offlineAfter = new FoundationStore(a.directory, a.key, offlineWorkspace)
     assert.deepEqual(offlineAfter.local.snapshot(), original)
     offlineAfter.close()
-    await b.sync.execute('sync.unlock', { password: 'sync 密码 123' })
     const bp = (await b.sync.execute('sync.preview', { includeOffline: false })) as SyncPreview
     await b.sync.execute('sync.bootstrap', { token: bp.token, mode: 'merge' })
     assert.equal(b.store.local.snapshot().groups[0].id, group.id)
     assert.equal((await b.sync.status()).pendingCount, 0)
     checks.push(
-      '并发初始包装 CAS 得到同一 DEK；确认前不上传；默认预览合并离线且保留原库；第二设备应用不回声上传',
+      '注册后两端使用登录缓存的同一 DEK；确认前不上传；默认预览合并离线且保留原库；第二设备应用不回声上传',
     )
 
     a.store.local.execute('group.update', { id: group.id, request: { name: '上传中旧编辑' } })
@@ -312,14 +320,24 @@ async function verify() {
     assert.ok(b.store.local.snapshot().groups.find((g) => g.id === local.id))
     peer.expiredBefore = 0
     const beforeKey = a.store.accounts.session(workspace)!.cachedSyncKey!.key
-    await a.sync.execute('sync.changePassword', { password: '轮换后的同步密码' })
-    assert.equal(a.store.accounts.session(workspace)!.cachedSyncKey!.key, beforeKey)
-    b.store.accounts.syncSettings(workspace, { cachedSyncKey: undefined })
-    await close(b)
-    b = create('device-b', keyB)
-    await assert.rejects(b.sync.execute('sync.unlock', { password: 'sync 密码 123' }), code('SYNC_CRYPTO'))
-    await b.sync.execute('sync.unlock', { password: '轮换后的同步密码' })
-    checks.push('游标过期通过快照核对并保留本地待同步；密码轮换重包装同一 DEK，新设备使用新密码')
+    const rotated = (await masterCrypto('master.create', {
+      password: 'rotated-master-password',
+      keys: master.keys,
+      parameters: { cryptoId: master.keys.cryptoId, salt: randomBytes(16).toString('base64') },
+      key: Buffer.from(beforeKey, 'hex'),
+    })) as { key: Uint8Array; keys: MasterKeys }
+    await assert.rejects(
+      masterCrypto('master.open', { password: 'synthetic-master-password', keys: rotated.keys }),
+      code('SYNC_CRYPTO'),
+    )
+    const reopened = (await masterCrypto('master.open', {
+      password: 'rotated-master-password',
+      keys: rotated.keys,
+    })) as { key: Uint8Array }
+    assert.equal(Buffer.from(reopened.key).toString('hex'), beforeKey)
+    rotated.key.fill(0)
+    reopened.key.fill(0)
+    checks.push('游标过期快照保留待同步；主密码轮换重新包装同一 DEK，旧密码无法解包')
 
     const stale = (await a.sync.execute('sync.preview', { includeOffline: true })) as SyncPreview
     const offlineEdit = new FoundationStore(a.directory, a.key, offlineWorkspace)

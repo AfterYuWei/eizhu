@@ -1,12 +1,24 @@
 import { z } from 'zod'
-import { ACCOUNT_SERVER, accountHttpRequestSchema, syncHttpRequestSchema, DesktopError, fail } from '@eizhu/contracts'
+import {
+  ACCOUNT_SERVER,
+  accountHttpRequestSchema,
+  syncHttpRequestSchema,
+  DesktopError,
+  fail,
+} from '@eizhu/contracts'
 import type { HttpResponse, Transport } from '../archive/network.ts'
 
 const remoteError = z.object({ code: z.string().max(100) })
 const messages: Record<string, [string, string]> = {
-  KEY_NOT_FOUND: ['KEY_NOT_FOUND', '尚未设置同步密码'],
-  KEY_CONFLICT: ['KEY_CONFLICT', '同步密码包装已变化，请重新解锁或重试'],
-  KEY_REQUIRED: ['KEY_REQUIRED', '请先设置同步密码'],
+  DEVICE_RECOVERY_REQUIRED: [
+    'DEVICE_RECOVERY_REQUIRED',
+    '请在仍可解锁数据的设备上恢复主密码；邮箱验证码不能单独恢复云端数据',
+  ],
+  MASTER_PASSWORD_CLIENT_REQUIRED: ['MASTER_PASSWORD_CLIENT_REQUIRED', '请使用主密码安全设置修改或恢复账号'],
+  ACCOUNT_SETUP_REQUIRED: ['ACCOUNT_SETUP_REQUIRED', '请先初始化管理后台'],
+  KEY_NOT_FOUND: ['KEY_NOT_FOUND', '账号加密密钥包不存在，请检查服务端状态'],
+  KEY_CONFLICT: ['KEY_CONFLICT', '账号密钥包已变化，请重新登录或重试'],
+  KEY_REQUIRED: ['KEY_REQUIRED', '请使用主密码登录后再同步'],
   ITEM_CONFLICT: ['ITEM_CONFLICT', '云端条目已变化，正在重新核对'],
   WATERMARK_CHANGED: ['WATERMARK_CHANGED', '云端关联数据已变化，请重新核对'],
   EPOCH_CHANGED: ['EPOCH_CHANGED', '云端已整体替换，请重新核对'],
@@ -19,7 +31,7 @@ const messages: Record<string, [string, string]> = {
   INVALID_CIPHERTEXT: ['INVALID_CIPHERTEXT', '云端拒绝无效密文，未修改数据'],
   INVALID_CURSOR: ['INVALID_CURSOR', '同步游标无效，请重新核对'],
   QUOTA_EXCEEDED: ['ACCOUNT_QUOTA_EXCEEDED', '账号云存储空间不足，本地修改已保留'],
-  INVALID_CREDENTIALS: ['ACCOUNT_INVALID_CREDENTIALS', '邮箱或密码不正确'],
+  INVALID_CREDENTIALS: ['ACCOUNT_INVALID_CREDENTIALS', '邮箱或主密码不正确'],
   EMAIL_TAKEN: ['ACCOUNT_EMAIL_TAKEN', '该邮箱已被注册'],
   ACCOUNT_DISABLED: ['ACCOUNT_DISABLED', '账号已被禁用，请联系管理员'],
   UNAUTHENTICATED: ['ACCOUNT_NOT_LOGGED_IN', '登录已失效，请重新登录'],
@@ -84,13 +96,14 @@ export class AccountClient {
     schema?: z.ZodType<T>,
     body?: unknown,
     accessToken?: string,
-    scope: 'auth'|'sync' = 'auth',
+    scope: 'auth' | 'sync' = 'auth',
   ): Promise<T> {
-    const bytes = body === undefined ? undefined : Buffer.from(typeof body === 'string' ? body : JSON.stringify(body))
+    const bytes =
+      body === undefined ? undefined : Buffer.from(typeof body === 'string' ? body : JSON.stringify(body))
     let response: HttpResponse | undefined
     try {
       const request = (scope === 'auth' ? accountHttpRequestSchema : syncHttpRequestSchema).parse({
-        url: new URL(`api/${scope==='auth'?'auth':'sync/v2'}/${path}`, ACCOUNT_SERVER).href,
+        url: new URL(`api/${scope === 'auth' ? 'auth' : 'sync/v2'}/${path}`, ACCOUNT_SERVER).href,
         method,
         headers: {
           accept: 'application/json',
@@ -108,9 +121,10 @@ export class AccountClient {
           retryable: !signal.aborted,
         })
       }
-      if (response.body.byteLength > (scope === 'auth' ? 131072 : 50*1024*1024)) fail('ACCOUNT_PROTOCOL', '账号响应超出大小限制')
+      if (response.body.byteLength > (scope === 'auth' ? 131072 : 50 * 1024 * 1024))
+        fail('ACCOUNT_PROTOCOL', '账号响应超出大小限制')
       if (response.status < 200 || response.status >= 300)
-        throw responseError(response, scope === 'auth' && path === 'register')
+        throw responseError(response, scope === 'auth' && path === 'master/register')
       if (!schema) return undefined as T
       try {
         return schema.parse(JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(response.body)))

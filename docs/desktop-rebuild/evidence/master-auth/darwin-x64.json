@@ -1,0 +1,140 @@
+{
+  "date": "2026-10-28",
+  "implementation": "registration-before-account, master password, device-only recovery, root account dialog",
+  "build": {
+    "base": "0.5.0",
+    "version": "0.5.0-test.347.5dfce60e",
+    "channel": "test",
+    "revision": "5dfce60e8601841a1525023362d338fbea4a59eb",
+    "platform": "darwin",
+    "arch": "x64",
+    "feeds": {},
+    "updateRepository": {
+      "owner": "AfterYuWei",
+      "repo": "eizhu"
+    },
+    "sourceDigest": "1e8dcc8e18130dcd435fbdb6738b71c5c285eb622e684de996a5bd49fb21046a"
+  },
+  "artifact": {
+    "path": "artifacts/desktop/eizhu-0.5.0-test.347.5dfce60e-mac-x64.dmg",
+    "bytes": 158154469,
+    "sha256": "743be4e52169410cae1dc171d12ecfca71096e120cef94a62541c03173154a98",
+    "signed": false,
+    "notarized": false
+  },
+  "checks": {
+    "types": true,
+    "lint": true,
+    "architecture": true,
+    "frozenBaseline": true,
+    "foundationTests": 118,
+    "webTests": 293,
+    "baselineTests": 10,
+    "backendTargetedTests": 28,
+    "adminWebTests": 26,
+    "adminWebBuild": true,
+    "adminWebLint": true,
+    "imageSmokeScriptSyntax": true
+  },
+  "packagedSmoke": {
+    "passed": true,
+    "packaged": true,
+    "platform": "darwin",
+    "arch": "x64",
+    "keyMode": "restricted-file",
+    "account": {
+      "passed": true,
+      "synthetic": true,
+      "realBackend": false,
+      "realEmail": false,
+      "setupGate": true,
+      "restrictedGate": true,
+      "editorCancellation": true,
+      "editorLockedDuringTransition": true,
+      "editorUnlockedOnAuthFailure": true,
+      "rendererTransition": true,
+      "register": true,
+      "emailVerification": true,
+      "passwordReset": true,
+      "concurrentRefresh": true,
+      "lostRefreshRequiresLogin": true,
+      "lostAuthenticationNotReplayed": true,
+      "localLogoutOnRemoteFailure": true,
+      "offlineRestart": true,
+      "accountIsolation": true,
+      "publicTokenRedaction": true,
+      "syncRequiresConfirmation": true,
+      "screenshots": [
+        "account-login-light.png",
+        "account-register-email.png",
+        "account-register-code.png",
+        "account-register-password-dark.png",
+        "account-signed-in-dark.png",
+        "account-signed-in-narrow.png"
+      ]
+    },
+    "sync": {
+      "passed": true,
+      "synthetic": true,
+      "realBackend": false,
+      "realEmail": false,
+      "rendererPasswordForm": true,
+      "previewCancelNoUpload": true,
+      "confirmedOfflineMerge": true,
+      "automaticOutbox": true,
+      "hintsNotConfirmations": true,
+      "singleSseConnection": true,
+      "sseReconnect": true,
+      "pauseReleasesSse": true,
+      "pausePreservesOutbox": true,
+      "lostHttpResponseNotReplayed": true,
+      "requestLookupRecovery": true,
+      "restartUnlockCache": true,
+      "logoutClearsUnlock": true,
+      "offlineOriginalRetained": true,
+      "screenshots": [
+        "sync-initialized-light.png",
+        "sync-unlocked-dark-narrow.png"
+      ]
+    },
+    "nativeCrypto": {
+      "passed": true,
+      "synthetic": true,
+      "realBackend": false,
+      "realDualDevice": false,
+      "checks": [
+        "固定 Rust 包装、条目与墓碑向量；错误密码/身份篡改拒绝；密码轮换保留数据密钥",
+        "注册后两端使用登录缓存的同一 DEK；确认前不上传；默认预览合并离线且保留原库；第二设备应用不回声上传",
+        "冻结上传后继续编辑；旧确认只清理覆盖修订，新编辑保留并在下一批上传",
+        "提交响应丢失、重启恢复先查原请求；确认不存在后逐字节重发相同密文和 requestId",
+        "固定水位分页；双端并发编辑、删除冲突保留；选择时复核远端修订并避免覆盖新变化",
+        "不合法依赖删除保留有效图并持久化冲突；重启保留，后续合法关联修改可恢复",
+        "游标过期快照保留待同步；主密码轮换重新包装同一 DEK，旧密码无法解包",
+        "预览绑定离线及账号本地修订；整体替换携带完整集合、水位和下一 epoch 密文；其他设备核对时保留本地编辑",
+        "超限整体替换明确拒绝且不拆分；远端业务/审计/影子/冲突/游标事务中途失败整体回滚"
+      ],
+      "devices": 2,
+      "fixedCryptoVectors": true,
+      "rememberedUnlock": true,
+      "unknownRequestRecovery": true,
+      "oldAckPreservesNewEdits": true,
+      "noRemoteEcho": true,
+      "dependencyConflicts": true,
+      "atomicCursor": true,
+      "replaceLimit": true
+    }
+  },
+  "syntheticTwoClient": {
+    "passed": true,
+    "synthetic": true,
+    "realBackend": false,
+    "report": "artifacts/acceptance/synthetic-darwin-x64.json"
+  },
+  "pending": [
+    "PostgreSQL/Testcontainers: Docker unavailable; execution attempted and environment failed",
+    "real local backend and real registration/recovery email",
+    "Windows x64, macOS arm64, Linux x64",
+    "real system keychain, signing/notarization, long-run acceptance"
+  ],
+  "sourceStatus": "uncommitted; no push, deployment, release or database reset"
+}

@@ -4,11 +4,7 @@ export const ACCOUNT_SERVER = 'https://eizhu.yuweinfo.com/'
 const integer = z.int().nonnegative()
 const email = z.email().max(255)
 const password = z.string().min(1).max(1024)
-const newPassword = z
-  .string()
-  .min(8)
-  .max(128)
-  .refine((value) => new TextEncoder().encode(value).byteLength <= 72, '登录密码不能超过 72 个 UTF-8 字节')
+const newPassword = z.string().min(12).max(128)
 const code = z.string().regex(/^[0-9]{6}$/)
 
 export const accountUserSchema = z.strictObject({
@@ -41,14 +37,29 @@ export const account = {
   'account.status': { input: z.undefined(), output: accountStatusSchema },
   'account.login': { input: z.strictObject({ email, password }), output: accountStatusSchema },
   'account.register': {
-    input: z.strictObject({ email, password: newPassword }),
+    input: z.strictObject({ email, password: newPassword, ticket: z.string().min(32).max(128) }),
     output: accountStatusSchema,
   },
+  'account.requestRegistrationCode': {
+    input: z.strictObject({ email }),
+    output: z.strictObject({
+      challengeId: z.uuid(),
+      retryAfterSeconds: z.int().positive(),
+      expiresAt: z.string(),
+    }),
+  },
+  'account.verifyRegistrationCode': {
+    input: z.strictObject({ email, challengeId: z.uuid(), code }),
+    output: z.strictObject({ ticket: z.string().min(32).max(128) }),
+  },
+  'account.recoveryAvailable': { input: z.strictObject({ email }), output: z.boolean() },
+  'account.changePassword': { input: z.strictObject({ password, newPassword }), output: z.void() },
   'account.logout': { input: z.undefined(), output: z.void() },
   'account.me': { input: z.undefined(), output: accountUserSchema },
-  'account.sendVerificationEmail': { input: z.undefined(), output: z.void() },
-  'account.verifyEmail': { input: z.strictObject({ code }), output: z.void() },
-  'account.requestPasswordReset': { input: z.strictObject({ email }), output: z.void() },
+  'account.requestPasswordReset': {
+    input: z.strictObject({ email }),
+    output: z.strictObject({ retryAfterSeconds: z.int().positive() }),
+  },
   'account.resetPassword': { input: z.strictObject({ email, code, newPassword }), output: z.void() },
   'account.setSyncEnabled': { input: z.strictObject({ enabled: z.boolean() }), output: accountStatusSchema },
 } as const
@@ -91,14 +102,16 @@ export const accountHttpRequestSchema = z
       request.method === 'GET'
         ? ['setup', 'me']
         : [
-            'login',
-            'register',
+            'master/parameters',
+            'master/login',
+            'master/register',
+            'master/registration/send',
+            'master/registration/verify',
+            'master/change',
+            'master/recovery/send',
+            'master/recovery/reset',
             'refresh',
             'logout',
-            'email/send',
-            'email/verify',
-            'password/forgot',
-            'password/reset',
           ]
     if (
       url.origin !== new URL(ACCOUNT_SERVER).origin ||

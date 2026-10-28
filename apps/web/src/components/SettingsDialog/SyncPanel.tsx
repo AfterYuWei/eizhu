@@ -6,7 +6,6 @@ import { conflictDependencies, syncDiagnostic } from '@/lib/syncExperience'
 import { writeClipboardText } from '@/lib/clipboard'
 import { runDesktopAction } from '@/lib/desktopActions'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { syncApi } from '@/api/sync'
@@ -28,8 +27,7 @@ import {
 export function SyncPanel() {
   const { status, conflicts, focusItem } = useSyncStore()
   const account = useAccountStore((s) => s.status)
-  const [password, setPassword] = useState(''),
-    [busy, setBusy] = useState(false),
+  const [busy, setBusy] = useState(false),
     [error, setError] = useState<{ code: string; message: string } | null>(null)
   const [includeOffline, setIncludeOffline] = useState(true)
   const [preview, setPreview] = useState<SyncPreview | null>(null),
@@ -51,7 +49,6 @@ export function SyncPanel() {
     setError(null)
     try {
       await work()
-      setPassword('')
       await useSyncStore.getState().refresh()
       if (message) toast.success(message)
     } catch (cause) {
@@ -144,36 +141,6 @@ export function SyncPanel() {
               />
             </div>
           )}
-          <form
-            className="settings-card account-form-card"
-            onSubmit={(event) => {
-              event.preventDefault()
-              void run(
-                () => (status?.unlocked ? syncApi.changePassword(password) : syncApi.unlock(password)),
-                status?.unlocked ? '同步密码已更换' : '同步数据已解锁',
-              )
-            }}
-          >
-            <Label htmlFor="sync-password">独立同步密码</Label>
-            <Input
-              id="sync-password"
-              type="password"
-              minLength={6}
-              maxLength={1024}
-              required
-              autoComplete="new-password"
-              value={password}
-              disabled={busy}
-              onChange={(event) => setPassword(event.target.value)}
-              placeholder={status?.unlocked ? '输入新的同步密码' : '首次设置或输入已有同步密码'}
-            />
-            <p className="settings-field-desc">
-              登录密码、同步密码与备份密码分别管理。本机记住解锁密钥；退出账号会清除解锁缓存。找回登录密码不会解密云端数据，已有本机密钥时可重新设置同步密码。
-            </p>
-            <Button type="submit" disabled={busy || password.length < 6}>
-              {status?.unlocked ? '更换同步密码' : '设置／解锁'}
-            </Button>
-          </form>
           {status?.unlocked && !status.initialized && (
             <div className="backup-card" aria-label="首次接入预览">
               <div className="backup-row">

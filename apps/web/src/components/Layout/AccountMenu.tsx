@@ -5,6 +5,7 @@ import { useSyncStore } from '@/store/sync'
 import { SYNC_STATUS_LABELS } from '@/types/sync'
 import { DEFAULT_DESKTOP_SIDEBAR_WIDTH,DESKTOP_SIDEBAR_INSET } from '@/lib/desktopSidebar'
 import { useRef } from 'react'
+import { useAccountDialogStore } from '@/store/accountDialog'
 import { AccountIdentity } from './AccountIdentity'
 import type { SettingsTab } from '@/components/SettingsDialog'
 import { Button } from '@/components/ui/button'
@@ -21,7 +22,7 @@ export function AccountMenu({ onSettings }: { onSettings: (tab: SettingsTab) => 
   const { theme, setTheme } = useSettingsStore()
   const cloud = account?.loggedIn === true
   const name = cloud ? account.user?.email.split('@')[0] || '云端用户' : '本地用户'
-  const openSettings = (tab: SettingsTab) => { openingSettings.current = true; onSettings(tab) }
+  const openSettings = (tab: SettingsTab) => { openingSettings.current = true; if (tab === 'account' && (!account?.loggedIn || account.sessionState === 'reauth_required')) useAccountDialogStore.getState().open('login', account?.user?.email); else onSettings(tab) }
   return <DropdownMenu>
     <DropdownMenuTrigger asChild>
       <Button variant="ghost" className="shell-account" aria-label={`${name} · ${cloud ? '云端' : '本地'}，打开账号菜单`}>

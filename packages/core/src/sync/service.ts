@@ -1,4 +1,4 @@
-import { randomBytes, randomUUID } from 'node:crypto'
+import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import {
   DesktopError,
@@ -7,7 +7,6 @@ import {
   syncBatchSchema,
   syncCapabilitiesSchema,
   syncChangesSchema,
-  syncKeyEnvelopeSchema,
   syncSnapshotSchema,
   syncSnapshotPageSchema,
 } from '@eizhu/contracts'
@@ -146,6 +145,14 @@ export class SyncService {
   credentialsChanged(): void {
     void this.ready
       .then(async () => {
+        const session = await this.database.call<AccountSession | null>(
+          'account.storage.session',
+          this.workspace,
+        )
+        if (session?.cachedSyncKey) {
+          this.key?.fill(0)
+          this.key = Buffer.from(session.cachedSyncKey.key, 'hex')
+        }
         const state = await this.db<State>('state')
         if (['ACCOUNT_NOT_LOGGED_IN', 'ACCOUNT_DISABLED'].includes(state.lastErrorCode)) this.blocked = false
         this.wake()
@@ -220,17 +227,6 @@ export class SyncService {
   ): Promise<T> {
     return this.account.syncRequest(path, method, schema, body, this.controller.signal)
   }
-  private async unwrapKey(
-    password: string,
-    envelope: z.infer<typeof syncKeyEnvelopeSchema>,
-  ): Promise<Buffer> {
-    const bytes = await this.crypto<Uint8Array>('unwrap', { password, envelope })
-    try {
-      return Buffer.from(bytes)
-    } finally {
-      bytes.fill(0)
-    }
-  }
   private async capabilities() {
     return this.request('capabilities', 'GET', syncCapabilitiesSchema)
   }
@@ -240,49 +236,6 @@ export class SyncService {
       deviceId: state.deviceId,
     })
     return state
-  }
-  private async unlock(password: string): Promise<void> {
-    await this.capabilities()
-    await this.enroll()
-    let envelope: z.infer<typeof syncKeyEnvelopeSchema>, key: Buffer | undefined
-    try {
-      try {
-        envelope = await this.request('keys', 'GET', syncKeyEnvelopeSchema)
-        key = await this.unwrapKey(password, envelope)
-      } catch (error) {
-        if (codeOf(error) !== 'KEY_NOT_FOUND') throw error
-        key = randomBytes(32)
-        const proposed = await this.crypto('wrap', { password, revision: 0 }, key)
-        try {
-          envelope = await this.request('keys', 'PUT', syncKeyEnvelopeSchema, proposed)
-        } catch (error) {
-          if (codeOf(error) !== 'KEY_CONFLICT') throw error
-          key.fill(0)
-          envelope = await this.request('keys', 'GET', syncKeyEnvelopeSchema)
-          key = await this.unwrapKey(password, envelope)
-        }
-      }
-      await this.database.call('account.storage.syncSettings', {
-        cachedSyncKey: { key: key.toString('hex'), revision: envelope.revision },
-      })
-      this.key?.fill(0)
-      this.key = Buffer.from(key)
-      this.blocked = false
-      await this.db('note', { phase: 'pending' })
-    } finally {
-      key?.fill(0)
-    }
-    this.wake()
-    await this.publish()
-  }
-  private async changePassword(password: string): Promise<void> {
-    if (!this.key) fail('SYNC_LOCKED', '请先解锁同步数据')
-    const current = await this.request('keys', 'GET', syncKeyEnvelopeSchema)
-    const proposed = await this.crypto('wrap', { password, revision: current.revision })
-    const saved = await this.request('keys', 'PUT', syncKeyEnvelopeSchema, proposed)
-    await this.database.call('account.storage.syncSettings', {
-      cachedSyncKey: { key: this.key.toString('hex'), revision: saved.revision },
-    })
   }
   private async snapshot(): Promise<{ seq: number; epoch: number; remote: Remote[] }> {
     if (!this.key) fail('SYNC_LOCKED', '请先解锁同步数据')
@@ -348,6 +301,7 @@ export class SyncService {
       for (const batch of changes.batches) {
         if (batch.seq !== cursor + 1 || batch.seq > until) fail('SYNC_PROTOCOL', '云端增量顺序无效')
         if (batch.epoch !== state.epoch) {
+          await this.enroll()
           const snapshot = await this.snapshot()
           await this.db('apply', { ...snapshot, cursor: snapshot.seq, snapshot: true })
           return true
@@ -518,11 +472,9 @@ export class SyncService {
       if (operation === 'sync.conflicts') return this.workspace.id === 'offline' ? [] : this.db('conflicts')
       if (this.workspace.id === 'offline') fail('ACCOUNT_NOT_LOGGED_IN', '请先登录账号')
       try {
-        if (operation === 'sync.unlock') return await this.unlock(sync[operation].input.parse(input).password)
-        if (operation === 'sync.changePassword')
-          return await this.changePassword(sync[operation].input.parse(input).password)
         if (!this.key) fail('SYNC_LOCKED', '请先解锁同步数据')
         if (operation === 'sync.preview') {
+          await this.enroll()
           const snapshot = await this.snapshot()
           return await this.db('preview', {
             ...snapshot,

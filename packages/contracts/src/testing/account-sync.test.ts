@@ -43,14 +43,14 @@ test('account schemas reject unsafe identities, leaked tokens and contradictory 
   ])
     assert.equal(accountStatusSchema.safeParse(invalid).success, false)
   assert.equal(
-    account['account.register'].input.safeParse({ email: user.email, password: '中'.repeat(25) }).success,
+    account['account.register'].input.safeParse({ email: user.email, password: '中'.repeat(129), ticket: 't'.repeat(64) }).success,
     false,
   )
   assert.equal(
-    account['account.register'].input.safeParse({ email: user.email, password: '中'.repeat(24) }).success,
+    account['account.register'].input.safeParse({ email: user.email, password: '中'.repeat(25), ticket: 't'.repeat(64) }).success,
     true,
   )
-  assert.equal(account['account.verifyEmail'].input.safeParse({ code: '12345x' }).success, false)
+  assert.equal(account['account.verifyRegistrationCode'].input.safeParse({ email: user.email, challengeId: randomUUID(), code: '12345x' }).success, false)
   assert.equal(
     account['account.login'].input.parse({ email: user.email, password: '  原样密码🔐  ' }).password,
     '  原样密码🔐  ',

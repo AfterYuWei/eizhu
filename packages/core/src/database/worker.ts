@@ -38,7 +38,7 @@ parentPort!.on('message', async (message) => {
       }
       case 'account.storage.acceptLogin': {
         const d = accountStorage['account.storage.acceptLogin'].parse(input)
-        return store.accounts.acceptLogin(d.workspace, d.user, d.tokens)
+        return store.accounts.acceptLogin(d.workspace, d.user, d.tokens, d.secrets)
       }
       case 'account.storage.update': {
         const d = accountStorage['account.storage.update'].parse(input)

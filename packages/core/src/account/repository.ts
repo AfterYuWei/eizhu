@@ -2,6 +2,7 @@ import { z } from 'zod'
 import type Database from 'better-sqlite3'
 import {
   accountStatusSchema,
+  masterKeyEnvelopeSchema,
   accountUserSchema,
   fail,
   offlineWorkspace,
@@ -30,6 +31,7 @@ export const accountSessionSchema = z.strictObject({
   syncEnabled: z.boolean(),
   tokens: tokens.nullable(),
   cachedSyncKey: cachedSyncKey.optional(),
+  masterKeys: masterKeyEnvelopeSchema.optional(),
 })
 export type AccountSession = z.infer<typeof accountSessionSchema>
 
@@ -153,6 +155,7 @@ export class AccountRepository {
     identity: WorkspaceIdentity,
     user: AccountSession['user'],
     tokens: NonNullable<AccountSession['tokens']>,
+    secrets?: Pick<AccountSession, 'cachedSyncKey' | 'masterKeys'>,
   ): AccountSession {
     return this.db.transaction(() => {
       let current: AccountSession | null = null
@@ -160,6 +163,7 @@ export class AccountRepository {
       if (exists) current = this.session(identity)
       const next = accountSessionSchema.parse({
         ...current,
+        ...secrets,
         user,
         tokens,
         syncEnabled: current?.syncEnabled ?? false,

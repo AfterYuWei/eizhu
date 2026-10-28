@@ -6,6 +6,7 @@ import { useSyncStore } from '@/store/sync';
 import { useProfileStore } from '@/store/profile';
 import { useVaultStore } from '@/store/vault';
 import { useEffect,useState } from 'react';
+import { AccountDialog } from '@/components/SettingsDialog/AccountDialog'
 import { Layout } from '@/components/Layout';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { initTheme } from '@/store/settings';
@@ -49,6 +50,7 @@ function App() {
     }, []);
     return (<TooltipProvider>
       {<Layout key={space}/>}
+      <AccountDialog />
     </TooltipProvider>);
 }
 export default App;

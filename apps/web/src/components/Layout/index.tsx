@@ -27,6 +27,8 @@ import { useWindowControls } from '@/hooks/useWindowControls'
 import { WindowControls } from '@/components/WindowControls'
 import { ShellIconButton } from './ShellControls'
 import { SidebarResizeHandle } from './SidebarResizeHandle'
+import { useAccountDialogStore } from '@/store/accountDialog'
+import { useAccountStore } from '@/store/account'
 import { AccountMenu } from './AccountMenu'
 import { WorkspaceTabs } from './WorkspaceTabs'
 import { WorkspaceContent } from './WorkspaceContent'
@@ -65,8 +67,9 @@ export function Layout() {
   const [snippetsOpen, setSnippetsOpen] = useState(false)
   const [snippetQuick, setSnippetQuick] = useState<{ target: SnippetTarget | null } | null>(null)
   const [profileFormOpen, setProfileFormOpen] = useState(false)
-  const [settingsTab, setSettingsTab] = useState<SettingsTab>('appearance')
-  const [settingsOpen, setSettingsOpen] = useState(false)
+  const settingsPage = useDesktopShellStore((s) => s.settingsPage)
+  const settingsTab = settingsPage ?? 'appearance'
+  const settingsOpen = settingsPage !== null
   const [inspectorOpen, setInspectorOpen] = useState(false)
   const [workspaceWidth, setWorkspaceWidth] = useState(window.innerWidth)
   const workspace = useRef<HTMLDivElement>(null)
@@ -90,8 +93,7 @@ export function Layout() {
   const openSettings = useCallback((tab: SettingsTab) => {
     const focused = document.activeElement
     if (focused instanceof HTMLElement && !focused.closest('.settings-page')) settingsReturnFocus.current = focused
-    setSettingsTab(tab)
-    setSettingsOpen(true)
+    useDesktopShellStore.getState().setSettingsPage(tab)
   }, [])
 
   useEffect(() => {
@@ -132,7 +134,7 @@ export function Layout() {
       registerDesktopAction('tunnels', () => setTunnelsOpen(true)),
       registerDesktopAction('palette', () => setPaletteOpen((v) => !v)),
       registerDesktopAction('sync-settings', () => openSettings('sync')),
-      registerDesktopAction('account-settings', () => openSettings('account')),
+      registerDesktopAction('account-settings', () => { const account = useAccountStore.getState().status; if (!account?.loggedIn || account.sessionState === 'reauth_required') useAccountDialogStore.getState().open('login', account?.user?.email); else openSettings('account') }),
       registerDesktopAction('snippets', () => setSnippetsOpen(true)),
       registerDesktopAction('snippet-quick', () => setSnippetQuick({ target: snippetTarget() })),
       registerDesktopAction('sidebar', toggleSidebar),
@@ -209,7 +211,7 @@ export function Layout() {
     {snippetsOpen && <Suspense fallback={null}><SnippetDialog key={workspaceGeneration()} open onOpenChange={setSnippetsOpen} /></Suspense>}
     {snippetQuick && <SnippetQuickPicker key={workspaceGeneration()} target={snippetQuick.target}
       onClose={() => setSnippetQuick(null)} onManage={() => { setSnippetQuick(null); setSnippetsOpen(true) }} />}
-    {settingsOpen && <Suspense fallback={<div className="settings-page settings-page-loading"><Loading /></div>}><SettingsPage key={settingsTab} initialTab={settingsTab} onBack={() => setSettingsOpen(false)} /></Suspense>}
+    {settingsOpen && <Suspense fallback={<div className="settings-page settings-page-loading"><Loading /></div>}><SettingsPage key={settingsTab} initialTab={settingsTab} onBack={() => useDesktopShellStore.getState().setSettingsPage(null)} onTabChange={tab => useDesktopShellStore.getState().setSettingsPage(tab)} /></Suspense>}
     <Toaster theme={theme} />
   </div>
 }

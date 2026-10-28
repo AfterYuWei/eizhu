@@ -266,10 +266,15 @@ class Actor implements LiveActor {
   call<T>(operation: string, value?: unknown): Promise<T> {
     return this.host.call<T>(operation, value)
   }
-  async login(operation: 'account.register' | 'account.login', email: string, password: string) {
+  async login(
+    operation: 'account.register' | 'account.login',
+    email: string,
+    password: string,
+    ticket?: string,
+  ) {
     const result = await this.call<{ workspace: WorkspaceIdentity }>('account.authenticate', {
       operation,
-      input: { email, password },
+      input: { email, password, ...(ticket ? { ticket } : {}) },
     })
     if (result.workspace.id !== this.host.workspace.id) {
       await this.host.close()

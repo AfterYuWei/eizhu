@@ -22,6 +22,7 @@ import { themeOptions,appFontFamilyOptions,terminalFontFamilyOptions,terminalFon
 interface SettingsPageProps {
     onBack: () => void;
     initialTab?: SettingsTab;
+    onTabChange?: (tab: SettingsTab) => void;
 }
 export type SettingsTab = 'appearance' | 'terminal' | 'backup' | 'account' | 'sync' | 'logs' | 'diagnostics' | 'about';
 const baseTabs: {
@@ -36,7 +37,7 @@ const baseTabs: {
     { key: 'sync', label: '云同步', icon: CloudSync },
     { key: 'about', label: '关于', icon: Info },
 ];
-export function SettingsPage({ onBack, initialTab = 'appearance' }: SettingsPageProps) {
+export function SettingsPage({ onBack, initialTab = 'appearance', onTabChange }: SettingsPageProps) {
     const page = useRef<HTMLElement>(null);
     const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab);
     const [themePickerOpen, setThemePickerOpen] = useState(false);
@@ -56,7 +57,7 @@ export function SettingsPage({ onBack, initialTab = 'appearance' }: SettingsPage
             event.stopPropagation();
             onBack();
         }}>
-      <Tabs className="settings-page-layout" orientation="vertical" value={activeTab} onValueChange={(value) => setActiveTab(value as SettingsTab)}>
+      <Tabs className="settings-page-layout" orientation="vertical" value={activeTab} onValueChange={(value) => { setActiveTab(value as SettingsTab); onTabChange?.(value as SettingsTab) }}>
         <aside className="settings-page-sidebar" aria-label="设置导航">
           <div className="settings-page-titlebar" data-eizhu-drag-region={isDesktopRuntime() || undefined}/>
           <div className="settings-page-back-row">

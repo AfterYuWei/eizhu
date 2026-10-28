@@ -1,0 +1,148 @@
+/* Account authentication shares a single, stable dialog across all entry points. */
+body:has(.desktop-shell) .account-dialog {
+  width: min(440px, calc(100vw - 32px));
+  max-height: calc(100dvh - 48px);
+  overflow-y: auto;
+  gap: 24px;
+  padding: 28px;
+  font: 400 max(14px, var(--sans-size)) / 1.5 var(--sans);
+}
+body:has(.desktop-shell) .account-dialog-heading {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+body:has(.desktop-shell) .account-dialog-symbol {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--bg-elevated);
+  color: var(--fg);
+  margin-bottom: 2px;
+}
+body:has(.desktop-shell) .account-dialog-heading [data-slot='dialog-title'] {
+  font-size: 20px;
+  line-height: 1.4;
+  font-weight: 600;
+}
+body:has(.desktop-shell) .account-dialog-heading [data-slot='dialog-description'],
+.account-help,
+.account-recovery-note {
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--fg-3);
+}
+body:has(.desktop-shell) .account-dialog-form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+body:has(.desktop-shell) .account-dialog-step {
+  min-height: 160px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  animation: account-step-in 160ms ease-out;
+}
+body:has(.desktop-shell) .account-dialog input {
+  min-height: 36px;
+  font-size: inherit;
+}
+body:has(.desktop-shell) .account-help {
+  margin: 0;
+}
+body:has(.desktop-shell) .account-email-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 32px;
+  gap: 8px;
+  overflow-wrap: anywhere;
+}
+body:has(.desktop-shell) .account-password-row {
+  display: flex;
+  position: relative;
+  align-items: center;
+}
+body:has(.desktop-shell) .account-password-row input {
+  padding-right: 42px;
+}
+body:has(.desktop-shell) .account-password-row button {
+  position: absolute;
+  right: 2px;
+  width: 32px;
+  height: 32px;
+}
+body:has(.desktop-shell) .account-code-row {
+  display: flex;
+  gap: 8px;
+}
+body:has(.desktop-shell) .account-code-row input {
+  min-width: 0;
+  flex: 1;
+  letter-spacing: 0.24em;
+}
+body:has(.desktop-shell) .account-code-row button {
+  flex-shrink: 0;
+}
+body:has(.desktop-shell) .account-dialog-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  min-height: 32px;
+}
+body:has(.desktop-shell) .account-dialog-footer button {
+  font-size: 12px;
+}
+body:has(.desktop-shell) .account-primary {
+  width: 100%;
+}
+body:has(.desktop-shell) .account-recovery-note {
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+}
+@keyframes account-step-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .account-dialog,
+  .account-dialog-step {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+body:has(.desktop-shell) .account-dialog-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 28px;
+  height: 28px;
+}
+
+body:has(.desktop-shell) .account-dialog {
+  background: var(--dialog-bg);
+  color: var(--fg);
+}
+body:has(.desktop-shell) .account-dialog [data-slot='dialog-title'],
+body:has(.desktop-shell) .account-dialog label {
+  color: var(--fg);
+}
+body:has(.desktop-shell) .account-dialog [data-variant='default'] {
+  background: var(--fg);
+  color: var(--bg-panel);
+  box-shadow: none;
+}
+body:has(.desktop-shell) .account-dialog [data-variant='link'] {
+  color: var(--fg-3);
+}
