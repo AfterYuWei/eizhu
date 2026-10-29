@@ -88,7 +88,7 @@ Electron 实际 xterm 场景共 **67 项**：27 个首词候选、5 组子命令
 
 ## 执行命令与原始结果
 
-- `npm run check`、`npm run lint`、`git diff --check`。
+- `npm run check`、`npm run lint`；源码及报告的差异空白检查通过。归档 `.log` 保留工具原始输出的行尾空白和末尾空行，差异空白检查排除这些日志文件。
 - `npm run test:unit --workspace @eizhu/web`：870 项通过。
 - 补全相关 10 个 Web 测试文件：593 项通过，包含 528 项规格矩阵、23 项输入交互及 DOM 面板、缓存、位置、历史等回归。
 - `npm run test:foundation`：最终 148 项通过、1 项跳过。
