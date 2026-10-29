@@ -120,13 +120,6 @@ export function useTerminal(options: UseTerminalOptions) {
             });
         }
         fitAddon.fit();
-        // Wait for fonts to finish loading before the final fit. xterm.js measures
-        // character size immediately; if the real font hasn't loaded yet, the row
-        // height is wrong and the terminal can render with a one-line offset.
-        const fitTimeout = setTimeout(() => fitAddon.fit(), 100);
-        document.fonts.ready.then(() => {
-            fitAddon.fit();
-        });
         terminalRef.current = terminal;
         fitAddonRef.current = fitAddon;
         // Use ref so the callback is always current without re-creating the terminal
@@ -337,7 +330,6 @@ export function useTerminal(options: UseTerminalOptions) {
         };
         window.addEventListener('resize', handleResize);
         return () => {
-            clearTimeout(fitTimeout);
             if (resizeTimer)
                 clearTimeout(resizeTimer);
             window.removeEventListener('resize', handleResize);
@@ -358,11 +350,38 @@ export function useTerminal(options: UseTerminalOptions) {
         const terminal = terminalRef.current;
         if (!terminal)
             return;
+        const family = buildFontFamily();
         terminal.options.fontSize = fontSize;
-        terminal.options.fontFamily = buildFontFamily();
+        terminal.options.fontFamily = family;
         fitAddonRef.current?.fit();
         // 字体变化后通知父组件新的终端尺寸
         onResizeRef.current?.(terminal.cols, terminal.rows);
+        let cancelled = false;
+        const refreshFontMetrics = () => {
+            if (cancelled)
+                return;
+            // fit() reuses cached character metrics, and xterm ignores unchanged
+            // options. Equivalent CSS whitespace forces a public-API remeasure
+            // without changing the user's font size or resizing the buffer first.
+            terminal.options.fontFamily = `${family} `;
+            terminal.options.fontFamily = family;
+            terminal.clearTextureAtlas();
+            fitAddonRef.current?.fit();
+            terminal.refresh(0, terminal.rows - 1);
+            onResizeRef.current?.(terminal.cols, terminal.rows);
+        };
+        // fonts.ready can already be resolved before the terminal first uses its
+        // font. Explicitly load both weights before correcting metrics and glyphs.
+        void Promise.all([
+            document.fonts.load(`${fontSize}px ${family}`, 'W中'),
+            document.fonts.load(`bold ${fontSize}px ${family}`, 'W中'),
+        ]).then(refreshFontMetrics, () => {
+            if (cancelled)
+                return;
+            refreshFontMetrics();
+            toast.warning('终端字体加载失败，已使用备用字体');
+        });
+        return () => { cancelled = true; };
     }, [fontSize, fontFamily, fontFamilyCN, buildFontFamily]);
     // Update terminal theme without recreating terminal
     useEffect(() => {
