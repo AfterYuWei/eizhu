@@ -441,6 +441,8 @@ export class SshService {
     s.stream.bind(port)
     if (s.state) port.postMessage({ type: 'event', message: s.state })
     if (s.meta.status === 'connected' && s.metadata) port.postMessage({ type: 'event', message: s.metadata })
+    if (s.meta.status === 'connected' && s.cwd)
+      port.postMessage({ type: 'event', message: { type: 'cwd', payload: { path: s.cwd } } })
     for (const message of s.pending.values()) port.postMessage({ type: 'event', message })
   }
   private async decide(requestId: string, fingerprint: string, decision: string) {
@@ -520,7 +522,12 @@ export class SshService {
         return [...this.terminals.values()].filter((s) => !s.closed).map((s) => s.meta)
       case 'session.attach': {
         const s = this.get((input as { id: string }).id)
-        return [...(s.state ? [s.state] : []), ...(s.metadata ? [s.metadata] : []), ...s.pending.values()]
+        return [
+          ...(s.state ? [s.state] : []),
+          ...(s.metadata ? [s.metadata] : []),
+          ...(s.meta.status === 'connected' && s.cwd ? [{ type: 'cwd', payload: { path: s.cwd } }] : []),
+          ...s.pending.values(),
+        ]
       }
       case 'session.close':
         return this.closeSession((input as { id: string }).id)

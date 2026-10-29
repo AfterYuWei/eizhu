@@ -97,6 +97,18 @@ it('renders a replayed failure snapshot at host confirmation as an error without
   expect(document.querySelector('.connection-live-logs')?.textContent).toContain('HOST_KEY_REJECTED')
 })
 
+it('保留连接就绪前上报的当前目录，并在重连开始时清除旧目录', async () => {
+  await act(async () => useSessionStore.setState((state) => ({ tabs: state.tabs.map((tab) => ({ ...tab, detailAttached: true })) })))
+  await message({ type: 'cwd', payload: { path: '/root' } })
+  await message({ type: 'metadata', payload: { session_id: 'ssh', host: 'example.test', username: 'user', protocol: 'ssh' } })
+  expect(useSessionStore.getState().tabs[0].cwd).toBe('/root')
+  await message({ type: 'connection_state', payload: { session_id: 'ssh', status: 'reconnecting', stage: 'retry_wait', retry_attempt: 1, next_retry_at: Date.now() + 1000 } })
+  expect(useSessionStore.getState().tabs[0].cwd).toBeUndefined()
+  await message({ type: 'cwd', payload: { path: '/home/user' } })
+  await message({ type: 'metadata', payload: { session_id: 'ssh', host: 'example.test', username: 'user', protocol: 'ssh' } })
+  expect(useSessionStore.getState().tabs[0].cwd).toBe('/home/user')
+})
+
 it('changes from the retry countdown to the actual operation as soon as a new attempt starts', async () => {
   await message({
     type: 'connection_state',

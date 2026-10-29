@@ -228,7 +228,9 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
               const nextTab = {
                 ...tab,
                 status,
-                ...(sessionId ? { sessionId, cwd: undefined, manualConnect: false } : {}),
+                // The shell can report its first CWD before the ready metadata.
+                cwd: status === 'connected' && (!sessionId || sessionId === tab.sessionId) ? tab.cwd : undefined,
+                ...(sessionId ? { sessionId, manualConnect: false } : {}),
               }
 
               if (status === 'connected' && !!tab.profileId && !tab.detailAttached) {
@@ -282,7 +284,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   markTabReconnecting: (tabId, attempt, nextRetryAt) => {
     set((state) => ({
       tabs: state.tabs.map((tab) =>
-        tab.id === tabId ? { ...tab, status: 'reconnecting', reconnectAttempt: attempt, nextRetryAt } : tab,
+        tab.id === tabId ? { ...tab, status: 'reconnecting', cwd: undefined, reconnectAttempt: attempt, nextRetryAt } : tab,
       ),
     }))
   },

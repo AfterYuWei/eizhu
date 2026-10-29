@@ -35,3 +35,20 @@ it('实时指标持续更新，账号重置后清空且迟到结果不会重建�
   store.getState().updateMetrics('p', metrics)
   expect(store.getState().details).toEqual({})
 })
+
+it.each(['success', 'failure'])('快速切换目录后丢弃旧列表的迟到 %s 结果', async (result) => {
+  await store.getState().connect('p')
+  let resolve!: (response: { path: string; entries: [] }) => void
+  let reject!: (error: Error) => void
+  api.listFiles.mockReturnValueOnce(new Promise((done, fail) => { resolve = done; reject = fail }))
+  const oldListing = store.getState().listFiles('p', '/old')
+  api.listFiles.mockResolvedValueOnce({ path: '/current', entries: [{ name: 'current.txt', path: '/current/current.txt', is_dir: false, size: 1, mod_time: '' }] })
+  await store.getState().listFiles('p', '/current')
+  if (result === 'success') resolve({ path: '/old', entries: [] })
+  else reject(new Error('旧目录读取失败'))
+  await oldListing
+  expect(store.getState().details.p.currentPath).toBe('/current')
+  expect(store.getState().details.p.files.map((file) => file.name)).toEqual(['current.txt'])
+  expect(store.getState().details.p.error).toBeNull()
+  expect(store.getState().details.p.loading).toBe(false)
+})

@@ -356,6 +356,10 @@ export async function verifyStage3(window: BrowserWindow, runtime: RuntimeHost, 
       () => js<Array<{ type: string; payload?: { path?: string } }>>('return window.__stage3.messages'),
       (values) => values.some((v) => v.type === 'cwd' && v.payload?.path === '/tmp/stage3-project'),
     )
+    assert.deepEqual(
+      (await call<Array<{ type: string; payload?: unknown }>>('session.attach', { id })).find((message) => message.type === 'cwd'),
+      { type: 'cwd', payload: { path: '/tmp/stage3-project' } },
+    )
     await call('session.complete', { id, requestId: 'cwd-paths', generatorId: 'paths', params: { directory: '.' } })
     assert.ok(directories.includes('/tmp/stage3-project'))
     await call('session.complete', { id, requestId: 'cwd-git', generatorId: 'git-branches', params: {} })

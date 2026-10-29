@@ -99,17 +99,14 @@ export function ServerDetail({
 
   // Auto-navigate the file browser when the shell CWD changes and follow is on.
   useEffect(() => {
-    if (!cwd || !detail.followShellCwd) return
-    const connected = serverDetail.status === 'connected'
-    if (!connected) return
-    const currentPath = serverDetail.currentPath || '/'
+    if (!active || !cwd || !detail.followShellCwd || serverDetail.status !== 'connected') return
+    // Read the shared browser path without making manual navigation or a failed
+    // listing trigger another follow request. Only the visible terminal owns it.
+    const currentPath = useServerDetailStore.getState().getStatus(profileId).currentPath || '/'
     if (cwd !== currentPath) {
       listFiles(profileId, cwd)
     }
-    // Store actions are stable; status/path come from the selected profile
-    // detail above and must not turn this synchronization into a request loop.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cwd, detail.followShellCwd])
+  }, [active, cwd, detail.followShellCwd, listFiles, profileId, serverDetail.status, serverDetail.sessionId])
 
   // Manual navigation: any directory change initiated inside the file browser
   // (double-click folder, "..", breadcrumb, context menu) turns off the

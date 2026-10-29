@@ -379,7 +379,8 @@ export const useServerDetailStore = create<ServerDetailStore>((set, get) => ({
 
       set((s) => {
         const current = s.details[profileId]
-        if (!current || current.sessionId !== sessionId) return s
+        // A newer shell CWD or manual navigation owns the displayed directory.
+        if (!current || current.sessionId !== sessionId || current.currentPath !== path) return s
         return {
           details: {
             ...s.details,
@@ -396,7 +397,7 @@ export const useServerDetailStore = create<ServerDetailStore>((set, get) => ({
       const msg = err instanceof Error ? err.message : '鍔犺浇澶辫触'
       set((s) => {
         const current = s.details[profileId]
-        if (!current || current.sessionId !== sessionId) return s
+        if (!current || current.sessionId !== sessionId || current.currentPath !== path) return s
         return {
           details: {
             ...s.details,
