@@ -1,3 +1,4 @@
+import { CloudOff } from 'lucide-react';
 import { useSyncStore } from '@/store/sync';
 import { useAccountStore } from '@/store/account';
 import { SYNC_STATUS_LABELS } from '@/types/sync';
@@ -21,6 +22,8 @@ export function ItemSyncBadge({ type, id }: {
     if (!loggedIn || !status)
         return null;
     const item = status.items.find((i) => i.itemType === type && i.itemId === id);
-    const label = conflict ? '存在冲突' : item ? SYNC_STATUS_LABELS[item.status] ?? item.status : status.initialized ? '已同步' : '待接入';
-    return <button type="button" onClick={(event) => { event.stopPropagation(); useSyncStore.getState().focusConflict(type, id); runDesktopAction('sync-settings'); }} className="text-[10px] text-muted-foreground ml-1" title={label} aria-label={label}>{item || conflict ? '●' : status.initialized ? '✓' : '○'}</button>;
+    if (!conflict && (item ? item.status === 'synced' : status.initialized))
+        return null;
+    const label = conflict ? '存在冲突' : item ? SYNC_STATUS_LABELS[item.status] ?? item.status : '待接入';
+    return <button type="button" onClick={(event) => { event.stopPropagation(); useSyncStore.getState().focusConflict(type, id); runDesktopAction('sync-settings'); }} className="ml-1 inline-flex align-middle text-destructive" title={label} aria-label={label}><CloudOff size={12} aria-hidden="true" /></button>;
 }
