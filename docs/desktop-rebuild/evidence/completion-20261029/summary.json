@@ -1,0 +1,93 @@
+{
+  "date": "2026-10-29 23:55:54",
+  "timezone": "Asia/Shanghai",
+  "source": {
+    "base": "0.5.0",
+    "version": "0.5.0-test.352.049b3b3a",
+    "channel": "test",
+    "revision": "049b3b3a76c1566452fd227008b7effd57a8a67d",
+    "platform": "darwin",
+    "arch": "x64",
+    "feeds": {},
+    "updateRepository": {
+      "owner": "AfterYuWei",
+      "repo": "eizhu"
+    },
+    "sourceDigest": "9e6935680f076bf9d6f2e8ae1259a2830c9ac6e25a23bd90788b10eeb0e8b909"
+  },
+  "tests": {
+    "web": {
+      "passed": 870,
+      "failed": 0
+    },
+    "completionWeb": {
+      "passed": 593,
+      "failed": 0,
+      "subsetOf": "web"
+    },
+    "foundation": {
+      "passed": 148,
+      "failed": 0,
+      "skipped": 1
+    },
+    "compatibility": {
+      "passed": 10,
+      "failed": 0
+    },
+    "contextAudit": {
+      "passed": 0,
+      "failed": 4
+    },
+    "totals": {
+      "passed": 1028,
+      "failed": 4,
+      "skipped": 1
+    }
+  },
+  "installer": {
+    "artifact": "artifacts/desktop/eizhu-0.5.0-test.352.049b3b3a-mac-x64.dmg",
+    "sha256": "699a942a6c643d13bc4960a6a2d3deeec27146d8a5dec119afe4f9062f4dfbfa",
+    "signed": false,
+    "packaged": true,
+    "platform": "darwin",
+    "arch": "x64",
+    "completionMatrix": {
+      "generators": 10,
+      "queries": 11,
+      "transport": "preload/main/utilityProcess/SSH/SFTP",
+      "syntheticCommands": true
+    },
+    "completionUi": {
+      "passed": true,
+      "cases": 67,
+      "commandPrefixes": 27,
+      "commandFamilies": 5,
+      "dynamicSelections": 9,
+      "fileCommands": 25,
+      "screenshots": [
+        "completion-docker-light.png",
+        "completion-kubectl-dark.png",
+        "completion-npm-narrow.png",
+        "completion-path-narrow.png",
+        "completion-cascade-narrow.png"
+      ],
+      "syntheticRemote": true,
+      "nativeIme": false
+    }
+  },
+  "remaining": [
+    "git -C",
+    "docker -H",
+    "kubectl --kubeconfig",
+    "systemctl --user"
+  ],
+  "limits": {
+    "syntheticRemote": true,
+    "realDocker": false,
+    "realKubernetes": false,
+    "realSystemd": false,
+    "realFish": false,
+    "nativeIme": false,
+    "otherPlatforms": false
+  }
+}

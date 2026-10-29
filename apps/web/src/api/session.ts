@@ -40,7 +40,13 @@ export const sessionApi = {
     bridge().session.authRespond({ requestId, responses }),
 
   complete: (id: string, requestId: string, generator: CompletionGeneratorRequest, cwd?: string) =>
-    bridge().session.complete({ id, requestId, ...generator, cwd }),
+    bridge().session.complete({
+      id,
+      requestId,
+      generatorId: generator.generatorId,
+      params: generator.params,
+      cwd,
+    }),
 
   close: (id: string) => bridge().session.close({ id }),
 }

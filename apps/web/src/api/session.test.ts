@@ -18,6 +18,8 @@ vi.mock('@/lib/bridge', () => ({
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { sessionApi } from './session'
+import { ssh } from '@eizhu/contracts'
+import { getDynamicGenerator, tokenize } from '@/lib/completionEngine'
 
 describe('sessionApi', () => {
   beforeEach(() => invoke.mockReset())
@@ -52,5 +54,23 @@ describe('sessionApi', () => {
       params: {},
       cwd: '/tmp',
     })
+  })
+
+  it('只发送动态生成器的业务参数，满足桌面严格输入 schema', async () => {
+    invoke.mockImplementation((operation, input) => {
+      if (operation === 'session.complete') ssh['session.complete'].input.parse(input)
+      return Promise.resolve()
+    })
+    for (const command of ['cd /srv/', 'git checkout ', 'npm run ', 'kubectl get pods ']) {
+      const generator = getDynamicGenerator(tokenize(command))!
+      await sessionApi.complete('s1', 'r1', generator, '/srv')
+      expect(invoke).toHaveBeenLastCalledWith('session.complete', {
+        id: 's1',
+        requestId: 'r1',
+        generatorId: generator.generatorId,
+        params: generator.params,
+        cwd: '/srv',
+      })
+    }
   })
 })

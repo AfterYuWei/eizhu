@@ -128,7 +128,9 @@ export async function complete(
       ? cwd
       : dir.startsWith('/') || dir === '~' || dir.startsWith('~/')
         ? dir
-        : posix.join(cwd, dir)
+        : cwd === '~' || cwd.startsWith('~/')
+          ? `${cwd}/${dir}` // Expand home before normalizing '..'; '~' is not a literal path segment.
+          : posix.join(cwd, dir)
   const rows = await readDirectory(client, directory, signal)
   return {
     output: '',

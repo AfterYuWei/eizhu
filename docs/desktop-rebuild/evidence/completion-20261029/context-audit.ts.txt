@@ -1,0 +1,11 @@
+import { expect, it } from 'vitest'
+import { getDynamicGenerator, tokenize } from './completionEngine'
+
+for (const [plain, overridden] of [
+  ['git checkout fe', 'git -C /other-repo checkout fe'],
+  ['docker logs we', 'docker -H tcp://fixture.invalid:2375 logs we'],
+  ['kubectl get pods we', 'kubectl --kubeconfig=/tmp/qa-config get pods we'],
+  ['systemctl start ap', 'systemctl --user start ap'],
+]) it(`查询上下文应随选项变化：${overridden}`, () => {
+  expect(getDynamicGenerator(tokenize(overridden))).not.toEqual(getDynamicGenerator(tokenize(plain)))
+})

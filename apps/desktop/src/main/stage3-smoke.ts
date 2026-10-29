@@ -6,6 +6,7 @@ import type { BrowserWindow } from 'electron'
 import type { RuntimeHost } from './runtime-host.ts'
 import { SocketReader, proxyHandshake } from '@eizhu/core/ssh/network'
 import { measureDesktopLoad } from './load-smoke.ts'
+import { verifyCompletionUi } from './completion-ui-smoke.ts'
 import type { ConnectionStatePayload } from '@eizhu/contracts/models/sessionMessage'
 
 /** Synthetic loopback peers only. Runs in the actual packaged Electron process tree. */
@@ -19,6 +20,7 @@ export async function verifyStage3(window: BrowserWindow, runtime: RuntimeHost, 
   const inputs: string[] = [],
     shells = new Set<ServerChannel>(),
     commands: string[] = [],
+    directories: string[] = [],
     sizes: number[] = []
   let loadInProgress = false
   const fixtureInfo =
@@ -69,17 +71,28 @@ export async function verifyStage3(window: BrowserWindow, runtime: RuntimeHost, 
         })
         session.on('shell', (accept) => {
           const stream = accept()
+          let tracking = false
           shells.add(stream)
           stream.on('error', () => undefined)
           stream.once('close', () => shells.delete(stream))
-          const greeting = Buffer.from('阶段三 🧪 终端\r\n\x1b]7;file://synthetic/tmp/stage3\x07')
+          const greeting = Buffer.from('阶段三 🧪 终端\r\n')
           stream.write(greeting.subarray(0, 2))
           setTimeout(() => stream.write(greeting.subarray(2, 9)), 40)
           setTimeout(() => stream.write(greeting.subarray(9)), 80)
           stream.on('data', (b: Buffer) => {
+            if (b.toString().includes('__eizhu_osc7')) {
+              tracking = true
+              // Model a plain Bash login that emits OSC 7 only after the session hook is installed.
+              const reply = Buffer.from(`${b.toString()}\r\n\x1b]7;file://synthetic/tmp/stage3\x07\x1b]1337;eizhuOsc7Ready\x07user@synthetic$ `)
+              setTimeout(() => stream.write(reply.subarray(0, 17)), 100)
+              setTimeout(() => stream.write(reply.subarray(17)), 140)
+              return
+            }
             inputs.push(b.toString('utf8'))
             if (loadInProgress && inputs.length > 1000) inputs.splice(0, inputs.length - 1000)
-            if (b.toString() === 'burst') stream.write('B'.repeat(262144) + '\r\nEND_BURST\r\n')
+            if (b.toString() === '\x03') stream.write('^C\r\nuser@synthetic$ ')
+            else if (tracking && b.toString() === 'cd /tmp/stage3-project\r') stream.write('\x1b]7;file://synthetic/tmp/stage3-project\x07')
+            else if (b.toString() === 'burst') stream.write('B'.repeat(262144) + '\r\nEND_BURST\r\n')
             else stream.write(b)
           })
         })
@@ -88,12 +101,23 @@ export async function verifyStage3(window: BrowserWindow, runtime: RuntimeHost, 
           if (loadInProgress && commands.length > 1000) commands.splice(0, commands.length - 1000)
           const stream = accept()
           stream.on('error', () => undefined)
+          const completionOutput = info.command.includes('git remote') ? 'origin\nupstream\n'
+            : info.command.includes('docker ps') ? 'abc123\tweb\ndef456\tworker\n'
+            : info.command.includes('kubectl config get-contexts') ? 'dev\nprod\n'
+            : info.command.includes('kubectl ') ? 'pod/web\npod/worker\n'
+            : info.command.includes('--state=failed') ? 'broken.service\n'
+            : info.command.includes('--state=active') ? 'app.service\n'
+            : info.command.includes('systemctl ') ? 'app.service\nworker.service\n'
+            : info.command.includes('node -e') ? 'dev\nbuild:qa\n'
+            : 'main\nfeature/stage3\n'
           stream.write(
-            info.command.includes('===CPU1===')
+            info.command === 'printf \'%s\\n\' "$SHELL"'
+              ? '/bin/bash\n'
+              : info.command.includes('===CPU1===')
               ? fixtureMetrics
               : info.command.includes('===HOSTNAME===')
                 ? fixtureInfo
-                : 'main\nfeature/stage3\n',
+                : completionOutput,
           )
           stream.exit(0)
           stream.end()
@@ -110,7 +134,8 @@ export async function verifyStage3(window: BrowserWindow, runtime: RuntimeHost, 
               },
             ]),
           )
-          sftp.on('OPENDIR', (id: number) => {
+          sftp.on('OPENDIR', (id: number, path: string) => {
+            directories.push(path)
             listed = false
             sftp.handle(id, Buffer.from('directory'))
           })
@@ -325,6 +350,16 @@ export async function verifyStage3(window: BrowserWindow, runtime: RuntimeHost, 
         values.some((v) => v.type === 'complete_response' && v.payload?.request_id === 'stage3-completion'),
     )
     assert.ok(commands.some((c) => c.startsWith("cd -- '/tmp/stage3 a'\\''b'")))
+    assert.ok(!(await js<string>('return window.__stage3.output')).includes('__eizhu_osc7'))
+    await call('session.input', { id, data: 'cd /tmp/stage3-project\r' })
+    await wait(
+      () => js<Array<{ type: string; payload?: { path?: string } }>>('return window.__stage3.messages'),
+      (values) => values.some((v) => v.type === 'cwd' && v.payload?.path === '/tmp/stage3-project'),
+    )
+    await call('session.complete', { id, requestId: 'cwd-paths', generatorId: 'paths', params: { directory: '.' } })
+    assert.ok(directories.includes('/tmp/stage3-project'))
+    await call('session.complete', { id, requestId: 'cwd-git', generatorId: 'git-branches', params: {} })
+    assert.ok(commands.some((c) => c.startsWith("cd -- '/tmp/stage3-project' && git ")))
     step('binary-completion-passed')
     const detail = await call<{ session_id: string }>('serverDetail.create', { profileId: direct })
     const info = await call<{ hostname: string }>('serverDetail.getInfo', { sessionId: detail.session_id }),
@@ -352,6 +387,29 @@ export async function verifyStage3(window: BrowserWindow, runtime: RuntimeHost, 
       (values) => values.some((v) => v.payload?.request_id === 'paths' && v.payload.candidates?.length === 2),
     )
     step('details-path-completion-passed')
+    const completionMatrix = [
+      { generatorId: 'git-branches', params: {}, expected: 'feature/stage3' },
+      { generatorId: 'git-remotes', params: {}, expected: 'origin' },
+      { generatorId: 'docker-containers', params: { all: false }, expected: 'abc123\tweb' },
+      { generatorId: 'docker-containers', params: { all: true }, expected: 'def456\tworker' },
+      { generatorId: 'kubectl-resources', params: { namespace: 'qa', resource: 'pods' }, expected: 'pod/web' },
+      { generatorId: 'kubectl-contexts', params: {}, expected: 'prod' },
+      { generatorId: 'systemd-service-units', params: {}, expected: 'worker.service' },
+      { generatorId: 'systemd-active-units', params: {}, expected: 'app.service' },
+      { generatorId: 'systemd-failed-units', params: {}, expected: 'broken.service' },
+      { generatorId: 'npm-scripts', params: {}, expected: 'build:qa' },
+    ]
+    for (const [index, testCase] of completionMatrix.entries()) {
+      const requestId = `matrix-${index}`
+      await js('return window.eizhu.session.complete(d)', { id, requestId, generatorId: testCase.generatorId, params: testCase.params, cwd: '/tmp/stage3-project' })
+      await wait(
+        () => js<Array<{ payload?: { request_id?: string; output?: string; exit_code?: number; error?: string } }>>('return window.__stage3.messages'),
+        (values) => values.some((v) => v.payload?.request_id === requestId && v.payload.exit_code === 0 && !v.payload.error && v.payload.output?.split('\n').includes(testCase.expected)),
+      )
+    }
+    step('all-completion-generators-passed')
+    const completionUi = await verifyCompletionUi(window, runtime, id, root, inputs)
+    step('all-completion-ui-passed')
     await call('history.record', { profileId: direct, command: 'echo 合成历史', cwd: '/tmp' })
     assert.equal((await call<unknown[]>('history.list', { profileId: direct })).length, 1)
     await call('localState.write', {
@@ -661,6 +719,8 @@ export async function verifyStage3(window: BrowserWindow, runtime: RuntimeHost, 
       binary: { utf8: true, consumedBytes: 262144, replayedInput: false },
       hostKey: { wrongRejected: true, staleRejected: true, permanent: true },
       completion: true,
+      completionUi,
+      completionMatrix: { generators: 10, queries: completionMatrix.length + 1, transport: 'preload/main/utilityProcess/SSH/SFTP', syntheticCommands: true },
       historyPrivacy: true,
       details: true,
       tunnels: ['local', 'remote', 'dynamic'],

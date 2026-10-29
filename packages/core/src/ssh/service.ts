@@ -1,6 +1,4 @@
-/* eslint-disable no-control-regex -- Remote OSC sequences contain literal terminal control bytes. */
 import { randomUUID,createHash } from 'node:crypto'
-import { StringDecoder } from 'node:string_decoder'
 import { posix } from 'node:path'
 import type { ClientChannel } from 'ssh2'
 import { ssh, fail, failureOf, DesktopError } from '@eizhu/contracts'
@@ -13,6 +11,7 @@ import { SshConnection, execBounded } from './connection.ts'
 import type { HandshakeHooks } from './connection.ts'
 import type { ConnectionHop } from './plan.ts'
 import { TerminalStream } from './stream.ts'
+import { ShellOutput, shellSetupCommand } from './shell.ts'
 import type { BinaryPort } from './stream.ts'
 import { complete, readDirectory } from './completion.ts'
 import { INFO_COMMAND, METRICS_COMMAND, parseInfo, parseMetrics } from './metrics.ts'
@@ -324,31 +323,29 @@ export class SshService {
       return
     }
     s.shell = shell
-    this.state(s, 'connected', 'ready', 'SSH 连接成功')
-    const hop = plan[plan.length - 1]
-    this.event(s, {
-      type: 'metadata',
-      payload: { session_id: owner, host: hop.profile.host, username: hop.profile.username, protocol: 'ssh' },
-    })
-    const decoder = new StringDecoder('utf8')
-    let tail = ''
+    const output = new ShellOutput()
+    let ready = false,
+      bootstrapTimer: NodeJS.Timeout | undefined
+    const markReady = () => {
+      if (ready || s.closed || s.connection !== connection || s.shell !== shell || connection.controller.signal.aborted) return
+      ready = true
+      clearTimeout(bootstrapTimer)
+      bootstrapTimer = undefined
+      this.state(s, 'connected', 'ready', 'SSH 连接成功')
+      const hop = plan[plan.length - 1]
+      this.event(s, {
+        type: 'metadata',
+        payload: { session_id: owner, host: hop.profile.host, username: hop.profile.username, protocol: 'ssh' },
+      })
+    }
     shell.on('data', (data: Buffer) => {
-      s.stream.output(data)
-      tail = (tail + decoder.write(data)).slice(-8192)
-      const matches = [...tail.matchAll(/\x1b\]7;file:\/\/[^/\x07\x1b]*([^\x07\x1b]*)(?:\x07|\x1b\\)/g)]
-      if (matches.length) {
-        const m = matches[matches.length - 1]
-        try {
-          const path = decodeURIComponent(m[1])
-          if (path.startsWith('/') && path.length <= 32768 && !/[\x00-\x1f]/.test(path)) {
-            s.cwd = path
-            this.event(s, { type: 'cwd', payload: { path } })
-          }
-        } catch {
-          /* Malformed remote OSC is ignored. */
-        }
-        tail = tail.slice(m.index! + m[0].length)
+      const result = output.push(data)
+      if (result.data.length) s.stream.output(result.data)
+      if (result.cwd) {
+        s.cwd = result.cwd
+        this.event(s, { type: 'cwd', payload: { path: result.cwd } })
       }
+      if (result.ready) markReady()
     })
     shell.stderr.on('data', (data: Buffer) => s.stream.output(data))
     let exitCode = 0
@@ -357,12 +354,29 @@ export class SshService {
     })
     shell.once('error', () => undefined)
     shell.once('close', () => {
-      if (s.closed || s.connection !== connection || s.meta.status !== 'connected') return
+      clearTimeout(bootstrapTimer)
+      if (s.closed || s.connection !== connection || s.shell !== shell) return
       s.shell = undefined
       this.state(s, 'disconnected', 'shell_closed', '远端终端已关闭')
       this.event(s, { type: 'exit', payload: { code: exitCode } })
       void connection.close().catch(() => undefined)
     })
+    // Open the interactive channel first so an auxiliary exec does not consume the login banner.
+    // Restricted servers may deny exec; directory tracking is optional in that case.
+    const setup = await execBounded(client, 'printf \'%s\\n\' "$SHELL"', connection.controller.signal, 4096)
+      .then((result) => result.code === 0 ? shellSetupCommand(result.output) : undefined, () => undefined)
+    if (s.closed || s.connection !== connection || s.shell !== shell || connection.controller.signal.aborted) return
+    if (!setup) {
+      markReady()
+      return
+    }
+    output.startBootstrap(setup)
+    bootstrapTimer = setTimeout(() => {
+      const pending = output.finishBootstrap()
+      if (pending.length) s.stream.output(pending)
+      markReady()
+    }, 10000)
+    shell.write(setup + '\n')
   }
   private reconnect(id: string): Promise<{ session_id: string; status: string }> {
     const s = this.get(id)

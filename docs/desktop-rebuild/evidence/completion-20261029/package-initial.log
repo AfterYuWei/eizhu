@@ -1,0 +1,84 @@
+
+> desktop:smoke:package
+> node scripts/smoke-package.mjs artifacts/desktop/eizhu-0.5.0-test.352.049b3b3a-mac-x64.dmg
+
+正在检查“Protective Master Boot Record（MBR：0）”的校验和…
+Protective Master Boot Record（MBR：0）：已验证CRC32 $D370150F
+正在检查“GPT Header（Primary GPT Header：1）”的校验和…
+    GPT Header（Primary GPT Header：1）：已验证CRC32 $5FE5C311
+正在检查“GPT Partition Data（Primary GPT Table：2）”的校验和…
+GPT Partition Data（Primary GPT Table：已验证CRC32 $D47EC298
+正在检查“（Apple_Free：3）”的校验和…
+                      （Apple_Free：3）：已验证CRC32 $00000000
+正在检查“disk image（Apple_HFS：4）”的校验和…
+             disk image（Apple_HFS：4）：已验证CRC32 $5EEA3DC4
+正在检查“（Apple_Free：5）”的校验和…
+                      （Apple_Free：5）：已验证CRC32 $00000000
+正在检查“GPT Partition Data（Backup GPT Table：6）”的校验和…
+GPT Partition Data（Backup GPT Table：：已验证CRC32 $D47EC298
+正在检查“GPT Header（Backup GPT Header：7）”的校验和…
+     GPT Header（Backup GPT Header：7）：已验证CRC32 $AA3F6CFA
+已验证CRC32 $05A675BD
+/dev/disk5          	GUID_partition_scheme          	
+/dev/disk5s1        	Apple_HFS                      	/private/var/folders/6s/4k01y34s1gv53tkfyndzyldw0000gn/T/eizhu-package-TldYB1/volume
+"disk5" ejected.
+[28787:1029/234639.303723:WARNING:electron/shell/common/api/electron_api_native_image.cc:229] Argument must be a file path or a NativeImage
+EIZHU_SMOKE_STEP waiting-renderer
+EIZHU_SMOKE_APP_READY 1 true
+EIZHU_SMOKE_STEP renderer-ready
+EIZHU_SMOKE_STEP foundation-bridge-passed
+EIZHU_SMOKE_STEP stage6-updater-passed
+[28787:1029/234642.119433:INFO:CONSOLE:9838] "task queue exceeded allotted deadline by 21ms", source: eizhu://app/assets/index-CuieOlnd.js (9838)
+[28787:1029/234645.050446:INFO:CONSOLE:9838] "task queue exceeded allotted deadline by 2402ms", source: eizhu://app/assets/index-CuieOlnd.js (9838)
+[28787:1029/234645.189663:INFO:CONSOLE:9838] "task queue exceeded allotted deadline by 41ms", source: eizhu://app/assets/index-CuieOlnd.js (9838)
+[28787:1029/234645.320113:INFO:CONSOLE:9838] "task queue exceeded allotted deadline by 22ms", source: eizhu://app/assets/index-CuieOlnd.js (9838)
+[28787:1029/234645.393583:INFO:CONSOLE:9838] "task queue exceeded allotted deadline by 28ms", source: eizhu://app/assets/index-CuieOlnd.js (9838)
+EIZHU_SMOKE_STEP workspace-tabs-passed
+EIZHU_SMOKE_STEP local-bridge-passed
+EIZHU_SMOKE_STEP stage2-native-passed
+EIZHU_SMOKE_STEP account-foundation-native-passed
+EIZHU_SMOKE_STEP sync-engine-native-passed
+EIZHU_STAGE3_STEP peers-listening
+EIZHU_STAGE3_STEP host-key-and-utf8-passed
+EIZHU_STAGE3_STEP binary-completion-passed
+EIZHU_STAGE3_STEP details-path-completion-passed
+EIZHU_STAGE3_STEP all-completion-generators-passed
+EIZHU_SMOKE_APP_READY 1 true
+EIZHU_STAGE3_FAILED Error: Completion UI timeout: bash 子
+    at wait (/private/var/folders/6s/4k01y34s1gv53tkfyndzyldw0000gn/T/eizhu-package-TldYB1/eizhu.app/Contents/Resources/app.asar/out/main/chunks/smoke-rkNu8SoL.cjs:137:9)
+    at async type (/private/var/folders/6s/4k01y34s1gv53tkfyndzyldw0000gn/T/eizhu-package-TldYB1/eizhu.app/Contents/Resources/app.asar/out/main/chunks/smoke-rkNu8SoL.cjs:178:4)
+    at async verifyCompletionUi (/private/var/folders/6s/4k01y34s1gv53tkfyndzyldw0000gn/T/eizhu-package-TldYB1/eizhu.app/Contents/Resources/app.asar/out/main/chunks/smoke-rkNu8SoL.cjs:319:4)
+    at async verifyStage3 (/private/var/folders/6s/4k01y34s1gv53tkfyndzyldw0000gn/T/eizhu-package-TldYB1/eizhu.app/Contents/Resources/app.asar/out/main/chunks/smoke-rkNu8SoL.cjs:768:24)
+    at async runSmoke (/private/var/folders/6s/4k01y34s1gv53tkfyndzyldw0000gn/T/eizhu-package-TldYB1/eizhu.app/Contents/Resources/app.asar/out/main/chunks/smoke-rkNu8SoL.cjs:2859:17)
+    at async start (/private/var/folders/6s/4k01y34s1gv53tkfyndzyldw0000gn/T/eizhu-package-TldYB1/eizhu.app/Contents/Resources/app.asar/out/main/index.cjs:1263:3)
+EIZHU_STAGE3_STEP cleanup
+eizhu initialization failed; existing data retained
+Error: Completion UI timeout: bash 子
+    at wait (/private/var/folders/6s/4k01y34s1gv53tkfyndzyldw0000gn/T/eizhu-package-TldYB1/eizhu.app/Contents/Resources/app.asar/out/main/chunks/smoke-rkNu8SoL.cjs:137:9)
+    at async type (/private/var/folders/6s/4k01y34s1gv53tkfyndzyldw0000gn/T/eizhu-package-TldYB1/eizhu.app/Contents/Resources/app.asar/out/main/chunks/smoke-rkNu8SoL.cjs:178:4)
+    at async verifyCompletionUi (/private/var/folders/6s/4k01y34s1gv53tkfyndzyldw0000gn/T/eizhu-package-TldYB1/eizhu.app/Contents/Resources/app.asar/out/main/chunks/smoke-rkNu8SoL.cjs:319:4)
+    at async verifyStage3 (/private/var/folders/6s/4k01y34s1gv53tkfyndzyldw0000gn/T/eizhu-package-TldYB1/eizhu.app/Contents/Resources/app.asar/out/main/chunks/smoke-rkNu8SoL.cjs:768:24)
+    at async runSmoke (/private/var/folders/6s/4k01y34s1gv53tkfyndzyldw0000gn/T/eizhu-package-TldYB1/eizhu.app/Contents/Resources/app.asar/out/main/chunks/smoke-rkNu8SoL.cjs:2859:17)
+    at async start (/private/var/folders/6s/4k01y34s1gv53tkfyndzyldw0000gn/T/eizhu-package-TldYB1/eizhu.app/Contents/Resources/app.asar/out/main/index.cjs:1263:3)
+[28787:1029/234720.096358:ERROR:base/process/process_mac.cc:53] task_policy_set TASK_CATEGORY_POLICY: (os/kern) invalid argument (4)
+[28787:1029/234720.096487:ERROR:base/process/process_mac.cc:98] task_policy_set TASK_SUPPRESSION_POLICY: (os/kern) invalid argument (4)
+file:///Users/yuwei/Desktop/Projects/yuweinfo/XControl/scripts/smoke-desktop.mjs:40
+    else reject(new Error(`Smoke exit ${code}`))
+                ^
+
+Error: Smoke exit 1
+    at ChildProcess.<anonymous> (file:///Users/yuwei/Desktop/Projects/yuweinfo/XControl/scripts/smoke-desktop.mjs:40:17)
+    at ChildProcess.emit (node:events:514:28)
+    at ChildProcess._handle.onexit (node:internal/child_process:324:12)
+
+Node.js v24.22.0
+file:///Users/yuwei/Desktop/Projects/yuweinfo/XControl/scripts/smoke-package.mjs:23
+      else reject(new Error(`${command}: ${code}`))
+                  ^
+
+Error: /Users/yuwei/.nvm/versions/node/v24.22.0/bin/node: 1
+    at ChildProcess.<anonymous> (file:///Users/yuwei/Desktop/Projects/yuweinfo/XControl/scripts/smoke-package.mjs:23:19)
+    at ChildProcess.emit (node:events:514:28)
+    at ChildProcess._handle.onexit (node:internal/child_process:324:12)
+
+Node.js v24.22.0
