@@ -1,0 +1,22 @@
+
+> baseline:test
+> node --test scripts/desktop-baseline.test.mjs
+
+✔ frozen source, UI assets and original Rust backup/sync vectors verify independently in Node (501.544943ms)
+✔ wrong password, format AAD and modified authentication tags reject original exporter ciphertext (198.384234ms)
+✔ sync ciphertext is bound to user, type, ID, revision, epoch, key version and deletion (1.369819ms)
+✔ encrypted OpenSSH specimen contains a real password-protected private key and dependency graph (1.233854ms)
+✔ none specimens never retain vault bodies, references or proxy/inline secrets (0.902643ms)
+✔ a changed frozen fixture is rejected before any cryptographic or UI comparison (43.305017ms)
+✔ adding an unreviewed file cannot silently expand the frozen evidence set (34.654233ms)
+✔ acceptance coverage rejects orphan mappings and duplicate interfaces (4.398509ms)
+✔ fixture lookup rejects paths outside the evidence directory (0.622628ms)
+✔ legacy interfaces can be reconstructed from the frozen Git source after deleting the old runtime (3055.719404ms)
+ℹ tests 10
+ℹ suites 0
+ℹ pass 10
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 3994.284547

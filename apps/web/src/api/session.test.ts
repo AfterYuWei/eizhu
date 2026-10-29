@@ -61,7 +61,16 @@ describe('sessionApi', () => {
       if (operation === 'session.complete') ssh['session.complete'].input.parse(input)
       return Promise.resolve()
     })
-    for (const command of ['cd /srv/', 'git checkout ', 'npm run ', 'kubectl get pods ']) {
+    for (const command of [
+      'cd /srv/',
+      'git checkout ',
+      'npm run ',
+      'kubectl get pods ',
+      'git -C /repo checkout ',
+      'docker -H unix:///qa.sock logs ',
+      'kubectl --kubeconfig=/qa/config get pods ',
+      'systemctl --user start ',
+    ]) {
       const generator = getDynamicGenerator(tokenize(command))!
       await sessionApi.complete('s1', 'r1', generator, '/srv')
       expect(invoke).toHaveBeenLastCalledWith('session.complete', {

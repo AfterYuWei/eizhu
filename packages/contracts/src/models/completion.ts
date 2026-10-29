@@ -15,6 +15,10 @@ export interface CompletionParams {
   namespace?: string
   resource?: string
   all?: boolean
+  gitDirectories?: string[]
+  dockerHost?: string
+  kubeconfig?: string
+  systemdUser?: boolean
 }
 export interface CompletionGeneratorRequest {
   generatorId: CompletionGeneratorId

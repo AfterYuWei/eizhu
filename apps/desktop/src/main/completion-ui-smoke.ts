@@ -158,6 +158,10 @@ export async function verifyCompletionUi(
       ['systemctl status ap', 'app.service', 'p.service'],
       ['systemctl is-failed br', 'broken.service', 'oken.service'],
       ['npm run bu', 'build:qa', 'ild\\:qa'],
+      ['git -C /other-repo checkout fe', 'feature/other', 'ature/other'],
+      ['docker -H tcp://qa.invalid:2375 logs qa', 'qa-web', '-web'],
+      ['kubectl --kubeconfig=/tmp/qa-config get pods co', 'config-web', 'nfig-web'],
+      ['systemctl --user start us', 'user-app.service', 'er-app.service'],
     ]) {
       await type(input, expected)
       const offset = receivedInputs.length
@@ -173,6 +177,8 @@ export async function verifyCompletionUi(
     await js(`document.documentElement.classList.remove('dark');document.documentElement.classList.add('light')`)
     await type('docker logs we', 'web')
     await capture('completion-docker-light.png')
+    await type('docker -H tcp://qa.invalid:2375 logs qa', 'qa-web')
+    await capture('completion-context-host.png')
     await js(
       `document.documentElement.classList.remove('light');document.documentElement.classList.add('dark')`,
     )
@@ -231,7 +237,7 @@ export async function verifyCompletionUi(
       cases,
       commandPrefixes: 27,
       commandFamilies: 5,
-      dynamicSelections: 9,
+      dynamicSelections: 13,
       fileCommands: 25,
       screenshots,
       syntheticRemote: true,

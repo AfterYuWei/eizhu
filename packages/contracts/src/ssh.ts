@@ -9,6 +9,10 @@ const path = z
   .min(1)
   .max(32768)
   .refine((v) => !v.includes('\0'))
+const completionOperand = z
+  .string()
+  .max(32768)
+  .refine((v) => !Array.from(v).some((c) => c.charCodeAt(0) < 32 || c.charCodeAt(0) === 127))
 const status = z.enum(['connecting', 'connected', 'reconnecting', 'suspended', 'disconnected', 'error'])
 const response = z.strictObject({ session_id: id, status: z.string().max(40) })
 export const authPromptSchema = z.strictObject({
@@ -227,6 +231,10 @@ export const ssh = {
           ])
           .optional(),
         all: z.boolean().optional(),
+        gitDirectories: z.array(completionOperand).max(8).optional(),
+        dockerHost: completionOperand.optional(),
+        kubeconfig: completionOperand.optional(),
+        systemdUser: z.boolean().optional(),
       }),
       cwd: path.optional(),
     }),

@@ -1,4 +1,4 @@
-import type { CompletionGeneratorRequest,CompletionData } from '@/types/completion'
+import type { CompletionGeneratorRequest,CompletionData,CompletionParams } from '@/types/completion'
 // Completion engine: tokenization, spec traversal, static matching and
 // dynamic generator resolution.
 
@@ -43,6 +43,7 @@ interface ResolutionState {
   argSource?: Arg
   usedOptions: Set<string>
   endOfOptions: boolean
+  context: CompletionParams
 }
 
 interface TokenParseState {
@@ -123,19 +124,6 @@ export function getSuggestions(ctx: CompletionContext): CompletionResult {
   return { suggestions: dedupeSuggestions(suggestions) }
 }
 
-function getKubectlNamespace(tokens: string[]): string {
-  for (let i = 0; i < tokens.length; i++) {
-    const token = decodeToken(tokens[i] ?? '')
-    if (token === '-n' || token === '--namespace') {
-      if (i + 1 < tokens.length) return decodeToken(tokens[i + 1] ?? '')
-    }
-    if (token.startsWith('--namespace=')) {
-      return token.slice('--namespace='.length)
-    }
-  }
-  return 'default'
-}
-
 export function getDynamicGenerator(ctx: CompletionContext): DynamicGenerator | null {
   if (ctx.cursorTokenIndex === 0) return null
 
@@ -153,7 +141,7 @@ export function getDynamicGenerator(ctx: CompletionContext): DynamicGenerator | 
     const isCd = isCdPathContext(ctx)
     return {
       generatorId: 'paths',
-      params: pathGeneratorParams(ctx.currentToken),
+      params: { ...pathGeneratorParams(ctx.currentToken), ...(state.context.gitDirectories ? { gitDirectories: state.context.gitDirectories } : {}) },
       cacheTtl: arg.fileGenerator.cacheTtl ?? 3000,
       // cd 命令走 directory-list，产出可级联展开的 directory 候选；
       // 其它文件命令保持 file-list（文件+目录混合，type:'arg'）。
@@ -165,7 +153,7 @@ export function getDynamicGenerator(ctx: CompletionContext): DynamicGenerator | 
   if (!arg.generator) return null
   return {
     generatorId: arg.generator.generatorId,
-    params: { ...arg.generator.params, ...(arg.generator.generatorId === 'kubectl-resources' ? { namespace: getKubectlNamespace(ctx.tokens) } : {}) },
+    params: { ...arg.generator.params, ...state.context },
     cacheTtl: arg.generator.cacheTtl ?? 10000,
     parser: arg.generator.parser ?? 'git-branch',
   }
@@ -401,13 +389,29 @@ function resolveState(ctx: CompletionContext): ResolutionState | null {
   let level: Spec | Subcommand = spec
   const path: Array<Spec | Subcommand> = [spec]
   let pendingArg: Arg | undefined
+  let pendingOption: Option | undefined
   let endOfOptions = false
   const usedOptions = new Set<string>()
+  const context: CompletionParams = {}
+  const captureOption = (option: Option, value?: string) => {
+    if (command === 'git' && option.name === '-C' && value !== undefined) {
+      (context.gitDirectories ??= []).push(value)
+    } else if (command === 'docker' && option.name === '-H' && value !== undefined) {
+      context.dockerHost = value
+    } else if (command === 'kubectl' && value !== undefined) {
+      if (option.name === '--kubeconfig') context.kubeconfig = value
+      if (option.name === '-n' || option.name === '--namespace') context.namespace = value
+    } else if (command === 'systemctl' && option.name === '--user') {
+      context.systemdUser = true
+    }
+  }
 
   for (let i = 1; i < ctx.cursorTokenIndex; i++) {
     const token = decodeToken(ctx.tokens[i] ?? '')
     if (pendingArg) {
+      captureOption(pendingOption!, token)
       pendingArg = undefined
+      pendingOption = undefined
       continue
     }
 
@@ -416,8 +420,13 @@ function resolveState(ctx: CompletionContext): ResolutionState | null {
     const optionMatch = matchOptionToken(path, token)
     if (optionMatch) {
       usedOptions.add(optionMatch.option.name)
-      if (!optionMatch.usesEquals) {
+      if (optionMatch.usesEquals) {
+        captureOption(optionMatch.option, optionMatch.value!)
+      } else if (optionMatch.option.args) {
         pendingArg = optionMatch.option.args
+        pendingOption = optionMatch.option
+      } else {
+        captureOption(optionMatch.option)
       }
       continue
     }
@@ -440,7 +449,7 @@ function resolveState(ctx: CompletionContext): ResolutionState | null {
     return null
   }
 
-  return { path, level, argSource: pendingArg, usedOptions, endOfOptions }
+  return { path, level, argSource: pendingArg, usedOptions, endOfOptions, context }
 }
 
 function findOption(path: Array<Spec | Subcommand>, token: string): Option | undefined {

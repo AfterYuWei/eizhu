@@ -2,6 +2,8 @@
 
 日期：2026-10-29（Asia/Shanghai）。验收代码基于本地 `dev` 的 `049b3b3a` 加本轮修改，构建来源指纹见下文。未发布或连接用户的生产服务器。
 
+**2026-10-30 状态更新：下文 CTX-01–04 已完成修复与回归，结果见[上下文修复报告](COMPLETION_CONTEXT_FIX_2026-10-30.md)。本页保留首次验收时的结果与失败证据。**
+
 ## 结论
 
 **普通会话上下文的已登记补全功能通过本轮自动化验证；整体仍有 4 项上下文选项缺陷，不能判定为全部通过。**
@@ -71,7 +73,7 @@ Kubernetes 资源：`pods`、`deployments`、`services`、`configmaps`、`secret
 
 这 4 项是语义上下文缺口，不能以“菜单中有该选项”认定通过。它们需要将上下文从解析器传至受限后端生成器，并相应扩展固定参数 schema；本次保留为明确的待修复项，没有据此断言它们由 Rust 迁移引入。
 
-诊断脚本：[context-audit.ts.txt](evidence/completion-20261029/context-audit.ts.txt)；真实执行日志：[context-audit.log](evidence/completion-20261029/context-audit.log)。复现方式是在临时工作区将脚本复制为 `apps/web/src/lib/completionContext.audit.test.ts`，运行 `npm run test:unit --workspace @eizhu/web -- src/lib/completionContext.audit.test.ts`，会得到 4 项失败、退出码 1。执行后删除该临时文件。
+诊断脚本：[context-audit.ts.txt](evidence/completion-20261029/context-audit.ts.txt)；真实执行日志：[context-audit.log](evidence/completion-20261029/context-audit.log)。在历史验收基线 `4aa2612` 的临时工作区将脚本复制为 `apps/web/src/lib/completionContext.audit.test.ts`，运行 `npm run test:unit --workspace @eizhu/web -- src/lib/completionContext.audit.test.ts`，可复现 4 项失败、退出码 1。当前源码已经修复，并在 `completionContext.test.ts` 中常规回归。执行历史诊断后删除临时文件。
 
 ## Electron 与安装包证据
 

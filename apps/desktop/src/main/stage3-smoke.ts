@@ -101,7 +101,14 @@ export async function verifyStage3(window: BrowserWindow, runtime: RuntimeHost, 
           if (loadInProgress && commands.length > 1000) commands.splice(0, commands.length - 1000)
           const stream = accept()
           stream.on('error', () => undefined)
-          const completionOutput = info.command.includes('git remote') ? 'origin\nupstream\n'
+          const completionOutput = info.command.includes("git -C '/other-repo'")
+            ? info.command.endsWith(' remote') ? 'other-origin\n' : 'feature/other\n'
+            : info.command.includes("docker --host='tcp://qa.invalid:2375'") ? 'qa123\tqa-web\n'
+            : info.command.includes("kubectl --kubeconfig='/tmp/qa-config'")
+              ? info.command.includes('get-contexts') ? 'qa-context\n' : 'pod/config-web\n'
+            : info.command.includes('systemctl --user ')
+              ? info.command.includes('--state=failed') ? 'broken-user.service\n' : 'user-app.service\n'
+            : info.command.includes('git remote') ? 'origin\nupstream\n'
             : info.command.includes('docker ps') ? 'abc123\tweb\ndef456\tworker\n'
             : info.command.includes('kubectl config get-contexts') ? 'dev\nprod\n'
             : info.command.includes('kubectl ') ? 'pod/web\npod/worker\n'
@@ -402,6 +409,14 @@ export async function verifyStage3(window: BrowserWindow, runtime: RuntimeHost, 
       { generatorId: 'systemd-active-units', params: {}, expected: 'app.service' },
       { generatorId: 'systemd-failed-units', params: {}, expected: 'broken.service' },
       { generatorId: 'npm-scripts', params: {}, expected: 'build:qa' },
+      { generatorId: 'git-branches', params: { gitDirectories: ['/other-repo'] }, expected: 'feature/other' },
+      { generatorId: 'git-remotes', params: { gitDirectories: ['/other-repo'] }, expected: 'other-origin' },
+      { generatorId: 'docker-containers', params: { dockerHost: 'tcp://qa.invalid:2375' }, expected: 'qa123\tqa-web' },
+      { generatorId: 'kubectl-resources', params: { kubeconfig: '/tmp/qa-config', resource: 'pods' }, expected: 'pod/config-web' },
+      { generatorId: 'kubectl-contexts', params: { kubeconfig: '/tmp/qa-config' }, expected: 'qa-context' },
+      { generatorId: 'systemd-service-units', params: { systemdUser: true }, expected: 'user-app.service' },
+      { generatorId: 'systemd-active-units', params: { systemdUser: true }, expected: 'user-app.service' },
+      { generatorId: 'systemd-failed-units', params: { systemdUser: true }, expected: 'broken-user.service' },
     ]
     for (const [index, testCase] of completionMatrix.entries()) {
       const requestId = `matrix-${index}`

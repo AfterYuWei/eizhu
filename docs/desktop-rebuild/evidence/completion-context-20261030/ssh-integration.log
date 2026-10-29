@@ -1,0 +1,28 @@
+▶ all completion generators over real SSH/SFTP with isolated CLI fixtures
+  ✔ git-branches{} (21.127614ms)
+  ✔ git-remotes{} (17.090703ms)
+  ✔ docker-containers{} (685.904063ms)
+  ✔ docker-containers{"all":true} (13.042501ms)
+  ✔ kubectl-resources{"namespace":"qa ' team","resource":"pods"} (681.63672ms)
+  ✔ kubectl-contexts{} (13.150183ms)
+  ✔ systemd-service-units{} (697.588537ms)
+  ✔ systemd-active-units{} (12.837547ms)
+  ✔ systemd-failed-units{} (12.132635ms)
+  ✔ npm-scripts{} (61.082047ms)
+  ✔ Git -C selects the actual repository for branches, remotes and file candidates (51.220733ms)
+  ✔ Docker -H reaches the requested fixture endpoint as one literal operand (22.819397ms)
+  ✔ kubectl resources and contexts both use the selected kubeconfig (29.945281ms)
+  ✔ all systemd unit generators honor --user (33.80985ms)
+  ✔ relative, absolute, home, dot, parent and Unicode path operands (16.494485ms)
+  ✔ directory failures, cancellation, timeout and output bounds (10112.366515ms)
+  ✔ shell operands remain literal and npm discovery does not execute scripts (32.880697ms)
+  ✔ nonzero CLI status and exec output limit are preserved (81.230075ms)
+✔ all completion generators over real SSH/SFTP with isolated CLI fixtures (12780.369929ms)
+ℹ tests 19
+ℹ suites 0
+ℹ pass 19
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 13054.618334

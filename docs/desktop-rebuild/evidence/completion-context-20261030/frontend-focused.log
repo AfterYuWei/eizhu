@@ -1,0 +1,13 @@
+
+> test:unit
+> vitest run src/lib/completionContext.test.ts src/lib/completionMatrix.test.ts src/hooks/useCompletion.interaction.test.tsx src/api/session.test.ts
+
+
+ RUN  v5.0.5 /Users/yuwei/Desktop/Projects/yuweinfo/XControl/apps/web
+
+
+ Test Files  4 passed (4)
+      Tests  562 passed (562)
+   Start at  00:11:31
+   Duration  1.20s (environment 41%, import 35%, tests 12%, transform 11%, worker 1%)
+

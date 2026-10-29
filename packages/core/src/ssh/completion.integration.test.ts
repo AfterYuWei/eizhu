@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { once } from 'node:events'
-import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises'
+import { mkdtemp, mkdir, writeFile, rm, cp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, dirname, delimiter } from 'node:path'
 import { spawn, execFileSync } from 'node:child_process'
@@ -46,18 +46,26 @@ test(
     )
     execFileSync('git', ['branch', 'feature/qa'], { cwd })
     execFileSync('git', ['remote', 'add', 'origin', 'https://example.invalid/repo.git'], { cwd })
+    const otherRepo = join(root, "other repo's"),
+      nestedRepo = join(otherRepo, 'nested')
+    await mkdir(nestedRepo, { recursive: true })
+    await cp(join(cwd, '.git'), join(otherRepo, '.git'), { recursive: true })
+    execFileSync('git', ['branch', '-m', 'feature/qa', 'feature/other'], { cwd: otherRepo })
+    execFileSync('git', ['remote', 'rename', 'origin', 'other-origin'], { cwd: otherRepo })
+    await cp(join(otherRepo, '.git'), join(nestedRepo, '.git'), { recursive: true })
+    execFileSync('git', ['branch', '-m', 'feature/other', 'feature/nested'], { cwd: nestedRepo })
     for (const [name, body] of [
       [
         'docker',
-        `case "$*" in *-a*) printf 'abc\\tweb\\ndef\\tstopped\\n';; *) printf 'abc\\tweb\\n';; esac`,
+        `if [ "$1" = '--host=unix:///qa socket' ]; then printf 'qa123\\tqa-web\\n';else case "$*" in *-a*) printf 'abc\\tweb\\ndef\\tstopped\\n';; *) printf 'abc\\tweb\\n';; esac;fi`,
       ],
       [
         'kubectl',
-        `case "$*" in *get-contexts*) printf 'dev\\nprod\\n';; *) printf 'pod/web\\npod/worker\\n';; esac`,
+        `if [ "$1" = '--kubeconfig=qa dir/config' ];then case "$*" in *get-contexts*) printf 'qa-context\\n';; *) printf 'pod/config-web\\n';; esac;else case "$*" in *get-contexts*) printf 'dev\\nprod\\n';; *) printf 'pod/web\\npod/worker\\n';; esac;fi`,
       ],
       [
         'systemctl',
-        `case "$*" in *--state=failed*) printf 'broken.service loaded failed\\n';; *--state=active*) printf 'app.service loaded active\\n';; *) printf 'app.service enabled\\nworker.service disabled\\n';; esac`,
+        `if [ "$1" = '--user' ];then case "$*" in *--state=failed*) printf 'broken-user.service loaded failed\\n';; *) printf 'user-app.service loaded active\\n';; esac;else case "$*" in *--state=failed*) printf 'broken.service loaded failed\\n';; *--state=active*) printf 'app.service loaded active\\n';; *) printf 'app.service enabled\\nworker.service disabled\\n';; esac;fi`,
       ],
     ])
       await writeFile(join(bin, name), '#!/bin/sh\n' + body + '\n', { mode: 0o700 })
@@ -191,6 +199,69 @@ test(
           assert.ok(result.output.split('\n').includes(expected), result.output)
           assert.equal(result.candidates, undefined)
         })
+      await t.test(
+        'Git -C selects the actual repository for branches, remotes and file candidates',
+        async () => {
+          const result = await run({ generatorId: 'git-branches', params: { gitDirectories: [otherRepo] } })
+          assert.ok(result.output.includes('feature/other'))
+          assert.ok(!result.output.includes('feature/qa'))
+          assert.equal(
+            (
+              await run({ generatorId: 'git-remotes', params: { gitDirectories: [otherRepo] } })
+            ).output.trim(),
+            'other-origin',
+          )
+          assert.ok(
+            (
+              await run({
+                generatorId: 'git-branches',
+                params: { gitDirectories: ["../other repo's", 'nested'] },
+              })
+            ).output.includes('feature/nested'),
+          )
+          await run({
+            generatorId: 'paths',
+            params: { gitDirectories: [otherRepo, 'nested'], directory: 'src/' },
+          })
+          assert.equal(opened.at(-1)?.replace(/\/$/, ''), join(nestedRepo, 'src'))
+        },
+      )
+      await t.test('Docker -H reaches the requested fixture endpoint as one literal operand', async () => {
+        const result = await run({
+          generatorId: 'docker-containers',
+          params: { dockerHost: 'unix:///qa socket' },
+        })
+        assert.equal(result.output.trim(), 'qa123\tqa-web')
+        assert.ok(!(await run({ generatorId: 'docker-containers', params: {} })).output.includes('qa-web'))
+      })
+      await t.test('kubectl resources and contexts both use the selected kubeconfig', async () => {
+        assert.equal(
+          (
+            await run({ generatorId: 'kubectl-resources', params: { kubeconfig: 'qa dir/config' } })
+          ).output.trim(),
+          'pod/config-web',
+        )
+        assert.ok(!executed.at(-1)?.includes('--namespace='))
+        assert.equal(
+          (
+            await run({ generatorId: 'kubectl-contexts', params: { kubeconfig: 'qa dir/config' } })
+          ).output.trim(),
+          'qa-context',
+        )
+      })
+      await t.test('all systemd unit generators honor --user', async () => {
+        for (const generatorId of [
+          'systemd-service-units',
+          'systemd-active-units',
+          'systemd-failed-units',
+        ] as const) {
+          const result = await run({ generatorId, params: { systemdUser: true } })
+          assert.equal(
+            result.output.trim(),
+            generatorId === 'systemd-failed-units' ? 'broken-user.service' : 'user-app.service',
+          )
+        }
+      })
       await t.test('relative, absolute, home, dot, parent and Unicode path operands', async () => {
         for (const [directory, base, expected] of [
           ['.', '/srv/qa', '/srv/qa'],
@@ -239,6 +310,11 @@ test(
         assert.equal(result.code, 0)
         assert.ok(executed.at(-1)?.includes("'x'\\''; touch MUST_NOT_RUN; '\\'''"))
         assert.ok(!completionCommand({ generatorId: 'npm-scripts', params: {} }, cwd).includes('npm run'))
+        for (const request of [
+          { generatorId: 'docker-containers', params: { dockerHost: namespace } },
+          { generatorId: 'kubectl-contexts', params: { kubeconfig: namespace } },
+        ] satisfies CompletionGeneratorRequest[])
+          assert.equal((await run(request)).code, 0)
         await assert.rejects(import('node:fs/promises').then((fs) => fs.access(join(cwd, 'MUST_NOT_RUN'))))
       })
       await t.test('nonzero CLI status and exec output limit are preserved', async () => {

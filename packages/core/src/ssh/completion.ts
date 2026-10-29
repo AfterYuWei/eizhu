@@ -4,27 +4,36 @@ import { networkError } from './network.ts'
 import { execBounded } from './connection.ts'
 import type { CompletionGeneratorRequest } from '@eizhu/contracts/models/completion'
 export const quote = (v: string) => "'" + v.replace(/'/g, "'\\''") + "'"
+const pathOperand = (v: string) =>
+  v === '~' ? '"$HOME"' : v.startsWith('~/') ? '"$HOME"/' + quote(v.slice(2)) : quote(v)
 export function completionCommand(request: CompletionGeneratorRequest, cwd = '~'): string {
   const p = request.params
+  const git = 'git' + (p.gitDirectories ?? []).map((dir) => ' -C ' + pathOperand(dir)).join('')
+  const docker = 'docker' + (p.dockerHost === undefined ? '' : ' --host=' + quote(p.dockerHost))
+  const kubectl = 'kubectl' + (p.kubeconfig === undefined ? '' : ' --kubeconfig=' + pathOperand(p.kubeconfig))
+  const systemctl = 'systemctl' + (p.systemdUser ? ' --user' : '')
   const commands: Record<Exclude<CompletionGeneratorRequest['generatorId'], 'paths'>, string> = {
-    'git-branches': 'git for-each-ref --format="%(refname:short)" refs/heads refs/remotes',
-    'git-remotes': 'git remote',
-    'docker-containers': `docker ps ${p.all ? '-a ' : ''}--format '{{.ID}}\t{{.Names}}'`,
-    'kubectl-resources': `kubectl ${p.namespace ? '--namespace ' + quote(p.namespace) + ' ' : ''}get ${quote(p.resource ?? 'pods')} -o name`,
-    'kubectl-contexts': 'kubectl config get-contexts -o name',
-    'systemd-service-units':
-      "systemctl list-unit-files --type=service --no-legend --no-pager 2>/dev/null | awk '{print $1}'",
-    'systemd-active-units':
-      "systemctl list-units --type=service --state=active --no-legend --no-pager 2>/dev/null | awk '{print $1}'",
-    'systemd-failed-units':
-      "systemctl list-units --type=service --state=failed --no-legend --no-pager 2>/dev/null | awk '{print $1}'",
+    'git-branches': `${git} for-each-ref --format="%(refname:short)" refs/heads refs/remotes`,
+    'git-remotes': `${git} remote`,
+    'docker-containers': `${docker} ps ${p.all ? '-a ' : ''}--format '{{.ID}}\t{{.Names}}'`,
+    'kubectl-resources': `${kubectl} ${p.namespace === undefined ? '' : '--namespace=' + quote(p.namespace) + ' '}get ${quote(p.resource ?? 'pods')} -o name`,
+    'kubectl-contexts': `${kubectl} config get-contexts -o name`,
+    'systemd-service-units': `${systemctl} list-unit-files --type=service --no-legend --no-pager 2>/dev/null | awk '{print $1}'`,
+    'systemd-active-units': `${systemctl} list-units --type=service --state=active --no-legend --no-pager 2>/dev/null | awk '{print $1}'`,
+    'systemd-failed-units': `${systemctl} list-units --type=service --state=failed --no-legend --no-pager 2>/dev/null | awk '{print $1}'`,
     'npm-scripts':
       'node -e \'try{process.stdout.write(Object.keys(require("./package.json").scripts||{}).join("\\n"))}catch{}\'',
   }
   if (request.generatorId === 'paths') throw networkError('BAD_REQUEST', '路径补全使用目录读取')
-  const directory =
-    cwd === '~' ? '"$HOME"' : cwd.startsWith('~/') ? '"$HOME"/' + quote(cwd.slice(2)) : quote(cwd)
-  return `cd -- ${directory} && ${commands[request.generatorId]}`
+  return `cd -- ${pathOperand(cwd)} && ${commands[request.generatorId]}`
+}
+
+function resolveDirectory(cwd: string, dir: string): string {
+  return dir.startsWith('/') || dir === '~' || dir.startsWith('~/')
+    ? dir
+    : cwd === '~' || cwd.startsWith('~/')
+      ? `${cwd}/${dir}`
+      : posix.join(cwd, dir)
 }
 export async function withSftp<T>(
   client: Client,
@@ -122,15 +131,11 @@ export async function complete(
 ) {
   if (request.generatorId !== 'paths')
     return { ...(await execBounded(client, completionCommand(request, cwd), signal)), candidates: undefined }
+  for (const directory of request.params.gitDirectories ?? []) {
+    if (directory) cwd = resolveDirectory(cwd, directory)
+  }
   const dir = request.params.directory
-  const directory =
-    dir === undefined
-      ? cwd
-      : dir.startsWith('/') || dir === '~' || dir.startsWith('~/')
-        ? dir
-        : cwd === '~' || cwd.startsWith('~/')
-          ? `${cwd}/${dir}` // Expand home before normalizing '..'; '~' is not a literal path segment.
-          : posix.join(cwd, dir)
+  const directory = dir === undefined ? cwd : resolveDirectory(cwd, dir)
   const rows = await readDirectory(client, directory, signal)
   return {
     output: '',
