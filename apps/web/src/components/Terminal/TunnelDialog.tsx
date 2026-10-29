@@ -7,6 +7,7 @@ import { useProfileStore } from '@/store/profile'
 import { workspaceGeneration } from '@/lib/workspaceScope'
 import { Dialog,DialogContent,DialogTitle,DialogDescription } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
+import { InlineError } from '@/components/ui/inline-error'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { AuthPromptDialog } from './AuthPromptDialog'
@@ -41,8 +42,7 @@ export function TunnelDialog({ open, onOpenChange }: { open: boolean; onOpenChan
   return <>
     <Dialog open={open} onOpenChange={onOpenChange}><DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
       <DialogTitle>SSH 隧道</DialogTitle><DialogDescription>配置仅保存在本账号空间；启动使用独立 SSH 连接。重启后需手动启动，监听只允许回环地址。</DialogDescription>
-      {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
-      <div className="flex justify-end"><Button disabled={busy} onClick={() => setEditing(initial())}>新增隧道</Button></div>
+      <div className="flex items-center justify-end gap-3"><InlineError message={!editing && !deleting ? error : null} className="flex-1"/><Button disabled={busy} onClick={() => { setError(''); setEditing(initial()) }}>新增隧道</Button></div>
       {configs.map((config) => { const status = states[config.id]; const running = status && ['running', 'connecting', 'reconnecting'].includes(status.status)
         return <div key={config.id} className="space-y-2 rounded-md border p-3 text-sm"><div className="flex items-center justify-between gap-2"><strong>{config.name} · {config.kind === 'dynamic' ? 'SOCKS5' : config.kind === 'remote' ? '远端' : '本地'}</strong><span>{labels[status?.status ?? 'stopped']}</span></div>
           <p className="break-all text-muted-foreground">{config.bind_host}:{status?.bound_port ?? config.bind_port} → {config.kind === 'dynamic' ? 'SOCKS5 TCP CONNECT' : `${config.target_host}:${config.target_port}`} · {profiles.find((profile) => profile.id === config.profile_id)?.name ?? '服务器配置已删除'}</p>
@@ -60,11 +60,10 @@ export function TunnelDialog({ open, onOpenChange }: { open: boolean; onOpenChan
         <Label>类型<select className="w-full rounded-md border bg-background p-2" value={editing.kind} onChange={(event) => setEditing({ ...editing, kind: event.target.value as TunnelConfig['kind'] })}><option value="local">本地转发</option><option value="remote">远端转发</option><option value="dynamic">动态 SOCKS5</option></select></Label>
         <Label>SSH 服务器<select required className="w-full rounded-md border bg-background p-2" value={editing.profile_id} onChange={(event) => setEditing({ ...editing, profile_id: event.target.value })}><option value="">选择服务器</option>{profiles.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select></Label>
         {(['bind_host', 'bind_port', 'target_host', 'target_port'] as const).filter((key) => editing.kind !== 'dynamic' || key.startsWith('bind_')).map((key) => <Label key={key}>{({ bind_host: '回环监听地址', bind_port: '监听端口（0 自动分配）', target_host: '目标域名或 IP', target_port: '目标端口' })[key]}<Input required type={key.endsWith('port') ? 'number' : 'text'} min={key === 'bind_port' ? 0 : 1} max={65535} value={editing[key]} onChange={(event) => setEditing({ ...editing, [key]: key.endsWith('port') ? Number(event.target.value) : event.target.value })} /></Label>)}
-        {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
-        <div className="flex justify-end gap-2"><Button type="button" variant="outline" disabled={busy} onClick={() => setEditing(null)}>取消</Button><Button disabled={busy}>保存</Button></div>
+        <div className="flex items-center justify-end gap-2"><InlineError message={error} className="flex-1"/><Button type="button" variant="outline" disabled={busy} onClick={() => setEditing(null)}>取消</Button><Button disabled={busy}>保存</Button></div>
       </form>}
     </DialogContent></Dialog>
-    <Dialog open={deleting !== null} onOpenChange={(open) => { if (!open) setDeleting(null) }}><DialogContent><DialogTitle>删除隧道</DialogTitle><DialogDescription>删除 {deleting?.name} 前将停止监听并清理正在转发的连接。</DialogDescription><Button disabled={busy} onClick={() => { const config = deleting; if (config) void run(async () => { await tunnelApi.remove(config.id); setDeleting(null) }) }}>确认删除</Button></DialogContent></Dialog>
+    <Dialog open={deleting !== null} onOpenChange={(open) => { if (!open) setDeleting(null) }}><DialogContent><DialogTitle>删除隧道</DialogTitle><DialogDescription>删除 {deleting?.name} 前将停止监听并清理正在转发的连接。</DialogDescription><div className="flex items-center justify-end gap-3"><InlineError message={error} className="flex-1"/><Button disabled={busy} onClick={() => { const config = deleting; if (config) void run(async () => { await tunnelApi.remove(config.id); setDeleting(null) }) }}>确认删除</Button></div></DialogContent></Dialog>
   </>
 }
 /** Always mounted: a pending connection can prompt after its management dialog is closed. */

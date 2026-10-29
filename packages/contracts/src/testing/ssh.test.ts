@@ -8,3 +8,21 @@ test('SSH contract rejects arbitrary completion programs, unsafe listeners and i
   assert.equal(ssh['history.record'].input.safeParse({profileId:'p',command:' password',cwd:'/'}).success,false)
   assert.equal(sessionMessageSchema.safeParse({type:'auth_request',payload:{request_id:'r',profile_id:'p',name:'认证',instructions:'',prompts:[{prompt:'密码',echo:false}]}}).success,true)
 })
+
+test('connection snapshots preserve a bounded diagnostic code and the actual failing stage', () => {
+  const payload = {
+    session_id: 's',
+    status: 'error',
+    stage: 'ssh_auth',
+    message: '服务器未接受当前登录凭据',
+    error_code: 'SSH_AUTH_FAILED',
+  }
+  assert.equal(sessionMessageSchema.safeParse({ type: 'connection_state', payload }).success, true)
+  assert.equal(
+    sessionMessageSchema.safeParse({
+      type: 'connection_state',
+      payload: { ...payload, error_code: 'x'.repeat(81) },
+    }).success,
+    false,
+  )
+})

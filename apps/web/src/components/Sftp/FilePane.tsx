@@ -1,4 +1,5 @@
-import { Loading } from '@/components/ui/loading'
+import { Loading,LoadingBar } from '@/components/ui/loading'
+import { InlineError } from '@/components/ui/inline-error'
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { writeClipboardText } from '@/lib/clipboard';
@@ -138,6 +139,11 @@ export function FilePane({ pane, onPickServer }: FilePaneProps) {
     const selected = activeTab.selected;
     const rawEntries = activeTab.entries;
     const treeRoot = activeTab.tree;
+    const connectionPrompt = store.pendingHostKey?.tabId === activeTab.id
+        ? '等待确认主机指纹'
+        : store.pendingAuth?.sessionId === activeTab.sessionId
+            ? '等待身份验证'
+            : '正在连接';
     const navigate = (p: string) => store.navigate(pane, p);
     const selectFn = (p: string, opts?: {
         additive?: boolean;
@@ -348,7 +354,7 @@ export function FilePane({ pane, onPickServer }: FilePaneProps) {
                     drag.start(e, session);
             }} dropTargetPath={matchesDropTarget(visualDropTarget, pane, activeTab.id, 'tree')
                 ? visualDropTarget?.destDir
-                : null} draggingPaths={store.dragSession?.sourceTabId === activeTab.id ? new Set(store.dragSession.entries.map((item) => item.path)) : undefined} makeDropTarget={(entry) => makeTarget(entry.path, 'tree')}/>) : (<Loading />)}
+                : null} draggingPaths={store.dragSession?.sourceTabId === activeTab.id ? new Set(store.dragSession.entries.map((item) => item.path)) : undefined} makeDropTarget={(entry) => makeTarget(entry.path, 'tree')}/>) : (<div className="sftp-list-empty"><Inbox size={20}/><span>空文件夹</span></div>)}
     </div>);
     return (<div className="sftp-pane">
       {false}
@@ -370,7 +376,18 @@ export function FilePane({ pane, onPickServer }: FilePaneProps) {
         }}/>
       </div>
 
-      {view === 'list' ? renderListView() : renderTreeView()}
+      <div className="sftp-load-track">
+        {activeTab.loading && <LoadingBar label={activeTab.connecting ? `${connectionPrompt} · ${server.name}` : '正在读取文件列表'} />}
+      </div>
+      {activeTab.error ? <div className="sftp-pane-error">
+        <InlineError message={activeTab.error}/>
+        <Button variant="outline" size="sm" onClick={handleRefresh}>重试</Button>
+      </div> : activeTab.loading ? <div className="sftp-pane-loading" aria-busy="true">
+        {activeTab.connecting ? <div className="sftp-connection-status" role="status">
+          <Loading inline />
+          <span>{connectionPrompt}<small>{server.name}</small></span>
+        </div> : <Loading />}
+      </div> : view === 'list' ? renderListView() : renderTreeView()}
 
       {store.dragSession && store.dropTarget?.pane === pane && (() => {
             const action = dropAction(store.dragSession, store.dropTarget, Boolean(store.dropTarget.copyModifier));

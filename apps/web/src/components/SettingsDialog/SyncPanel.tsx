@@ -125,12 +125,8 @@ export function SyncPanel() {
           </div>
           {(error || status?.lastError || account.sessionState === 'reauth_required') && (
             <div className="backup-card">
-              <p role="alert" className="account-error">
-                {error?.message ||
-                  status?.lastError ||
-                  (account.sessionState === 'reauth_required' ? '登录已失效，账号本地数据仍保留' : '')}
-              </p>
               <ErrorRecovery
+                message={error?.message || status?.lastError || (account.sessionState === 'reauth_required' ? '登录已失效，账号本地数据仍保留' : '')}
                 code={
                   account.sessionState === 'reauth_required'
                     ? 'ACCOUNT_NOT_LOGGED_IN'

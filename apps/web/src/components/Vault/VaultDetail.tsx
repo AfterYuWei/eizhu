@@ -4,6 +4,7 @@ import { ChevronDown, ChevronRight, Copy, Eye, EyeOff, MoreHorizontal, Pencil, S
 import { toast } from 'sonner'
 import { vaultApi } from '@/api/vault'
 import { Button } from '@/components/ui/button'
+import { InlineError } from '@/components/ui/inline-error'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { writeSensitiveClipboardText } from '@/lib/clipboard'
 import { workspaceGeneration } from '@/lib/workspaceScope'
@@ -114,7 +115,7 @@ export function VaultDetail({ item, onEdit, onDelete }: VaultDetailProps) {
         <span>关联连接</span><span>{item.ref_count > 0 ? `${item.ref_count} 个连接` : '未引用'}{refsOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}</span>
       </button>
       {refsOpen && <div id={`vault-references-${item.id}`} className="vault-reference-list">
-        {refsError ? <p role="alert">{refsError}<Button type="button" variant="ghost" size="sm" onClick={() => void loadReferences()}>重试</Button></p> : references === null ? <Loading className="min-h-12" /> : references.length === 0 ? <p>暂无连接引用此凭据</p> : references.map((ref) => <div className="vault-reference-row" key={ref.id}><Server size={16} aria-hidden="true" /><span>{ref.name || '未命名连接'}</span></div>)}
+        {refsError ? <div className="vault-reference-row"><InlineError message={refsError}/><Button type="button" variant="ghost" size="sm" onClick={() => void loadReferences()}>重试</Button></div> : references === null ? <Loading className="min-h-12" /> : references.length === 0 ? <p>暂无连接引用此凭据</p> : references.map((ref) => <div className="vault-reference-row" key={ref.id}><Server size={16} aria-hidden="true" /><span>{ref.name || '未命名连接'}</span></div>)}
       </div>}
     </section>
   </div>

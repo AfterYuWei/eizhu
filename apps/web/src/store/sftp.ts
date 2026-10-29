@@ -231,6 +231,7 @@ export interface SftpTab {
   selected: Set<string>
   entries: SftpEntry[]    // cached list-view entries
   tree: TreeNode | null   // cached tree-view root
+  connecting: boolean
   loading: boolean
   error: string | null
   // Monotonic counter to dedupe in-flight list requests: only the latest
@@ -352,6 +353,7 @@ function makeTab(server: SftpServer): SftpTab {
     selected: new Set(),
     entries: [],
     tree: null,
+    connecting: false,
     loading: false,
     error: null,
     fetchSeq: 0,
@@ -1057,7 +1059,7 @@ async function connectAndNavigate(
   server: SftpServer
 ) {
   // Mark as loading
-  set(updateTabById(get(), pane, tabId, (t) => ({ ...t, loading: true, error: null })))
+  set(updateTabById(get(), pane, tabId, (t) => ({ ...t, connecting: true, loading: true, error: null })))
 
   let ownedSession:string|undefined
   try {
@@ -1112,14 +1114,14 @@ async function connectAndNavigate(
     }
 
     // Update tab with session ID
-    set(updateTabById(get(), pane, tabId, (t) => ({ ...t, sessionId })))
+    set(updateTabById(get(), pane, tabId, (t) => ({ ...t, sessionId, connecting: false })))
 
     // Fetch home directory listing (default to / if home_dir not available)
     await fetchEntries(get, set, pane, homeDir,tabId)
   } catch (err) {
     if(ownedSession)await sftpApi.closeSession(ownedSession).catch(()=>undefined)
     const msg = err instanceof Error ? err.message : String(err)
-    set({pendingAuth:null,pendingHostKey:null,...updateTabById(get(), pane, tabId, (t) => ({ ...t, sessionId:null,loading: false, error: msg }))})
+    set({pendingAuth:null,pendingHostKey:null,...updateTabById(get(), pane, tabId, (t) => ({ ...t, sessionId:null,connecting: false,loading: false, error: msg }))})
   }
 }
 

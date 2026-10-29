@@ -72,6 +72,7 @@ export interface ConnectionStatePayload {
   stage: string
   message: string
   error?: string
+  error_code?: string
   host_key_request_id?: string
   waiting_for_host_key?: boolean
   host_key_fingerprint?: string

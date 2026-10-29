@@ -3,7 +3,7 @@ import { randomUUID,createHash } from 'node:crypto'
 import { StringDecoder } from 'node:string_decoder'
 import { posix } from 'node:path'
 import type { ClientChannel } from 'ssh2'
-import { ssh, fail, failureOf } from '@eizhu/contracts'
+import { ssh, fail, failureOf, DesktopError } from '@eizhu/contracts'
 import type { RuntimeContext } from '@eizhu/contracts'
 import type { Session, SessionCreateRequest } from '@eizhu/contracts/models/session'
 import type { SessionMessage, ConnectionLogEntry } from '@eizhu/contracts/models/sessionMessage'
@@ -30,6 +30,7 @@ interface TerminalSession {
   retry: number
   timer?: NodeJS.Timeout
   logs: ConnectionLogEntry[]
+  stage: string
   queries: number
   pending: Map<string, SessionMessage>
   reconnecting?: Promise<{ session_id: string; status: string }>
@@ -120,6 +121,7 @@ export class SshService {
     extra: Record<string, unknown> = {},
   ): void {
     s.meta.status = status
+    s.stage = stage
     s.logs.push({ at: Date.now(), level: status === 'error' ? 'error' : 'info', stage, message })
     s.logs = s.logs.slice(-60)
     this.event(s, {
@@ -261,7 +263,10 @@ export class SshService {
     s.task = this.connectTerminal(s).catch(async (cause) => {
       if (s.closed) return
       const error = failureOf(cause)
-      this.state(s, 'error', 'failed', error.message, { error: error.message })
+      this.state(s, 'error', error.stage ?? s.stage, error.message, {
+        error: error.message,
+        error_code: error.code,
+      })
       this.event(s, { type: 'error', payload: { code: error.code, message: error.message } })
       this.cancelPrompts(s.meta.id)
       await s.connection.close()
@@ -301,9 +306,17 @@ export class SshService {
       }),
     )
     if (s.closed || connection.controller.signal.aborted) return
+    this.state(s, 'connecting', 'starting_shell', '服务器已通过认证，正在请求交互式终端')
     const shell = await new Promise<ClientChannel>((resolve, reject) =>
       client.shell({ term: 'xterm-256color', cols: s.cols, rows: s.rows }, (e, c) =>
-        e ? reject(new Error('Shell unavailable')) : resolve(c),
+        e
+          ? reject(
+              new DesktopError({
+                code: 'SSH_SHELL_FAILED',
+                message: '服务器已通过认证，但未能打开交互式终端',
+              }),
+            )
+          : resolve(c),
       ),
     )
     if (s.closed || connection.controller.signal.aborted) {
@@ -372,7 +385,8 @@ export class SshService {
     s.metadata = undefined
     s.cwd = undefined
     s.cache.clear()
-    this.state(s, 'connecting', 'connecting', '正在重新连接')
+    s.logs = []
+    this.state(s, 'connecting', 'preparing', '正在重新读取服务器配置与认证方式')
     this.launch(s)
     return { session_id: id, status: 'connecting' }
   }
@@ -474,6 +488,7 @@ export class SshService {
           closed: false,
           retry: 0,
           logs: [],
+          stage: 'preparing',
           queries: 0,
           pending: new Map(),
           cache: new Map(),
@@ -483,7 +498,7 @@ export class SshService {
           }),
         }
         this.terminals.set(id, s)
-        this.state(s, 'connecting', 'connecting', '正在连接')
+        this.state(s, 'connecting', 'preparing', '正在读取服务器配置与认证方式')
         this.launch(s)
         return { session_id: id, status: 'connecting' }
       }

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Dialog,DialogContent,DialogHeader,DialogTitle,DialogFooter,} from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { InlineError } from '@/components/ui/inline-error';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select,SelectContent,SelectItem,SelectTrigger,SelectValue } from '@/components/ui/select';
@@ -98,9 +99,8 @@ export function GroupForm({ open, onOpenChange, group, defaultParentId }: GroupF
             </div>
           </div>
 
-          {error && <div className="text-sm text-destructive">{error}</div>}
-
-          <DialogFooter>
+          <DialogFooter className="flex-row items-center gap-2">
+            <InlineError message={error} className="flex-1"/>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               取消
             </Button>

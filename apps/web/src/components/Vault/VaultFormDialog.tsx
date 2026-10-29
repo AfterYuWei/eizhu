@@ -2,6 +2,7 @@ import { useEffect,useId,useRef,useState } from 'react';
 import { ChevronDown,Copy,Dices,Download,Eye,EyeOff,FileText,Terminal,Upload } from 'lucide-react';
 import { Dialog,DialogContent,DialogHeader,DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { InlineError } from '@/components/ui/inline-error';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select,SelectContent,SelectItem,SelectTrigger,SelectValue } from '@/components/ui/select';
@@ -275,7 +276,6 @@ export function VaultForm({ item, onOpenChange, onStateChange, onSaved }: VaultF
     };
     return (<form onSubmit={handleSubmit} id={formId} className="vault-form vault-sheet-form">
       {credentialLoading && <p role="status" className="vault-editor-status">正在读取凭据…</p>}
-      {credentialError && <p role="alert" className="vault-editor-status">读取凭据失败，原有内容已保留。<Button type="button" variant="outline" size="sm" onClick={() => setLoadAttempt((value) => value + 1)}>重试</Button></p>}
       <fieldset className="vault-editor-fields" disabled={loading || credentialLoading || credentialError}>
       {/* 基本信息 - 上层 */}
       <section className="vault-form-basic">
@@ -392,8 +392,9 @@ export function VaultForm({ item, onOpenChange, onStateChange, onSaved }: VaultF
       </fieldset>
 
       <div className="vault-sheet-footer">
-        {error ? <div className="pf-error vault-sheet-error">{error}</div> : <div />}
+        <InlineError message={credentialError ? '读取凭据失败，原有内容已保留。' : error} className="vault-sheet-error"/>
         <div className="vault-sheet-footer-actions">
+          {credentialError && <Button type="button" variant="outline" size="sm" onClick={() => setLoadAttempt((value) => value + 1)}>重试</Button>}
           <Button type="button" variant="outline" disabled={loading} onClick={() => onOpenChange(false)} className="pf-btn-cancel">
             取消
           </Button>

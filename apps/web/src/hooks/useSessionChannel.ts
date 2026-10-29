@@ -31,6 +31,7 @@ export function useSessionChannel(options: UseSessionChannelOptions) {
     let subscriptionId: string | undefined
 
     const dispatch = async (message: SessionMessage) => {
+      if (disposed) return
       if (message.type === 'pong' && pingTimeRef.current > 0) {
         setLatency(Date.now() - pingTimeRef.current)
         pingTimeRef.current = 0

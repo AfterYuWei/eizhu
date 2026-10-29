@@ -4,6 +4,7 @@ import { account, normalizeCommandError, type AccountUser } from '@eizhu/contrac
 import { accountApi } from '@/api/account'
 import { useAccountStore } from '@/store/account'
 import { Button } from '@/components/ui/button'
+import { InlineError } from '@/components/ui/inline-error'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
@@ -180,12 +181,8 @@ export function AccountProfileDialog({ user, onClose }: { user: AccountUser; onC
               登录时使用此邮箱，用户名仅用于展示。
             </p>
           </div>
-          {error && (
-            <p className="account-error" role="alert">
-              {error}
-            </p>
-          )}
           <div className="account-dialog-actions">
+            <InlineError message={error} className="account-error" />
             <Button type="button" variant="secondary" disabled={busy} onClick={onClose}>
               取消
             </Button>

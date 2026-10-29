@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Dialog,DialogContent,DialogHeader,DialogTitle,DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { InlineError } from '@/components/ui/inline-error';
 import { Folder,FileText,AlertTriangle } from 'lucide-react';
 import type { SftpEntry } from '@/types/sftp';
 export interface DeleteConfirmDialogProps {
@@ -57,10 +58,10 @@ export function DeleteConfirmDialog({ open, onOpenChange, entries, onConfirm, }:
               </div>))}
           </div>
 
-          {error && (<p className="text-sm text-destructive mt-3">{error}</p>)}
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="flex-row items-center gap-2">
+          <InlineError message={error} className="flex-1"/>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
             取消
           </Button>

@@ -26,6 +26,7 @@ export const connectionStateSchema = z.strictObject({
   stage: z.string().max(80),
   message: z.string().max(1024),
   error: z.string().max(1024).optional(),
+  error_code: z.string().max(80).optional(),
   waiting_for_host_key: z.boolean().optional(),
   host_key_request_id: id.optional(),
   host_key_fingerprint: z.string().max(256).optional(),

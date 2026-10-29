@@ -312,11 +312,6 @@
 .pf-feedback { flex: none; max-height: 140px; overflow-y: auto; padding: 0 24px; }
 .pf-feedback:empty { display: none; }
 .pf-feedback > :last-child { margin-bottom: 12px; }
-/* Error message. */
-.pf-error {
-  font: 400 var(--sans-size) / 1.4 var(--sans);
-  color: var(--red);
-}
 /* 操作栏固定在滚动区域外。 */
 .pf-footer {
   display: flex;

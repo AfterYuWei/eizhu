@@ -2,6 +2,7 @@ import { useCallback,useRef,useState } from 'react';
 import { CheckCircle2,Eye,EyeOff,LoaderCircle,Network,ShieldAlert,Upload,X,XCircle } from 'lucide-react';
 import { Dialog,DialogClose,DialogContent,DialogDescription,DialogHeader,DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { InlineError } from '@/components/ui/inline-error';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select,SelectContent,SelectItem,SelectTrigger,SelectValue } from '@/components/ui/select';
@@ -475,7 +476,6 @@ export function ProfileForm({ open, onOpenChange, profile, presetGroupId }: Prof
         </form>
 
         <div className="pf-feedback" aria-live="polite">
-          {error && <div className="pf-error" role="alert">{error}</div>}
           {testResult && (<div className={`pf-test-result ${testResult.success ? 'success' : 'error'}`}>
               <div className="pf-test-summary">
                 {testResult.success ? <CheckCircle2 size={15}/> : <XCircle size={15}/>}
@@ -500,7 +500,7 @@ export function ProfileForm({ open, onOpenChange, profile, presetGroupId }: Prof
             {testing ? <LoaderCircle size={14} className="animate-spin"/> : <Network size={14}/>}
             {testing ? '测试中...' : '测试连接'}
           </Button>
-          <div className="pf-footer-spacer"/>
+          {error ? <InlineError message={error} className="pf-footer-spacer"/> : <div className="pf-footer-spacer"/>}
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)} className="pf-btn-cancel">
             取消
           </Button>

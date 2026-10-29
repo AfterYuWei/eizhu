@@ -2,6 +2,8 @@ import { useId, useRef, useState } from 'react'
 import { ArrowUp, ArrowDown, X, Check, AlertCircle, Loader2, ChevronDown, ChevronUp, Trash2, Copy, Pause, Play, RotateCcw, Save } from 'lucide-react'
 import { useSftpStore } from './storeContext'
 import { Button } from '@/components/ui/button'
+import { InlineError } from '@/components/ui/inline-error'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { sftpApi } from '@/api/sftp'
 import { normalizeCommandError } from '@eizhu/contracts'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
@@ -97,7 +99,6 @@ export function TransferQueue() {
             <Button onClick={() => { const task = restartTarget; setRestartTarget(null); if (task) void run(task.id, () => resumeTransfer(task.id, true), true) }}>重新开始</Button></DialogFooter>
         </DialogContent>
       </Dialog>
-      {errors.queue && <p role="alert" className="sftp-tx-queue-error">{errors.queue}</p>}
       <div className="sftp-tx-hdr">
         <Button variant="ghost" className="sftp-tx-toggle" aria-label={collapsed ? '展开传输队列' : '收起传输队列'} aria-expanded={!collapsed} aria-controls={listId} onClick={() => setCollapsed((v) => !v)}>
           {collapsed ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
@@ -110,6 +111,7 @@ export function TransferQueue() {
           {filters.map((item) => <Button key={item.id} variant="ghost" size="xs" className="sftp-tx-filter" aria-pressed={filter === item.id} onClick={() => setFilter(item.id)}>{item.label}<span>{item.count}</span></Button>)}
         </div>}
         <div className="sftp-tx-hdr-right">
+          <InlineError message={errors.queue}/>
           {speed > 0 && <span className="sftp-tx-speed" aria-label="当前总传输速度">{formatSpeed(speed)}</span>}
           {finished.length > 0 && <Button variant="ghost" size="xs" className="sftp-tx-clear" aria-label="清除记录" title="清除已完成和已取消的记录" disabled={busy.has('queue')} onClick={() => void run('queue', clearCompleted)}><Trash2 size={12} /><span>清除记录</span></Button>}
         </div>
@@ -121,6 +123,8 @@ export function TransferQueue() {
           const pct = transferProgress(task)
           const preparing = task.status === 'transferring' && ['scanning', 'archiving'].includes(task.phase ?? '')
           const direction = task.direction === 'upload' ? '上传' : task.direction === 'download' ? '下载' : '传输'
+          const error = errors[task.id] || task.error_message
+          const statusContent = <>{meta.icon}<span>{meta.label}{errors[task.id] && ' · 操作失败'}{isSending(task) && task.speed > 0 && <small>{formatSpeed(task.speed)}</small>}</span></>
           return <div key={task.id} className={`sftp-tx-item ${task.status}`}>
             <span className="sftp-tx-dir" title={direction} aria-label={direction}>{task.direction === 'upload' ? <ArrowUp size={14} /> : task.direction === 'download' ? <ArrowDown size={14} /> : <Copy size={14} />}</span>
             <span className="sftp-tx-name" title={`${task.file_name}\n${task.current_file ?? ''}\n${direction} · ${formatSize(task.transferred)} / ${formatSize(task.size)}`}>
@@ -132,7 +136,14 @@ export function TransferQueue() {
               <span className="sftp-tx-pct">{preparing ? '—' : `${pct}%`}</span>
             </span>
             <span className="sftp-tx-size">{formatSize(task.transferred)} / {formatSize(task.size)}</span>
-            <span className={`sftp-tx-status ${task.status}`}>{meta.icon}<span>{meta.label}{isSending(task) && task.speed > 0 && <small>{formatSpeed(task.speed)}</small>}</span></span>
+            {error ? <Popover>
+              <PopoverTrigger asChild><button type="button" className={`sftp-tx-status sftp-tx-error-trigger ${task.status}`} aria-label={`${meta.label} · 查看 ${task.file_name} 的错误详情`} title={error}>{statusContent}</button></PopoverTrigger>
+              <PopoverContent side="top" align="end" className="sftp-dialog sftp-tx-error-popover">
+                <strong>错误详情{task.error_code && ` · ${task.error_code}`}</strong>
+                <InlineError message={error}/>
+                <p>恢复前请连接任务所属服务器。源文件或暂存内容变化时需重新开始；取消将清理本任务暂存。</p>
+              </PopoverContent>
+            </Popover> : <span className={`sftp-tx-status ${task.status}`}>{statusContent}</span>}
             <div className="sftp-tx-actions">
               {taskGroup(task) === 'active' && <Button variant="ghost" size="icon-xs" title="暂停" aria-label={`暂停 ${task.file_name}`} disabled={busy.has(task.id)} onClick={() => void run(task.id, () => pauseTransfer(task.id))}><Pause size={12} /></Button>}
               {(task.status === 'paused' || task.status === 'recoverable' || task.status === 'failed' && task.retryable) && <Button variant="ghost" size="icon-xs" title={task.status === 'failed' ? '重试' : '继续'} aria-label={`${task.status === 'failed' ? '重试' : '继续'} ${task.file_name}`} disabled={busy.has(task.id)} onClick={() => void run(task.id, () => resumeTransfer(task.id))}><Play size={12} /></Button>}
@@ -140,10 +151,6 @@ export function TransferQueue() {
               {task.direction === 'download' && task.target_profile === '__staging__' && task.status === 'completed' && <Button variant="ghost" size="icon-xs" title="保存下载文件" aria-label={`保存 ${task.file_name}`} disabled={busy.has(task.id)} onClick={() => void run(task.id, () => sftpApi.exportDownload(task.id))}><Save size={12} /></Button>}
               {taskGroup(task) !== 'finished' && <Button variant="ghost" size="icon-xs" className="sftp-tx-cancel" title="取消并清理暂存" aria-label={`取消并清理 ${task.file_name}`} disabled={busy.has(task.id)} onClick={() => void run(task.id, () => cancelTransfer(task.id))}><X size={12} /></Button>}
             </div>
-            {(task.error_message || errors[task.id]) && <details className="sftp-tx-error"><summary>错误详情 {task.error_code && `· ${task.error_code}`}</summary>
-              <p role="alert">{errors[task.id] || task.error_message}</p>
-              <p className="sftp-tx-error-hint">恢复前请连接任务所属服务器。源文件或暂存内容变化时需重新开始；取消将清理本任务暂存。</p>
-            </details>}
           </div>
         })}
       </div>

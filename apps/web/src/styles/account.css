@@ -149,11 +149,15 @@ body:has(.desktop-shell) .account-form-field {
 }
 body:has(.desktop-shell) .account-dialog-actions {
   display: flex;
+  align-items: center;
   justify-content: flex-end;
   gap: 8px;
   padding-top: 16px;
   border-top: 1px solid var(--border-subtle);
 }
+.account-submit-row { display: flex; align-items: center; gap: 12px; }
+.account-dialog-actions > .inline-error, .account-submit-row > .inline-error { flex: 1; }
+body:has(.desktop-shell) .account-submit-row:has(.inline-error) .account-primary { width: auto; }
 .account-error {
   margin: 0;
   color: var(--red);

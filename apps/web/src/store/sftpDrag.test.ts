@@ -54,6 +54,7 @@ describe('SFTP drag helpers', () => {
       selected: new Set(),
       entries: [entry('/one.txt'), entry('/two.txt')],
       tree: null,
+      connecting: false,
       loading: false,
       error: null,
       fetchSeq: 0,

@@ -721,21 +721,19 @@
   color: var(--fg-4);
   text-align: center;
 }
+.vault-error-content { display: flex; align-items: center; gap: 12px; min-width: 0; text-align: left; }
 
-.vault-empty-icon,
-.vault-error-icon {
+.vault-empty-icon {
   opacity: 0.5;
 }
 
-.vault-empty-title,
-.vault-error-title {
+.vault-empty-title {
   font-size: 13px;
   font-weight: 500;
   color: var(--fg-2);
 }
 
-.vault-empty-desc,
-.vault-error-desc {
+.vault-empty-desc {
   font-size: 12px;
   color: var(--fg-4);
   max-width: 280px;
@@ -1734,8 +1732,8 @@
 .desktop-shell .vault-inline-editor .pf-label { color: var(--fg); font-weight: 400; }
 .desktop-shell .vault-inline-editor .vault-form-password-hint { color: var(--vault-muted); }
 .desktop-shell .vault-master-detail :is(.vault-error, .vault-empty) { flex: 1; min-height: 0; padding: 20px 8px; }
-.desktop-shell .vault-master-detail :is(.vault-empty-title, .vault-error-title) { font-size: inherit; }
-.desktop-shell .vault-master-detail :is(.vault-empty-desc, .vault-error-desc) { color: var(--vault-muted); font-size: max(12px, calc(var(--sans-size) - 2px)); }
+.desktop-shell .vault-master-detail .vault-empty-title { font-size: inherit; }
+.desktop-shell .vault-master-detail .vault-empty-desc { color: var(--vault-muted); font-size: max(12px, calc(var(--sans-size) - 2px)); }
 @container (max-width: 800px) {
   .desktop-shell .vault-master-detail .vault-toolbar { padding: 20px 20px 16px; }
   .desktop-shell .vault-columns { grid-template-columns: 220px minmax(0, 1fr); gap: 20px; padding: 0 20px 20px; }

@@ -1,9 +1,10 @@
 import { Loading } from '@/components/ui/loading'
-import { KeyRound,AlertCircle,Plus } from 'lucide-react'
+import { KeyRound,Plus } from 'lucide-react'
 import { useEffect,useRef } from 'react'
 import { useVaultStore } from '@/store/vault'
 import { VaultItemRow } from './VaultItemRow'
 import { Button } from '@/components/ui/button'
+import { InlineError } from '@/components/ui/inline-error'
 import type { VaultItem } from '@/types/vault'
 
 interface VaultListProps {
@@ -33,14 +34,12 @@ export function VaultList({ selectedId, disabled, onSelect, onCreate }: VaultLis
   // 错误态
   if (error) {
     return (
-      <div className="vault-error" role="alert">
-        <AlertCircle size={28} className="vault-error-icon" />
-        <div className="vault-error-title">加载失败</div>
-        <div className="vault-error-desc">{error}</div>
+      <div className="vault-error"><div className="vault-error-content">
+        <InlineError message={`加载凭据失败：${error}`} />
         <Button type="button" variant="outline" size="sm" onClick={() => fetchList()}>
           重试
         </Button>
-      </div>
+      </div></div>
     )
   }
 

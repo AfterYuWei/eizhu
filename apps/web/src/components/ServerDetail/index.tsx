@@ -1,4 +1,4 @@
-import { Loading } from '@/components/ui/loading'
+import { Loading,LoadingBar } from '@/components/ui/loading'
 import React,{ useEffect,useRef,useState } from 'react'
 import {
 File,Folder,HardDrive,Cpu,AlertCircle,
@@ -339,7 +339,7 @@ export function ServerDetail({
   // Loading state for the whole component
   const isConnecting = serverDetail.status === 'connecting'
   const isConnected = serverDetail.status === 'connected'
-  const hasError = serverDetail.status === 'disconnected' && serverDetail.error
+  const hasError = !isConnecting && serverDetail.error
 
   return (
     <div className="flex flex-col h-full sdetail-pane" aria-hidden={!active}>
@@ -434,10 +434,15 @@ export function ServerDetail({
         />
       )}
 
+      {!detail.filesCollapsed && <div className="sdetail-load-track">
+        {(isConnecting || serverDetail.loading) && <LoadingBar label={isConnecting ? '正在连接服务器文件服务' : '正在读取服务器文件列表'} />}
+      </div>}
+
       {/* File browser list — fills remaining space, scrolls independently */}
       {!detail.filesCollapsed && (
         <div
           className="sdetail-file-area"
+          aria-busy={isConnecting || serverDetail.loading}
           ref={bodyRef}
           onScroll={handleScroll}
           onClick={(e) => {
@@ -488,7 +493,7 @@ export function ServerDetail({
                 {serverDetail.loading && (
                   <Loading />
                 )}
-                {!serverDetail.loading && serverDetail.files.length === 0 && (
+                {!serverDetail.loading && !hasError && serverDetail.files.length === 0 && (
                   <div className="sdetail-file-empty sdetail-file-loading">
                     <Inbox size={14} />
                     <span>空文件夹</span>

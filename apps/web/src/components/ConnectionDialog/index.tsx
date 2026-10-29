@@ -1,371 +1,479 @@
-import { useEffect,useMemo,useRef,useState } from 'react';
-import { AlertTriangle,Check,ChevronDown,Copy,Loader2,ShieldAlert,SquareTerminal,X,} from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Dialog,DialogContent,DialogTitle } from '@/components/ui/dialog';
-import { writeClipboardText } from '@/lib/clipboard';
-import { ServerIcon } from '@/lib/serverIcons';
-import { cn } from '@/lib/utils';
-import type { ConnectionLogEntry } from '@/types/sessionMessage';
-import '@/styles/connection-dialog.css';
-interface ConnectionStep {
-    id: string;
-    label: string;
-    shortLabel: string;
-    status: 'pending' | 'active' | 'done' | 'error';
-    detail?: string;
-}
-interface ConnectionDialogProps {
-    open: boolean;
-    onOpenChange: (open: boolean) => void;
-    profileName: string;
-    host: string;
-    port: number;
-    username: string;
-    icon?: string;
-    status: 'connecting' | 'connected' | 'error' | 'reconnecting' | 'hostkey';
-    currentStage?: string;
-    logs?: ConnectionLogEntry[];
-    errorMessage?: string;
-    onCancel?: () => void;
-    reconnectAttempt?: number;
-    nextRetryAt?: number;
-    onReconnectNow?: () => void;
-    hostKeyFingerprint?: string;
-    knownHostKeyFingerprint?: string;
-    onHostKeyDecision?: (decision: 'trust_once' | 'trust_permanently' | 'reject') => void;
-}
-const STAGE_ORDER = [
-    'submitting',
-    'preparing',
-    'credential',
-    'hostkey_check',
-    'establishing_ssh',
-    'starting_shell',
-    'ready',
-] as const;
-const STAGE_LABELS: Record<string, string> = {
-    submitting: '提交连接请求',
-    preparing: '加载连接配置',
-    credential: '准备认证信息',
-    hostkey_check: '检查主机指纹',
-    hostkey_confirm: '等待确认主机指纹',
-    establishing_ssh: '建立 SSH 安全通道',
-    starting_shell: '启动远程 Shell',
-    ready: '终端就绪',
-    disconnected: '连接已中断',
-};
-const STAGE_SHORT_LABELS: Record<string, string> = {
-    submitting: '提交',
-    preparing: '配置',
-    credential: '认证',
-    hostkey_check: '指纹',
-    hostkey_confirm: '确认',
-    establishing_ssh: '通道',
-    starting_shell: 'Shell',
-    ready: '完成',
-    disconnected: '中断',
-};
-const LOG_LEVEL_CLASS: Record<string, string> = {
-    info: 'connection-log-info',
-    warn: 'connection-log-warn',
-    error: 'connection-log-error',
-};
-function stageLabel(stage?: string) {
-    return stage ? (STAGE_LABELS[stage] ?? stage) : STAGE_LABELS.submitting;
-}
-function stageShortLabel(stage?: string) {
-    return stage ? (STAGE_SHORT_LABELS[stage] ?? stage) : STAGE_SHORT_LABELS.submitting;
-}
-function stageIndex(stage?: string) {
-    if (!stage)
-        return 0;
-    if (stage === 'hostkey_confirm')
-        return STAGE_ORDER.indexOf('hostkey_check');
-    const index = STAGE_ORDER.indexOf(stage as typeof STAGE_ORDER[number]);
-    return index === -1 ? 0 : index;
-}
-function formatLogTime(at: number) {
-    if (!at)
-        return '--:--:--';
-    return new Date(at).toLocaleTimeString('zh-CN', { hour12: false });
-}
-export function ConnectionDialog({ open, onOpenChange, profileName, host, port, username, icon, status, currentStage, logs = [], errorMessage, onCancel, reconnectAttempt, nextRetryAt, onReconnectNow, hostKeyFingerprint, knownHostKeyFingerprint, onHostKeyDecision, }: ConnectionDialogProps) {
-    const [elapsed, setElapsed] = useState(0);
-    const [remainingMs, setRemainingMs] = useState(0);
-    const [logsExpanded, setLogsExpanded] = useState(status === 'error');
-    const [copiedFingerprint, setCopiedFingerprint] = useState<'known' | 'current' | null>(null);
-    const logContainerRef = useRef<HTMLDivElement | null>(null);
-    useEffect(() => {
-        if (!open)
-            return;
-        setElapsed(0);
-        const timer = setInterval(() => setElapsed((value) => value + 1), 1000);
-        return () => clearInterval(timer);
-    }, [open, status, currentStage]);
-    useEffect(() => {
-        if (status !== 'connected')
-            return;
-        const timer = setTimeout(() => onOpenChange(false), 700);
-        return () => clearTimeout(timer);
-    }, [status, onOpenChange]);
-    useEffect(() => {
-        if (status === 'error')
-            setLogsExpanded(true);
-    }, [status]);
-    useEffect(() => {
-        if (status !== 'reconnecting' || !nextRetryAt) {
-            setRemainingMs(0);
-            return;
-        }
-        const update = () => setRemainingMs(Math.max(0, nextRetryAt - Date.now()));
-        update();
-        const timer = setInterval(update, 100);
-        return () => clearInterval(timer);
-    }, [status, nextRetryAt]);
-    useEffect(() => {
-        if (!open || !logsExpanded)
-            return;
-        const container = logContainerRef.current;
-        if (!container)
-            return;
-        const raf = requestAnimationFrame(() => {
-            container.scrollTop = container.scrollHeight;
-        });
-        return () => cancelAnimationFrame(raf);
-    }, [logs, logsExpanded, open]);
-    useEffect(() => {
-        if (!copiedFingerprint)
-            return;
-        const timer = setTimeout(() => setCopiedFingerprint(null), 1800);
-        return () => clearTimeout(timer);
-    }, [copiedFingerprint]);
-    const steps = useMemo<ConnectionStep[]>(() => {
-        const currentIndex = stageIndex(currentStage);
-        const items: ConnectionStep[] = STAGE_ORDER.map((stage) => ({
-            id: stage,
-            label: stageLabel(stage),
-            shortLabel: stageShortLabel(stage),
-            status: 'pending',
-        }));
-        items.forEach((item, index) => {
-            if (status === 'connected') {
-                item.status = 'done';
-                return;
-            }
-            if (index < currentIndex) {
-                item.status = 'done';
-                return;
-            }
-            if (index === currentIndex) {
-                item.status = status === 'error' ? 'error' : 'active';
-                if (currentStage === 'hostkey_confirm') {
-                    item.detail = '请核对服务器主机指纹后决定是否继续。';
-                }
-                else if (status === 'reconnecting') {
-                    item.detail = errorMessage || '连接中断后，系统正在自动重连。';
-                }
-                else if (status === 'error') {
-                    item.detail = errorMessage;
-                }
-            }
-        });
-        if (status === 'connected') {
-            items[items.length - 1].detail = '远程终端已经可用。';
-        }
-        if ((status === 'error' || status === 'reconnecting') && currentStage === 'disconnected') {
-            items[items.length - 1].status = status === 'error' ? 'error' : 'active';
-            items[items.length - 1].label = stageLabel('disconnected');
-            items[items.length - 1].shortLabel = stageShortLabel('disconnected');
-            items[items.length - 1].detail = errorMessage;
-        }
-        return items;
-    }, [currentStage, errorMessage, status]);
-    const currentStep = useMemo(() => steps.find((step) => step.status === 'active' || step.status === 'error') ?? steps[steps.length - 1], [steps]);
-    const isHostKeyStep = status === 'hostkey' || currentStage === 'hostkey_confirm';
-    const isChangedHostKey = isHostKeyStep && Boolean(knownHostKeyFingerprint);
-    const activeStepIndex = steps.findIndex((step) => step.status === 'active' || step.status === 'error');
-    const currentStepNumber = status === 'connected' ? steps.length : Math.max(0, activeStepIndex) + 1;
-    const latestLog = logs.at(-1)?.message;
-    const summaryText = status === 'connected'
-        ? '连接成功'
-        : status === 'error'
-            ? '连接失败'
-            : status === 'reconnecting'
-                ? reconnectAttempt
-                    ? `第 ${reconnectAttempt} 次自动重连`
-                    : '正在自动重连'
-                : isHostKeyStep
-                    ? '等待安全确认'
-                    : `正在连接 · ${elapsed}s`;
-    const focusTitle = status === 'connected'
-        ? '连接成功'
-        : status === 'error'
-            ? currentStage === 'disconnected'
-                ? '连接已中断'
-                : currentStep?.label || '连接失败'
-            : status === 'reconnecting'
-                ? summaryText
-                : isHostKeyStep
-                    ? isChangedHostKey
-                        ? '服务器主机指纹已发生变化'
-                        : '首次连接，需要验证主机身份'
-                    : `正在${currentStep?.label || stageLabel(currentStage)}`;
-    const focusDetail = status === 'reconnecting' && remainingMs > 0
-        ? `${Math.ceil(remainingMs / 1000)} 秒后再次尝试`
-        : currentStep?.detail || errorMessage || latestLog || '正在推进连接流程';
-    const canCloseByClick = status !== 'connecting' && status !== 'reconnecting' && status !== 'hostkey';
-    const copyFingerprint = async (kind: 'known' | 'current', value?: string) => {
-        if (!value)
-            return;
-        try {
-            await writeClipboardText(value);
-            setCopiedFingerprint(kind);
-        }
-        catch {
-            setCopiedFingerprint(null);
-        }
-    };
-    if (!open)
-        return null;
-    return (<Dialog open={open} onOpenChange={(nextOpen) => {
-            if (!nextOpen && canCloseByClick)
-                onOpenChange(false);
-        }}>
-      <DialogContent showCloseButton={false} onEscapeKeyDown={(event) => !canCloseByClick && event.preventDefault()} onPointerDownOutside={(event) => !canCloseByClick && event.preventDefault()} className="connection-dialog" data-status={status} data-host-key-change={isChangedHostKey ? 'true' : 'false'}>
-        <DialogTitle className="sr-only">{focusTitle}</DialogTitle>
+import { useEffect, useId, useRef, useState } from 'react'
+import { AlertTriangle, Check, ChevronDown, Copy, LoaderCircle, SquareTerminal } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog'
+import { writeClipboardText } from '@/lib/clipboard'
+import { ServerIcon } from '@/lib/serverIcons'
+import type { ConnectionLogEntry } from '@/types/sessionMessage'
+import { connectionDiagnosis, stageLabel } from './diagnostics'
+import '@/styles/connection-dialog.css'
 
+interface ConnectionDialogProps {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  profileName: string
+  host: string
+  port: number
+  username: string
+  icon?: string
+  status: 'connecting' | 'connected' | 'error' | 'reconnecting' | 'hostkey'
+  currentStage?: string
+  logs?: ConnectionLogEntry[]
+  errorMessage?: string
+  errorCode?: string
+  onCancel?: () => void
+  reconnectAttempt?: number
+  nextRetryAt?: number
+  onReconnectNow?: () => void
+  hostKeyFingerprint?: string
+  knownHostKeyFingerprint?: string
+  onHostKeyDecision?: (decision: 'trust_once' | 'trust_permanently' | 'reject') => void
+}
+
+// 阶段只决定视觉位置，不作为耗时或完成百分比展示。
+const STAGE_PROGRESS: Record<string, number> = {
+  submitting: 4,
+  preparing: 12,
+  credential: 20,
+  connecting: 12,
+  resolve: 25,
+  proxy: 34,
+  establishing_ssh: 44,
+  host_key: 58,
+  hostkey_check: 58,
+  hostkey_confirm: 60,
+  ssh_auth: 76,
+  starting_shell: 92,
+  ready: 94,
+}
+
+export function ConnectionDialog({
+  open,
+  onOpenChange,
+  profileName,
+  host,
+  port,
+  username,
+  icon,
+  status,
+  currentStage,
+  logs = [],
+  errorMessage,
+  errorCode,
+  onCancel,
+  reconnectAttempt,
+  nextRetryAt,
+  onReconnectNow,
+  hostKeyFingerprint,
+  knownHostKeyFingerprint,
+  onHostKeyDecision,
+}: ConnectionDialogProps) {
+  const [now, setNow] = useState(() => Date.now())
+  const [openedAt, setOpenedAt] = useState(now)
+  const [progress, setProgress] = useState({ startedAt: 0, value: 0 })
+  const [logsExpanded, setLogsExpanded] = useState(false)
+  const [copied, setCopied] = useState<'known' | 'current' | 'diagnostics' | null>(null)
+  const [copyFailure, setCopyFailure] = useState<ConnectionLogEntry | null>(null)
+  const logContainerRef = useRef<HTMLDivElement>(null)
+  const logsId = useId()
+  const waiting = status === 'hostkey' || (status === 'connecting' && currentStage === 'hostkey_confirm')
+  const changedKey = waiting && Boolean(knownHostKeyFingerprint)
+  const busy = status === 'connecting' || status === 'reconnecting'
+  const failed = status === 'error' || status === 'reconnecting'
+  const latestLog = logs.at(-1)
+  // Older snapshots used "failed" instead of retaining the last real operation.
+  const stage =
+    currentStage && !['failed', 'retry_wait'].includes(currentStage)
+      ? currentStage
+      : logs.findLast((log) => log.level !== 'error' && !['failed', 'retry_wait'].includes(log.stage))?.stage
+  const diagnosis = connectionDiagnosis(errorCode)
+  const startedAt = logs[0]?.at || openedAt
+  const phaseProgress = waiting
+    ? STAGE_PROGRESS.hostkey_confirm
+    : (STAGE_PROGRESS[stage || 'submitting'] ?? 8)
+  const endedAt = status === 'error' || status === 'connected' ? latestLog?.at || now : now
+  const seconds = Math.max(0, Math.floor((endedAt - startedAt) / 1000))
+  const duration = seconds ? `${seconds} 秒` : '不足 1 秒'
+  const remaining = nextRetryAt ? Math.max(0, Math.ceil((nextRetryAt - now) / 1000)) : 0
+  const endpoint = `${username}@${host.includes(':') ? `[${host}]` : host}:${port}`
+  const title =
+    status === 'connected'
+      ? '连接成功'
+      : status === 'error'
+        ? diagnosis.title
+        : status === 'reconnecting'
+          ? '连接中断，等待重连'
+          : waiting
+            ? changedKey
+              ? '服务器身份发生变化'
+              : '确认服务器身份'
+            : stageLabel(stage)
+  const detail = failed
+    ? errorMessage || logs.findLast((log) => log.level === 'error')?.message || '未收到具体失败原因。'
+    : waiting
+      ? changedKey
+        ? '本次主机指纹与已保存记录不同。可能是服务器重装或密钥轮换，也可能存在中间人攻击；请先通过可信渠道核对。'
+        : '首次连接这台服务器。请通过可信渠道核对主机指纹，确认目标服务器身份。'
+      : status === 'connected'
+        ? '远程终端已经就绪。'
+        : latestLog && latestLog.stage === stage
+          ? latestLog.message
+          : '等待连接服务返回当前操作。'
+
+  const records = [...logs]
+  let failureIndex = -1
+  if (failed) {
+    failureIndex = records.findLastIndex((log) => log.message === detail)
+    if (failureIndex < 0) {
+      failureIndex = records.length
+      records.push({
+        at: latestLog?.at || openedAt,
+        stage: stage || 'connecting',
+        level: 'error',
+        message: detail,
+      })
+    } else {
+      records[failureIndex] = { ...records[failureIndex], level: 'error' }
+    }
+  }
+  if (changedKey && !records.some((log) => log.level === 'warn' && log.message === detail)) {
+    records.push({ at: latestLog?.at || openedAt, stage: 'hostkey_confirm', level: 'warn', message: detail })
+  }
+  if (copyFailure) records.push(copyFailure)
+
+  useEffect(() => {
+    if (!open) return
+    setProgress((current) => ({
+      startedAt,
+      value:
+        status === 'connected'
+          ? 100
+          : status === 'reconnecting'
+            ? 0
+            : Math.min(
+                96,
+                current.startedAt === startedAt ? Math.max(current.value, phaseProgress) : phaseProgress,
+              ),
+    }))
+    if (status !== 'connecting' || waiting) return
+    const ceiling = Math.min(96, phaseProgress + 8)
+    const timer = setInterval(
+      () =>
+        setProgress((current) =>
+          current.value >= ceiling
+            ? current
+            : {
+                ...current,
+                value: current.value + (ceiling - current.value) * 0.04,
+              },
+        ),
+      200,
+    )
+    return () => clearInterval(timer)
+  }, [open, startedAt, phaseProgress, status, waiting])
+
+  useEffect(() => {
+    if (failed || changedKey) setLogsExpanded(true)
+  }, [failed, changedKey])
+
+  useEffect(() => {
+    if (!open) return
+    const at = Date.now()
+    setNow(at)
+    setOpenedAt(at)
+  }, [open])
+  useEffect(() => {
+    if (!open || (!busy && !waiting)) return
+    const timer = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(timer)
+  }, [open, busy, waiting])
+  useEffect(() => {
+    if (!open || status !== 'connected') return
+    const timer = setTimeout(() => onOpenChange(false), 700)
+    return () => clearTimeout(timer)
+  }, [open, status, onOpenChange])
+  useEffect(() => {
+    if (!open || !logsExpanded) return
+    const container = logContainerRef.current
+    if (container) {
+      const failure = container.querySelector<HTMLElement>('[data-diagnosis="true"]')
+      container.scrollTop =
+        failure && !copyFailure ? failure.offsetTop - container.offsetTop : container.scrollHeight
+    }
+  }, [logs, logsExpanded, open, failed, copyFailure])
+  useEffect(() => {
+    if (!copied) return
+    const timer = setTimeout(() => setCopied(null), 1800)
+    return () => clearTimeout(timer)
+  }, [copied])
+
+  const copy = async (kind: 'known' | 'current' | 'diagnostics', value: string) => {
+    try {
+      await writeClipboardText(value)
+      setCopied(kind)
+      setCopyFailure(null)
+    } catch {
+      setCopyFailure({
+        at: Date.now(),
+        stage: 'clipboard',
+        level: 'error',
+        message: '复制失败，请手动选择并复制所需信息。',
+      })
+      setLogsExpanded(true)
+    }
+  }
+  const diagnostics = [
+    `服务器：${profileName}`,
+    `连接：${endpoint}`,
+    `状态：${title}`,
+    `阶段：${stageLabel(stage)}`,
+    ...(errorCode ? [`错误码：${errorCode}`] : []),
+    ...(failed ? [`原因：${detail}`] : []),
+    ...logs.map((log) => `${new Date(log.at).toISOString()} [${stageLabel(log.stage)}] ${log.message}`),
+  ].join('\n')
+
+  if (!open) return null
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen && !busy && !waiting) onOpenChange(false)
+      }}
+    >
+      <DialogContent
+        showCloseButton={false}
+        className="connection-dialog"
+        data-status={status}
+        data-host-key-change={changedKey}
+        onEscapeKeyDown={(event) => {
+          if (busy || waiting) event.preventDefault()
+        }}
+        onPointerDownOutside={(event) => {
+          if (busy || waiting) event.preventDefault()
+        }}
+      >
         <header className="connection-dialog-header">
           <div className="connection-server-icon" aria-hidden="true">
-            {isHostKeyStep ? (<ShieldAlert />) : status === 'reconnecting' || status === 'error' ? (<AlertTriangle />) : (<ServerIcon iconKey={icon} size={17}/>)}
+            <ServerIcon iconKey={icon} size={18} />
           </div>
-
           <div className="connection-server-identity">
-            <span>SSH SESSION</span>
-            <strong>{profileName}</strong>
-            <small>
-              {username}@{host}:{port}
-            </small>
+            <DialogTitle>{profileName}</DialogTitle>
+            <DialogDescription title={endpoint}>{endpoint}</DialogDescription>
           </div>
-
-          <Button variant="outline" size="sm" onClick={() => onOpenChange(false)} className="connection-hide-button">
+          <Button variant="ghost" size="sm" onClick={() => onOpenChange(false)}>
             {status === 'connected' ? '关闭' : '隐藏'}
           </Button>
         </header>
 
-        <main className="connection-dialog-main">
-          <section className="connection-current-stage" aria-live="polite">
-            <div className="connection-stage-indicator" aria-hidden="true">
-              {status === 'connected' ? (<Check />) : status === 'error' ? (<X />) : isHostKeyStep ? (<ShieldAlert />) : (<Loader2 className="connection-spin"/>)}
-            </div>
-            <div className="connection-current-copy">
-              <strong>{focusTitle}</strong>
-              <span>{focusDetail}</span>
-            </div>
-            <span className="connection-elapsed">{isHostKeyStep ? `${currentStepNumber}/${steps.length}` : summaryText}</span>
-          </section>
+        <div className="connection-progress-wrap">
+          <div
+            className="connection-progress-bar"
+            role="progressbar"
+            aria-label="连接进度"
+            aria-valuenow={status === 'connected' ? 100 : undefined}
+            aria-valuetext={
+              status === 'connected'
+                ? '连接已完成'
+                : status === 'reconnecting'
+                  ? '等待重新连接'
+                  : status === 'error'
+                    ? '连接已停止'
+                    : waiting
+                      ? '等待确认主机指纹'
+                      : stageLabel(stage)
+            }
+          >
+            <span
+              className="connection-progress-fill"
+              aria-hidden="true"
+              style={{ transform: `scaleX(${progress.value / 100})` }}
+            />
+          </div>
+        </div>
 
-          <section className="connection-steps" aria-label={`连接进度：第 ${currentStepNumber} 步，共 ${steps.length} 步`}>
-            <div className="connection-step-rail">
-              {steps.map((step, index) => (<div className="connection-step-segment" key={step.id}>
-                  <div className={cn('connection-step-node', `is-${step.status}`)} aria-current={step.status === 'active' ? 'step' : undefined}>
-                    {step.status === 'done' ? (<Check />) : step.status === 'active' ? (<Loader2 className="connection-spin"/>) : step.status === 'error' ? (<X />) : (index + 1)}
-                  </div>
-                  {index < steps.length - 1 && <div className={cn('connection-step-line', `is-${step.status}`)}/>}
-                </div>))}
-            </div>
-            <div className="connection-step-labels" aria-hidden="true">
-              {steps.map((step) => (<span className={cn(step.status === 'active' && 'is-active', step.status === 'error' && 'is-error')} key={step.id}>
-                  {step.shortLabel}
-                </span>))}
-            </div>
-          </section>
-
-          {isHostKeyStep && (<section className={cn('connection-host-key', isChangedHostKey ? 'is-changed' : 'is-first')} role="alert">
-              <div className="connection-security-heading">
-                {isChangedHostKey ? <AlertTriangle aria-hidden="true"/> : <ShieldAlert aria-hidden="true"/>}
-                <div>
-                  <strong>{isChangedHostKey ? '主机指纹与历史记录不一致' : '确认这台服务器的主机指纹'}</strong>
-                  <p>
-                    {isChangedHostKey
-                ? '这可能是服务器重装或密钥轮换，也可能存在中间人攻击。请先通过可信渠道核对新指纹。'
-                : '这是首次连接这台服务器。请通过可信渠道核对指纹，确认目标服务器身份。'}
-                  </p>
+        {!failed && (
+          <main className="connection-dialog-main">
+            {!waiting && (
+              <section className="connection-status" aria-live="polite">
+                <div className="connection-status-heading">
+                  <span className="connection-status-icon" aria-hidden="true">
+                    {status === 'connected' ? (
+                      <Check />
+                    ) : (
+                      <LoaderCircle className="motion-safe:animate-spin" />
+                    )}
+                  </span>
+                  <h2>{title}</h2>
+                  <span className="connection-duration">
+                    {status === 'connected' ? '耗时' : '已用'} {duration}
+                  </span>
                 </div>
-              </div>
+                <p>{detail}</p>
+              </section>
+            )}
 
-              <div className={cn('connection-fingerprint-grid', !isChangedHostKey && 'is-single')}>
-                {knownHostKeyFingerprint && (<div className="connection-fingerprint is-known">
-                    <div>
-                      <span>历史指纹</span>
-                      <small>上次保存</small>
-                    </div>
-                    <code>{knownHostKeyFingerprint}</code>
-                    <button type="button" onClick={() => void copyFingerprint('known', knownHostKeyFingerprint)} aria-label="复制历史指纹">
-                      {copiedFingerprint === 'known' ? <Check /> : <Copy />}
-                    </button>
-                  </div>)}
-                <div className="connection-fingerprint is-current">
-                  <div>
-                    <span>{isChangedHostKey ? '当前指纹' : '服务器指纹'}</span>
-                    <small>{isChangedHostKey ? '本次返回' : 'SHA-256'}</small>
-                  </div>
-                  <code>{hostKeyFingerprint || '未知'}</code>
-                  <button type="button" onClick={() => void copyFingerprint('current', hostKeyFingerprint)} disabled={!hostKeyFingerprint} aria-label="复制当前指纹">
-                    {copiedFingerprint === 'current' ? <Check /> : <Copy />}
-                  </button>
+            {waiting && (
+              <section className="connection-host-key">
+                <div className="connection-section-label">
+                  主机指纹 <span>SHA-256</span>
                 </div>
-              </div>
-
-              <div className="connection-host-key-actions">
-                {onHostKeyDecision && (<Button size="sm" variant={isChangedHostKey ? 'destructive' : 'outline'} onClick={() => onHostKeyDecision('reject')} className="connection-security-action">
-                    {isChangedHostKey ? '拒绝并断开' : '取消连接'}
-                  </Button>)}
-                {onHostKeyDecision && (<Button size="sm" variant="outline" onClick={() => onHostKeyDecision('trust_once')} className="connection-security-action">
-                    仅本次信任
-                  </Button>)}
-                {onHostKeyDecision && (<Button size="sm" variant={isChangedHostKey ? 'outline' : 'default'} onClick={() => onHostKeyDecision('trust_permanently')} className="connection-security-action">
-                    {isChangedHostKey ? '更新指纹并继续' : '信任并继续'}
-                  </Button>)}
-              </div>
-            </section>)}
-
-          {(status === 'error' || status === 'reconnecting') && errorMessage && (<section className={cn('connection-error-panel', status === 'reconnecting' && 'is-reconnecting')} role="alert">
-              <AlertTriangle aria-hidden="true"/>
-              <div>
-                <strong>{status === 'reconnecting' ? '连接已中断，正在恢复' : '连接失败'}</strong>
-                <p>{errorMessage}</p>
-              </div>
-              <div className="connection-error-actions">
-                {onReconnectNow && (<Button size="sm" onClick={onReconnectNow} variant={status === 'error' ? 'default' : 'outline'}>
-                    {status === 'error' ? '重新连接' : '立即重连'}
-                  </Button>)}
-                {onCancel && (<Button size="sm" variant="outline" onClick={onCancel}>
-                    关闭标签
-                  </Button>)}
-              </div>
-            </section>)}
-        </main>
-
-        <footer className="connection-logs-section">
-          <button type="button" className="connection-logs-toggle" onClick={() => setLogsExpanded((value) => !value)} aria-expanded={logsExpanded} aria-controls="connection-live-logs">
-            <SquareTerminal aria-hidden="true"/>
-            <span>连接日志</span>
-            <em>{logs.length}</em>
-            {!logsExpanded && latestLog && <small>{latestLog}</small>}
-            <ChevronDown className="connection-logs-chevron" aria-hidden="true"/>
-          </button>
-
-          {logsExpanded && (<div id="connection-live-logs" ref={logContainerRef} className="connection-live-logs" aria-live="polite">
-              {logs.length === 0 ? (<div className="connection-log-empty">正在等待后端返回连接日志…</div>) : (logs.map((log, index) => (<div className="connection-log-entry" key={`${log.at}-${index}`}>
-                    <div>
-                      <time>{formatLogTime(log.at)}</time>
-                      <span>{stageLabel(log.stage)}</span>
-                      <b className={LOG_LEVEL_CLASS[log.level] ?? 'connection-log-info'}>{log.level.toUpperCase()}</b>
+                {!changedKey && <p className="connection-host-key-description">{detail}</p>}
+                <div className="connection-fingerprints">
+                  {knownHostKeyFingerprint && (
+                    <div className="connection-fingerprint">
+                      <span>上次保存</span>
+                      <code>{knownHostKeyFingerprint}</code>
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        aria-label="复制历史指纹"
+                        title="复制历史指纹"
+                        onClick={() => void copy('known', knownHostKeyFingerprint)}
+                      >
+                        {copied === 'known' ? <Check /> : <Copy />}
+                      </Button>
                     </div>
-                    <p className={LOG_LEVEL_CLASS[log.level] ?? 'connection-log-info'}>{log.message}</p>
-                  </div>)))}
-            </div>)}
+                  )}
+                  <div className="connection-fingerprint">
+                    <span>{changedKey ? '本次返回' : '服务器指纹'}</span>
+                    <code>{hostKeyFingerprint || '尚未收到指纹'}</code>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label="复制当前指纹"
+                      title="复制当前指纹"
+                      disabled={!hostKeyFingerprint}
+                      onClick={() => void copy('current', hostKeyFingerprint!)}
+                    >
+                      {copied === 'current' ? <Check /> : <Copy />}
+                    </Button>
+                  </div>
+                </div>
+                {onHostKeyDecision && (
+                  <div className="connection-actions">
+                    <Button
+                      size="sm"
+                      variant={changedKey ? 'destructive' : 'outline'}
+                      onClick={() => onHostKeyDecision('reject')}
+                    >
+                      {changedKey ? '拒绝并断开' : '取消连接'}
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => onHostKeyDecision('trust_once')}>
+                      仅本次信任
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className={changedKey ? undefined : 'connection-primary-action'}
+                      onClick={() => onHostKeyDecision('trust_permanently')}
+                    >
+                      {changedKey ? '更新指纹并继续' : '信任并继续'}
+                    </Button>
+                  </div>
+                )}
+              </section>
+            )}
+
+            {status === 'connecting' && !waiting && onCancel && (
+              <div className="connection-actions">
+                <Button size="sm" variant="outline" onClick={onCancel}>
+                  取消连接
+                </Button>
+              </div>
+            )}
+          </main>
+        )}
+
+        <footer className={`connection-records${failed ? ' is-primary' : ''}`}>
+          <div className="connection-records-toolbar">
+            <button
+              type="button"
+              className="connection-records-toggle"
+              onClick={() => setLogsExpanded((value) => !value)}
+              aria-expanded={logsExpanded}
+              aria-controls={logsId}
+            >
+              <SquareTerminal size={14} aria-hidden="true" />
+              <span>连接记录</span>
+              <small>
+                {records.length}
+                {failed ? ` · 耗时 ${duration}` : ''}
+              </small>
+              <ChevronDown size={14} aria-hidden="true" />
+            </button>
+            <Button variant="ghost" size="sm" onClick={() => void copy('diagnostics', diagnostics)}>
+              {copied === 'diagnostics' ? <Check size={14} /> : <Copy size={14} />}
+              {copied === 'diagnostics' ? '已复制' : '复制诊断信息'}
+            </Button>
+          </div>
+          {logsExpanded && (
+            <div id={logsId} className="connection-live-logs" ref={logContainerRef}>
+              {records.length ? (
+                <ol>
+                  {records.map((log, index) => (
+                    <li
+                      key={`${log.at}-${index}`}
+                      data-level={log.level}
+                      data-diagnosis={index === failureIndex}
+                    >
+                      <time>{new Date(log.at).toLocaleTimeString('zh-CN', { hour12: false })}</time>
+                      <div>
+                        <span>
+                          {stageLabel(log.stage)}
+                          {log.level === 'error' ? ' · 错误' : log.level === 'warn' ? ' · 注意' : ''}
+                          {index === failureIndex && errorCode && <code> · {errorCode}</code>}
+                        </span>
+                        <div
+                          className="connection-log-message"
+                          role={log.level === 'error' || log.level === 'warn' ? 'alert' : undefined}
+                        >
+                          {(log.level === 'error' || log.level === 'warn') && (
+                            <AlertTriangle size={14} aria-hidden="true" />
+                          )}
+                          <p>
+                            {index === failureIndex && <strong>{diagnosis.title} · </strong>}
+                            {log.message}
+                          </p>
+                        </div>
+                        {index === failureIndex && (
+                          <p className="connection-log-suggestion">建议：{diagnosis.suggestion}</p>
+                        )}
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              ) : (
+                <p className="connection-records-empty">尚未收到连接记录。</p>
+              )}
+            </div>
+          )}
+          {failed && (
+            <div className="connection-actions connection-records-actions">
+              {status === 'reconnecting' && (
+                <span className="connection-retry-status">
+                  {remaining ? `${remaining} 秒后重试` : '正在准备重试'}
+                  {reconnectAttempt ? ` · 第 ${reconnectAttempt} 次重连` : ''}
+                </span>
+              )}
+              {onCancel && (
+                <Button size="sm" variant="outline" onClick={onCancel}>
+                  取消连接
+                </Button>
+              )}
+              {onReconnectNow && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="connection-primary-action"
+                  onClick={onReconnectNow}
+                >
+                  {status === 'error' ? '重新连接' : '立即重连'}
+                </Button>
+              )}
+            </div>
+          )}
         </footer>
       </DialogContent>
-    </Dialog>);
+    </Dialog>
+  )
 }

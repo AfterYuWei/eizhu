@@ -24,8 +24,6 @@
 .desktop-shell .backup-schedule-fields label { color: var(--fg); }
 .desktop-shell .backup-schedule-fields .backup-description { grid-column: 1 / -1; }
 .desktop-shell .backup-card-footer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; padding: 12px 16px; border-top: 1px solid var(--edge-soft); }
-.desktop-shell .backup-status-message { padding: 0 16px 12px; font-size: var(--sans-size); color: var(--settings-muted); }
-.desktop-shell .backup-status-message[role='alert'] { color: var(--red); }
 .desktop-shell .backup-count { margin-left: 4px; color: var(--settings-muted); font-size: max(12px, calc(var(--sans-size) - 2px)); font-weight: 400; }
 .desktop-shell .backup-page .sync-provider-header { align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 10px; }
 .desktop-shell .backup-page .settings-subsection-title { display: flex; align-items: center; gap: 8px; color: var(--settings-muted); }

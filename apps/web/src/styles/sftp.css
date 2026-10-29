@@ -101,6 +101,23 @@
   transition: background 0.15s;
   border-radius: var(--r-lg);
 }
+.sftp-load-track { height: 2px; flex: none; }
+.sftp-pane-loading, .sftp-pane-error {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 16px;
+  color: var(--sftp-muted);
+  font: 400 var(--sans-size)/1.5 var(--sans);
+}
+.sftp-connection-status { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.sftp-connection-status > span:last-child { min-width: 0; }
+.sftp-connection-status small { display: block; overflow-wrap: anywhere; font-size: max(12px, calc(var(--sans-size) - 2px)); }
+.sftp-pane-error { color: var(--red); overflow-wrap: anywhere; }
+.sftp-pane-error > .inline-error { max-width: min(420px, calc(100% - 70px)); }
 /* ===== PANE HEADER (multi-tab) ===== */
 .sftp-pane-hdr {
   display: flex;
@@ -817,11 +834,10 @@ body.ptr-dragging * {
 .sftp-tx-actions { display: flex; align-items: center; justify-content: flex-end; gap: 2px; }
 .sftp-tx-actions [data-slot='button'] { width: 24px; height: 24px; padding: 0; color: var(--sftp-muted); }
 .sftp-tx-actions .sftp-tx-cancel:hover { color: var(--red); background: var(--red-bg); }
-.sftp-tx-error { grid-column: 2 / -1; color: var(--red); font: 400 max(11px, calc(var(--sans-size) - 1px)) / 1.5 var(--sans); overflow-wrap: anywhere; }
-.sftp-tx-error summary { cursor: pointer; }
-.sftp-tx-error p { margin: 6px 0; white-space: pre-wrap; }
-.sftp-tx-error-hint { color: var(--sftp-muted); }
-.sftp-tx-queue-error { color: var(--red); padding: 4px 12px; font: 400 var(--sans-size) / 1.5 var(--sans); }
+.sftp-tx-error-trigger { min-width: 0; padding: 0; border: 0; background: transparent; color: var(--red); text-align: left; cursor: pointer; }
+.sftp-tx-error-popover { display: flex; flex-direction: column; width: min(360px, calc(100vw - 32px)); gap: 10px; font: 400 var(--sans-size)/1.6 var(--sans); }
+.sftp-tx-error-popover strong { font-size: max(12px, calc(var(--sans-size) - 2px)); font-weight: 500; overflow-wrap: anywhere; }
+.sftp-tx-error-popover p { margin: 0; color: var(--sftp-muted); font-size: max(12px, calc(var(--sans-size) - 2px)); }
 .sftp-tx-empty { padding: 16px 4px; color: var(--sftp-muted); font: 400 var(--sans-size) / 1.5 var(--sans); }
 .sftp-tx-spin { animation: sftp-spin 800ms linear infinite; }
 @keyframes sftp-spin { to { transform: rotate(360deg); } }
@@ -835,7 +851,6 @@ body.ptr-dragging * {
   .sftp-tx-status > span { flex-direction: row; gap: 6px; }
   .sftp-tx-actions { grid-column: 4; grid-row: 1 / 3; }
   .sftp-tx-progress { grid-column: 3; grid-row: 1 / 3; }
-  .sftp-tx-error { grid-row: 3; }
   .sftp-tx-hdr { gap: 6px; padding-inline: 8px; }
   .sftp-tx-speed { display: none; }
   .sftp-tx-clear span { display: none; }

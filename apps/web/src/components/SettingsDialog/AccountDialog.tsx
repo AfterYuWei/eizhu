@@ -6,6 +6,7 @@ import { useAccountStore } from '@/store/account'
 import { useAccountDialogStore, type AccountDialogMode } from '@/store/accountDialog'
 import { useSyncStore } from '@/store/sync'
 import { Button } from '@/components/ui/button'
+import { InlineError } from '@/components/ui/inline-error'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog'
@@ -378,12 +379,8 @@ function AccountForm({
             </p>
           )}
         </div>
-        {error && (
-          <p className="account-error" role="alert">
-            {error}
-          </p>
-        )}
         <div className={mode === 'change' ? 'account-dialog-actions' : 'account-submit-row'}>
+          <InlineError message={error} className="account-error" />
           {mode === 'change' && (
             <Button type="button" variant="secondary" disabled={busy} onClick={onClose}>
               取消

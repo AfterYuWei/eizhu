@@ -6,6 +6,7 @@ import type { BrowserWindow } from 'electron'
 import type { RuntimeHost } from './runtime-host.ts'
 import { SocketReader, proxyHandshake } from '@eizhu/core/ssh/network'
 import { measureDesktopLoad } from './load-smoke.ts'
+import type { ConnectionStatePayload } from '@eizhu/contracts/models/sessionMessage'
 
 /** Synthetic loopback peers only. Runs in the actual packaged Electron process tree. */
 export async function verifyStage3(window: BrowserWindow, runtime: RuntimeHost, root: string) {
@@ -280,6 +281,15 @@ export async function verifyStage3(window: BrowserWindow, runtime: RuntimeHost, 
       (value) => value.includes('阶段三 🧪 终端'),
     )
     assert.equal(await js('return window.__stage3.wrong'), true)
+    const readySnapshot = (
+      await call<Array<{ type: string; payload: ConnectionStatePayload }>>('session.attach', { id })
+    ).find((message) => message.type === 'connection_state')!.payload
+    const operations = readySnapshot.logs!.map((log) => log.stage)
+    assert.ok(operations.indexOf('establishing_ssh') < operations.indexOf('host_key'))
+    assert.ok(operations.indexOf('host_key') < operations.indexOf('ssh_auth'))
+    assert.ok(operations.indexOf('ssh_auth') < operations.indexOf('starting_shell'))
+    assert.equal(operations.at(-1), 'ready')
+    assert.ok(!JSON.stringify(readySnapshot).includes('synthetic-password'))
     const current = await js<{ host_key_request_id: string; host_key_fingerprint: string }>(
       'return window.__stage3.states.find(s=>s.waiting_for_host_key)',
     )
@@ -431,6 +441,27 @@ export async function verifyStage3(window: BrowserWindow, runtime: RuntimeHost, 
       )
     }
     step('fault-injection')
+    const refused = net.createServer()
+    const refusedPort = await listen(refused)
+    await new Promise<void>((resolve) => refused.close(() => resolve()))
+    const refusedSession = await call<{ session_id: string }>('session.create', {
+      request: { profile_id: await newProfile({ port: refusedPort }) },
+    })
+    sessionIds.push(refusedSession.session_id)
+    const refusedMessages = await wait(
+      () =>
+        call<Array<{ type: string; payload: ConnectionStatePayload }>>('session.attach', {
+          id: refusedSession.session_id,
+        }),
+      (rows) =>
+        rows.some((message) => message.type === 'connection_state' && message.payload.status === 'error'),
+    )
+    const failure = refusedMessages.find((message) => message.type === 'connection_state')!.payload
+    assert.equal(failure.stage, 'establishing_ssh')
+    assert.equal(failure.error_code, 'SSH_CONNECTION_REFUSED')
+    assert.ok(!JSON.stringify(failure).includes('synthetic-password'))
+    await call('session.close', { id: refusedSession.session_id })
+    step('connection-diagnostics-passed')
     const mfa = await call<{ session_id: string }>('session.create', {
       request: { profile_id: await newProfile({ password: 'wrong-password' }) },
     })
@@ -636,6 +667,7 @@ export async function verifyStage3(window: BrowserWindow, runtime: RuntimeHost, 
       portsReleased: true,
       tunnelReconnect: true,
       faults: {
+        connectionDiagnostics: true,
         hostRejectBeforeAuthentication: true,
         hostCancel: true,
         mfaCancel: true,

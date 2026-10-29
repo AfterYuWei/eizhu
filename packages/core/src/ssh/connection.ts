@@ -5,7 +5,7 @@ import type { Duplex } from 'node:stream'
 import { createHash } from 'node:crypto'
 import { DesktopError } from '@eizhu/contracts'
 import type { ConnectionHop } from './plan.ts'
-import { proxyHandshake, networkError } from './network.ts'
+import { proxyHandshake, networkError, connectionError } from './network.ts'
 export interface HandshakeHooks {
   verify: (hop: ConnectionHop, fingerprint: string) => Promise<boolean>
   authenticate: (
@@ -31,24 +31,31 @@ export class SshConnection {
   }
   async connect(plan: ConnectionHop[], hooks: HandshakeHooks): Promise<Client> {
     let previous: Client | undefined
-    for (const hop of plan) {
+    for (const [index, hop] of plan.entries()) {
       if (this.controller.signal.aborted) throw networkError('CANCELLED', '连接已取消')
       const p = hop.profile
       if (p.auth_type === 'agent' && process.platform !== 'win32' && !process.env.SSH_AUTH_SOCK)
         throw networkError('AGENT_UNAVAILABLE', '未找到系统 SSH Agent，请启动 Agent 或选择其他认证方式')
-      hooks.stage('resolve', '正在建立 SSH 路由')
+      const endpoint = `${p.host.includes(':') ? `[${p.host}]` : p.host}:${p.port}`
+      const route = plan.length > 1 ? ` · 第 ${index + 1}/${plan.length} 跳` : ''
+      hooks.stage('resolve', `连接目标 ${endpoint}${route}`)
       let sock: Duplex | undefined
       if (previous) {
-        hooks.stage('proxy', '正在通过跳板连接')
+        hooks.stage('proxy', `通过已连接的跳板转发至 ${endpoint}${route}`)
         sock = this.ownSocket(
           await new Promise<ClientChannel>((resolve, reject) =>
             previous!.forwardOut('127.0.0.1', 0, p.host, p.port, (e, s) =>
-              e ? reject(networkError('JUMP_FAILED', '跳板转发失败')) : resolve(s),
+              e
+                ? reject(networkError('JUMP_FAILED', '跳板服务器拒绝转发至目标，请检查转发权限与目标可达性'))
+                : resolve(s),
             ),
           ),
         )
       } else if (hop.proxy.type === 'socks5' || hop.proxy.type === 'http') {
-        hooks.stage('proxy', '正在连接代理')
+        hooks.stage(
+          'proxy',
+          `通过 ${hop.proxy.type.toUpperCase()} 代理 ${hop.proxy.host}:${hop.proxy.port} 连接 ${endpoint}`,
+        )
         const proxy = hop.proxy
         const socket = this.ownSocket(
           net.connect({ host: proxy.host!, port: proxy.port!, allowHalfOpen: true }),
@@ -56,7 +63,9 @@ export class SshConnection {
         socket.setTimeout(hop.timeout, () => socket.destroy(networkError('PROXY_TIMEOUT', '代理连接超时')))
         await new Promise<void>((resolve, reject) => {
           socket.once('connect', resolve)
-          socket.once('error', reject)
+          socket.once('error', (error) =>
+            reject(error instanceof DesktopError ? error : connectionError(error, true)),
+          )
         })
         await proxyHandshake(
           socket,
@@ -65,7 +74,12 @@ export class SshConnection {
           p.port,
           proxy.username,
           p.proxy_password,
-        )
+        ).catch((cause: unknown) => {
+          if (cause instanceof DesktopError) throw cause
+          throw cause instanceof Error
+            ? connectionError(cause, true)
+            : networkError('PROXY_CONNECTION_FAILED', '代理握手未完成')
+        })
         socket.setTimeout(0)
         sock = socket
       }
@@ -77,6 +91,7 @@ export class SshConnection {
         if (!this.controller.signal.aborted) hooks.disconnected()
       })
       await new Promise<void>((resolve, reject) => {
+        let verificationFailure: DesktopError | undefined
         const abort = () => {
           client.destroy()
           reject(networkError('CANCELLED', '连接已取消'))
@@ -99,18 +114,13 @@ export class SshConnection {
           cleanup()
           resolve()
         })
-        client.once('error', (error: { level?: string }) => {
+        client.once('error', (error: Error & { code?: string; level?: string }) => {
           cleanup()
-          reject(
-            networkError(
-              error.level === 'client-authentication' ? 'SSH_AUTH_FAILED' : 'SSH_CONNECTION_FAILED',
-              error.level === 'client-authentication' ? 'SSH 认证失败' : 'SSH 连接失败',
-            ),
-          )
+          reject(verificationFailure ?? connectionError(error))
         })
         client.once('close', () => {
           cleanup()
-          reject(networkError())
+          reject(verificationFailure ?? networkError('SSH_CONNECTION_RESET', '服务器在连接完成前关闭了通道'))
         })
         client.on('keyboard-interactive', (name, instructions, _lang, prompts, finish) => {
           void hooks
@@ -129,7 +139,7 @@ export class SshConnection {
         })
         const privateKey = hop.credential.private_key ? Buffer.from(hop.credential.private_key) : undefined
         try {
-          hooks.stage('host_key', '正在校验主机密钥')
+          hooks.stage('establishing_ssh', `正在与 ${endpoint} 建立 SSH 通道${route}`)
           client.connect({
             host: p.host,
             port: p.port,
@@ -149,21 +159,34 @@ export class SshConnection {
                   : process.env.SSH_AUTH_SOCK
                 : undefined,
             hostVerifier: (key: Buffer, callback: (valid: boolean) => void) => {
+              hooks.stage('host_key', `已收到 ${endpoint} 的主机密钥，正在核对指纹${route}`)
               const fingerprint =
                 'SHA256:' + createHash('sha256').update(key).digest('base64').replace(/=+$/, '')
               void hooks.verify(hop, fingerprint).then(
                 (accepted) => {
+                  if (!accepted)
+                    verificationFailure = networkError(
+                      'HOST_KEY_REJECTED',
+                      '服务器主机指纹未获确认，连接已停止',
+                    )
+                  if (accepted)
+                    hooks.stage('ssh_auth', `主机身份已确认，正在验证 ${p.username} 的登录凭据${route}`)
                   callback(accepted && !this.controller.signal.aborted)
-                  if (accepted) hooks.stage('ssh_auth', '正在进行 SSH 认证')
                 },
-                () => callback(false),
+                (cause: unknown) => {
+                  verificationFailure =
+                    cause instanceof DesktopError
+                      ? cause
+                      : networkError('HOST_KEY_CHECK_FAILED', '未能读取或验证服务器主机指纹')
+                  callback(false)
+                },
               )
             },
           })
         } catch {
           this.closedClients.add(client)
           cleanup()
-          reject(networkError('SSH_AUTH_FAILED', '认证配置或私钥无效'))
+          reject(networkError('SSH_KEY_INVALID', 'SSH 认证配置或私钥无法读取'))
         } finally {
           privateKey?.fill(0)
         }

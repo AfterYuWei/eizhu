@@ -7,6 +7,7 @@ import { useAccountStore } from '@/store/account'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import { InlineError } from '@/components/ui/inline-error'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
 import { TabsContent } from '@/components/ui/tabs'
@@ -134,7 +135,7 @@ export function ArchivePanel() {
               <div className="backup-setting-info">
                 <span className="backup-setting-label">完整版本</span>
                 <p className="backup-description">
-                  {status.local_latest
+                  {status.status === 'error' || status.status === 'conflict' ? <InlineError message={status.status === 'conflict' ? '云端版本存在冲突，请查看目标状态与诊断。' : '备份提交遇到问题，请查看目标状态与诊断。'}/> : status.status === 'syncing' ? <span role="status">正在提交备份，各目标独立处理…</span> : status.local_latest
                     ? `最新 v${status.local_latest.version} · ${new Date(status.local_latest.created_at).toLocaleString()}`
                     : settings.backup_password_set
                       ? '尚无本地备份，创建后可预览并恢复当前空间的数据'
@@ -159,18 +160,6 @@ export function ArchivePanel() {
                 </Button>
               </div>
             </div>
-            {status.status !== 'idle' && (
-              <p
-                className="backup-status-message"
-                role={status.status === 'error' || status.status === 'conflict' ? 'alert' : 'status'}
-              >
-                {status.status === 'syncing'
-                  ? '正在提交备份，各目标独立处理…'
-                  : status.status === 'conflict'
-                    ? '云端版本存在冲突，请查看目标状态与诊断。'
-                    : '备份提交遇到问题，请查看目标状态与诊断。'}
-              </p>
-            )}
           </div>
         </section>
 

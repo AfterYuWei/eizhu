@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import { Ellipsis, LogOut, Repeat2, UserRound } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { InlineError } from '@/components/ui/inline-error'
 import { useAccountStore } from '@/store/account'
 import { useAccountDialogStore } from '@/store/accountDialog'
 import { AccountProfileDialog } from './AccountProfileDialog'
@@ -40,7 +41,7 @@ export function AccountPanel() {
               {status?.loggedIn ? status.user.username || status.user.email : '登录你的账号'}
             </span>
             <p className="settings-field-desc">
-              {status?.loggedIn
+              {error ? <InlineError message={error} /> : status?.loggedIn
                 ? status.sessionState === 'reauth_required'
                   ? '登录已失效，账号空间和本地修改仍保留。'
                   : status.user.username
@@ -131,11 +132,6 @@ export function AccountPanel() {
       )}
       {editing && status?.loggedIn && status.sessionState === 'authenticated' && (
         <AccountProfileDialog user={status.user} onClose={() => setEditing(false)} />
-      )}
-      {error && (
-        <p role="alert" className="account-error">
-          {error}
-        </p>
       )}
       <div className="settings-card">
         <div className="settings-field">

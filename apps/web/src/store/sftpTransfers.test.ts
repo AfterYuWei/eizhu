@@ -19,7 +19,7 @@ const setup = () => {
   const tab: SftpTab = {
     id: 'right', server: { id: 'target', name: '目标', host: 'host', port: 22, username: 'user' },
     sessionId: 'target-session', path: '/dest', view: 'list', showHidden: false, selected: new Set(),
-    entries: [], tree: null, loading: false, error: null, fetchSeq: 0,
+    entries: [], tree: null, connecting: false, loading: false, error: null, fetchSeq: 0,
   }
   store.setState({ rightTabs: [tab], activeRightTabId: tab.id, pendingDirectoryDrop: {
     drag: { sourcePane: 'left', sourceTabId: 'left', sourceSessionId: 'source-session', entries: [
