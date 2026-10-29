@@ -56,7 +56,7 @@ export async function verifySyncDesktop(
 
   const before = await js<Array<{ id: string }>>('window.eizhu.group.list()')
   await js(
-    `(async()=>{const email='sync-desktop@example.invalid';const c=await window.eizhu.account.requestRegistrationCode({email});const v=await window.eizhu.account.verifyRegistrationCode({email,challengeId:c.challengeId,code:'123456'});return window.eizhu.account.register({email,password:'synthetic-sync-123',ticket:v.ticket})})()`,
+    `(async()=>{const email='sync-desktop@example.invalid';const c=await window.eizhu.account.requestRegistrationCode({email});const v=await window.eizhu.account.verifyRegistrationCode({email,challengeId:c.challengeId,code:'123456'});return window.eizhu.account.register({email,password:'Synthetic-sync-123!',ticket:v.ticket})})()`,
   )
   const user = await js<{ user: { id: number } }>('window.eizhu.account.status()'),
     peer = fixture.sync(user.user.id)
@@ -184,7 +184,7 @@ export async function verifySyncDesktop(
   await click('前往登录')
   await wait(() => js(`Boolean(document.querySelector('#account-email'))`))
   await js(
-    `(()=>{for(const [id,value] of [['account-email','sync-desktop@example.invalid'],['account-password','synthetic-sync-123']]){const input=document.getElementById(id);Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,value);input.dispatchEvent(new Event('input',{bubbles:true}))}})()`,
+    `(()=>{for(const [id,value] of [['account-email','sync-desktop@example.invalid'],['account-password','Synthetic-sync-123!']]){const input=document.getElementById(id);Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,value);input.dispatchEvent(new Event('input',{bubbles:true}))}})()`,
   )
   await js(`document.querySelector('.account-dialog form').requestSubmit()`)
   await wait(() =>

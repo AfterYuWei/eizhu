@@ -4,7 +4,23 @@ export const ACCOUNT_SERVER = 'https://eizhu.yuweinfo.com/'
 const integer = z.int().nonnegative()
 const email = z.email().max(255)
 const password = z.string().min(1).max(1024)
-const newPassword = z.string().min(12).max(128)
+export const masterPasswordSchema = z
+  .string()
+  .min(8)
+  .max(128)
+  .regex(/[A-Z]/, '主密码需包含大写字母')
+  .regex(/[a-z]/, '主密码需包含小写字母')
+  .regex(/[0-9]/, '主密码需包含数字')
+  .regex(/[\p{P}\p{S}]/u, '主密码需包含符号')
+const newPassword = masterPasswordSchema
+const username = z.string().trim().min(1).max(50)
+const avatar = z.union([
+  z.literal(''),
+  z
+    .string()
+    .max(43715)
+    .regex(/^data:image\/(png|jpeg);base64,[A-Za-z0-9+/]+={0,2}$/),
+])
 const code = z.string().regex(/^[0-9]{6}$/)
 
 export const accountUserSchema = z.strictObject({
@@ -12,6 +28,8 @@ export const accountUserSchema = z.strictObject({
   email,
   emailVerified: z.boolean(),
   verificationRequired: z.boolean(),
+  username: z.string().max(50).optional(),
+  avatar: avatar.optional(),
   storageUsed: integer,
   storageQuota: integer,
 })
@@ -56,6 +74,7 @@ export const account = {
   'account.changePassword': { input: z.strictObject({ password, newPassword }), output: z.void() },
   'account.logout': { input: z.undefined(), output: z.void() },
   'account.me': { input: z.undefined(), output: accountUserSchema },
+  'account.updateProfile': { input: z.strictObject({ username, avatar }), output: accountUserSchema },
   'account.requestPasswordReset': {
     input: z.strictObject({ email }),
     output: z.strictObject({ retryAfterSeconds: z.int().positive() }),
@@ -112,6 +131,7 @@ export const accountHttpRequestSchema = z
             'master/recovery/reset',
             'refresh',
             'logout',
+            'profile',
           ]
     if (
       url.origin !== new URL(ACCOUNT_SERVER).origin ||

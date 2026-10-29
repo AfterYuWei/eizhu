@@ -102,7 +102,10 @@ export class AccountService {
         )
         if (response.user.id !== this.workspace.userId) fail('ACCOUNT_PROTOCOL', '账号刷新响应身份不匹配')
         const tokens = this.tokenExpiry(response)
-        const next = await this.storage.update(this.workspace, expected, { tokens, user: response.user })
+        const next = await this.storage.update(this.workspace, expected, {
+          tokens,
+          user: { ...previous.user, ...response.user },
+        })
         await this.publish()
         await this.schedule()
         return next
@@ -267,19 +270,24 @@ export class AccountService {
             })
           ).key
         }
-        const workspace = accountWorkspace(response.tokens.user.id)
-        const saved = await this.storage.acceptLogin(
-          workspace,
-          response.tokens.user,
-          this.tokenExpiry(response.tokens),
-          {
-            cachedSyncKey: {
-              key: Buffer.from(key.buffer, key.byteOffset, key.byteLength).toString('hex'),
-              revision: response.keys.revision,
-            },
-            masterKeys: response.keys,
-          },
+        // Keep token responses compatible with existing clients; display metadata belongs to /me.
+        const user = await this.client.request(
+          'me',
+          'GET',
+          this.controller.signal,
+          userWire,
+          undefined,
+          response.tokens.accessToken,
         )
+        if (user.id !== response.tokens.user.id) fail('ACCOUNT_PROTOCOL', '账号资料响应身份不匹配')
+        const workspace = accountWorkspace(user.id)
+        const saved = await this.storage.acceptLogin(workspace, user, this.tokenExpiry(response.tokens), {
+          cachedSyncKey: {
+            key: Buffer.from(key.buffer, key.byteOffset, key.byteLength).toString('hex'),
+            revision: response.keys.revision,
+          },
+          masterKeys: response.keys,
+        })
         if (workspace.id === this.workspace.id) {
           await this.publish()
           await this.schedule()
@@ -289,7 +297,7 @@ export class AccountService {
           account: {
             loggedIn: true,
             sessionState: 'authenticated',
-            user: response.tokens.user,
+            user,
             syncEnabled: saved.syncEnabled,
           },
         }
@@ -352,8 +360,12 @@ export class AccountService {
       switch (operation) {
         case 'account.status':
           return this.storage.status()
-        case 'account.me': {
-          const result = await this.authorized('me', 'GET', userWire)
+        case 'account.me':
+        case 'account.updateProfile': {
+          const result =
+            operation === 'account.me'
+              ? await this.authorized('me', 'GET', userWire)
+              : await this.authorized('profile', 'POST', userWire, data)
           if (result.value.id !== this.workspace.userId) fail('ACCOUNT_PROTOCOL', '账号响应身份不匹配')
           await this.storage.update(this.workspace, result.session.tokens!.refreshToken, {
             user: result.value,

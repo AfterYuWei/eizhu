@@ -117,7 +117,8 @@ function errorMessage(cause: unknown): string {
     ACCOUNT_EMAIL_TAKEN: '该邮箱已被注册',
     ACCOUNT_DISABLED: '账号已被禁用，请联系管理员',
     ACCOUNT_NOT_LOGGED_IN: '登录已失效，请重新登录',
-    ACCOUNT_QUOTA_EXCEEDED: '账号云存储空间不足',
+    ACCOUNT_QUOTA_EXCEEDED: '账号云端配额不足',
+    ACCOUNT_ITEM_LIMIT_EXCEEDED: '服务器和密钥条目已达账号上限，请清理条目或联系管理员',
   }
   return (code && known[code]) || value?.error?.message || value?.message || '账号操作失败'
 }

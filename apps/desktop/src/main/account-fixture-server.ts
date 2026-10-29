@@ -1,6 +1,6 @@
 import { createServer } from 'node:http'
 import { createHash, randomUUID } from 'node:crypto'
-import { masterKeyEnvelopeSchema, type syncKeyEnvelopeSchema } from '@eizhu/contracts'
+import { account, masterKeyEnvelopeSchema, type syncKeyEnvelopeSchema } from '@eizhu/contracts'
 import type { z } from 'zod'
 import { SyncFixture } from '@eizhu/core/sync/fixture'
 import type { EventStream } from '@eizhu/core/sync/service'
@@ -13,6 +13,8 @@ type User = {
   id: number
   email: string
   credential: string
+  username?: string
+  avatar?: string
   emailVerified: boolean
   disabled: boolean
   keys?: z.infer<typeof syncKeyEnvelopeSchema>
@@ -61,6 +63,8 @@ export async function createAccountFixture(): Promise<AccountFixture> {
   const summary = (user: User) => ({
     id: user.id,
     email: user.email,
+    username: user.username || '',
+    avatar: user.avatar || '',
     emailVerified: user.emailVerified,
     verificationRequired: true,
     storageUsed: 0,
@@ -71,7 +75,15 @@ export async function createAccountFixture(): Promise<AccountFixture> {
       r = `synthetic-refresh-${randomUUID()}`
     access.set(a, user)
     refresh.set(r, user)
-    return { accessToken: a, refreshToken: r, expiresIn: 1800, user: summary(user) }
+    const publicUser = {
+      id: user.id,
+      email: user.email,
+      emailVerified: user.emailVerified,
+      verificationRequired: true,
+      storageUsed: 0,
+      storageQuota: 1048576,
+    }
+    return { accessToken: a, refreshToken: r, expiresIn: 1800, user: publicUser }
   }
   let closed: Promise<void> | undefined
   const server = createServer(async (req, res) => {
@@ -215,6 +227,12 @@ export async function createAccountFixture(): Promise<AccountFixture> {
           return
         }
         return reply(result.status, result.value)
+      }
+      if (path === '/api/auth/profile') {
+        const profile = account['account.updateProfile'].input.parse(body)
+        user.username = profile.username
+        user.avatar = profile.avatar
+        return reply(200, { ...summary(user), role: 'USER' })
       }
       if (path === '/api/auth/me') {
         if (fixture.rejectMeCount > 0) {

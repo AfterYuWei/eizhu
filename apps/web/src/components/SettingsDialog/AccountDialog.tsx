@@ -1,6 +1,6 @@
-import { useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react'
-import { ArrowLeft, Eye, EyeOff, Mail, ShieldCheck, X } from 'lucide-react'
-import { normalizeCommandError } from '@eizhu/contracts'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { ArrowLeft, Eye, EyeOff, X } from 'lucide-react'
+import { masterPasswordSchema, normalizeCommandError } from '@eizhu/contracts'
 import { accountApi } from '@/api/account'
 import { useAccountStore } from '@/store/account'
 import { useAccountDialogStore, type AccountDialogMode } from '@/store/accountDialog'
@@ -48,27 +48,9 @@ function AccountForm({
   const [nextSend, setNextSend] = useState(0),
     [now, setNow] = useState(() => Date.now())
   const [credentialUpdated, setCredentialUpdated] = useState(false)
-  const content = useRef<HTMLDivElement>(null),
-    previousHeight = useRef(0),
-    returnFocus = useRef(document.activeElement)
+  const returnFocus = useRef(document.activeElement)
   const lock = useRef(false),
     form = useRef<HTMLFormElement>(null)
-  useLayoutEffect(() => {
-    const node = content.current
-    if (!node) return
-    const height = node.getBoundingClientRect().height
-    if (
-      previousHeight.current &&
-      height !== previousHeight.current &&
-      typeof node.animate === 'function' &&
-      !window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    )
-      node.animate([{ height: `${previousHeight.current}px` }, { height: `${height}px` }], {
-        duration: 160,
-        easing: 'ease-out',
-      })
-    previousHeight.current = height
-  }, [step, error])
   const wait = Math.max(0, Math.ceil((nextSend - now) / 1000))
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 1000)
@@ -162,6 +144,8 @@ function AccountForm({
         return
       }
       if (mode !== 'login' && password !== confirm) throw new Error('两次输入的主密码不一致')
+      if (mode !== 'login' && !masterPasswordSchema.safeParse(password).success)
+        throw new Error('主密码需为 8–128 位，包含大写字母、小写字母、数字和符号。')
       if (mode === 'register') await useAccountStore.getState().register(email.trim(), password, ticket)
       else if (mode === 'change') {
         if (!credentialUpdated) {
@@ -212,7 +196,6 @@ function AccountForm({
     (mode === 'recover' && step === 'code')
   return (
     <DialogContent
-      ref={content}
       className="account-dialog"
       onCloseAutoFocus={(event) => {
         event.preventDefault()
@@ -247,9 +230,6 @@ function AccountForm({
         <X size={16} />
       </Button>
       <div className="account-dialog-heading">
-        <span className="account-dialog-symbol">
-          {step === 'code' ? <Mail size={20} /> : <ShieldCheck size={20} />}
-        </span>
         <DialogTitle>{title}</DialogTitle>
         <DialogDescription>{description}</DialogDescription>
       </div>
@@ -262,6 +242,7 @@ function AccountForm({
                 id="account-email"
                 type="email"
                 autoComplete="username"
+                placeholder="输入账号邮箱"
                 value={email}
                 maxLength={255}
                 required
@@ -351,8 +332,9 @@ function AccountForm({
                   id="account-password"
                   type={showPassword ? 'text' : 'password'}
                   autoComplete={newPassword ? 'new-password' : 'current-password'}
-                  minLength={newPassword ? 12 : 1}
-                  maxLength={128}
+                  minLength={newPassword ? 8 : 1}
+                  maxLength={newPassword ? 128 : 1024}
+                  aria-describedby={newPassword ? 'account-password-help' : undefined}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
@@ -370,7 +352,9 @@ function AccountForm({
                 </Button>
               </div>
               {newPassword && (
-                <p className="account-help">至少 12 个字符。请妥善保管，邮箱不能单独恢复加密数据。</p>
+                <p className="account-help" id="account-password-help">
+                  8–128 位，包含大写字母、小写字母、数字和符号。邮箱不能单独恢复加密数据。
+                </p>
               )}
             </div>
           )}
@@ -399,42 +383,55 @@ function AccountForm({
             {error}
           </p>
         )}
-        <Button type="submit" className="account-primary" disabled={busy || (step === 'email' && wait > 0)}>
-          {busy
-            ? '正在提交…'
-            : step === 'email'
-              ? wait > 0
-                ? `${wait} 秒后可发送`
-                : '发送验证码'
-              : step === 'code' && mode === 'register'
-                ? ticket
-                  ? '继续设置主密码'
-                  : '验证邮箱'
-                : mode === 'register'
-                  ? '创建账号并登录'
-                  : mode === 'change'
-                    ? '保存并重新登录'
-                    : mode === 'recover'
-                      ? '恢复并登录'
-                      : '登录'}
-        </Button>
-        <div className="account-dialog-footer">
-          {mode === 'login' ? (
-            <>
-              <Button type="button" variant="link" disabled={busy} onClick={() => choose('register')}>
-                创建账号
-              </Button>
-              <Button type="button" variant="link" disabled={busy} onClick={() => choose('recover')}>
-                忘记主密码？
-              </Button>
-            </>
-          ) : (
-            <Button type="button" variant="ghost" disabled={busy} onClick={back}>
-              <ArrowLeft size={14} />
-              {step === 'code' || (mode === 'register' && step === 'password') ? '返回上一步' : '返回登录'}
+        <div className={mode === 'change' ? 'account-dialog-actions' : 'account-submit-row'}>
+          {mode === 'change' && (
+            <Button type="button" variant="secondary" disabled={busy} onClick={onClose}>
+              取消
             </Button>
           )}
+          <Button
+            type="submit"
+            className={mode === 'change' ? undefined : 'account-primary'}
+            disabled={busy || (step === 'email' && wait > 0)}
+          >
+            {busy
+              ? '正在提交…'
+              : step === 'email'
+                ? wait > 0
+                  ? `${wait} 秒后可发送`
+                  : '发送验证码'
+                : step === 'code' && mode === 'register'
+                  ? ticket
+                    ? '继续设置主密码'
+                    : '验证邮箱'
+                  : mode === 'register'
+                    ? '创建账号并登录'
+                    : mode === 'change'
+                      ? '保存并重新登录'
+                      : mode === 'recover'
+                        ? '恢复并登录'
+                        : '登录'}
+          </Button>
         </div>
+        {mode !== 'change' && (
+          <div className="account-dialog-footer">
+            {mode === 'login' ? (
+              <>
+                <Button type="button" variant="link" disabled={busy} onClick={() => choose('register')}>
+                  创建账号
+                </Button>
+                <Button type="button" variant="link" disabled={busy} onClick={() => choose('recover')}>
+                  忘记主密码？
+                </Button>
+              </>
+            ) : (
+              <Button type="button" variant="ghost" disabled={busy} onClick={back}>
+                <ArrowLeft size={14} />
+                {step === 'code' || (mode === 'register' && step === 'password') ? '返回上一步' : '返回登录'}
+              </Button>
+            )}
+          </div>
+        )}
       </form>
     </DialogContent>
   )

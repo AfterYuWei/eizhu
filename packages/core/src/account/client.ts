@@ -30,7 +30,11 @@ const messages: Record<string, [string, string]> = {
   INVALID_BATCH: ['INVALID_BATCH', '同步批次无效，未修改云端'],
   INVALID_CIPHERTEXT: ['INVALID_CIPHERTEXT', '云端拒绝无效密文，未修改数据'],
   INVALID_CURSOR: ['INVALID_CURSOR', '同步游标无效，请重新核对'],
-  QUOTA_EXCEEDED: ['ACCOUNT_QUOTA_EXCEEDED', '账号云存储空间不足，本地修改已保留'],
+  ITEM_LIMIT_EXCEEDED: [
+    'ACCOUNT_ITEM_LIMIT_EXCEEDED',
+    '服务器和密钥条目已达账号上限，请清理条目或联系管理员；本地修改已保留',
+  ],
+  QUOTA_EXCEEDED: ['ACCOUNT_QUOTA_EXCEEDED', '账号云端配额不足，本地修改已保留'],
   INVALID_CREDENTIALS: ['ACCOUNT_INVALID_CREDENTIALS', '邮箱或主密码不正确'],
   EMAIL_TAKEN: ['ACCOUNT_EMAIL_TAKEN', '该邮箱已被注册'],
   ACCOUNT_DISABLED: ['ACCOUNT_DISABLED', '账号已被禁用，请联系管理员'],

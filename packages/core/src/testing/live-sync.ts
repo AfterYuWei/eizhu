@@ -43,8 +43,8 @@ export async function acceptLiveSync(
   phase: (name: string) => void,
   options: { resume?: boolean; resetExisting?: boolean } = {},
 ) {
-  let password = randomBytes(36).toString('base64url')
-  const nextPassword = randomBytes(32).toString('base64url')
+  let password = 'Aa1!' + randomBytes(36).toString('base64url')
+  const nextPassword = 'Aa1!' + randomBytes(32).toString('base64url')
   if (options.resume || options.resetExisting)
     throw new DesktopError({
       code: 'ACCEPTANCE_NEW_ACCOUNT_REQUIRED',
@@ -314,7 +314,7 @@ export async function acceptLiveSync(
   checks.push('刷新轮换后丢弃响应要求重新登录，账号空间、本地数据与记住解锁保留')
 
   phase('password-reset-mail')
-  const newPassword = randomBytes(36).toString('base64url')
+  const newPassword = 'Aa1!' + randomBytes(36).toString('base64url')
   await challenge(
     'reset',
     () => a.call('account.requestPasswordReset', { email }),

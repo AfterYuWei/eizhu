@@ -89,7 +89,7 @@ test('initialization blocks registration and lost authentication responses never
     await assert.rejects(
       service.authenticate('account.register', {
         email: user.email,
-        password: 'password12345',
+        password: 'Password123!',
         ticket: 't'.repeat(64),
       }),
       code('ACCOUNT_SETUP_REQUIRED'),
@@ -99,7 +99,7 @@ test('initialization blocks registration and lost authentication responses never
     await assert.rejects(
       service.authenticate('account.register', {
         email: user.email,
-        password: 'password12345',
+        password: 'Password123!',
         ticket: 't'.repeat(64),
       }),
       code('ACCOUNT_UNAVAILABLE'),
@@ -133,7 +133,7 @@ test('a rejected public registration explains server access limits without inval
     await assert.rejects(
       service.authenticate('account.register', {
         email: user.email,
-        password: 'synthetic-password',
+        password: 'Synthetic-password1!',
         ticket: 't'.repeat(64),
       }),
       (cause: unknown) =>
@@ -156,7 +156,7 @@ test('a rejected public registration explains server access limits without inval
 
 test('concurrent expiry refreshes once, persists rotation and exposes only public account status', async () => {
   const identity = accountWorkspace(42),
-    store = storage(identity, session())
+    store = storage(identity, { ...session(), user: { ...user, username: '保留用户名', avatar: '' } })
   let refreshed = 0
   const service = new AccountService(
     store.api,
@@ -172,7 +172,8 @@ test('concurrent expiry refreshes once, persists rotation and exposes only publi
         })
       }
       assert.equal(request.headers.authorization, 'Bearer new-access')
-      return response(200, { ...user, role: 'USER' })
+      assert.equal(store.rows.get(identity.id)?.user.username, '保留用户名')
+      return response(200, { ...user, username: '保留用户名', avatar: '', role: 'USER' })
     },
     identity,
     () => {},
@@ -370,6 +371,97 @@ test('wrong identity and raw server errors never replace the local account or ex
       service.authenticate('account.login', { email: user.email, password: 'wrong' }),
       (cause: unknown) => !String(cause).includes('SYNTHETIC-SECRET'),
     )
+  } finally {
+    await service.close()
+  }
+})
+
+test('profile updates persist only the authenticated identity and do not replay a lost write', async () => {
+  const identity = accountWorkspace(42),
+    initial = session()
+  initial.tokens!.expiresAt = Date.now() + 3600000
+  const store = storage(identity, initial)
+  let writes = 0,
+    mode = 'ok'
+  const service = new AccountService(
+    store.api,
+    async (request) => {
+      assert.ok(request.url.endsWith('/profile'))
+      assert.equal(request.headers.authorization, 'Bearer old-access')
+      writes++
+      if (mode === 'lost') throw new Error('synthetic lost profile response')
+      return response(200, {
+        ...user,
+        id: mode === 'wrong-user' ? 43 : 42,
+        username: '新用户名',
+        avatar: '',
+        role: 'USER',
+      })
+    },
+    identity,
+    () => {},
+  )
+  try {
+    const updated = await service.execute('account.updateProfile', { username: '新用户名', avatar: '' })
+    assert.deepEqual(updated, { ...user, username: '新用户名', avatar: '' })
+    assert.equal(store.rows.get(identity.id)?.user.username, '新用户名')
+    mode = 'wrong-user'
+    await assert.rejects(
+      service.execute('account.updateProfile', { username: 'other', avatar: '' }),
+      code('ACCOUNT_PROTOCOL'),
+    )
+    assert.equal(store.rows.get(identity.id)?.user.id, 42)
+    mode = 'lost'
+    await assert.rejects(
+      service.execute('account.updateProfile', { username: 'pending', avatar: '' }),
+      code('ACCOUNT_UNAVAILABLE'),
+    )
+    assert.equal(writes, 3)
+    assert.equal(store.rows.get(identity.id)?.user.username, '新用户名')
+  } finally {
+    await service.close()
+  }
+})
+
+test('authentication reads display metadata separately from the compatible token response', async () => {
+  const store = storage(offlineWorkspace)
+  const paths: string[] = []
+  const service = new AccountService(
+    store.api,
+    async (request) => {
+      const path = new URL(request.url).pathname
+      paths.push(path)
+      if (path.endsWith('/setup')) return response(200, { required: false, passwordMinLength: 8 })
+      if (path.endsWith('/master/register')) {
+        const body = JSON.parse(new TextDecoder().decode(request.body))
+        return response(200, {
+          tokens: {
+            accessToken: 'registered-access',
+            refreshToken: 'registered-refresh',
+            expiresIn: 1800,
+            user,
+          },
+          keys: { ...body.keys, revision: 1 },
+        })
+      }
+      assert.ok(path.endsWith('/me'))
+      assert.equal(request.headers.authorization, 'Bearer registered-access')
+      return response(200, { ...user, username: '展示用户名', avatar: '', role: 'USER' })
+    },
+    offlineWorkspace,
+    () => {},
+    compute,
+  )
+  try {
+    const result = await service.authenticate('account.register', {
+      email: user.email,
+      password: 'Abcdef1!',
+      ticket: 't'.repeat(64),
+    })
+    assert.equal(result.account.user?.username, '展示用户名')
+    assert.equal(store.rows.get(result.workspace.id)?.user.username, '展示用户名')
+    assert.deepEqual(paths, ['/api/auth/setup', '/api/auth/master/register', '/api/auth/me'])
+    assert.equal(JSON.stringify(result.account).includes('registered-access'), false)
   } finally {
     await service.close()
   }

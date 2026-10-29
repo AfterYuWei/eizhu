@@ -21,7 +21,7 @@ export function AccountMenu({ onSettings }: { onSettings: (tab: SettingsTab) => 
   const sync = useSyncStore((s) => s.status)
   const { theme, setTheme } = useSettingsStore()
   const cloud = account?.loggedIn === true
-  const name = cloud ? account.user?.email.split('@')[0] || '云端用户' : '本地用户'
+  const name = cloud ? account.user.username || account.user.email.split('@')[0] || '云端用户' : '本地用户'
   const openSettings = (tab: SettingsTab) => { openingSettings.current = true; if (tab === 'account' && (!account?.loggedIn || account.sessionState === 'reauth_required')) useAccountDialogStore.getState().open('login', account?.user?.email); else onSettings(tab) }
   return <DropdownMenu>
     <DropdownMenuTrigger asChild>

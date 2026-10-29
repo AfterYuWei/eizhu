@@ -88,6 +88,7 @@ export interface DomainOperations {
   'account.changePassword': { input: { password: string; newPassword: string }; output: void }
   'account.logout': { input: void; output: void }
   'account.me': { input: void; output: AccountUser }
+  'account.updateProfile': { input: { username: string; avatar: string }; output: AccountUser }
   'account.register': { input: { email: string; password: string; ticket: string }; output: AccountStatus }
   'account.requestPasswordReset': { input: { email: string }; output: { retryAfterSeconds: number } }
   'account.resetPassword': { input: { email: string; code: string; newPassword: string }; output: void }
@@ -334,6 +335,7 @@ export const reservedOperations = [
   'account.login',
   'account.logout',
   'account.me',
+  'account.updateProfile',
   'account.register',
   'account.requestPasswordReset',
   'account.resetPassword',

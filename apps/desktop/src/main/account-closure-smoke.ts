@@ -48,8 +48,8 @@ export async function verifyAccountClosure(
   const emailA = 'account-a@example.invalid',
     emailB = 'account-b@example.invalid',
     emailC = 'account-unknown@example.invalid'
-  const password = 'synthetic-password123',
-    newPassword = 'synthetic-password456'
+  const password = 'Synthetic-password123!',
+    newPassword = 'Synthetic-password456!'
   const js = <T = unknown>(script: string) => window.webContents.executeJavaScript(script) as Promise<T>
   const expectCode = async (script: string, code: string) =>
     assert.equal(await js(`(${script}).then(()=> 'unexpected-success', e=>e.code)`), code)
@@ -171,11 +171,36 @@ export async function verifyAccountClosure(
   )
   assert.equal(await js(`window.eizhu.account.status().then(s=>s.user.emailVerified)`), true)
   await openAccount(window)
-  await waitFor(window, `document.body.innerText.includes('邮箱已验证')`)
+  await waitFor(window, `document.body.innerText.includes('编辑资料')`)
+  assert.equal(await js(`document.querySelector('[aria-label="账号设置"]').innerText.includes('MiB')`), false)
+  await js(`[...document.querySelectorAll('button')].find(b=>b.textContent==='编辑资料').click()`)
+  await waitFor(window, `Boolean(document.querySelector('#account-username'))`)
+  await js(
+    `(()=>{const c=document.createElement('canvas');c.width=c.height=128;const ctx=c.getContext('2d');ctx.fillStyle='#555555';ctx.fillRect(0,0,128,128);ctx.fillStyle='#ffffff';ctx.font='64px sans-serif';ctx.fillText('A',40,88);const encoded=c.toDataURL('image/png').split(',')[1];const bytes=Uint8Array.from(atob(encoded),v=>v.charCodeAt(0));const transfer=new DataTransfer();transfer.items.add(new File([bytes],'avatar.png',{type:'image/png'}));const input=document.querySelector('input[type=file][aria-label="选择头像"]');input.files=transfer.files;input.dispatchEvent(new Event('change',{bubbles:true}));const name=document.querySelector('#account-username');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(name,'验收用户');name.dispatchEvent(new Event('input',{bubbles:true}))})()`,
+  )
+  await waitFor(
+    window,
+    `Boolean(document.querySelector('.account-profile-avatar img')) && !document.querySelector('.account-dialog form').getAttribute('aria-busy').includes('true')`,
+  )
+  await capture(window, root, 'account-profile-light.png', 'light')
+  await js(`document.querySelector('.account-dialog form').requestSubmit()`)
+  await waitFor(
+    window,
+    `!document.querySelector('#account-username') && document.body.innerText.includes('验收用户')`,
+  )
+  const profile = await js<{ username: string; avatar: string; email: string }>(`window.eizhu.account.me()`)
+  assert.equal(profile.username, '验收用户')
+  assert.equal(profile.email, emailA)
+  assert.ok(profile.avatar.startsWith('data:image/jpeg;base64,'))
+  await js(`[...document.querySelectorAll('button')].find(b=>b.textContent==='修改主密码').click()`)
+  await waitFor(window, `Boolean(document.querySelector('#account-current'))`)
+  assert.equal(await js(`document.querySelector('#account-password').minLength`), 8)
+  await capture(window, root, 'account-password-change-dark.png', 'dark')
+  await js(`[...document.querySelectorAll('.account-dialog button')].find(b=>b.textContent==='取消').click()`)
   await capture(window, root, 'account-signed-in-dark.png', 'dark')
   assert.equal(
     await js(
-      `Array.from(document.querySelectorAll('[aria-label="账号设置"] .settings-card-footer button')).every(button=>!button.disabled)`,
+      `Array.from(document.querySelectorAll('[aria-label="账号设置"] .account-summary-actions button')).every(button=>!button.disabled)`,
     ),
     true,
   )
@@ -200,6 +225,7 @@ export async function verifyAccountClosure(
   await expectCode('window.eizhu.account.me()', 'ACCOUNT_UNAVAILABLE')
   assert.equal(await js(`window.eizhu.account.status().then(s=>s.sessionState)`), 'authenticated')
   await js('window.eizhu.runtime.restart()')
+  assert.equal(await js(`window.eizhu.account.status().then(s=>s.user.username)`), '验收用户')
   assert.equal((await js<{ id: string }>('window.eizhu.workspace.status()')).id, accountA.id)
   assert.ok(
     (await js<Array<{ id: string }>>('window.eizhu.group.list()')).some(
@@ -286,6 +312,7 @@ export async function verifyAccountClosure(
     register: true,
     emailVerification: true,
     passwordReset: true,
+    profileEditing: true,
     concurrentRefresh: true,
     lostRefreshRequiresLogin: true,
     lostAuthenticationNotReplayed: true,
@@ -299,6 +326,8 @@ export async function verifyAccountClosure(
       'account-register-email.png',
       'account-register-code.png',
       'account-register-password-dark.png',
+      'account-profile-light.png',
+      'account-password-change-dark.png',
       'account-signed-in-dark.png',
       'account-signed-in-narrow.png',
     ],

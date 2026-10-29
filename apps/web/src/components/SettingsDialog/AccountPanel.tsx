@@ -1,11 +1,22 @@
-import { UserRound } from 'lucide-react'
+import { useRef, useState } from 'react'
+import { Ellipsis, LogOut, Repeat2, UserRound } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useAccountStore } from '@/store/account'
 import { useAccountDialogStore } from '@/store/accountDialog'
+import { AccountProfileDialog } from './AccountProfileDialog'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { runDesktopAction } from '@/lib/desktopActions'
 
 export function AccountPanel() {
-  const { status, loading, error, logout, refresh } = useAccountStore()
+  const { status, loading, error, logout } = useAccountStore()
+  const [editing, setEditing] = useState(false)
+  const openingDialog = useRef(false)
   const open = useAccountDialogStore((s) => s.open)
   return (
     <section className="settings-section settings-stack" aria-label="账号设置">
@@ -14,59 +25,88 @@ export function AccountPanel() {
         <span>账号设置</span>
       </div>
       <div className="settings-card">
-        <div className="settings-field">
+        <div className="settings-field account-summary">
+          {status?.loggedIn && (
+            <span className="account-avatar" aria-hidden="true">
+              {status.user.avatar ? (
+                <img src={status.user.avatar} alt="" />
+              ) : (
+                (status.user.username || status.user.email).slice(0, 1).toUpperCase()
+              )}
+            </span>
+          )}
           <div className="settings-field-info">
             <span className="settings-field-label">
-              {status?.loggedIn ? status.user.email : '登录你的账号'}
+              {status?.loggedIn ? status.user.username || status.user.email : '登录你的账号'}
             </span>
             <p className="settings-field-desc">
               {status?.loggedIn
                 ? status.sessionState === 'reauth_required'
                   ? '登录已失效，账号空间和本地修改仍保留。'
-                  : '邮箱已验证，登录时已解锁加密数据。'
+                  : status.user.username
+                    ? status.user.email
+                    : '使用邮箱登录，自动解锁加密数据。'
                 : '在多台设备间安全同步服务器、凭据、分组和命令片段。'}
             </p>
           </div>
-          <span className="settings-status">
-            {status?.loggedIn
-              ? status.sessionState === 'reauth_required'
-                ? '需要登录'
-                : '已登录'
-              : '未登录'}
-          </span>
-        </div>
-        <div className="settings-card-footer">
-          {!status?.loggedIn ? (
-            <>
-              <Button size="sm" onClick={() => open('login')}>
-                登录
-              </Button>
-              <Button size="sm" variant="secondary" onClick={() => open('register')}>
-                创建账号
-              </Button>
-            </>
-          ) : (
-            <>
-              <Button
-                size="sm"
-                variant="secondary"
-                disabled={loading}
-                onClick={() =>
-                  status.sessionState === 'reauth_required'
-                    ? open('login', status.user.email)
-                    : void refresh().catch(() => undefined)
-                }
-              >
-                {status.sessionState === 'reauth_required' ? '重新登录' : '刷新账号'}
-              </Button>
-              <Button size="sm" variant="secondary" disabled={loading} onClick={() => open('login')}>
-                切换账号
-              </Button>
-              <Button size="sm" variant="secondary" disabled={loading} onClick={() => void logout()}>
-                退出账号
-              </Button>
-            </>
-          )}
+          <div className="account-summary-actions">
+            {!status?.loggedIn ? (
+              <>
+                <Button size="sm" onClick={() => open('login')}>
+                  登录
+                </Button>
+                <Button size="sm" variant="secondary" onClick={() => open('register')}>
+                  创建账号
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  disabled={loading}
+                  onClick={() =>
+                    status.sessionState === 'reauth_required'
+                      ? open('login', status.user.email)
+                      : setEditing(true)
+                  }
+                >
+                  {status.sessionState === 'reauth_required' ? '重新登录' : '编辑资料'}
+                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button size="icon" variant="ghost" disabled={loading} aria-label="更多账号操作">
+                      <Ellipsis size={16} />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent
+                    align="end"
+                    onCloseAutoFocus={(event) => {
+                      if (openingDialog.current) {
+                        event.preventDefault()
+                        openingDialog.current = false
+                      }
+                    }}
+                  >
+                    <DropdownMenuItem
+                      onSelect={() => {
+                        openingDialog.current = true
+                        open('login')
+                      }}
+                    >
+                      <Repeat2 />
+                      切换账号
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem variant="destructive" onSelect={() => void logout()}>
+                      <LogOut />
+                      退出账号
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </>
+            )}
+          </div>
         </div>
       </div>
       {status?.loggedIn && (
@@ -87,16 +127,10 @@ export function AccountPanel() {
               修改主密码
             </Button>
           </div>
-          <div className="settings-field">
-            <div className="settings-field-info">
-              <span className="settings-field-label">云端存储</span>
-              <p className="settings-field-desc">
-                {(status.user.storageUsed / 1048576).toFixed(1)} /{' '}
-                {(status.user.storageQuota / 1048576).toFixed(1)} MiB
-              </p>
-            </div>
-          </div>
         </div>
+      )}
+      {editing && status?.loggedIn && status.sessionState === 'authenticated' && (
+        <AccountProfileDialog user={status.user} onClose={() => setEditing(false)} />
       )}
       {error && (
         <p role="alert" className="account-error">

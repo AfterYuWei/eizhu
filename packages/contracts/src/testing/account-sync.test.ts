@@ -22,12 +22,32 @@ const user = {
   verificationRequired: true,
 }
 test('account network permits only fixed-origin auth routes and never exposes admin initialization or sync settings', () => {
-  const request = { url: 'https://eizhu.yuweinfo.com/api/auth/me', method: 'GET', headers: { accept: 'application/json', authorization: 'Bearer synthetic' } }
+  const request = {
+    url: 'https://eizhu.yuweinfo.com/api/auth/me',
+    method: 'GET',
+    headers: { accept: 'application/json', authorization: 'Bearer synthetic' },
+  }
   assert.equal(accountHttpRequestSchema.safeParse(request).success, true)
-  for (const url of ['http://eizhu.yuweinfo.com/api/auth/me', 'https://other.invalid/api/auth/me', 'https://eizhu.yuweinfo.com/api/admin/users', 'https://eizhu.yuweinfo.com/api/auth/me?token=synthetic'])
+  for (const url of [
+    'http://eizhu.yuweinfo.com/api/auth/me',
+    'https://other.invalid/api/auth/me',
+    'https://eizhu.yuweinfo.com/api/admin/users',
+    'https://eizhu.yuweinfo.com/api/auth/me?token=synthetic',
+  ])
     assert.equal(accountHttpRequestSchema.safeParse({ ...request, url }).success, false)
-  assert.equal(accountHttpRequestSchema.safeParse({ ...request, method: 'POST', url: 'https://eizhu.yuweinfo.com/api/auth/setup' }).success, false)
-  assert.equal(accountHttpRequestSchema.safeParse({ ...request, headers: { ...request.headers, host: 'other.invalid' } }).success, false)
+  assert.equal(
+    accountHttpRequestSchema.safeParse({
+      ...request,
+      method: 'POST',
+      url: 'https://eizhu.yuweinfo.com/api/auth/setup',
+    }).success,
+    false,
+  )
+  assert.equal(
+    accountHttpRequestSchema.safeParse({ ...request, headers: { ...request.headers, host: 'other.invalid' } })
+      .success,
+    false,
+  )
   assert.equal(isAccountOperation('account.login'), true)
   assert.equal(isAccountOperation('account.setSyncEnabled'), true)
 })
@@ -43,14 +63,29 @@ test('account schemas reject unsafe identities, leaked tokens and contradictory 
   ])
     assert.equal(accountStatusSchema.safeParse(invalid).success, false)
   assert.equal(
-    account['account.register'].input.safeParse({ email: user.email, password: '中'.repeat(129), ticket: 't'.repeat(64) }).success,
+    account['account.register'].input.safeParse({
+      email: user.email,
+      password: '中'.repeat(129),
+      ticket: 't'.repeat(64),
+    }).success,
     false,
   )
   assert.equal(
-    account['account.register'].input.safeParse({ email: user.email, password: '中'.repeat(25), ticket: 't'.repeat(64) }).success,
+    account['account.register'].input.safeParse({
+      email: user.email,
+      password: '中'.repeat(25) + 'Aa1!',
+      ticket: 't'.repeat(64),
+    }).success,
     true,
   )
-  assert.equal(account['account.verifyRegistrationCode'].input.safeParse({ email: user.email, challengeId: randomUUID(), code: '12345x' }).success, false)
+  assert.equal(
+    account['account.verifyRegistrationCode'].input.safeParse({
+      email: user.email,
+      challengeId: randomUUID(),
+      code: '12345x',
+    }).success,
+    false,
+  )
   assert.equal(
     account['account.login'].input.parse({ email: user.email, password: '  原样密码🔐  ' }).password,
     '  原样密码🔐  ',
@@ -101,5 +136,57 @@ test('sync boundaries reject secret summaries, unsafe cursors and unbound replac
   assert.equal(
     eventSchemas['eizhu-sync-message'].safeParse({ workspaceGeneration: 1, status: {} }).success,
     false,
+  )
+})
+
+test('new master passwords require eight characters and all four classes; login remains email-only', () => {
+  for (const operation of ['account.register', 'account.changePassword', 'account.resetPassword'] as const) {
+    const input = {
+      email: user.email,
+      password: 'Old1!',
+      ticket: 't'.repeat(64),
+      code: '123456',
+      newPassword: 'Abcdef1!',
+    }
+    const value =
+      operation === 'account.register'
+        ? { email: input.email, password: 'Abcdef1!', ticket: input.ticket }
+        : operation === 'account.changePassword'
+          ? { password: input.password, newPassword: input.newPassword }
+          : { email: input.email, code: input.code, newPassword: input.newPassword }
+    assert.equal(account[operation].input.safeParse(value).success, true)
+    for (const weak of ['Abc1!xy', 'abcdefgh1!', 'ABCDEFGH1!', 'Abcdefgh!', 'Abcdefg1', 'Abcdef1 '])
+      assert.equal(
+        account[operation].input.safeParse({
+          ...value,
+          [operation === 'account.register' ? 'password' : 'newPassword']: weak,
+        }).success,
+        false,
+      )
+  }
+  assert.equal(
+    account['account.login'].input.safeParse({ email: 'username', password: 'old' }).success,
+    false,
+  )
+  assert.equal(account['account.login'].input.safeParse({ email: user.email, password: 'old' }).success, true)
+})
+test('profile changes cannot alter email or load remote and executable avatars', () => {
+  const schema = account['account.updateProfile'].input
+  assert.deepEqual(schema.parse({ username: ' 用户名 ', avatar: '' }), { username: '用户名', avatar: '' })
+  for (const invalid of [
+    { username: ' ', avatar: '' },
+    { username: 'x'.repeat(51), avatar: '' },
+    { username: 'name', avatar: 'https://other.invalid/avatar.png' },
+    { username: 'name', avatar: 'data:image/svg+xml;base64,AAAA' },
+    { username: 'name', avatar: '', email: 'other@example.invalid' },
+  ])
+    assert.equal(schema.safeParse(invalid).success, false)
+  assert.equal(
+    accountHttpRequestSchema.safeParse({
+      url: 'https://eizhu.yuweinfo.com/api/auth/profile',
+      method: 'POST',
+      headers: { accept: 'application/json' },
+    }).success,
+    true,
   )
 })

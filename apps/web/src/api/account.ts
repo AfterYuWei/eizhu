@@ -16,5 +16,6 @@ export const accountApi = {
     bridge().account.resetPassword({ email, code, newPassword }),
   logout: () => bridge().account.logout(),
   me: () => bridge().account.me(),
+  updateProfile: (username: string, avatar: string) => bridge().account.updateProfile({ username, avatar }),
   setSyncEnabled: (enabled: boolean) => bridge().account.setSyncEnabled({ enabled }),
 }
