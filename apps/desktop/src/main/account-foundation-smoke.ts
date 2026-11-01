@@ -28,7 +28,7 @@ export async function verifyAccountFoundation(runtime: RuntimeHost, assets: stri
     await active.start()
     assert.equal(active.workspace.id, accountWorkspace(43).id)
     assert.equal((await active.call<{ userId: number }>('workspace.status')).userId, 43)
-    assert.equal((await active.call<{ schema: number }>('runtime.health')).schema, 3)
+    assert.equal((await active.call<{ schema: number }>('runtime.health')).schema, 4)
     assert.deepEqual(await active.call('group.list'), [])
     const previousGeneration = active.context.generation
     await assert.rejects(

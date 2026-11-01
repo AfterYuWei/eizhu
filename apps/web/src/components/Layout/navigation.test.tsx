@@ -45,6 +45,23 @@ it('分组可折叠，服务器单击不连接，双击复用当前连接草稿'
   expect(host.querySelector('.grp-label')!.getAttribute('aria-expanded')).toBe('false')
 })
 
+it('服务器是固定标题，只有真实文件夹提供展开和收起操作', async () => {
+  await act(async () => root.render(<TooltipProvider><Sidebar /></TooltipProvider>))
+  const heading = host.querySelector<HTMLElement>('.shell-section-heading')!
+  expect(heading.querySelector('h2')!.textContent).toBe('服务器1')
+  expect(heading.querySelector('h2')!.hasAttribute('aria-expanded')).toBe(false)
+  expect(heading.querySelectorAll('button')).toHaveLength(1)
+  expect(heading.querySelector('button')!.getAttribute('aria-label')).toBe('新增服务器或分组')
+  expect(heading.querySelector('h2 svg')).toBeNull()
+  await act(async () => heading.querySelector('h2')!.click())
+  expect(host.querySelector('.sidebar-body')!.hasAttribute('hidden')).toBe(false)
+  expect(host.querySelectorAll('.grp-label[aria-expanded]')).toHaveLength(2)
+  await act(async () => host.querySelector<HTMLElement>('.shell-child-groups .grp-label')!.click())
+  await act(async () => host.querySelector<HTMLElement>('.grp-label')!.click())
+  await act(async () => host.querySelector<HTMLElement>('.grp-label')!.click())
+  expect(host.querySelector('.shell-child-groups .grp-label')!.getAttribute('aria-expanded')).toBe('false')
+})
+
 it('终端标签区分同名会话，工具页面不进入标签列表', async () => {
   useSessionStore.setState({ tabs: [
     { id: 'a', profileId: 'p', profileName: '生产环境', status: 'disconnected', sessionId: null },

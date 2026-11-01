@@ -1,16 +1,11 @@
 import { create } from 'zustand';
-import { useSessionStore,type SessionTab } from './session';
-import { useProfileStore } from './profile';
-import { localStateApi } from '@/api/localState';
-import { workspaceGeneration } from '@/lib/workspaceScope';
+import { useSessionStore } from './session';
 import { terminalActions } from '@/lib/terminalActions';
-import { leaves,replaceLeaf,pruneTree,setRatio,parseSplitTree,type SplitTree,type SplitAxis } from '@/lib/terminalLayout';
-import { toast } from 'sonner';
+import { leaves,replaceLeaf,pruneTree,setRatio,type SplitTree,type SplitAxis } from '@/lib/terminalLayout';
 interface LayoutState {
     tree: SplitTree | null;
     focusedId: string | null;
     maximizedId: string | null;
-    ready: boolean;
     split: (axis: SplitAxis) => void;
     focusNext: (direction: number) => void;
     maximize: () => void;
@@ -18,11 +13,9 @@ interface LayoutState {
     resize: (id: string, ratio: number) => void;
 }
 let mutating = false;
-let timer: ReturnType<typeof setTimeout> | undefined;
-let savedSnapshot = '';
-let bootGeneration: number | undefined;
+// Terminal tabs and splits belong to this run only; never restore saved server references.
 export const useTerminalLayoutStore = create<LayoutState>((set, get) => ({
-    tree: null, focusedId: null, maximizedId: null, ready: false,
+    tree: null, focusedId: null, maximizedId: null,
     split: (axis) => {
         syncTerminalLayout();
         const { tree, focusedId } = get();
@@ -66,87 +59,9 @@ function syncTerminalLayout() {
     if (tree !== layout.tree || focusedId !== layout.focusedId)
         useTerminalLayoutStore.setState({ tree, focusedId, maximizedId: layout.maximizedId && active ? active.id : null });
 }
-function scheduleSave() {
-    const { ready } = useTerminalLayoutStore.getState();
-    if (!ready || false)
-        return;
-    if (timer)
-        clearTimeout(timer);
-    const generation = workspaceGeneration();
-    timer = setTimeout(() => {
-        if (generation !== workspaceGeneration())
-            return;
-        const { tree, focusedId } = useTerminalLayoutStore.getState();
-        // Drafts have no restorable server reference and cannot pass the saved-layout schema.
-        const sessions = useSessionStore.getState().tabs.filter((tab) => tab.profileId);
-        const visible = new Set(leaves(tree));
-        const tabs = [...sessions.filter((tab) => visible.has(tab.id)), ...sessions.filter((tab) => !visible.has(tab.id))].slice(0, 128).map(({ id, profileId }) => ({ id, profileId }));
-        const savedIds = new Set(tabs.map((tab) => tab.id));
-        const savedTree = pruneTree(tree, savedIds);
-        const savedFocus = focusedId && savedIds.has(focusedId) ? focusedId : leaves(savedTree)[0] ?? tabs[0]?.id ?? null;
-        const snapshot = { version: 1, tree: savedTree, focusedId: savedFocus, tabs };
-        const serialized = JSON.stringify(snapshot);
-        if (serialized === savedSnapshot)
-            return;
-        void localStateApi.write('terminal_layout', snapshot).then(() => { if (generation === workspaceGeneration())
-            savedSnapshot = serialized; }).catch(() => {
-            if (generation === workspaceGeneration())
-                toast.error('终端布局保存失败，可继续使用当前布局');
-        });
-    }, 250);
-}
 useSessionStore.subscribe((state, previous) => { if (state.tabs !== previous.tabs || state.activeTabId !== previous.activeTabId) {
     syncTerminalLayout();
-    scheduleSave();
 } });
-useTerminalLayoutStore.subscribe(scheduleSave);
 export function resetTerminalLayout() {
-    if (timer)
-        clearTimeout(timer);
-    savedSnapshot = '';
-    bootGeneration = undefined;
     useTerminalLayoutStore.setState(useTerminalLayoutStore.getInitialState(), true);
-}
-export async function restoreTerminalLayout() {
-    const generation = workspaceGeneration();
-    if (generation === undefined || bootGeneration === generation)
-        return;
-    bootGeneration = generation;
-    try {
-        const snapshot = await localStateApi.read<{
-            version: number;
-            tree: unknown;
-            focusedId?: string;
-            tabs?: {
-                id: string;
-                profileId: string;
-            }[];
-        }>('terminal_layout');
-        if (generation !== workspaceGeneration())
-            return;
-        if (snapshot?.version === 1 && Array.isArray(snapshot.tabs) && useSessionStore.getState().tabs.length === 0) {
-            const profiles = useProfileStore.getState().profiles, seen = new Set<string>();
-            const tabs: SessionTab[] = snapshot.tabs.slice(0, 128).flatMap((reference) => {
-                if (!reference || typeof reference.id !== 'string' || reference.id.length > 128 || seen.has(reference.id))
-                    return [];
-                seen.add(reference.id);
-                const profile = profiles.find((profile) => profile.id === reference.profileId);
-                return [{ id: reference.id, profileId: profile?.id ?? '', profileName: profile?.name ?? '选择服务器', host: profile?.host, port: profile?.port, username: profile?.username, status: 'disconnected', sessionId: null, manualConnect: true }];
-            });
-            const tree = parseSplitTree(snapshot.tree, new Set(tabs.map((tab) => tab.id)));
-            const focusedId = leaves(tree).includes(snapshot.focusedId ?? '') ? snapshot.focusedId! : leaves(tree)[0] ?? tabs[0]?.id ?? null;
-            mutating = true;
-            useSessionStore.setState({ tabs, activeTabId: focusedId });
-            mutating = false;
-            useTerminalLayoutStore.setState({ tree, focusedId });
-        }
-    }
-    catch {
-        if (generation === workspaceGeneration())
-            toast.warning('无法读取本地布局，请手动打开连接');
-    }
-    if (generation === workspaceGeneration()) {
-        syncTerminalLayout();
-        useTerminalLayoutStore.setState({ ready: true });
-    }
 }

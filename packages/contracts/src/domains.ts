@@ -42,12 +42,10 @@ import type { SyncStatus, SyncConflict, SyncPreview } from './models/sync.ts'
 import type { AccountStatus, AccountUser } from './models/account.ts'
 import type {
   BackupSettings,
+  BackupPreferences,
   BackupStatus,
-  BackupVersion,
-  BackupEvent,
   BackupTargetMeta,
   ProviderConfig,
-  RestorePreview,
 } from './models/backup.ts'
 import type { Snippet, SnippetCreateRequest, SnippetUpdateRequest } from './models/snippet.ts'
 import type {
@@ -74,7 +72,6 @@ export interface DomainOperations {
     output: Array<{ id: string; action: string; entity_id: string; created_at: string }>
   }
   'audit.clear': { input: void; output: void }
-  'backup.prepareRestore': { input: { filePath: string; password?: string }; output: RestorePreview }
   'account.login': { input: { email: string; password: string }; output: AccountStatus }
   'account.requestRegistrationCode': {
     input: { email: string }
@@ -94,16 +91,9 @@ export interface DomainOperations {
   'account.resetPassword': { input: { email: string; code: string; newPassword: string }; output: void }
   'account.setSyncEnabled': { input: { enabled: boolean }; output: AccountStatus }
   'account.status': { input: void; output: AccountStatus }
-  'backup.applyRestore': { input: { token: string; mode: 'merge' | 'replace' }; output: void }
-  'backup.backupNow': { input: void; output: { created: boolean; message?: string; version?: BackupVersion } }
-  'backup.cloudVersions': {
-    input: { providerId: string }
-    output: Array<{ object: string; size: number; createdAt: string }>
-  }
+  'backup.backupNow': { input: void; output: { path: string; uploaded: number; failed: number } }
   'backup.createProvider': { input: { config: ProviderConfig }; output: BackupTargetMeta }
   'backup.deleteProvider': { input: { id: string }; output: void }
-  'backup.deleteVersion': { input: { id: string; force: boolean }; output: void }
-  'backup.events': { input: { limit: number }; output: BackupEvent[] }
   'backup.export': { input: { mode: CredentialMode; password: string | undefined }; output: string | null }
   'backup.getSettings': { input: void; output: BackupSettings }
   'backup.import': {
@@ -114,29 +104,17 @@ export interface DomainOperations {
     input: { providerType: 'gdrive' | 'onedrive'; providerId: string }
     output: { url: string }
   }
+  'backup.selectDirectory': { input: void; output: string | null }
   'backup.pickFile': { input: void; output: { name: string; reference: string } | string | null }
   'backup.preview': { input: { filePath: string; password: string | undefined }; output: BackupPreview }
-  'backup.previewCloud': {
-    input: { providerId: string; object: string; password: string | undefined }
-    output: RestorePreview
-  }
-  'backup.previewLegacyAccount': { input: { password: string }; output: RestorePreview }
-  'backup.previewSafety': { input: { id: string }; output: RestorePreview }
-  'backup.previewVersion': { input: { id: string; password: string | undefined }; output: RestorePreview }
-  'backup.push': { input: void; output: { started: boolean } }
-  'backup.restoreVersion': { input: { id: string }; output: { restored: boolean } }
-  'backup.revealPassword': { input: void; output: { backup_password: string } }
-  'backup.safetyVersions': { input: void; output: Array<{ id: string; createdAt: string }> }
   'backup.status': { input: void; output: BackupStatus }
-  'backup.submitLatest': { input: void; output: { started: boolean } }
   'backup.targets': { input: void; output: BackupTargetMeta[] }
   'backup.testProvider': { input: { id: string }; output: { saved: boolean } }
   'backup.updateProvider': { input: { id: string; config: ProviderConfig }; output: { saved: boolean } }
   'backup.updateSettings': {
-    input: { settings: BackupSettings; backupPassword: string | undefined }
+    input: { settings: BackupPreferences; backupPassword: string | undefined }
     output: { saved: boolean }
   }
-  'backup.versions': { input: void; output: BackupVersion[] }
   'document.exportText': {
     input: { content: string; suggestedName: string; mimeType: string }
     output: string | null
@@ -341,34 +319,21 @@ export const reservedOperations = [
   'account.resetPassword',
   'account.setSyncEnabled',
   'account.status',
-  'backup.applyRestore',
   'backup.backupNow',
-  'backup.cloudVersions',
   'backup.createProvider',
   'backup.deleteProvider',
-  'backup.deleteVersion',
-  'backup.events',
   'backup.export',
   'backup.getSettings',
   'backup.import',
   'backup.oauthUrl',
+  'backup.selectDirectory',
   'backup.pickFile',
   'backup.preview',
-  'backup.previewCloud',
-  'backup.previewLegacyAccount',
-  'backup.previewSafety',
-  'backup.previewVersion',
-  'backup.push',
-  'backup.restoreVersion',
-  'backup.revealPassword',
-  'backup.safetyVersions',
   'backup.status',
-  'backup.submitLatest',
   'backup.targets',
   'backup.testProvider',
   'backup.updateProvider',
   'backup.updateSettings',
-  'backup.versions',
   'document.exportText',
   'document.pick',
   'document.readText',

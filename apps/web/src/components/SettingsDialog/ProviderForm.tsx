@@ -49,9 +49,7 @@ function providerStatus(p: EditableProvider): ProvStatus {
 }
 
 export function ProviderSection({ providers, onChanged }: Props) {
-  const visibleProviders = providers.filter(
-    (provider): provider is EditableProvider => provider.type !== 'account',
-  )
+  const visibleProviders = providers
   const oauthPolls = useRef(new Set<ReturnType<typeof setInterval>>())
   useEffect(() => () => { for (const timer of oauthPolls.current) clearInterval(timer); oauthPolls.current.clear() }, [])
   const [adding, setAdding] = useState(false)

@@ -306,7 +306,7 @@ export class SyncRepository {
       runtimeId,
       seq,
       epoch,
-      revision: this.local.archiveRevision(),
+      revision: this.local.dataRevision(),
       offlineRevision: offline?.revision ?? null,
       offline: offline?.payload ?? emptyPayload(),
       remote,
@@ -336,7 +336,7 @@ export class SyncRepository {
     const p = this.cipher.open<Preview>(row.data, `sync-preview:${token}`)
     if (
       p.runtimeId !== runtimeId ||
-      p.revision !== this.local.archiveRevision() ||
+      p.revision !== this.local.dataRevision() ||
       (p.offlineRevision !== null && p.offlineRevision !== this.offline().revision)
     )
       fail('PREVIEW_CHANGED', '本地数据或运行实例已变化，请重新预览')
@@ -398,11 +398,11 @@ export class SyncRepository {
         const cloud = emptyPayload()
         for (const r of p.remote) put(cloud, r.itemType, r.itemId, r.value)
         graph(cloud)
-        this.local.syncApply(cloud, 'sync_use_cloud', true, false)
+        this.local.syncApply(cloud, 'sync_use_cloud', false)
         this.db.prepare('DELETE FROM outbox').run()
         for (const r of p.remote) this.write('sync_shadow', r.itemType, r.itemId, r)
       } else {
-        this.local.syncApply(local.payload, 'sync_import_offline', true, true)
+        this.local.syncApply(local.payload, 'sync_import_offline', true)
         if (mode === 'use_local') {
           if (!push) fail('SYNC_PROTOCOL', '缺少整体替换请求')
           const expected = this.replacementFromPreview(p, local.payload)
@@ -536,7 +536,7 @@ export class SyncRepository {
           reason: 'dependency',
         } satisfies Conflict)
     }
-    this.local.syncApply(candidate, 'sync_remote_apply', false, false)
+    this.local.syncApply(candidate, 'sync_remote_apply', false)
     this.writeState({ ...state, cursor, epoch, phase: 'pending', lastError: '', lastErrorCode: '' })
   }
   draft(): Draft | null {
@@ -581,7 +581,7 @@ export class SyncRepository {
     return {
       cursor: state.cursor,
       epoch: state.epoch,
-      revision: this.local.archiveRevision(),
+      revision: this.local.dataRevision(),
       covered: pending.map((p) => ({ kind: p.kind, itemId: p.itemId, revision: p.revision })),
       items: pending.map((p) => {
         const itemType = typeOf[p.kind],
@@ -682,14 +682,14 @@ export class SyncRepository {
         const payload = this.local.snapshot()
         put(payload, type, id, c.remote.value)
         graph(payload)
-        this.local.syncApply(payload, 'sync_resolve_cloud', true, c.source === 'offline')
+        this.local.syncApply(payload, 'sync_resolve_cloud', c.source === 'offline')
         if (c.source !== 'offline') this.clear(type, id, Number.MAX_SAFE_INTEGER)
       } else {
         const payload = this.local.snapshot(),
           value = get(payload, type, id)
         // A dependency conflict can have no local outbox; create a real local revision/tombstone.
-        const revision = this.local.archiveRevision() + 1
-        this.local.syncApply(payload, 'sync_resolve_local', false, false)
+        const revision = this.local.dataRevision() + 1
+        this.local.syncApply(payload, 'sync_resolve_local', false)
         this.db
           .prepare('INSERT INTO outbox(kind,item_id,revision,deleted,payload) VALUES (?,?,?,?,?)')
           .run(

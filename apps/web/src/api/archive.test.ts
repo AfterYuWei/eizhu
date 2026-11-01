@@ -24,37 +24,20 @@ const mockedInvoke = vi.mocked(invoke)
 beforeEach(() => mockedInvoke.mockReset())
 
 describe('archiveApi 领域接口', () => {
-  it('版本、状态、事件和同步动作全部通过细粒度 command', async () => {
+  it('自动备份和目录选择使用独立领域接口', async () => {
     mockedInvoke.mockResolvedValue(undefined)
-
     await archiveApi.status()
     await archiveApi.backupNow()
-    await archiveApi.versions()
-    await archiveApi.restoreVersion('v1')
-    await archiveApi.deleteVersion('v1', true)
-    await archiveApi.events(25)
-    await archiveApi.syncNow()
-    await archiveApi.push()
-
+    await archiveApi.selectDirectory()
     expect(mockedInvoke.mock.calls).toEqual([
-      ['backup.status', undefined],
-      ['backup.backupNow', undefined],
-      ['backup.versions', undefined],
-      ['backup.restoreVersion', { id: 'v1' }],
-      ['backup.deleteVersion', { id: 'v1', force: true }],
-      ['backup.events', { limit: 25 }],
-      ['backup.submitLatest', undefined],
-      ['backup.push', undefined],
+      ['backup.status', undefined], ['backup.backupNow', undefined], ['backup.selectDirectory', undefined],
     ])
   })
 
   it('设置密码作为独立敏感参数传递', async () => {
     mockedInvoke.mockResolvedValue(undefined)
     const settings: BackupSettings = {
-      sync_mode: 'auto',
-      conflict_policy: 'prompt',
-      cloud_retention: 'keep_forever',
-      local_keep_versions: 20,
+      directory: '/selected/backup',
       scheduled_enabled: false,
       scheduled_interval_hours: 0,
       scheduled_daily_time: '',
@@ -65,16 +48,14 @@ describe('archiveApi 领域接口', () => {
 
     await archiveApi.settings()
     await archiveApi.updateSettings(settings, 'secret')
-    await archiveApi.revealPassword()
 
     expect(mockedInvoke.mock.calls).toEqual([
       ['backup.getSettings', undefined],
-      ['backup.updateSettings', { settings, backupPassword: 'secret' }],
-      ['backup.revealPassword', undefined],
+      ['backup.updateSettings', { settings: { scheduled_enabled: false, scheduled_interval_hours: 0, scheduled_daily_time: '', auto_backup_enabled: true, change_debounce_seconds: 30 }, backupPassword: 'secret' }],
     ])
   })
 
-  it('provider 与 OAuth 使用 Rust command 和原生深链参数', async () => {
+  it('provider 与 OAuth 使用领域接口', async () => {
     mockedInvoke.mockResolvedValue(undefined)
     const config: ProviderConfig = {
       type: 'gdrive',

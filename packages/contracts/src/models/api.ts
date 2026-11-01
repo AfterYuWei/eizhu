@@ -63,7 +63,7 @@ export interface HistorySettings {
   retentionDays: number
 }
 
-export type LocalStateKey = 'history_settings' | 'terminal_layout' | 'shortcuts'
+export type LocalStateKey = 'history_settings' | 'terminal_layout' | 'shortcuts' | 'sidebar_groups'
 
 export interface VaultListParams {
   type?: VaultType

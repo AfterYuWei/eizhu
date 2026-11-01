@@ -61,7 +61,7 @@ export function Layout() {
     if (sidebarHidden) setSidebarWidth(DEFAULT_DESKTOP_SIDEBAR_WIDTH)
     toggleSidebarVisibility()
   }, [sidebarHidden, setSidebarWidth, toggleSidebarVisibility])
-  const { serversCollapsed, toggleServers, inspectorWidth } = useDesktopShellStore()
+  const inspectorWidth = useDesktopShellStore((s) => s.inspectorWidth)
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [tunnelsOpen, setTunnelsOpen] = useState(false)
   const [snippetsOpen, setSnippetsOpen] = useState(false)
@@ -173,8 +173,8 @@ export function Layout() {
           <Button variant="ghost" onClick={() => runDesktopAction('snippets')}><SquareTerminal size={16} /><span>命令片段</span></Button>
         </nav>
         <div className="shell-lists">
-          <section className="shell-servers" aria-label="服务器" style={{ flex: serversCollapsed ? '0 0 auto' : '1 1 0' }}>
-            <Sidebar visible={sidebarInteractive && !settingsOpen} collapsed={serversCollapsed} onToggle={toggleServers} onAddServer={() => setProfileFormOpen(true)} />
+          <section className="shell-servers" aria-label="服务器">
+            <Sidebar visible={sidebarInteractive && !settingsOpen} onAddServer={() => setProfileFormOpen(true)} />
           </section>
         </div>
         <div className="shell-sidebar-footer"><AccountMenu onSettings={openSettings} /></div>

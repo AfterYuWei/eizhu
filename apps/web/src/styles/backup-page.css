@@ -24,7 +24,6 @@
 .desktop-shell .backup-schedule-fields label { color: var(--fg); }
 .desktop-shell .backup-schedule-fields .backup-description { grid-column: 1 / -1; }
 .desktop-shell .backup-card-footer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; padding: 12px 16px; border-top: 1px solid var(--edge-soft); }
-.desktop-shell .backup-count { margin-left: 4px; color: var(--settings-muted); font-size: max(12px, calc(var(--sans-size) - 2px)); font-weight: 400; }
 .desktop-shell .backup-page .sync-provider-header { align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 10px; }
 .desktop-shell .backup-page .settings-subsection-title { display: flex; align-items: center; gap: 8px; color: var(--settings-muted); }
 .desktop-shell .backup-provider-content { min-width: 0; }
@@ -40,25 +39,10 @@
 .desktop-shell .backup-empty > p { color: var(--fg); font-size: var(--sans-size); }
 .desktop-shell .backup-page .sync-provider-empty-hint { display: flex; align-items: center; justify-content: space-between; flex-direction: row; flex-wrap: wrap; gap: 12px 24px; margin: 0; padding: 18px 16px; border: 1px solid var(--edge-soft); border-radius: var(--r-lg); background: var(--surface-app); text-align: left; }
 .desktop-shell .sync-provider-empty-hint p { margin-bottom: 4px; color: var(--fg); font-size: var(--sans-size); }
-.desktop-shell .backup-provider-types { color: var(--settings-muted); font-size: max(12px, calc(var(--sans-size) - 2px)); line-height: 1.6; }
-.desktop-shell .backup-page .backup-cloud-note { margin-top: 10px; }
-.desktop-shell .backup-page-footer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
-.desktop-shell .backup-page-footer > span { display: inline-flex; align-items: center; gap: 6px; }
-.desktop-shell .backup-page-footer > span > svg { flex-shrink: 0; }
 .desktop-shell .backup-section-heading { display: flex; align-items: flex-start; gap: 10px; min-width: 0; }
 .desktop-shell .backup-section-heading > div { min-width: 0; }
 .desktop-shell .backup-section-heading .backup-description { margin-top: 4px; }
 .desktop-shell .backup-section-icon { display: grid; place-items: center; flex-shrink: 0; height: 22px; color: var(--settings-muted); }
-.desktop-shell .backup-page .backup-restore-password { flex-direction: row; align-items: center; justify-content: space-between; padding: 16px; }
-.desktop-shell .backup-restore-password > input { width: 280px; max-width: 100%; }
-.desktop-shell .backup-version-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-block: 16px; }
-.desktop-shell .backup-version-row + .backup-version-row { border-top: 1px solid var(--edge-soft); }
-.desktop-shell .backup-version-list > .backup-version-row:first-child { padding-top: 0; }
-.desktop-shell .backup-version-list > .backup-version-row:last-child { padding-bottom: 0; }
-.desktop-shell .backup-version-info { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 4px; color: var(--fg); }
-.desktop-shell .backup-version-tag { padding: 4px 10px; border: 1px solid var(--edge-soft); border-radius: var(--r-sm); color: var(--fg); background: var(--bg-active); font-variant-numeric: tabular-nums; }
-.desktop-shell .backup-cloud-picker { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
-.desktop-shell .backup-cloud-picker > [role='combobox'] { width: 280px; max-width: 100%; }
 .desktop-shell .backup-file-grid { display: flex; flex-direction: column; gap: 28px; }
 .desktop-shell .backup-file-card > .backup-row { justify-content: space-between; gap: 24px; padding-block: 12px; }
 .desktop-shell .backup-file-card > .backup-row + .backup-row { border-top: 1px solid var(--edge-soft); }
@@ -70,8 +54,6 @@
 .desktop-shell .backup-page .backup-warning { align-items: flex-start; font-size: max(12px, calc(var(--sans-size) - 2px)); line-height: 1.6; }
 .desktop-shell .backup-warning > svg { flex-shrink: 0; margin-top: 3px; }
 .desktop-shell .backup-file-picker { display: flex; align-items: center; flex-direction: column; gap: 12px; padding: 24px 16px; border: 1px dashed var(--border); border-radius: var(--r-md); color: var(--settings-muted); text-align: center; }
-.desktop-shell .backup-page .backup-file-restore { padding: 16px 0 0; gap: 12px; border: 0; border-top: 1px solid var(--edge-soft); border-radius: 0; background: transparent; }
-.desktop-shell .backup-file-restore > button { align-self: flex-start; }
 .desktop-shell .backup-cloud-card .backup-row { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 12px; min-height: 44px; }
 .desktop-shell .backup-cloud-card .backup-row > :is(input, .settings-select) { width: min(100%, 360px); justify-self: end; }
 .desktop-shell .backup-cloud-card .backup-row:has(> button),
@@ -81,10 +63,6 @@
 @container (max-width: 760px) {
   .desktop-shell .backup-setting-row:has(.backup-actions) { align-items: flex-start; flex-direction: column; gap: 12px; }
   .desktop-shell .backup-schedule-fields { grid-template-columns: minmax(0, 1fr); gap: 16px; }
-  .desktop-shell .backup-page .backup-restore-password { align-items: stretch; flex-direction: column; }
-  .desktop-shell .backup-restore-password > input { width: 100%; }
-  .desktop-shell .backup-version-row { flex-wrap: wrap; }
-  .desktop-shell .backup-version-row > .backup-actions { width: 100%; }
 }
 @container (max-width: 520px) {
   .desktop-shell .backup-tabs { gap: 16px; flex-wrap: wrap; }
@@ -95,3 +73,7 @@
   .desktop-shell .backup-cloud-card .backup-row { grid-template-columns: minmax(0, 1fr); }
   .desktop-shell .backup-cloud-card .backup-row > :is(input, .settings-select) { width: 100%; }
 }
+.desktop-shell .backup-directory-path { overflow-wrap: anywhere; }
+.desktop-shell .backup-directory-row > button { flex-shrink: 0; }
+.desktop-shell .backup-status-error { padding: 0 16px 16px; }
+.desktop-shell .backup-cloud-note { margin-top: 10px; }

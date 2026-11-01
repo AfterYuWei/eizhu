@@ -1,28 +1,19 @@
 import { z } from 'zod'
-import { restoreSchema } from './local.ts'
 
 const id = z.uuid()
 const text = z.string().max(512)
 const secret = z.string().max(16384)
-const hash = z.string().regex(/^[a-f0-9]{64}$/)
-const count = z.int().nonnegative()
-export const backupSettingsSchema = z
-  .strictObject({
-    sync_mode: z.enum(['manual', 'auto']),
-    conflict_policy: z.enum(['prompt', 'latest']),
-    cloud_retention: z.enum(['keep_forever', 'mirror_local']),
-    local_keep_versions: z.int().min(0).max(1000),
-    scheduled_enabled: z.boolean(),
-    scheduled_interval_hours: z.int().min(0).max(8760),
-    scheduled_daily_time: z.string().regex(/^(|([01]\d|2[0-3]):[0-5]\d)$/),
-    auto_backup_enabled: z.boolean(),
-    change_debounce_seconds: z.int().min(1).max(3600),
-    backup_password_set: z.boolean(),
-  })
-  .refine(
-    (s) => !s.scheduled_enabled || s.scheduled_interval_hours > 0 || !!s.scheduled_daily_time,
-    '定时备份必须设置间隔或每日时间',
-  )
+export const backupPreferencesSchema = z.strictObject({
+  scheduled_enabled: z.boolean(),
+  scheduled_interval_hours: z.int().min(0).max(8760),
+  scheduled_daily_time: z.string().regex(/^(|([01]\d|2[0-3]):[0-5]\d)$/),
+  auto_backup_enabled: z.boolean(),
+  change_debounce_seconds: z.int().min(1).max(3600),
+})
+export const backupSettingsSchema = backupPreferencesSchema.extend({
+  directory: z.string().min(1).max(32768).nullable(),
+  backup_password_set: z.boolean(),
+})
 const endpoint = z
   .string()
   .max(4096)
@@ -70,59 +61,41 @@ export const targetSchema = z.strictObject({
   created_at: text,
   updated_at: text,
 })
-export const versionInfoSchema = z.strictObject({ version: count, hash, size: count, created_at: text })
-export const versionSchema = versionInfoSchema.extend({ id, origin: text, synced_to: z.array(id).max(32) })
-export const eventSchema = z.strictObject({
-  id,
-  provider_id: text,
-  action: text,
-  version: count,
-  success: z.boolean(),
-  error: text.optional(),
-  created_at: text,
-})
-export const cloudEntrySchema = versionInfoSchema.extend({
-  object: z.string().regex(/^v\d+-[a-f0-9]{12,64}\.eizhubackup$/),
-})
-export const cloudIndexSchema = z
-  .strictObject({
-    format: z.literal('eizhu-sync-index'),
-    version: z.literal(1),
-    device_id: text,
-    latest_version: count,
-    versions: z.array(cloudEntrySchema).max(10000),
-    updated_at: text,
-  })
-  .superRefine((i, ctx) => {
-    if (
-      new Set(i.versions.map((v) => v.version)).size !== i.versions.length ||
-      new Set(i.versions.map((v) => v.object)).size !== i.versions.length ||
-      i.latest_version !== Math.max(0, ...i.versions.map((v) => v.version))
-    )
-      ctx.addIssue({ code: 'custom', message: '云端目录版本不一致' })
-  })
-const byId = z.strictObject({ id })
+
 const empty = z.undefined(),
   done = z.void(),
   saved = z.strictObject({ saved: z.boolean() })
+const byId = z.strictObject({ id })
 export const archive = {
   'backup.getSettings': { input: empty, output: backupSettingsSchema },
   'backup.updateSettings': {
-    input: z.strictObject({ settings: backupSettingsSchema, backupPassword: secret.min(6).optional() }),
+    input: z.strictObject({
+      settings: backupPreferencesSchema.refine(
+        (s) => !s.scheduled_enabled || s.scheduled_interval_hours > 0 || !!s.scheduled_daily_time,
+        '定时备份必须设置间隔或每日时间',
+      ),
+      backupPassword: secret.min(6).optional(),
+    }),
     output: saved,
   },
-  'backup.revealPassword': { input: empty, output: z.strictObject({ backup_password: secret }) },
   'backup.backupNow': {
     input: empty,
     output: z.strictObject({
-      created: z.boolean(),
-      message: text.optional(),
-      version: versionSchema.optional(),
+      path: z.string().min(1).max(32768),
+      uploaded: z.int().nonnegative(),
+      failed: z.int().nonnegative(),
     }),
   },
-  'backup.versions': { input: empty, output: z.array(versionSchema).max(1000) },
-  'backup.deleteVersion': { input: byId.extend({ force: z.boolean() }), output: done },
-  'backup.previewVersion': { input: byId.extend({ password: secret.optional() }), output: restoreSchema },
+  'backup.status': {
+    input: empty,
+    output: z.strictObject({
+      status: z.enum(['idle', 'backing_up', 'error']),
+      last_backup_at: text.nullable(),
+      last_backup_path: z.string().max(32768).nullable(),
+      last_error: text.nullable(),
+      providers: z.array(targetSchema).max(32),
+    }),
+  },
   'backup.targets': { input: empty, output: z.array(targetSchema).max(32) },
   'backup.createProvider': { input: z.strictObject({ config: providerConfigSchema }), output: targetSchema },
   'backup.updateProvider': { input: byId.extend({ config: providerConfigSchema }), output: saved },
@@ -132,47 +105,9 @@ export const archive = {
     input: z.strictObject({ providerType: z.enum(['gdrive', 'onedrive']), providerId: id }),
     output: z.strictObject({ url: z.url() }),
   },
-  'backup.cloudVersions': {
-    input: z.strictObject({ providerId: id }),
-    output: z.array(z.strictObject({ object: text, size: count, createdAt: text })).max(10000),
-  },
-  'backup.previewCloud': {
-    input: z.strictObject({
-      providerId: id,
-      object: cloudEntrySchema.shape.object,
-      password: secret.optional(),
-    }),
-    output: restoreSchema,
-  },
-  'backup.submitLatest': { input: empty, output: z.strictObject({ started: z.boolean() }) },
-  'backup.push': { input: empty, output: z.strictObject({ started: z.boolean() }) },
-  'backup.events': {
-    input: z.strictObject({ limit: z.int().min(1).max(500) }),
-    output: z.array(eventSchema),
-  },
-  'backup.status': {
-    input: empty,
-    output: z.strictObject({
-      status: z.enum(['idle', 'syncing', 'conflict', 'error']),
-      local_latest: versionInfoSchema.nullable(),
-      cloud_latest: z.record(id, versionInfoSchema),
-      providers: z.array(targetSchema).max(32),
-      conflict: z
-        .strictObject({
-          provider_id: id,
-          provider_name: text,
-          local: versionInfoSchema,
-          cloud: versionInfoSchema,
-        })
-        .nullable(),
-      last_sync_at: text.nullable(),
-    }),
-  },
 } as const
 export type ArchiveOperation = keyof typeof archive
 export function isArchiveOperation(op: string): op is ArchiveOperation {
   return Object.hasOwn(archive, op)
 }
 export type ProviderConfig = z.infer<typeof providerConfigSchema>
-export type CloudIndex = z.infer<typeof cloudIndexSchema>
-export type CloudEntry = z.infer<typeof cloudEntrySchema>

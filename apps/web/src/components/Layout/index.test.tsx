@@ -50,7 +50,7 @@ beforeEach(async () => {
   settings.sidebarWidth = 300
   vi.clearAllMocks()
   settings.setSidebarWidth.mockImplementation((width: number) => { settings.sidebarWidth = width })
-  useDesktopShellStore.setState({ serversCollapsed: false, settingsPage: null })
+  useDesktopShellStore.setState({ settingsPage: null })
   resetTerminalLayout()
   useSessionStore.setState(useSessionStore.getInitialState(), true)
   useProfileStore.setState({ fetchProfiles: async () => {}, fetchGroups: async () => {} })

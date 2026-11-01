@@ -1,4 +1,4 @@
-import { net } from 'electron'
+import { session } from 'electron'
 import { z } from 'zod'
 import { MAX_NETWORK_BYTES } from '@eizhu/core/archive/network'
 import type { HttpResponse } from '@eizhu/core/archive/network'
@@ -8,15 +8,41 @@ const request = z.strictObject({
   headers: z.record(z.string().max(256), z.string().max(32768)),
   body: z.instanceof(Uint8Array).optional(),
 })
-/** Internal business-process transport. Electron supplies system proxy/TLS; redirects never forward credentials. */
-export async function cloudRequest(
+let backupSession: Electron.Session | undefined
+let backupQueue: Promise<unknown> = Promise.resolve()
+
+/** Fresh write connections prevent Chromium from replaying a lost upload on a reused socket. */
+export function cloudRequest(
   raw: unknown,
   signal: AbortSignal,
   maxBytes = MAX_NETWORK_BYTES,
   networkSession?: Electron.Session,
 ): Promise<HttpResponse> {
-  const d = request.parse(raw),
-    url = new URL(d.url)
+  const data = request.parse(raw)
+  // Account requests already own their connection queue and isolated session.
+  if (networkSession) return performRequest(data, signal, maxBytes, networkSession)
+  const task = backupQueue.then(async () => {
+    if (signal.aborted) throw new Error('Backup request cancelled')
+    backupSession ??= session.fromPartition('eizhu-backup-network', { cache: false })
+    if (data.method !== 'GET') await backupSession.closeAllConnections()
+    if (signal.aborted) throw new Error('Backup request cancelled')
+    return performRequest(data, signal, maxBytes, backupSession)
+  })
+  backupQueue = task.then(
+    () => undefined,
+    () => undefined,
+  )
+  return task
+}
+
+/** Internal business-process transport. Electron supplies system proxy/TLS; redirects never forward credentials. */
+async function performRequest(
+  d: z.infer<typeof request>,
+  signal: AbortSignal,
+  maxBytes: number,
+  networkSession: Electron.Session,
+): Promise<HttpResponse> {
+  const url = new URL(d.url)
   if (
     !['https:', 'http:'].includes(url.protocol) ||
     url.username ||
@@ -32,8 +58,7 @@ export async function cloudRequest(
   let total = 0
   let reader: ReadableStreamDefaultReader<Uint8Array> | undefined
   try {
-    const fetch = networkSession ? networkSession.fetch.bind(networkSession) : net.fetch.bind(net)
-    const response = await fetch(url.href, {
+    const response = await networkSession.fetch(url.href, {
       method: d.method,
       headers,
       body,

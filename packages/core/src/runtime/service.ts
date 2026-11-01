@@ -27,11 +27,6 @@ export class RuntimeService {
   private database: WorkerClient
   private compute: WorkerClient
   private filePreviews = new Map<string, { token: string; hash: string }>()
-  private restoreTokens = new Set<string>()
-  private rememberToken(token: string): void {
-    if (this.restoreTokens.size >= 4) this.restoreTokens.delete(this.restoreTokens.values().next().value!)
-    this.restoreTokens.add(token)
-  }
   private archive: ArchiveService
   private ssh: SshService
   private sftp:SftpService
@@ -77,7 +72,7 @@ export class RuntimeService {
     this.scope.own(() => this.ssh.close())
     this.sftp=new SftpService(this.ssh,this.database,context,root,emit,localHome)
     this.scope.own(()=>this.sftp.close())
-    this.archive=new ArchiveService(this.database,this.compute,transport,token=>this.rememberToken(token))
+    this.archive=new ArchiveService(this.database,this.compute,transport)
     this.scope.own(()=>this.archive.close())
   }
   async initialize(): Promise<WorkspaceIdentity> {
@@ -123,9 +118,10 @@ export class RuntimeService {
         return this.account.execute('account.status', undefined)
       }
       case 'runtime.beforeQuit': return this.archive.beforeQuit()
+      case 'backup.setDirectory': return this.archive.selectDirectory((request.input as { directory: string }).directory)
       case 'runtime.health':
         await this.database.call('health')
-        return { context: this.context, schema: 3, workers: 2 }
+        return { context: this.context, schema: 4, workers: 2 }
       case 'workspace.status':
         return { id: this.context.workspaceId, generation: this.context.generation, userId: this.workspace.userId }
       case 'settings.read':
@@ -193,12 +189,10 @@ export class RuntimeService {
         }
         if (request.operation === 'backup.releaseSource') {
           const { path } = request.input as { path: string }
-          const preview = this.filePreviews.get(path)
-          if (preview) this.restoreTokens.delete(preview.token)
           this.filePreviews.delete(path)
           return
         }
-        if (isLocalOperation(request.operation)) {const result=await this.executeLocal(request.operation, request.input);if(/\.(create|update|delete)$/.test(request.operation)||['backup.applyRestore','backup.import'].includes(request.operation))this.sync.wake();return result}
+        if (isLocalOperation(request.operation)) {const result=await this.executeLocal(request.operation, request.input);if(/\.(create|update|delete)$/.test(request.operation)||request.operation==='backup.import')this.sync.wake();return result}
         return fail('STAGE_NOT_READY', '该业务能力尚未开放；官方备份不在本轮账号同步范围')
     }
   }
@@ -239,8 +233,7 @@ export class RuntimeService {
           )
         return this.database.call(operation, data)
       }
-      case 'backup.preview':
-      case 'backup.prepareRestore': {
+      case 'backup.preview': {
         // Paths here are substituted by main from a window/context-bound native picker grant.
         const data = local[operation].input.parse(input),
           parsed = await this.compute.call<Awaited<ReturnType<typeof decodeBackup>>>(
@@ -252,28 +245,20 @@ export class RuntimeService {
           token: string
           stats: unknown
           conflicts: unknown
-          changes: unknown
           credentialMode: string
           exportedAt: string
-          source: unknown
         }>('backup.prepare', {
           ...parsed,
-          source: { kind: 'file', name: data.filePath.split(/[\\/]/).pop() },
           payload: parsed.payload as Payload,
         })
         if (this.filePreviews.size >= 4) this.filePreviews.delete(this.filePreviews.keys().next().value!)
         this.filePreviews.set(data.filePath, { token: result.token, hash: parsed.hash })
-        this.rememberToken(result.token)
-        if (operation === 'backup.preview')
-          return {
-            credential_mode: result.credentialMode,
-            exported_at: result.exportedAt,
-            stats: result.stats,
-            conflicts: result.conflicts,
-          }
-        const { conflicts, ...preview } = result
-        void conflicts
-        return preview
+        return {
+          credential_mode: result.credentialMode,
+          exported_at: result.exportedAt,
+          stats: result.stats,
+          conflicts: result.conflicts,
+        }
       }
       case 'backup.import': {
         const data = local[operation].input.parse(input),
@@ -290,23 +275,7 @@ export class RuntimeService {
           strategy: data.strategy,
         })
         this.filePreviews.clear()
-        this.restoreTokens.clear()
         return result
-      }
-      case 'backup.applyRestore': {
-        const data = local[operation].input.parse(input)
-        if (!this.restoreTokens.has(data.token)) fail('PREVIEW_EXPIRED', '预览所属运行实例已失效，请重新预览')
-        await this.database.call(operation, data)
-        this.restoreTokens.clear()
-        this.filePreviews.clear()
-        return
-      }
-      case 'backup.previewSafety': {
-        const result = await this.database.call<{ token: string; conflicts: unknown }>(operation, input)
-        this.rememberToken(result.token)
-        const { conflicts, ...preview } = result
-        void conflicts
-        return preview
       }
       default:
         return this.database.call(operation, input)

@@ -3,7 +3,7 @@ import { ssh, tunnelConfigSchema } from '@eizhu/contracts'
 import type { HistoryEntry, HistorySettings, TunnelConfig } from '@eizhu/contracts/models/api'
 import type Database from 'better-sqlite3'
 import { randomUUID } from 'node:crypto'
-import { DesktopError, fail, local } from '@eizhu/contracts'
+import { DesktopError, fail, local, backupPreferencesSchema } from '@eizhu/contracts'
 import type { LocalInput } from '@eizhu/contracts'
 import { LocalCipher } from '../local/crypto.ts'
 import { restoreCheckpoint } from '../sftp/checkpoint.ts'
@@ -27,7 +27,6 @@ type Preview = {
   expires: number
   mode: 'none' | 'plain' | 'encrypted'
   exportedAt: string
-  source: import('@eizhu/contracts/models/backup').RestorePreview['source']
 }
 const now = () => new Date().toISOString()
 const stats = (p: Payload) => Object.fromEntries(kinds.map((k) => [k, p[k].length])) as Record<Kind, number>
@@ -50,7 +49,7 @@ function inUse(references: Array<{ id: string; name: string }>, message: string)
 export class LocalStore {
   private cipher: LocalCipher
   private db: Database.Database
-  constructor(db: Database.Database, key: Uint8Array, workspace = 'offline', beforeMigration: () => void = () => undefined) {
+  constructor(db: Database.Database, key: Uint8Array, workspace = 'offline', beforeMigration: (from: number, to: number) => void = () => undefined) {
     this.db = db
     this.cipher = new LocalCipher(key, workspace)
     try {
@@ -63,20 +62,20 @@ export class LocalStore {
         CREATE TABLE outbox (sequence INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT NOT NULL, item_id TEXT NOT NULL, revision INTEGER NOT NULL, deleted INTEGER NOT NULL, payload BLOB NOT NULL);
         CREATE TABLE local_state (key TEXT PRIMARY KEY, data BLOB NOT NULL);
         CREATE TABLE restore_previews (token TEXT PRIMARY KEY, data BLOB NOT NULL, expires INTEGER NOT NULL);
-        CREATE TABLE safety_snapshots (id TEXT PRIMARY KEY, data BLOB NOT NULL, created_at TEXT NOT NULL);
         CREATE TABLE key_check (id INTEGER PRIMARY KEY CHECK(id=1), data BLOB NOT NULL);
       `)
         db.prepare('INSERT INTO key_check VALUES (1, ?)').run(this.cipher.seal('eizhu-local-v2', 'key-check'))
         db.pragma('user_version = 2')
       })()
-    else if (version !== 2 && version !== 3) fail('SCHEMA_UNSUPPORTED', '业务数据版本不受支持，原数据已保留')
+    else if (version !== 2 && version !== 3 && version !== 4) fail('SCHEMA_UNSUPPORTED', '业务数据版本不受支持，原数据已保留')
     const marker = db.prepare('SELECT data FROM key_check WHERE id=1').get() as { data: Buffer } | undefined
     if (!marker || this.cipher.open(marker.data, 'key-check') !== 'eizhu-local-v2')
       fail('KEY_INVALID', '数据密钥校验失败，原数据已保留')
-    if (db.pragma('user_version', { simple: true }) === 2) {
-      beforeMigration()
+    const from = Number(db.pragma('user_version', { simple: true }))
+    if (from < 4) {
+      beforeMigration(from, 4)
       db.transaction(() => {
-        db.exec(`
+        if (from === 2) db.exec(`
           CREATE TABLE sync_state (key TEXT PRIMARY KEY, data BLOB NOT NULL);
           CREATE TABLE sync_shadow (kind TEXT NOT NULL, item_id TEXT NOT NULL, data BLOB NOT NULL, PRIMARY KEY(kind,item_id));
           CREATE TABLE sync_requests (request_id TEXT PRIMARY KEY, data BLOB NOT NULL);
@@ -84,7 +83,18 @@ export class LocalStore {
           CREATE TABLE sync_previews (token TEXT PRIMARY KEY, data BLOB NOT NULL, expires INTEGER NOT NULL);
           CREATE INDEX outbox_item_revision ON outbox(kind,item_id,revision);
         `)
-        db.pragma('user_version = 3')
+        const previous = this.state<Partial<import('@eizhu/contracts/models/backup').BackupPreferences>>('archive:settings', {})
+        const preferences = backupPreferencesSchema.parse({
+          scheduled_enabled: false,
+          scheduled_interval_hours: previous.scheduled_interval_hours ?? 24,
+          scheduled_daily_time: previous.scheduled_daily_time ?? '',
+          auto_backup_enabled: false,
+          change_debounce_seconds: previous.change_debounce_seconds ?? 10,
+        })
+        // Keep target credentials and identity. Old cloud objects are deliberately untouched.
+        db.prepare("DELETE FROM local_state WHERE key LIKE 'archive:%' AND key NOT IN ('archive:settings','archive:password','archive:providers','archive:identity')").run()
+        this.setState('archive:settings', preferences)
+        db.exec('DROP TABLE IF EXISTS safety_snapshots; DELETE FROM restore_previews; PRAGMA user_version = 4;')
       })()
     }
     this.pruneHistory()
@@ -117,10 +127,9 @@ export class LocalStore {
     this.db.transaction(() => this.setState(`archive:${key}`, value))()
   }
   archiveTransaction<T>(work: () => T): T { return this.db.transaction(work)() }
-  archiveDelete(key: string): void { this.db.prepare('DELETE FROM local_state WHERE key=?').run(`archive:${key}`) }
-  archiveRevision(): number { return this.revision() }
-  syncApply(payload: Payload, action: string, safety = false, capture = false): void {
-    this.db.transaction(() => this.commit(this.snapshot(), payload, action, '', safety, capture))()
+  dataRevision(): number { return this.revision() }
+  syncApply(payload: Payload, action: string, capture = false): void {
+    this.db.transaction(() => this.commit(this.snapshot(), payload, action, '', capture))()
   }
   syncPending(): Array<{ kind: Kind; itemId: string; revision: number; value: Entity | null }> {
     const rows = this.db.prepare('SELECT kind,item_id,revision,deleted,payload FROM outbox WHERE sequence IN (SELECT max(sequence) FROM outbox GROUP BY kind,item_id) ORDER BY sequence').all() as Array<{kind:Kind;item_id:string;revision:number;deleted:number;payload:Buffer}>
@@ -175,16 +184,10 @@ export class LocalStore {
       if (profile.vault_id) references.set(profile.vault_id, (references.get(profile.vault_id) ?? 0) + 1)
     return references
   }
-  private commit(before: Payload, after: Payload, action: string, id = '', safety = false, capture = true): void {
+  private commit(before: Payload, after: Payload, action: string, id = '', capture = true): void {
     payloadSchema.parse(after)
     validateGraph(after)
     const revision = this.revision() + 1
-    if (safety) {
-      const snapshotId = randomUUID()
-      this.db
-        .prepare('INSERT INTO safety_snapshots VALUES (?, ?, ?)')
-        .run(snapshotId, this.cipher.seal(before, `safety:${snapshotId}`), now())
-    }
     for (const kind of kinds) {
       const old = new Map<string, Entity>(before[kind].map((v) => [v.id, v]))
       const next = new Map<string, Entity>(after[kind].map((v) => [v.id, v]))
@@ -620,29 +623,6 @@ export class LocalStore {
         })()
         return
       }
-      case 'backup.safetyVersions':
-        return this.db
-          .prepare('SELECT id,created_at AS createdAt FROM safety_snapshots ORDER BY rowid DESC')
-          .all()
-      case 'backup.previewSafety': {
-        const { id } = local[operation].input.parse(input),
-          row = this.db.prepare('SELECT data,created_at FROM safety_snapshots WHERE id=?').get(id) as
-            { data: Buffer; created_at: string } | undefined
-        if (!row) fail('NOT_FOUND', '安全快照不存在')
-        const { conflicts, ...preview } = this.prepare({
-          payload: this.cipher.open(row.data, `safety:${id}`),
-          mode: 'encrypted',
-          exportedAt: row.created_at,
-          source: { kind: 'safety', createdAt: row.created_at },
-        })
-        void conflicts
-        return preview
-      }
-      case 'backup.applyRestore': {
-        const d = local[operation].input.parse(input)
-        this.apply(d.token, d.mode === 'replace' ? 'replace' : 'overwrite')
-        return
-      }
       default:
         return fail('UNKNOWN_OPERATION', '未开放的本地操作')
     }
@@ -654,26 +634,7 @@ export class LocalStore {
     } catch {
       return fail('IMPORT_FAILED', '备份关联或数据内容无效')
     }
-    const current = this.snapshot(),
-      changes = Object.fromEntries(
-        kinds.map((kind) => {
-          const before = new Map<string, Entity>(current[kind].map((v) => [v.id, v])),
-            after = new Map<string, Entity>(payload[kind].map((v) => [v.id, v]))
-          return [
-            kind,
-            {
-              added: [...after.keys()].filter((id) => !before.has(id)).length,
-              changed: [...after].filter(
-                ([id, v]) => before.has(id) && comparable(kind, before.get(id)) !== comparable(kind, v),
-              ).length,
-              unchanged: [...after].filter(
-                ([id, v]) => comparable(kind, before.get(id)) === comparable(kind, v),
-              ).length,
-              removedInReplace: [...before.keys()].filter((id) => !after.has(id)).length,
-            },
-          ]
-        }),
-      )
+    const current = this.snapshot()
     const preview: Preview = {
       ...input,
       payload,
@@ -695,10 +656,8 @@ export class LocalStore {
     return {
       token: preview.token,
       stats: stats(payload),
-      changes,
       credentialMode: preview.mode,
       exportedAt: preview.exportedAt,
-      source: preview.source,
       conflicts: Object.fromEntries(
         kinds.map((k) => {
           const ids = new Set(current[k].map((c) => c.id))
@@ -707,7 +666,7 @@ export class LocalStore {
       ),
     }
   }
-  apply(token: string, strategy: 'skip' | 'overwrite' | 'regenerate' | 'replace') {
+  apply(token: string, strategy: 'skip' | 'overwrite' | 'regenerate') {
     return this.db.transaction(() => {
       const row = this.db
         .prepare('SELECT data FROM restore_previews WHERE token=? AND expires>=?')
@@ -717,7 +676,7 @@ export class LocalStore {
       if (preview.revision !== this.revision()) fail('PREVIEW_CHANGED', '本地数据已变化，请重新预览')
       const before = this.snapshot(),
         incoming = structuredClone(preview.payload),
-        after = strategy === 'replace' ? emptyPayload() : structuredClone(before)
+        after = structuredClone(before)
       if (strategy === 'regenerate') {
         const maps = Object.fromEntries(
           kinds.map((k) => [k, new Map(incoming[k].map((v) => [v.id, randomUUID()]))]),
@@ -768,7 +727,7 @@ export class LocalStore {
           if (vault?.type === 'password') profile.username = vault.username
         }
       try {
-        this.commit(before, after, 'backup_import', '', true)
+        this.commit(before, after, 'backup_import')
       } catch (cause) {
         if (cause instanceof DesktopError && cause.error.code !== 'DATA_DECRYPT_FAILED')
           fail('IMPORT_FAILED', '导入后的关联无效，未修改任何数据')

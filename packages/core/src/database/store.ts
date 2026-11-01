@@ -44,7 +44,7 @@ export class FoundationStore {
           const cipher = new LocalCipher(key, 'offline')
           try {
             const version = Number(previous.pragma('user_version', { simple: true }))
-            if (![1, 2, 3].includes(version)) fail('SCHEMA_UNSUPPORTED', '业务数据版本不受支持，原数据已保留')
+            if (![1, 2, 3, 4].includes(version)) fail('SCHEMA_UNSUPPORTED', '业务数据版本不受支持，原数据已保留')
             if (version >= 2) {
               const marker = previous.prepare('SELECT data FROM key_check WHERE id=1').get() as
                 { data: Buffer } | undefined
@@ -91,8 +91,8 @@ export class FoundationStore {
         { value: string } | undefined
       if (metadata && metadata.value !== this.identity.id)
         fail('WORKSPACE_INVALID', '业务库不属于当前空间，原数据已保留')
-      this.local = new LocalStore(this.workspace, key, this.identity.id, () => {
-        if (workspaceExisted) preserveBeforeMigration(this.workspace, root, this.identity.id, 2, 3)
+      this.local = new LocalStore(this.workspace, key, this.identity.id, (from, to) => {
+        if (workspaceExisted) preserveBeforeMigration(this.workspace, root, this.identity.id, from, to)
       })
       this.sync = new SyncRepository(this.workspace, this.local, key, this.identity.id, () => this.offlineSnapshot())
       if (!metadata)
@@ -108,13 +108,13 @@ export class FoundationStore {
     }
   }
   private offlineSnapshot(): { payload: Payload; revision: number } {
-    if (this.identity.id === 'offline') return { payload: this.local.snapshot(), revision: this.local.archiveRevision() }
+    if (this.identity.id === 'offline') return { payload: this.local.snapshot(), revision: this.local.dataRevision() }
     const path = join(this.root, 'workspaces', 'offline', 'workspace.sqlite')
     if (!existsSync(path)) return { payload: emptyPayload(), revision: 0 }
     const db = new Database(path, { readonly: true, fileMustExist: true }), cipher = new LocalCipher(this.deviceKey, 'offline')
     try {
       const version = Number(db.pragma('user_version', { simple: true }))
-      if (![2, 3].includes(version)) fail('SCHEMA_UNSUPPORTED', '离线空间版本不受支持，原数据已保留')
+      if (![2, 3, 4].includes(version)) fail('SCHEMA_UNSUPPORTED', '离线空间版本不受支持，原数据已保留')
       const marker = db.prepare('SELECT data FROM key_check WHERE id=1').get() as {data:Buffer}|undefined
       if (!marker || cipher.open(marker.data, 'key-check') !== 'eizhu-local-v2') fail('KEY_INVALID', '离线空间密钥无效')
       return db.transaction(() => {
@@ -139,7 +139,7 @@ export class FoundationStore {
           db.exec(schema)
           db.pragma('user_version = 1')
         })()
-      else if (![1, 2, ...(path.endsWith('workspace.sqlite') ? [3] : [])].includes(Number(version)))
+      else if (![1, 2, ...(path.endsWith('workspace.sqlite') ? [3, 4] : [])].includes(Number(version)))
         fail('SCHEMA_UNSUPPORTED', '数据版本高于当前应用支持范围，原数据已保留')
       return db
     } catch (cause) {

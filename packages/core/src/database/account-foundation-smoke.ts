@@ -61,7 +61,7 @@ async function verify() {
     assert.deepEqual(store.local.snapshot(), before)
     assert.equal(store.settings()['eizhu-settings'], '{"theme":"dark"}')
     const migrated = new Database(path, { readonly: true })
-    assert.equal(migrated.pragma('user_version', { simple: true }), 3)
+    assert.equal(migrated.pragma('user_version', { simple: true }), 4)
     assert.deepEqual(migrated.prepare('SELECT * FROM outbox ORDER BY sequence').all(), oldOutbox)
     const encryptedEntity = (
       migrated.prepare('SELECT data FROM entities WHERE id=?').get(group.id) as { data: Buffer }
@@ -69,7 +69,7 @@ async function verify() {
     migrated.close()
     for (const [name, version] of [
       ['global-v1-before-v2.sqlite', 1],
-      ['offline-v2-before-v3.sqlite', 2],
+      ['offline-v2-before-v4.sqlite', 2],
     ] as const) {
       const backup = join(root, 'schema-backups', name),
         db = new Database(backup, { readonly: true })
@@ -77,7 +77,7 @@ async function verify() {
       db.close()
       if (process.platform !== 'win32') assert.equal((await stat(backup)).mode & 0o777, 0o600)
     }
-    checks.push('全局 v1→v2、业务 v2→v3：设置、实体、原 outbox 密文保留；一致性副本可读取')
+    checks.push('全局 v1→v2、业务 v2→v4：设置、实体、原 outbox 密文保留；一致性副本可读取')
 
     const a = accountWorkspace(42),
       b = accountWorkspace(43)

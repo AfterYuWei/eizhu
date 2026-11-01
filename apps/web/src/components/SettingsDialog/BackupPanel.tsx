@@ -1,5 +1,4 @@
 import { ArchivePanel } from './ArchivePanel'
-import { LocalRestorePanel } from './LocalRestorePanel'
 import { useState } from 'react'
 import { Download, Upload, AlertTriangle, FileJson, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -202,8 +201,7 @@ export function BackupPanel() {
   return (
     <Tabs defaultValue="backup" className="settings-section backup-page">
       <TabsList className="settings-subtabs backup-tabs" variant="line" aria-label="数据备份功能">
-        <TabsTrigger value="backup">备份设置</TabsTrigger>
-        <TabsTrigger value="restore">版本恢复</TabsTrigger>
+        <TabsTrigger value="backup">自动备份</TabsTrigger>
         <TabsTrigger value="files">文件导入与导出</TabsTrigger>
       </TabsList>
 
@@ -410,7 +408,6 @@ export function BackupPanel() {
                 )}
               </>
             )}
-            <LocalRestorePanel source={file} password={importPwd} onRestored={resetImport} />
           </section>
         </div>
       </TabsContent>

@@ -93,11 +93,55 @@ export async function verifyWorkspaceTabs(window: BrowserWindow, root: string) {
     const enlarged = await geometry()
     assert.ok(enlarged.headerHeight >= 48 && enlarged.buttonsFit && enlarged.noDrag)
     await capture('workspace-tabs-large-collapsed.png', 'light')
-    assert.equal(await js(`document.body.innerText.includes('终端布局保存失败')`), false, 'Draft tabs must not break layout persistence')
+    assert.equal(await js(`window.eizhu.localState.read({key:'terminal_layout'})`), null, 'Terminal tabs must remain in memory only')
     // Close through the same button path, checking the restored keyboard focus.
     await js(`(()=>{const close=document.querySelector('.shell-tab.is-active .shell-tab-close');close.focus();close.click()})()`)
     await wait(`${tabCount}===11&&document.activeElement===document.querySelector('.shell-tab-list [aria-selected="true"]')`)
-    return { passed: true, synthetic: true, keyboard: true, mountedContentRetained: true, singletonTools: true, toolShortcutIsolation: true, closeFocus: true, vaultLayout, wide, narrow, enlarged, screenshots }
+
+    const folders = await js<{ parent: string; child: string }>(`(async()=>{
+      const parent=await window.eizhu.group.create({request:{name:'展开状态父文件夹'}});
+      const child=await window.eizhu.group.create({request:{name:'展开状态子文件夹',parent_id:parent.id}});
+      // Old versions saved references even when no SSH connection could be resumed.
+      await window.eizhu.localState.write({key:'terminal_layout',value:{version:1,tree:{type:'leaf',tabId:'old'},focusedId:'old',tabs:[{id:'old',profileId:'removed-profile'}]}});
+      return {parent:parent.id,child:child.id};
+    })()`)
+    const reload = async (withFolders = true) => {
+      await new Promise<void>((resolve) => {
+        window.webContents.once('did-finish-load', () => resolve())
+        window.webContents.reload()
+      })
+      await wait(`!!document.querySelector('.shell-section-title')&&${withFolders ? "document.querySelectorAll('.grp-label[aria-expanded]').length>0" : "!!document.querySelector('.sidebar-empty')"}`)
+    }
+    const parentFolder = `Array.from(document.querySelectorAll('.grp-label[aria-expanded]')).find(el=>el.textContent.includes('展开状态父文件夹'))`
+    const childFolder = `Array.from(document.querySelectorAll('.grp-label[aria-expanded]')).find(el=>el.textContent.includes('展开状态子文件夹'))`
+    await reload()
+    assert.equal(await js(tabCount), 0, 'Reload must discard all previous tabs, including legacy saved references')
+    assert.equal(await js(`document.querySelector('.shell-section-title').tagName==='H2'&&!document.querySelector('.shell-section-title svg')&&document.querySelectorAll('.shell-section-heading button').length===1`), true)
+    await js(`(${childFolder}).click()`)
+    await wait(`(${childFolder})?.getAttribute('aria-expanded')==='false'`)
+    await js(`(${parentFolder}).click()`)
+    await wait(`(${parentFolder})?.getAttribute('aria-expanded')==='false'`)
+    const savedFolders = await js<Record<string, boolean>>(`window.eizhu.localState.read({key:'sidebar_groups'})`)
+    assert.equal(savedFolders[folders.parent], true)
+    assert.equal(savedFolders[folders.child], true)
+    await reload()
+    await wait(`(${parentFolder})?.getAttribute('aria-expanded')==='false'`)
+    assert.equal(await js(`(${parentFolder}).getAttribute('aria-expanded')`), 'false', 'Collapsed parent folder survives reload')
+    await js(`(${parentFolder}).click()`)
+    await wait(`(${childFolder})?.getAttribute('aria-expanded')==='false'`)
+    await reload()
+    await wait(`(${parentFolder})?.getAttribute('aria-expanded')==='true'&&(${childFolder})?.getAttribute('aria-expanded')==='false'`)
+    assert.equal(await js(`(${parentFolder}).getAttribute('aria-expanded')`), 'true', 'Expanded parent folder survives reload')
+    assert.equal(await js(`(${childFolder}).getAttribute('aria-expanded')`), 'false', 'Child folder remembers its own state')
+    await capture('sidebar-folders-remembered.png', 'light')
+    await js(`(async()=>{
+      await window.eizhu.group.delete({id:${JSON.stringify(folders.child)}});
+      await window.eizhu.group.delete({id:${JSON.stringify(folders.parent)}});
+      await window.eizhu.localState.write({key:'sidebar_groups',value:{}});
+      await window.eizhu.localState.write({key:'terminal_layout',value:{version:1,tree:null,focusedId:null,tabs:[]}});
+    })()`)
+    await reload(false)
+    return { passed: true, synthetic: true, keyboard: true, mountedContentRetained: true, singletonTools: true, toolShortcutIsolation: true, closeFocus: true, freshSessions: true, fixedServerHeading: true, rememberedFolders: true, vaultLayout, wide, narrow, enlarged, screenshots }
   } finally {
     await js(`document.documentElement.className=${JSON.stringify(original.theme)};document.documentElement.style.setProperty('--sans-size',${JSON.stringify(original.font)});delete window.__tabsSmokePanel;delete window.__tabsSmokeVault`)
     await js(`(()=>{if(document.querySelector('.desktop-shell.sidebar-is-hidden'))document.dispatchEvent(new KeyboardEvent('keydown',{key:'b',ctrlKey:true,shiftKey:true,bubbles:true,cancelable:true}))})()`)

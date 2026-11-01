@@ -367,6 +367,14 @@ async function execute(window: BrowserWindow, operation: string, input: unknown)
     }
     let result: unknown
     switch (operation) {
+      case 'backup.selectDirectory': {
+        const picked = await dialog.showOpenDialog(window, { properties: ['openDirectory', 'createDirectory'] })
+        ensureOwner()
+        if (picked.canceled || !picked.filePaths[0]) return null
+        const directory = await runtime.call('backup.setDirectory', { directory: picked.filePaths[0] })
+        ensureOwner()
+        return local[operation].output.parse(directory)
+      }
       case 'backup.pickFile': {
         const picked = await dialog.showOpenDialog(window, {
           properties: ['openFile'],
@@ -435,7 +443,6 @@ async function execute(window: BrowserWindow, operation: string, input: unknown)
         return picked.filePath
       }
       case 'backup.preview':
-      case 'backup.prepareRestore':
       case 'backup.import': {
         const d = local[operation].input.parse(value),
           grant = documents.get(window.id, runtime.context, d.filePath, 'backup')
@@ -451,7 +458,7 @@ async function execute(window: BrowserWindow, operation: string, input: unknown)
     }
     return local[operation].output.parse(result)
   }
-  if (!isFoundationOperation(operation)) return fail('STAGE_NOT_READY', (operation.startsWith('account.') || operation.startsWith('sync.') || operation === 'backup.previewLegacyAccount') ? '官方备份未接入；完整版本与第三方备份独立使用' : '该业务能力将在后续实施阶段开放')
+  if (!isFoundationOperation(operation)) return fail('STAGE_NOT_READY', (operation.startsWith('account.') || operation.startsWith('sync.')) ? '官方备份未接入' : '该业务能力将在后续实施阶段开放')
   const value = foundation[operation].input.parse(input)
   switch (operation) {
     case 'update.check':

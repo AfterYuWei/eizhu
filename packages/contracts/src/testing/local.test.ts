@@ -51,3 +51,18 @@ test('list output schemas reject leaked credentials and invalid restore sources'
     false,
   )
 })
+
+test('sidebar folder preferences accept only bounded group IDs and boolean states', () => {
+  assert.equal(local['localState.read'].input.safeParse({ key: 'sidebar_groups' }).success, true)
+  for (const value of [{ parent: true, child: false }, {}])
+    assert.equal(local['localState.write'].input.safeParse({ key: 'sidebar_groups', value }).success, true)
+  for (const value of [{ parent: 'true' }, { '': true }, { ['x'.repeat(161)]: true }, []])
+    assert.equal(local['localState.write'].input.safeParse({ key: 'sidebar_groups', value }).success, false)
+})
+
+test('removed restore history APIs are unavailable and directory selection never accepts renderer paths', () => {
+  for (const op of ['backup.safetyVersions', 'backup.previewSafety', 'backup.applyRestore', 'backup.prepareRestore'])
+    assert.equal(isLocalOperation(op), false)
+  assert.equal(local['backup.selectDirectory'].input.safeParse(undefined).success, true)
+  assert.equal(local['backup.selectDirectory'].input.safeParse({ directory: '/untrusted' }).success, false)
+})

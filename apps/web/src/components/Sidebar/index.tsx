@@ -21,10 +21,8 @@ import { AlertDialog,AlertDialogAction,AlertDialogCancel,AlertDialogContent,Aler
 import type { Profile } from '@/types/profile';
 import type { Group } from '@/types/group';
 const UNGROUPED_ID = '__ungrouped__';
-export function Sidebar({ collapsed = false, onToggle, onAddServer }: {
+export function Sidebar({ onAddServer }: {
     visible?: boolean;
-    collapsed?: boolean;
-    onToggle?: () => void;
     onAddServer?: () => void;
 }) {
     const { collapsedGroups, toggleGroup } = useDesktopShellStore();
@@ -287,9 +285,7 @@ export function Sidebar({ collapsed = false, onToggle, onAddServer }: {
     };
     return (<div className="shell-server-list">
       <div className="shell-section-heading">
-        <Button variant="ghost" className="shell-section-toggle" aria-expanded={!collapsed} onClick={onToggle}>
-          <ChevronDown className={collapsed ? 'is-collapsed' : ''} size={12}/><span>服务器</span><span className="shell-count">{profiles.length}</span>
-        </Button>
+        <h2 className="shell-section-title"><span>服务器</span><span className="shell-count">{profiles.length}</span></h2>
         <DropdownMenu>
           <DropdownMenuTrigger asChild><ShellIconButton label="新增服务器或分组"><Plus size={15}/></ShellIconButton></DropdownMenuTrigger>
           <DropdownMenuContent data-sidebar-popover align="end">
@@ -298,7 +294,7 @@ export function Sidebar({ collapsed = false, onToggle, onAddServer }: {
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
-          <div className="sidebar-body" hidden={collapsed} inert={collapsed} onContextMenu={handleBlankContextMenu} onClick={() => setSelectedProfileId(null)}>
+          <div className="sidebar-body" onContextMenu={handleBlankContextMenu} onClick={() => setSelectedProfileId(null)}>
             {loading ? (<Loading />) : profiles.length === 0 && groups.length === 0 ? (<div className="sidebar-empty">
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round">
                   <circle cx="7" cy="7" r="4.5"/>

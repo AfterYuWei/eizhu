@@ -4,7 +4,8 @@ import { CloudProvider, signS3 } from './providers.ts'
 import type { Provider } from './repository.ts'
 import type { HttpRequest, Transport } from './network.ts'
 import { successful } from './network.ts'
-import { archive, cloudIndexSchema, providerConfigSchema } from '@eizhu/contracts'
+import { defaults } from './repository.ts'
+import { archive, isArchiveOperation, providerConfigSchema } from '@eizhu/contracts'
 const row: Provider = {
   meta: {
     id: '00000000-0000-4000-8000-000000000001',
@@ -24,32 +25,16 @@ const row: Provider = {
     password: 'secret',
   },
 }
-test('cloud contracts reject path traversal, embedded credentials, unsafe counts, corrupt indices and official targets', () => {
-  assert.equal(
-    providerConfigSchema.safeParse({ ...row.config, endpoint: 'https://user:pass@example.invalid' }).success,
-    false,
-  )
+test('backup contracts reject embedded credentials and remove every version-management operation', () => {
+  assert.equal(providerConfigSchema.safeParse({ ...row.config, endpoint: 'https://user:pass@example.invalid' }).success, false)
   assert.equal(providerConfigSchema.safeParse({ ...row.config, type: 'account' }).success, false)
-  assert.equal(
-    archive['backup.previewCloud'].input.safeParse({ providerId: row.meta.id, object: '../index.json' })
-      .success,
-    false,
-  )
-  assert.equal(
-    archive['backup.updateSettings'].input.safeParse({ settings: {}, backupPassword: 'short' }).success,
-    false,
-  )
-  assert.equal(
-    cloudIndexSchema.safeParse({
-      format: 'eizhu-sync-index',
-      version: 1,
-      device_id: 'x',
-      latest_version: 2 ** 54,
-      versions: [],
-      updated_at: '',
-    }).success,
-    false,
-  )
+  for (const method of ['versions', 'previewVersion', 'deleteVersion', 'events', 'cloudVersions', 'previewCloud', 'push', 'submitLatest'])
+    assert.equal(isArchiveOperation(`backup.${method}`), false)
+  const { directory, backup_password_set, ...settings } = defaults
+  assert.equal(directory, null)
+  assert.equal(backup_password_set, false)
+  assert.equal(archive['backup.updateSettings'].input.safeParse({ settings: { ...settings, directory: '/renderer-controlled' } }).success, false)
+  assert.equal(archive['backup.updateSettings'].input.safeParse({ settings: {}, backupPassword: 'short' }).success, false)
 })
 test('WebDAV creates only its namespaced collection, sends conditional writes and never follows redirects', async () => {
   const calls: HttpRequest[] = [],
@@ -64,37 +49,14 @@ test('WebDAV creates only its namespaced collection, sends conditional writes an
   const provider = new CloudProvider(row, 'offline-test', network, new AbortController().signal, async () =>
     assert.fail('DAV cannot request OAuth'),
   )
-  await assert.rejects(provider.put('index.json', Buffer.from('{}'), '"previous"'), /HTTP 302/)
+  await assert.rejects(provider.put('eizhu-auto.eizhubackup', Buffer.from('{}'), '"previous"'), /HTTP 302/)
   assert.equal(calls.length, 2)
   assert.equal(calls[1].headers['if-match'], '"previous"')
-  assert.equal(calls[1].url, 'https://dav.example.invalid/root/eizhu-offline-test/index.json')
+  assert.equal(calls[1].url, 'https://dav.example.invalid/root/eizhu-offline-test/eizhu-auto.eizhubackup')
 })
-test('malformed index, foreign namespace, duplicate versions and HTTP failures cannot become an empty cloud', async () => {
-  for (const value of [
-    'not JSON',
-    JSON.stringify({
-      format: 'eizhu-sync-index',
-      version: 1,
-      device_id: 'other',
-      latest_version: 0,
-      versions: [],
-      updated_at: '',
-    }),
-  ]) {
-    const provider = new CloudProvider(
-      row,
-      'offline-test',
-      async () => ({ status: 200, headers: {}, body: Buffer.from(value) }),
-      new AbortController().signal,
-      async () => '',
-    )
-    await assert.rejects(provider.index())
-  }
+test('HTTP failures never expose response bodies', () => {
   for (const status of [401, 403, 429, 500, 412])
-    assert.throws(
-      () => successful({ status, headers: {}, body: Buffer.from('sensitive error must not be returned') }),
-      (e) => !String(e).includes('sensitive'),
-    )
+    assert.throws(() => successful({ status, headers: {}, body: Buffer.from('sensitive error must not be returned') }), (e) => !String(e).includes('sensitive'))
 })
 test('S3 SigV4 matches the AWS documented GET test vector', () => {
   const result = signS3(

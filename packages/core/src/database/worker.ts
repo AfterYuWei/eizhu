@@ -27,7 +27,7 @@ parentPort!.on('message', async (message) => {
         return store.writeSetting(data.key, data.value)
       }
       case 'health':
-        return { schema: 3 }
+        return { schema: 4 }
       case 'workspace.identity':
         return store.identity
       case 'account.storage.status': return store.accounts.status(store.identity)
@@ -59,7 +59,6 @@ parentPort!.on('message', async (message) => {
             payload: Payload
             mode: 'none' | 'plain' | 'encrypted'
             exportedAt: string
-            source: { kind: 'file'; name?: string }
           },
         )
       case 'backup.apply': {

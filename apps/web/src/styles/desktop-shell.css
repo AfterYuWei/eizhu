@@ -80,13 +80,12 @@
 .shell-primary-nav > button > span { overflow: hidden; text-overflow: ellipsis; }
 .shell-primary-nav kbd { margin-left: auto; font: 400 11px var(--sans); color: var(--fg-4); }
 .shell-lists { width: 100%; min-height: 0; flex: 1; display: flex; flex-direction: column; padding: 0 var(--shell-sidebar-inset); }
-.shell-servers { display: flex; min-height: 34px; overflow: hidden; }
+.shell-servers { display: flex; flex: 1 1 0; min-height: 34px; overflow: hidden; }
 .shell-server-list { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; }
 .shell-section-heading { display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; gap: 4px; min-height: 34px; }
-.shell-section-toggle { min-width: 0; justify-content: flex-start; height: auto; min-height: 32px; gap: 5px; padding: 4px; font: 400 var(--sans-size) / 1.5 var(--sans); color: var(--fg-3); }
-.shell-section-toggle:hover { background: transparent; color: var(--fg); }
-.shell-section-toggle > svg, .grp-label-left > svg:first-child { transition: transform 120ms; }
-.shell-section-toggle .is-collapsed, .grp-label-left .is-collapsed { transform: rotate(-90deg); }
+.shell-section-title { display: flex; align-items: center; min-width: 0; min-height: 32px; gap: 5px; margin: 0; padding: 4px; font: 400 var(--sans-size) / 1.5 var(--sans); color: var(--fg-3); }
+.grp-label-left > svg:first-child { transition: transform 120ms; }
+.grp-label-left .is-collapsed { transform: rotate(-90deg); }
 .shell-count { color: var(--fg-4); font-size: 11px; padding-left: 3px; }
 .desktop-shell .sidebar-body { min-height: 0; overflow: auto; padding: 2px 0 4px; }
 .desktop-shell .grp-label { min-height: 32px; padding: 5px 8px; font-size: inherit; font-weight: 400; line-height: 1.5; letter-spacing: 0; cursor: pointer; border-radius: var(--r-sm); }

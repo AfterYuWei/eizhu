@@ -76,7 +76,7 @@ ipcRenderer.on('eizhu:event', (_event, envelope) => {
 async function call(operation: string, input?: unknown): Promise<unknown> {
   await initial
   if (!isFoundationOperation(operation) && !isLocalOperation(operation) && !isSshOperation(operation)&&!isSftpOperation(operation)&&!isArchiveOperation(operation)&&!isAccountOperation(operation)&&!isSyncOperation(operation))
-    throw new DesktopError({ code: 'STAGE_NOT_READY', message: (operation.startsWith('account.') || operation.startsWith('sync.') || operation === 'backup.previewLegacyAccount') ? '官方备份未接入；完整版本与第三方备份独立使用' : '该业务能力将在后续实施阶段开放' })
+    throw new DesktopError({ code: 'STAGE_NOT_READY', message: (operation.startsWith('account.') || operation.startsWith('sync.')) ? '官方备份未接入' : '该业务能力将在后续实施阶段开放' })
   const sentContext = context
   if (isFoundationOperation(operation)) input = foundation[operation].input.parse(input)
   else if (isLocalOperation(operation)) input = local[operation].input.parse(input)

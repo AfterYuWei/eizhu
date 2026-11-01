@@ -1,4 +1,4 @@
-import { resetTerminalLayout,restoreTerminalLayout } from '@/store/terminalLayout'
+import { resetTerminalLayout } from '@/store/terminalLayout'
 import { bridge } from './bridge'
 import { useProfileStore } from '@/store/profile'
 import { useVaultStore } from '@/store/vault'
@@ -9,7 +9,7 @@ import { useServerDetailStore } from '@/store/serverDetail'
 import { useSyncStore } from '@/store/sync'
 import { useHistoryStore } from '@/store/history'
 import { useSidebarDetailStore } from '@/store/sidebarDetail'
-import { useDesktopShellStore } from '@/store/desktopShell'
+import { useDesktopShellStore,restoreSidebarGroups } from '@/store/desktopShell'
 import { workspaceGeneration,setWorkspaceGeneration } from './workspaceScope'
 import { resetSnippetQuickAccess } from './snippetQuickAccess'
 export interface WorkspaceStatus { id: string; generation: number; userId: number }
@@ -28,8 +28,9 @@ export function applyWorkspace(workspace: WorkspaceStatus) {
   useSyncStore.setState(useSyncStore.getInitialState(), true)
   useHistoryStore.setState(useHistoryStore.getInitialState(), true)
   useSidebarDetailStore.setState(useSidebarDetailStore.getInitialState(), true)
-  useDesktopShellStore.setState({ collapsedGroups: {} })
-  void useProfileStore.getState().refreshAll().then(() => { if (workspaceGeneration() === workspace.generation) return restoreTerminalLayout() }).catch(() => {})
+  useDesktopShellStore.setState({ collapsedGroups: {}, groupsReady: false })
+  void restoreSidebarGroups()
+  void useProfileStore.getState().refreshAll().catch(() => {})
   void useVaultStore.getState().fetchList()
   void useSyncStore.getState().refresh()
 }

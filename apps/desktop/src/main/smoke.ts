@@ -80,7 +80,7 @@ export async function runSmoke(options: {
     node: typeof process, require: typeof require, bridge: typeof window.eizhu.app.bootstrap,
     health: await window.eizhu.runtime.health(), text: document.body.innerText.includes('新建连接'),
     account: await window.eizhu.account.status(),
-    reserved: await window.eizhu.backup.previewLegacyAccount({password:'synthetic'}).then(() => 'unexpected-success', e => e.code),
+    removedVersionApi: typeof window.eizhu.backup.versions,
     local: await window.eizhu.group.list(),
     arbitraryPath: await window.eizhu.backup.preview({ filePath: '/etc/passwd' }).then(() => 'unexpected-success', e => e.code),
     inputValidation: await window.eizhu.settings.write({ key: 'credential', value: 'synthetic' }).then(() => 'unexpected-success', e => e.code)
@@ -88,7 +88,7 @@ export async function runSmoke(options: {
   assert.equal(renderer.node, 'undefined')
   assert.equal(renderer.require, 'undefined')
   assert.equal(renderer.text, true)
-  assert.equal(renderer.reserved, 'STAGE_NOT_READY')
+  assert.equal(renderer.removedVersionApi, 'undefined')
   assert.deepEqual(renderer.account, { loggedIn: false, sessionState: 'anonymous', syncEnabled: false })
   assert.equal(renderer.inputValidation, 'BAD_REQUEST')
   assert.deepEqual(renderer.local, [])
@@ -210,8 +210,8 @@ export async function runSmoke(options: {
   assert.equal(failed, 'RUNTIME_UNAVAILABLE')
   const restored = await window.webContents.executeJavaScript('window.eizhu.runtime.restart()')
   step('runtime-restarted')
-  const recoveredVersions=await window.webContents.executeJavaScript('window.eizhu.backup.versions()') as Array<{id:string}>
-  assert.ok(recoveredVersions.some(v=>v.id===stage5.persistedVersionId))
+  const recoveredBackup = await window.webContents.executeJavaScript('window.eizhu.backup.status()') as { last_backup_path: string | null }
+  assert.equal(recoveredBackup.last_backup_path, stage5.persistedPath)
   if(stage4.passed){
     const fileRecovery=await window.webContents.executeJavaScript(`(async()=>{
       const api=window.eizhu,id=${JSON.stringify(stage4.restoredTaskId)};

@@ -1,5 +1,4 @@
 import type { SyncConflict,SyncStatus } from '@/types/sync'
-import type { BackupEvent,BackupStatus,RestorePreview } from '@/types/backup'
 
 export function recoveryFor(code = '', status = '') {
   if (code === 'EMAIL_NOT_VERIFIED') return { kind: 'account', label: '验证邮箱', explanation: '请在账号设置中完成邮箱验证，再继续同步。' }
@@ -12,23 +11,6 @@ export function recoveryFor(code = '', status = '') {
   return { kind: 'retry', label: '重试', explanation: '处理错误后可以重试；本地修改与云端确认分别记录。' }
 }
 
-export function restoreSourceLabel(source: RestorePreview['source']) {
-  switch (source.kind) {
-    case 'local_version': return `本地版本 v${source.version}`
-    case 'cloud': return `云端备份：${source.providerName} · ${source.object}`
-    case 'safety': return `覆盖前安全快照 · ${source.createdAt}`
-    case 'legacy_account': return `旧账号备份 v${source.version} · ${source.object}`
-    case 'file': return `备份文件：${source.name}`
-  }
-}
-
-export function backupDiagnostic(status: BackupStatus | null, events: BackupEvent[]) {
-  return JSON.stringify({ schema: 1, capturedAt: new Date().toISOString(), backup: status ? {
-    status: status.status, lastSyncAt: status.last_sync_at, latestVersion: status.local_latest?.version ?? null,
-    targets: status.providers.map((p) => ({ type: p.type, enabled: p.enabled, authorized: p.authorized })),
-    recentEvents: events.slice(0, 50).map((e) => ({ action: e.action, version: e.version, success: e.success, createdAt: e.created_at })),
-  } : null }, null, 2)
-}
 export function conflictDependencies(conflict: SyncConflict) {
   const result = new Map<string, { type: string; id: string }>()
   for (const summary of [conflict.local, conflict.remote]) {

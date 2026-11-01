@@ -7,6 +7,7 @@ import Database from 'better-sqlite3'
 import { DesktopError, failureOf, local } from '@eizhu/contracts'
 import type { LocalOperation, LocalInput, LocalOutput } from '@eizhu/contracts'
 import { FoundationStore } from './store.ts'
+import { LocalCipher } from '../local/crypto.ts'
 import { decodeBackup, encodeBackup, readBounded } from '../local/backup.ts'
 import { orderedPayload, proxyOf, validateGraph } from '../local/model.ts'
 import { generateKeyPair, prepareCredential } from '../local/keys.ts'
@@ -22,7 +23,7 @@ async function verify() {
   const inspect = new Database(path)
   const counters = () =>
     Object.fromEntries(
-      ['entities', 'audit', 'outbox', 'safety_snapshots', 'restore_previews'].map((table) => [
+      ['entities', 'audit', 'outbox', 'restore_previews'].map((table) => [
         table,
         (inspect.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get() as { n: number }).n,
       ]),
@@ -38,14 +39,45 @@ async function verify() {
       payload,
       mode: 'plain',
       exportedAt: '',
-      source: { kind: 'file', name: '合成测试备份' },
     })
   const checks: string[] = []
   try {
+    // Simulate a v3 workspace with retired history, but keep settings, credentials and ordinary local state.
+    const cipher = new LocalCipher(key, 'offline')
+    const retained = { password: 'SYNTHETIC-old-backup-password', providers: [{ token: 'SYNTHETIC-provider-token' }], identity: 'retained-device-id' }
+    for (const [name, value] of Object.entries(retained)) {
+      const stateKey = `archive:${name}`
+      inspect.prepare('INSERT INTO local_state VALUES (?,?)').run(stateKey, cipher.seal(value, `state:${stateKey}`))
+    }
+    inspect.prepare('INSERT OR REPLACE INTO local_state VALUES (?,?)').run('archive:settings', cipher.seal({ scheduled_interval_hours: 12, scheduled_daily_time: '09:00', auto_backup_enabled: true }, 'state:archive:settings'))
+    for (const name of ['versions', 'object:old', 'sequence', 'events']) {
+      const stateKey = `archive:${name}`
+      inspect.prepare('INSERT INTO local_state VALUES (?,?)').run(stateKey, cipher.seal('retired-history', `state:${stateKey}`))
+    }
+    cipher.close()
+    inspect.exec("CREATE TABLE safety_snapshots (id TEXT PRIMARY KEY, data BLOB NOT NULL, created_at TEXT NOT NULL); INSERT INTO safety_snapshots VALUES ('old', x'010203', 'old'); PRAGMA user_version=3;")
+    const preserved = inspect.prepare("SELECT key,data FROM local_state WHERE key IN ('archive:password','archive:providers','archive:identity') ORDER BY key").all()
+    foundation.close()
+    inspect.exec("CREATE TRIGGER fail_history_cleanup BEFORE DELETE ON local_state WHEN old.key='archive:versions' BEGIN SELECT RAISE(ABORT,'synthetic migration failure'); END;")
+    assert.throws(() => new FoundationStore(root, key))
+    assert.equal(inspect.pragma('user_version', { simple: true }), 3)
+    assert.equal((inspect.prepare('SELECT count(*) AS n FROM safety_snapshots').get() as { n: number }).n, 1)
+    inspect.exec('DROP TRIGGER fail_history_cleanup')
+    foundation = new FoundationStore(root, key)
+    assert.equal(inspect.pragma('user_version', { simple: true }), 4)
+    assert.deepEqual(inspect.prepare("SELECT key,data FROM local_state WHERE key IN ('archive:password','archive:providers','archive:identity') ORDER BY key").all(), preserved)
+    assert.equal((inspect.prepare("SELECT count(*) AS n FROM local_state WHERE key IN ('archive:versions','archive:object:old','archive:sequence','archive:events')").get() as { n: number }).n, 0)
+    assert.equal((inspect.prepare("SELECT count(*) AS n FROM sqlite_master WHERE name='safety_snapshots'").get() as { n: number }).n, 0)
+    const migrationCopy = new Database(join(root, 'schema-backups', 'offline-v3-before-v4.sqlite'), { readonly: true })
+    assert.equal(migrationCopy.pragma('user_version', { simple: true }), 3)
+    assert.equal((migrationCopy.prepare('SELECT count(*) AS n FROM safety_snapshots').get() as { n: number }).n, 1)
+    migrationCopy.close()
+    checks.push('v3→v4 清除本地版本正文/目录/历史/快照，保留云凭据及身份；迁移失败回滚且一致性副本可读')
+
     const rootGroup = run('group.create', { request: { name: '父组' } })
     const child = run('group.create', { request: { name: '子组', parent_id: rootGroup.id } })
     const unchanged = prepare(foundation.local.snapshot())
-    assert.equal(unchanged.changes.groups.unchanged, 2)
+    assert.equal(unchanged.stats.groups, 2)
     assert.throws(
       () => run('group.update', { id: rootGroup.id, request: { parent_id: child.id } }),
       code('VALIDATION'),
@@ -118,6 +150,8 @@ async function verify() {
     })
     run('localState.write', { key: 'shortcuts', value: { search: 'Ctrl+K' } })
     assert.deepEqual(run('localState.read', { key: 'shortcuts' }), { search: 'Ctrl+K' })
+    run('localState.write', { key: 'sidebar_groups', value: { [rootGroup.id]: true, [child.id]: false } })
+    assert.deepEqual(run('localState.read', { key: 'sidebar_groups' }), { [rootGroup.id]: true, [child.id]: false })
     checks.push('本地 CRUD、查询、默认名称、引用保护、用户名联动、循环拒绝与脱敏列表')
 
     const before = foundation.local.snapshot(),
@@ -129,14 +163,14 @@ async function verify() {
     assert.deepEqual(foundation.local.snapshot(), before)
     assert.deepEqual(counters(), counts)
     const rollbackCandidate = structuredClone(before)
-    rollbackCandidate.profiles[0].note = '必须回滚安全快照'
+    rollbackCandidate.profiles[0].note = '必须回滚导入'
     const rollbackPreview = prepare(rollbackCandidate),
       snapshotCounts = counters()
-    assert.throws(() => foundation.local.apply(rollbackPreview.token, 'replace'))
+    assert.throws(() => foundation.local.apply(rollbackPreview.token, 'overwrite'))
     assert.deepEqual(foundation.local.snapshot(), before)
     assert.deepEqual(counters(), snapshotCounts)
     inspect.exec('DROP TRIGGER smoke_fail_outbox')
-    checks.push('真实 SQLite 中途失败：业务、审计、outbox、安全快照与预览消费整体回滚')
+    checks.push('真实 SQLite 中途失败：业务、审计、outbox 与导入预览消费整体回滚')
 
     const fixturePassword = 'fixture-only-备份密码🔐'
     for (const prefix of ['eizhu', 'xcontrol'])
@@ -148,7 +182,8 @@ async function verify() {
         )
         const expected = await readFile(join(fixtures, `payload-${mode}.json`), 'utf8')
         assert.equal(JSON.stringify(orderedPayload(decoded.payload)), expected)
-        foundation.local.apply(prepare(decoded.payload).token, 'replace')
+        foundation.local.syncApply({ groups: [], vault: [], profiles: [], snippets: [] }, 'fixture_clear')
+        foundation.local.apply(prepare(decoded.payload).token, 'overwrite')
         const result = foundation.local.snapshot()
         assert.equal(result.profiles.length, 6)
         validateGraph(result)
@@ -218,21 +253,16 @@ async function verify() {
     validateGraph(regenerated)
     const stale = prepare(original)
     run('snippet.create', { request: { name: '使预览失效', content: 'true' } })
-    assert.throws(() => foundation.local.apply(stale.token, 'replace'), code('PREVIEW_CHANGED'))
+    assert.throws(() => foundation.local.apply(stale.token, 'overwrite'), code('PREVIEW_CHANGED'))
     const expired = prepare(original)
     inspect.prepare('UPDATE restore_previews SET expires=0 WHERE token=?').run(expired.token)
-    assert.throws(() => foundation.local.apply(expired.token, 'replace'), code('PREVIEW_EXPIRED'))
+    assert.throws(() => foundation.local.apply(expired.token, 'overwrite'), code('PREVIEW_EXPIRED'))
     const merged = foundation.local.apply(prepare(original).token, 'overwrite')
     assert.equal(merged.snapshot.profiles.length, 12)
-    foundation.local.apply(prepare(original).token, 'replace')
+    foundation.local.syncApply(original, 'fixture_reset')
     assert.equal(foundation.local.snapshot().profiles.length, 6)
-    const safety = run('backup.safetyVersions', undefined)[0]
-    const safetyPreview = run('backup.previewSafety', { id: safety.id })
-    run('backup.applyRestore', { token: safetyPreview.token, mode: 'replace' })
-    assert.equal(foundation.local.snapshot().profiles.length, 12)
-    checks.push(
-      'skip/overwrite/regenerate、分组/凭据/跳板 ID 重映射、merge/replace、过期/编辑失效与安全快照恢复',
-    )
+    assert.equal((inspect.prepare("SELECT count(*) AS n FROM sqlite_master WHERE name='safety_snapshots'").get() as { n: number }).n, 0)
+    checks.push('skip/overwrite/regenerate、分组/凭据/跳板 ID 重映射、过期/编辑失效；导入不再建立历史快照')
 
     for (const [algo, bits] of [
       ['ed25519', undefined],
@@ -269,6 +299,7 @@ async function verify() {
     foundation = new FoundationStore(root, key)
     assert.deepEqual(foundation.local.snapshot(), persisted)
     assert.deepEqual(run('localState.read', { key: 'shortcuts' }), { search: 'Ctrl+K' })
+    assert.deepEqual(run('localState.read', { key: 'sidebar_groups' }), { [rootGroup.id]: true, [child.id]: false })
     checks.push('SQLite 无明文凭据、正确密钥重启持久化、错误密钥拒绝并保留原数据')
     await assert.rejects(readBounded(join(fixtures, 'eizhu-plain.eizhubackup'), 1), code('FILE_TOO_LARGE'))
     return {
