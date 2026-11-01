@@ -28,6 +28,7 @@ parentPort!.on('message', async (message) => {
       }
       case 'health':
         return { schema: 4 }
+      case 'ai.storage': return store.agent.execute(input)
       case 'workspace.identity':
         return store.identity
       case 'account.storage.status': return store.accounts.status(store.identity)

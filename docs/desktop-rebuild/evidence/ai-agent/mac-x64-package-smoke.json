@@ -1,0 +1,64 @@
+{
+  "date": "2026-11-01",
+  "platform": "darwin",
+  "arch": "x64",
+  "packaged": true,
+  "electron": "44.9.0",
+  "node": "24.22.0",
+  "version": "0.5.0-test.358.b088d585",
+  "revision": "b088d58562a2a229a199e822f17751538846a1c4",
+  "sourceDigest": "81c8c3da75afd216da03ec5c0b49cc08b41b23368ff9d81847be16a66bbd02de",
+  "installer": {
+    "name": "eizhu-0.5.0-test.358.b088d585-mac-x64.dmg",
+    "bytes": 158202063,
+    "sha256": "97851cd7f66973d9adac00ad79b40108c1f310843a5e3a8d3153fc4b497adf37",
+    "signed": false
+  },
+  "ai": {
+    "passed": true,
+    "model": "loopback-synthetic",
+    "ssh": "loopback-synthetic",
+    "approvalRequired": true,
+    "duplicateRejected": true,
+    "outputAndExitCode": true,
+    "encryptedStorage": true,
+    "historyDeletion": true,
+    "quotaAndAuthErrors": true,
+    "incompleteStreamRejected": true,
+    "unsupportedToolsRejected": true,
+    "screenshots": [
+      "ai-chat-light.png",
+      "ai-chat-dark.png",
+      "ai-chat-narrow.png"
+    ]
+  },
+  "regressions": {
+    "stage2": true,
+    "accountFoundation": true,
+    "accountClosure": true,
+    "syncEngine": true,
+    "syncDesktop": true,
+    "stage3": true,
+    "stage4": true,
+    "stage5": true,
+    "stage6": true,
+    "workspaceTabs": true
+  },
+  "validation": {
+    "typecheck": true,
+    "lint": true,
+    "foundationPassed": 178,
+    "foundationSkipped": 1,
+    "webPassed": 898,
+    "baselinePassed": 10,
+    "baselineVerify": true,
+    "architectureVerify": true
+  },
+  "pending": [
+    "官方真实网关与计量",
+    "真实模型供应商",
+    "真实远端运维命令与 sudo、停止语义",
+    "Windows x64 / macOS arm64 / Linux x64",
+    "签名、公证、长时间并发与正式更新"
+  ]
+}

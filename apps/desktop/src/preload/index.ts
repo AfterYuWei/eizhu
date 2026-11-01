@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import {
+  ai, isAiOperation,
   archive,
   isArchiveOperation,
   contextSchema,
@@ -75,7 +76,7 @@ ipcRenderer.on('eizhu:event', (_event, envelope) => {
 
 async function call(operation: string, input?: unknown): Promise<unknown> {
   await initial
-  if (!isFoundationOperation(operation) && !isLocalOperation(operation) && !isSshOperation(operation)&&!isSftpOperation(operation)&&!isArchiveOperation(operation)&&!isAccountOperation(operation)&&!isSyncOperation(operation))
+  if (!isFoundationOperation(operation) && !isLocalOperation(operation) && !isSshOperation(operation)&&!isSftpOperation(operation)&&!isArchiveOperation(operation)&&!isAccountOperation(operation)&&!isSyncOperation(operation)&&!isAiOperation(operation))
     throw new DesktopError({ code: 'STAGE_NOT_READY', message: (operation.startsWith('account.') || operation.startsWith('sync.')) ? '官方备份未接入' : '该业务能力将在后续实施阶段开放' })
   const sentContext = context
   if (isFoundationOperation(operation)) input = foundation[operation].input.parse(input)
@@ -85,6 +86,7 @@ async function call(operation: string, input?: unknown): Promise<unknown> {
   else if(isArchiveOperation(operation)) input=archive[operation].input.parse(input)
   else if(isAccountOperation(operation)) input=account[operation].input.parse(input)
   else if(isSyncOperation(operation)) input=sync[operation].input.parse(input)
+  else if(isAiOperation(operation)) input=ai[operation].input.parse(input)
   const id = crypto.randomUUID()
   const response = await ipcRenderer.invoke('eizhu:request', { id, context: sentContext, operation, input })
   if (response.id !== id) throw new DesktopError({ code: 'STALE_RESPONSE', message: '响应标识不匹配' })
@@ -113,7 +115,7 @@ async function call(operation: string, input?: unknown): Promise<unknown> {
       ? local[operation].output.parse(response.value)
       : isSshOperation(operation)
         ? ssh[operation].output.parse(response.value)
-        : isSftpOperation(operation)?sftp[operation].output.parse(response.value):isArchiveOperation(operation)?archive[operation].output.parse(response.value):isAccountOperation(operation)?account[operation].output.parse(response.value):isSyncOperation(operation)?sync[operation].output.parse(response.value):response.value
+        : isSftpOperation(operation)?sftp[operation].output.parse(response.value):isArchiveOperation(operation)?archive[operation].output.parse(response.value):isAccountOperation(operation)?account[operation].output.parse(response.value):isSyncOperation(operation)?sync[operation].output.parse(response.value):isAiOperation(operation)?ai[operation].output.parse(response.value):response.value
 }
 const api: Record<string, Record<string, unknown>> = Object.create(null)
 for (const operation of new Set([
@@ -124,6 +126,7 @@ for (const operation of new Set([
   ...Object.keys(archive),
   ...Object.keys(account),
   ...Object.keys(sync),
+  ...Object.keys(ai),
   ...reservedOperations,
 ])) {
   const [domain, method] = operation.split('.')

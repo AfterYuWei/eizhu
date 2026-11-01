@@ -1,3 +1,6 @@
+import { AiStreamRelay } from '@eizhu/core/agent/relay'
+import { aiNetwork } from './ai-network.ts'
+import type { AiTransport } from '@eizhu/core/agent/model'
 import { SyncEventRelay } from '@eizhu/core/sync/relay'
 import { syncEventStream } from './sync-events.ts'
 import type { EventStream } from '@eizhu/core/sync/service'
@@ -19,7 +22,7 @@ export class RuntimeHost {
   private child?: UtilityProcess
   private pending = new Map<string, Pending>()
   private stopping?: Promise<void>
-  onEvent?: (name: 'eizhu-session-message'|'eizhu-sftp-message'|'eizhu-account-message'|'eizhu-sync-message', payload: unknown) => void
+  onEvent?: (name: 'eizhu-session-message'|'eizhu-sftp-message'|'eizhu-account-message'|'eizhu-sync-message'|'eizhu-ai-message', payload: unknown) => void
   readonly context: RuntimeContext
   workspace: WorkspaceIdentity
   private requestedWorkspace?: WorkspaceIdentity
@@ -28,8 +31,10 @@ export class RuntimeHost {
   private failed: () => void
   private key: Buffer
   private events:SyncEventRelay
+  private agentStreams: AiStreamRelay
   private fixtureAccountTransport?: Transport
-  constructor(root: string, directory: string, generation: number, failed: () => void, key: Buffer, workspace?: WorkspaceIdentity, fixtureAccountTransport?: Transport, fixtureEventStream?:EventStream) {
+  constructor(root: string, directory: string, generation: number, failed: () => void, key: Buffer, workspace?: WorkspaceIdentity, fixtureAccountTransport?: Transport, fixtureEventStream?:EventStream, fixtureAiTransport?: AiTransport) {
+    this.agentStreams = new AiStreamRelay(message => this.child?.postMessage({ ...message, context: this.context }), fixtureAiTransport ?? aiNetwork)
     this.events=new SyncEventRelay(message=>this.child?.postMessage({...message as object,context:this.context}),fixtureEventStream??syncEventStream)
     this.root = root
     this.directory = directory
@@ -56,6 +61,13 @@ export class RuntimeHost {
         child.kill()
       }, 30_000)
       child.on('message', (message) => {
+        if (['ai.stream.open', 'ai.stream.ack', 'ai.stream.abort'].includes(message.type)) {
+          if (!sameContext(message.context, this.context) || typeof message.id !== 'string') return
+          if (message.type === 'ai.stream.open') this.agentStreams.open(message.id, message.request)
+          else if (message.type === 'ai.stream.ack') this.agentStreams.acknowledge(message.id, message.sequence)
+          else this.agentStreams.abort(message.id)
+          return
+        }
         if (['sync.events.open','sync.events.ack','sync.events.abort'].includes(message.type)) {
           if(!sameContext(message.context,this.context)||typeof message.id!=='string')return
           if(message.type==='sync.events.open')this.events.open(message.id,message.request)
@@ -82,9 +94,9 @@ export class RuntimeHost {
           message.type === 'event' &&
           sameContext(message.context, this.context) &&
           isDesktopEvent(message.name) &&
-          ['eizhu-session-message','eizhu-sftp-message','eizhu-account-message','eizhu-sync-message'].includes(message.name)
+          ['eizhu-session-message','eizhu-sftp-message','eizhu-account-message','eizhu-sync-message','eizhu-ai-message'].includes(message.name)
         ) {
-          const parsed = eventSchemas[message.name as 'eizhu-session-message'|'eizhu-sftp-message'|'eizhu-account-message'|'eizhu-sync-message'].safeParse(message.payload)
+          const parsed = eventSchemas[message.name as 'eizhu-session-message'|'eizhu-sftp-message'|'eizhu-account-message'|'eizhu-sync-message'|'eizhu-ai-message'].safeParse(message.payload)
           if (parsed.success) this.onEvent?.(message.name, parsed.data)
         }
         if (message.type === 'ready') {
@@ -144,7 +156,7 @@ export class RuntimeHost {
         reject(
           new DesktopError({ code: 'REQUEST_TIMEOUT', message: '请求超时，操作结果未知；请检查当前状态' }),
         )
-      }, (operation.startsWith('account.')||operation.startsWith('sync.')) ? 60_000 : 30_000)
+      }, operation === 'ai.dispatch' ? 180_000 : (operation.startsWith('account.')||operation.startsWith('sync.')) ? 60_000 : 30_000)
       this.pending.set(id, { resolve: (value) => resolve(value as T), reject, timer })
       this.child!.postMessage({ id, context: this.context, operation, input })
     })
@@ -170,6 +182,7 @@ export class RuntimeHost {
     for(const controller of this.network.values())controller.abort()
     this.network.clear()
     void this.events.close()
+    void this.agentStreams.close()
   }
   close(): Promise<void> {
     if (this.stopping) return this.stopping
@@ -178,7 +191,7 @@ export class RuntimeHost {
         this.stopping = undefined
         throw cause
       })
-      .finally(async () => {this.rejectPending();await this.events.close()})
+      .finally(async () => {this.rejectPending();await this.events.close(); await this.agentStreams.close()})
     return this.stopping
   }
 }

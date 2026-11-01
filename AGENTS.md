@@ -9,6 +9,8 @@ UI 与文档使用中文。当前执行阶段 6 最终工程交付与发布验�
 
 ## 开发入口
 
+2026-11-01 新增 AI 运维助手：右侧对话、逐条确认、独立 SSH exec、自配 Chat Completions/Responses 与官方网关客户端。本地配置和历史通过数据库 Worker 加密保存，不进入同步/备份；确认绑定窗口和连接实例，未知结果不重放。官方真实服务与跨平台仍待验，见 `docs/desktop-rebuild/AI_AGENT_2026-11-01.md`、`docs/AI_API.md`。
+
 Node 24 LTS（至少 24.7）、npm workspaces、一个根锁文件。用户安装应用无需另装 Node。
 
 ```bash

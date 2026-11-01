@@ -33,7 +33,7 @@ it('旧列表和服务器整体折叠偏好不再水化或持久化，保留详�
     expect(state).not.toHaveProperty('openedCollapsed')
     state.setInspectorWidth(400)
     const saved = JSON.parse(write.mock.calls.at(-1)![1])
-    expect(saved.state).toEqual({ inspectorWidth: 400 })
+    expect(saved.state).toEqual({ inspectorWidth: 400, aiWidth: 400 })
   } finally {
     get.mockRestore(); write.mockRestore()
     useDesktopShellStore.setState(useDesktopShellStore.getInitialState(), true)
@@ -48,7 +48,7 @@ it('父子文件夹独立记忆，重新载入时恢复，本地状态不进入�
   useDesktopShellStore.getState().toggleGroup('parent')
   const saved = vi.mocked(localStateApi.write).mock.calls.at(-1)![1]
   expect(saved).toEqual({ parent: false, child: true })
-  expect(JSON.parse(write.mock.calls.at(-1)![1]).state).toEqual({ inspectorWidth: 320 })
+  expect(JSON.parse(write.mock.calls.at(-1)![1]).state).toEqual({ inspectorWidth: 320, aiWidth: 400 })
   useDesktopShellStore.setState({ collapsedGroups: {}, groupsReady: false })
   vi.mocked(localStateApi.read).mockResolvedValue(saved)
   await restoreSidebarGroups()

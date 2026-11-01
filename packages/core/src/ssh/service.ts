@@ -1,4 +1,6 @@
 import { randomUUID,createHash } from 'node:crypto'
+import { executeAgentCommand } from '../agent/executor.ts'
+import type { AiTarget, AiProposal } from '@eizhu/contracts'
 import { posix } from 'node:path'
 import type { ClientChannel } from 'ssh2'
 import { ssh, fail, failureOf, DesktopError } from '@eizhu/contracts'
@@ -17,6 +19,8 @@ import { complete, readDirectory } from './completion.ts'
 import { INFO_COMMAND, METRICS_COMMAND, parseInfo, parseMetrics } from './metrics.ts'
 import { TunnelListener } from './tunnel.ts'
 interface TerminalSession {
+  system?: string
+  endpoint?: { host: string; port: number; username: string }
   meta: Session
   cols: number
   rows: number
@@ -59,6 +63,23 @@ interface Tunnel {
 }
 type Emit = (name: 'eizhu-session-message', payload: unknown) => void
 export class SshService {
+  async agentTarget(sessionId: string): Promise<{ target: AiTarget; binding: object }> {
+    const s = this.connected(sessionId), binding = s.connection
+    const p = s.endpoint ?? fail('SSH_NOT_CONNECTED', 'SSH 连接信息尚未就绪')
+    if (!this.agentConnected(sessionId, binding)) fail('SSH_NOT_CONNECTED', 'SSH 连接已变化')
+    return { binding, target: { profileId: s.meta.profile_id, sessionId, host: p.host, port: p.port,
+      username: p.username, cwd: s.cwd ?? '', system: s.system ?? '尚未检测' } }
+  }
+  agentConnected(sessionId: string, binding: object): boolean {
+    const s = this.terminals.get(sessionId)
+    return Boolean(s && !s.closed && s.meta.status === 'connected' && s.connection === binding && s.connection.client && !s.connection.controller.signal.aborted)
+  }
+  async agentExecute(sessionId: string, binding: object, p: AiProposal, signal: AbortSignal, output: (stdout: string, stderr: string) => void) {
+    if (!this.agentConnected(sessionId, binding)) fail('AI_PROPOSAL_EXPIRED', 'SSH 连接已变化，命令未执行')
+    const s = this.connected(sessionId)
+    return executeAgentCommand(s.connection.client!, p.command, p.cwd, p.timeoutSeconds,
+      AbortSignal.any([signal, s.connection.controller.signal]), output)
+  }
   private compute: WorkerClient
   private database: WorkerClient
   private context: RuntimeContext
@@ -272,6 +293,8 @@ export class SshService {
     })
   }
   private async connectTerminal(s: TerminalSession): Promise<void> {
+    s.system = undefined
+    s.endpoint = undefined
     const connection = s.connection,
       owner = s.meta.id
     const plan = await this.plan({ id: s.meta.profile_id })
@@ -331,8 +354,9 @@ export class SshService {
       ready = true
       clearTimeout(bootstrapTimer)
       bootstrapTimer = undefined
-      this.state(s, 'connected', 'ready', 'SSH 连接成功')
       const hop = plan[plan.length - 1]
+      s.endpoint = { host: hop.profile.host, port: hop.profile.port, username: hop.profile.username }
+      this.state(s, 'connected', 'ready', 'SSH 连接成功')
       this.event(s, {
         type: 'metadata',
         payload: { session_id: owner, host: hop.profile.host, username: hop.profile.username, protocol: 'ssh' },
@@ -740,7 +764,12 @@ export class SshService {
             s.connection.controller.signal,
           )
           if (result.code !== 0) fail('SSH_EXEC_FAILED', '服务器查询失败')
-          return operation === 'serverDetail.getInfo' ? parseInfo(result.output) : parseMetrics(result.output)
+          if (operation === 'serverDetail.getInfo') {
+            const info = parseInfo(result.output)
+            s.system = JSON.stringify(info).slice(0, 4096)
+            return info
+          }
+          return parseMetrics(result.output)
         } finally {
           s.queries--
         }

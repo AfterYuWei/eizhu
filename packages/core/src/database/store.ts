@@ -1,4 +1,5 @@
 import Database from 'better-sqlite3'
+import { AgentRepository } from '../agent/repository.ts'
 import { existsSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { fail } from '@eizhu/contracts'
@@ -14,6 +15,7 @@ import type { Payload, Kind } from '../local/model.ts'
 
 /** Global metadata and one isolated business workspace. Only used by database Workers. */
 export class FoundationStore {
+  readonly agent!: AgentRepository
   readonly local!: LocalStore
   readonly accounts!: AccountRepository
   readonly sync!: SyncRepository
@@ -95,9 +97,11 @@ export class FoundationStore {
         if (workspaceExisted) preserveBeforeMigration(this.workspace, root, this.identity.id, from, to)
       })
       this.sync = new SyncRepository(this.workspace, this.local, key, this.identity.id, () => this.offlineSnapshot())
+      this.agent = new AgentRepository(this.workspace, key, this.identity.id)
       if (!metadata)
         this.workspace.prepare("INSERT INTO workspace_metadata VALUES ('id',?)").run(this.identity.id)
     } catch (cause) {
+      this.agent?.close()
       this.sync?.close()
       this.deviceKey.fill(0)
       this.accounts?.close()
@@ -164,6 +168,7 @@ export class FoundationStore {
     })()
   }
   close(): void {
+    this.agent.close()
     this.sync.close()
     this.deviceKey.fill(0)
     this.local.close()

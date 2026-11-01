@@ -219,6 +219,7 @@ export function TerminalPane({ tab, isActive, isVisible = isActive }: TerminalPa
         updateTabStatus,
     ]);
     useEffect(() => registerTerminalActions(tab.id, {
+        selection: () => getTerminal()?.getSelection() ?? '',
         focus: () => { if (tab.profileId)
             getTerminal()?.focus();
         else

@@ -1,6 +1,6 @@
 import { Loading } from '@/components/ui/loading'
 import { lazy,Suspense,useCallback,useEffect,useRef,useState,type CSSProperties } from 'react'
-import { FolderUp,KeyRound,PanelLeft,PanelLeftClose,PanelRight,Plus,Search,SquareTerminal } from 'lucide-react'
+import { Bot,FolderUp,KeyRound,PanelLeft,PanelLeftClose,PanelRight,Plus,Search,SquareTerminal } from 'lucide-react'
 import { TunnelDialog,TunnelPrompts } from '@/components/Terminal/TunnelDialog'
 import type { SettingsTab } from '@/components/SettingsDialog'
 import { workspaceGeneration } from '@/lib/workspaceScope'
@@ -34,6 +34,7 @@ import { WorkspaceTabs } from './WorkspaceTabs'
 import { WorkspaceContent } from './WorkspaceContent'
 import { useWorkspaceViewStore } from '@/store/workspaceView'
 import { ServerInspector } from './ServerInspector'
+import { AiInspector } from '@/components/Agent/AiInspector'
 import { WorkspaceActions } from './WorkspaceActions'
 
 const SettingsPage = lazy(() => import('@/components/SettingsDialog').then((m) => ({ default: m.SettingsPage })))
@@ -71,6 +72,8 @@ export function Layout() {
   const settingsTab = settingsPage ?? 'appearance'
   const settingsOpen = settingsPage !== null
   const [inspectorOpen, setInspectorOpen] = useState(false)
+  const [aiOpen, setAiOpen] = useState(false)
+  const aiWidth = useDesktopShellStore(s => s.aiWidth)
   const [workspaceWidth, setWorkspaceWidth] = useState(window.innerWidth)
   const workspace = useRef<HTMLDivElement>(null)
   const sessionView = useRef<HTMLDivElement>(null)
@@ -193,13 +196,15 @@ export function Layout() {
           <WorkspaceTabs />
           <div className="shell-workspace-actions" data-eizhu-drag-region={desktop || undefined}>
             <TerminalSplitMenu iconOnly />
-            {terminal && <ShellIconButton label="服务器详情" aria-pressed={inspectorOpen} onClick={() => setInspectorOpen((v) => !v)}><PanelRight size={16} /></ShellIconButton>}
+            {terminal && <ShellIconButton label="服务器详情" aria-pressed={inspectorOpen} onClick={() => { setAiOpen(false); setInspectorOpen((v) => !v) }}><PanelRight size={16} /></ShellIconButton>}
+            {terminal && <ShellIconButton label="AI 助手" aria-pressed={aiOpen} onClick={() => { setInspectorOpen(false); setAiOpen(v => !v) }}><Bot size={16} /></ShellIconButton>}
             {activePage === 'terminal' && activeTab && <WorkspaceActions terminal={terminal} />}
           </div>
           {showControls && <div className="shell-window-controls-space" aria-hidden="true" />}
         </header>
         <div className="shell-workspace-body" ref={workspace}>
           <div className="cnt-wrap shell-workspace-content"><WorkspaceContent onAddServer={() => setProfileFormOpen(true)} /></div>
+          <AiInspector key={workspaceGeneration()} open={aiOpen && !settingsOpen && terminal} overlay={workspaceWidth < aiWidth + 480} onClose={() => setAiOpen(false)} />
           <ServerInspector open={inspectorOpen && !settingsOpen} overlay={workspaceWidth < inspectorWidth + 480} onClose={() => setInspectorOpen(false)} />
         </div>
       </main>

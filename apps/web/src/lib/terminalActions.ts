@@ -1,4 +1,5 @@
 export interface TerminalActions {
+  selection?: () => string
   focus: () => void
   reconnect: () => Promise<void>
   search: () => void

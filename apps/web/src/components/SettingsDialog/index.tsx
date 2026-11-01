@@ -15,6 +15,7 @@ import { SyncPanel } from './SyncPanel';
 import { AboutPanel } from './AboutPanel';
 import { LogPanel } from './LogPanel';
 import { HistoryPanel } from './HistoryPanel';
+import { AiPanel } from './AiPanel';
 import { isTestBuild } from '@/lib/updater';
 import { isDesktopRuntime } from '@/lib/platform';
 import { AccountPanel } from './AccountPanel';
@@ -24,7 +25,7 @@ interface SettingsPageProps {
     initialTab?: SettingsTab;
     onTabChange?: (tab: SettingsTab) => void;
 }
-export type SettingsTab = 'appearance' | 'terminal' | 'backup' | 'account' | 'sync' | 'logs' | 'diagnostics' | 'about';
+export type SettingsTab = 'appearance' | 'terminal' | 'backup' | 'account' | 'sync' | 'logs' | 'diagnostics' | 'about' | 'ai';
 const baseTabs: {
     key: SettingsTab;
     label: string;
@@ -33,6 +34,7 @@ const baseTabs: {
     { key: 'account', label: '账号', icon: UserRound },
     { key: 'appearance', label: '外观', icon: Palette },
     { key: 'terminal', label: '终端', icon: Terminal },
+    { key: 'ai', label: 'AI 助手', icon: Terminal },
     { key: 'backup', label: '数据备份', icon: DatabaseBackup },
     { key: 'sync', label: '云同步', icon: CloudSync },
     { key: 'about', label: '关于', icon: Info },
@@ -240,6 +242,7 @@ export function SettingsPage({ onBack, initialTab = 'appearance', onTabChange }:
             </TabsContent>
 
             <TabsContent value="backup" className="settings-content"><BackupPanel /></TabsContent>
+            <TabsContent value="ai" className="settings-content"><AiPanel /></TabsContent>
 
             <TabsContent value="account" className="settings-content"><AccountPanel /></TabsContent>
 

@@ -13,6 +13,8 @@ interface DesktopShellStore {
   settingsPage: SettingsTab | null
   setSettingsPage: (tab: SettingsTab | null) => void
   inspectorWidth: number
+  aiWidth: number
+  setAiWidth: (width: number) => void
   collapsedGroups: Record<string, boolean>
   groupsReady: boolean
   setInspectorWidth: (width: number) => void
@@ -24,6 +26,8 @@ export const useDesktopShellStore = create<DesktopShellStore>()(persist((set) =>
   settingsPage: null,
   setSettingsPage: (settingsPage) => set({ settingsPage }),
   inspectorWidth: 320,
+  aiWidth: 400,
+  setAiWidth: width => set({ aiWidth: clamp(width, 320, 560) }),
   collapsedGroups: {},
   groupsReady: false,
   setInspectorWidth: (width) => set({ inspectorWidth: clamp(width, 280, 480) }),
@@ -31,11 +35,12 @@ export const useDesktopShellStore = create<DesktopShellStore>()(persist((set) =>
 }), {
   name: 'eizhu-desktop-shell',
   storage: createJSONStorage(() => settingsStorage),
-  partialize: ({ inspectorWidth }) => ({ inspectorWidth }),
+  partialize: ({ inspectorWidth, aiWidth }) => ({ inspectorWidth, aiWidth }),
   // Older preferences may still contain the removed split-list fields.
   merge: (persisted, current) => {
     const saved = persisted as Partial<DesktopShellStore> | undefined
     return { ...current,
+      aiWidth: typeof saved?.aiWidth === 'number' && Number.isFinite(saved.aiWidth) ? clamp(saved.aiWidth, 320, 560) : current.aiWidth,
       inspectorWidth: typeof saved?.inspectorWidth === 'number' && Number.isFinite(saved.inspectorWidth) ? clamp(saved.inspectorWidth, 280, 480) : current.inspectorWidth,
     }
   },

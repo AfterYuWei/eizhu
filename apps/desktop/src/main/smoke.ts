@@ -1,4 +1,5 @@
 import { verifyStage3 } from './stage3-smoke.ts'
+import { verifyAiDesktop } from './ai-smoke.ts'
 import { verifyStage5 } from './stage5-smoke.ts'
 import { verifyStage6 } from './stage6-smoke.ts'
 import { verifyStage4 } from './stage4-smoke.ts'
@@ -113,6 +114,8 @@ export async function runSmoke(options: {
   for (const key of ['crud', 'computeWorker', 'revealed', 'protectedDelete', 'redacted', 'audit'])
     assert.equal(localBridge[key], true)
   step('local-bridge-passed')
+  const aiDesktop = await verifyAiDesktop(window, options.runtime(), root)
+  step('ai-desktop-passed')
   const stage2 = await options
     .runtime()
     .call<{ passed: boolean }>('runtime.verifyStage2', { fixtures: process.env.EIZHU_SMOKE_FIXTURES })
@@ -288,6 +291,7 @@ export async function runSmoke(options: {
     syncEngine,
     syncDesktop,
     stage3,
+    aiDesktop,
     stage3Storage,
     stage4,
     stage5,
@@ -306,7 +310,7 @@ export async function runSmoke(options: {
     monaco,
     firstWindowMs,
     processMetrics: app.getAppMetrics().map(({ type, memory, cpu }) => ({ type, memory, cpu })),
-    screenshots: ['home-light.png', 'home-dark.png', 'editor-empty.png', ...workspaceTabs.screenshots, ...accountClosure.screenshots, ...syncDesktop.screenshots, ...stage3.completionUi.screenshots],
+    screenshots: ['home-light.png', 'home-dark.png', 'editor-empty.png', ...aiDesktop.screenshots, ...workspaceTabs.screenshots, ...accountClosure.screenshots, ...syncDesktop.screenshots, ...stage3.completionUi.screenshots],
     screenshotContrast,
   }
   await writeFile(join(root, 'smoke.json'), JSON.stringify(report, null, 2))

@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { aiEventSchema } from './ai.ts'
 import { sftpEventSchema,transferTaskSchema } from './sftp.ts'
 import { sshGlobalEventSchema, tunnelStatusSchema } from './ssh.ts'
 import { editorOpenSchema, workspaceSchema, foundation } from './foundation.ts'
@@ -8,6 +9,7 @@ import { syncMessageSchema } from './sync.ts'
 import { accountMessageSchema } from './account.ts'
 /** Reserved event types cannot be emitted until their business stage supplies a payload schema. */
 export const eventSchemas = {
+  'eizhu-ai-message': aiEventSchema,
   'eizhu-update-progress': updateProgressSchema,
   'eizhu-workspace-changed': workspaceSchema,
   'eizhu-account-message': accountMessageSchema,

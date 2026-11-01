@@ -1,4 +1,5 @@
 import { resetTerminalLayout } from '@/store/terminalLayout'
+import { useAiStore } from '@/store/ai'
 import { bridge } from './bridge'
 import { useProfileStore } from '@/store/profile'
 import { useVaultStore } from '@/store/vault'
@@ -19,6 +20,7 @@ export function applyWorkspace(workspace: WorkspaceStatus) {
   void resetWorkspaceView().catch((error: unknown) => console.error('释放旧工作空间文件资源失败', error))
   resetTerminalLayout()
   setWorkspaceGeneration(workspace.generation)
+  useAiStore.setState({ tabs: {}, conversations: {} })
   resetSnippetQuickAccess()
   useProfileStore.setState(useProfileStore.getInitialState(), true)
   useVaultStore.setState(useVaultStore.getInitialState(), true)

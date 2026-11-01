@@ -19,6 +19,8 @@ npm workspaces与单一锁文件。以Node 24 LTS作为开发环境；运行时�
 
 ## 进程和所有权
 
+AI 运维助手已作为现有 utilityProcess 中的 AgentService 接入，见 [AI 交付记录](AI_AGENT_2026-11-01.md)。renderer 只展示对话和确认卡片；main 提供受限模型流式网络桥与窗口身份，SSH 服务复用当前连接的独立 exec 通道。提议绑定窗口、空间/代次与连接实例，确认检查点先于执行持久化；未知结果不重放。配置和历史通过数据库 Worker 存入加密本地状态，不进入同步和备份。
+
 - React承载页面、xterm、Monaco、Zustand临时状态和编辑器未保存内容，不持有数据库/网络连接/长期凭据。
 - preload仅提供window.eizhu下按领域划分的方法和订阅，不暴露原始ipcRenderer、通用invoke、SQL或任意执行能力。
 - main是桌面装配根：窗口、单实例、显示时机、关闭确认、系统文件/剪贴板/拖放/外链/深链、系统密钥库和更新。

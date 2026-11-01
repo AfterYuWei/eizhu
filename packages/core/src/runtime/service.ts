@@ -1,4 +1,8 @@
 import { SyncService } from '../sync/service.ts'
+import { AgentService } from '../agent/service.ts'
+import type { AiTransport } from '../agent/model.ts'
+import { z } from 'zod'
+import { ai, isAiOperation } from '@eizhu/contracts'
 import type { EventStream } from '../sync/service.ts'
 import { sync, isSyncOperation } from '@eizhu/contracts'
 import { ArchiveService } from '../archive/service.ts'
@@ -23,6 +27,9 @@ import type { FileIdentity } from '../local/backup.ts'
 import { join } from 'node:path'
 
 export class RuntimeService {
+  private agent!: AgentService
+  private agentTransport: AiTransport
+  private emitAgent: (conversation: import('@eizhu/contracts').AiConversation, message?: import('@eizhu/contracts').AiConversation['messages'][number]) => void
   private scope = new ResourceScope()
   private database: WorkerClient
   private compute: WorkerClient
@@ -45,13 +52,18 @@ export class RuntimeService {
     root: string,
     paths: { database: string; compute: string; verification: string; verification3: string; verificationAccount: string; verificationSync: string },
     key: Uint8Array,
-    emit: (name: 'eizhu-session-message'|'eizhu-sftp-message'|'eizhu-account-message'|'eizhu-sync-message', payload: unknown) => void = () => undefined,
+    emit: (name: 'eizhu-session-message'|'eizhu-sftp-message'|'eizhu-account-message'|'eizhu-sync-message'|'eizhu-ai-message', payload: unknown) => void = () => undefined,
     localHome?:string,
     transport:Transport=async()=>fail('CLOUD_UNAVAILABLE','云存储网络不可用'),
     workspace?: WorkspaceIdentity,
     accountTransport: Transport = async () => fail('ACCOUNT_UNAVAILABLE', '账号网络不可用'),
     stream?: EventStream,
+    agentTransport: AiTransport = async () => fail('AI_UNAVAILABLE', 'AI 网络不可用'),
   ) {
+    this.agentTransport = agentTransport
+    this.emitAgent = (conversation, message) => emit('eizhu-ai-message', message
+      ? { workspaceGeneration: this.context.generation, conversationId: conversation.id, message }
+      : { workspaceGeneration: this.context.generation, conversation })
     this.context = context
     this.accountTransport = accountTransport
     this.stream = stream
@@ -83,6 +95,9 @@ export class RuntimeService {
     this.scope.own(() => this.account.close())
     this.sync = new SyncService(this.database,this.compute,this.account,this.workspace,this.context,this.emitSync,this.stream)
     this.scope.own(()=>this.sync.close())
+    this.agent = new AgentService(input => this.database.call('ai.storage', input), this.ssh, this.agentTransport,
+      async () => `Bearer ${(await this.account.syncToken()).token}`, this.context, this.emitAgent)
+    this.scope.own(() => this.agent.close())
     this.initialized = true
     return this.workspace
   }
@@ -99,12 +114,20 @@ export class RuntimeService {
     }
     if (isAccountOperation(request.operation)) return account[request.operation].output.parse(await this.account.execute(request.operation, request.input))
     if(isArchiveOperation(request.operation)) return archive[request.operation].output.parse(await this.archive.execute(request.operation,request.input))
-    if (isSshOperation(request.operation))
+    if (isSshOperation(request.operation)) {
+      if (request.operation === 'session.close' || request.operation === 'session.reconnect')
+        await this.agent.invalidateSession(ssh[request.operation].input.parse(request.input).id)
       return ssh[request.operation].output.parse(await this.ssh.execute(request.operation, request.input))
+    }
     if(isSftpOperation(request.operation))return sftp[request.operation].output.parse(await this.sftp.execute(request.operation,request.input))
     if(request.operation==='sftp.authorizeEditor'){const d=request.input as {sessionId:string;path:string};return this.sftp.authorizeEditor(d.sessionId,d.path)}
     if(request.operation==='sftp.downloadPath')return this.sftp.downloadPath((request.input as {taskId:string}).taskId)
     switch (request.operation) {
+      case 'ai.dispatch': {
+        const d = z.strictObject({ owner: z.int().positive(), operation: z.string().refine(isAiOperation), input: z.unknown() }).parse(request.input)
+        if (!isAiOperation(d.operation)) fail('BAD_REQUEST', 'AI 操作无效')
+        return ai[d.operation].output.parse(await this.agent.execute(d.operation, d.input, d.owner))
+      }
       case 'account.authenticate': {
         const d = request.input as { operation: string; input: unknown }
         if (!d || (d.operation !== 'account.login' && d.operation !== 'account.register')) fail('BAD_REQUEST', '账号操作无效')

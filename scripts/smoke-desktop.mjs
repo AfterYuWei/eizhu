@@ -68,11 +68,12 @@ else assert.equal(report.stage4.passed, true)
 assert.equal(report.stage5.passed, true)
 assert.equal(report.stage6.passed, true)
 assert.equal(report.workspaceTabs.passed, true)
+assert.equal(report.aiDesktop.passed, true)
 if (executableArg) assert.equal(report.packaged, true)
 const evidenceRoot = `artifacts/smoke/${process.platform}-${process.arch}`
 await mkdir(evidenceRoot, { recursive: true })
 // Keep visual evidence outside the temporary profile so CI and later reviews can retrieve it.
-for (const name of ['home-light.png', 'home-dark.png', 'editor-empty.png', ...report.workspaceTabs.screenshots, ...report.accountClosure.screenshots, ...report.syncDesktop.screenshots, ...report.stage3.completionUi.screenshots]) {
+for (const name of ['home-light.png', 'home-dark.png', 'editor-empty.png', ...report.aiDesktop.screenshots, ...report.workspaceTabs.screenshots, ...report.accountClosure.screenshots, ...report.syncDesktop.screenshots, ...report.stage3.completionUi.screenshots]) {
   assert.ok(report.screenshots.includes(name), `Missing screenshot: ${name}`)
   await copyFile(join(root, name), join(evidenceRoot, name))
 }

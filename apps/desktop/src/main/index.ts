@@ -22,6 +22,7 @@ import { lstatSync, readdirSync, realpathSync, mkdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { randomUUID } from 'node:crypto'
 import {
+  ai, isAiOperation,
   archive,
   isArchiveOperation,
   foundation,
@@ -289,6 +290,11 @@ async function load(window: BrowserWindow): Promise<void> {
   else await window.loadURL('eizhu://app/index.html' + suffix)
 }
 async function execute(window: BrowserWindow, operation: string, input: unknown): Promise<unknown> {
+  if (isAiOperation(operation)) {
+    if (window !== windows.main) fail('FORBIDDEN', '仅主窗口可使用 AI 助手')
+    if (!healthy || restarting || shuttingDown) fail('RUNTIME_UNAVAILABLE', '业务进程尚未就绪')
+    return ai[operation].output.parse(await runtime.call('ai.dispatch', { owner: window.id, operation, input: ai[operation].input.parse(input) }))
+  }
   if (isSyncOperation(operation)) {
     if(window!==windows.main)fail('FORBIDDEN','仅主窗口可管理账号同步')
     if(!healthy)fail('RUNTIME_UNAVAILABLE','业务进程不可用，请先恢复')
