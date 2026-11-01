@@ -1,3 +1,4 @@
+/* eslint-disable no-control-regex -- Assertions cover actual terminal control sequences. */
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
@@ -50,6 +51,16 @@ test('bootstrap fallback releases pending output and bounds retained data', () =
   assert.equal(large.data.length, 65537)
 })
 
+test('hides setup echoes redrawn by ZLE while retaining actual shell errors and banners', () => {
+  const output = new ShellOutput(), setup = shellSetupCommand('/bin/zsh')!
+  output.startBootstrap(setup)
+  const echoed = setup.replace('__eizhu_osc7(){', '__ \r\x1b[Ke\reizhu_osc7(){').replace('add-zsh-hook', 'add-zsh-\r\x1b[Khook')
+  const packet = Buffer.from(`banner\r\n${echoed}\r\n__eizhu_osc7: permission denied\r\n\x1b]1337;eizhuOsc7Ready\x07prompt$ `)
+  const chunks: Buffer[] = []
+  for (const byte of packet) chunks.push(output.push(Buffer.from([byte])).data)
+  assert.equal(Buffer.concat(chunks).toString(), 'banner\r\n__eizhu_osc7: permission denied\r\nprompt$ ')
+})
+
 for (const shell of ['bash', 'zsh', 'fish']) {
   const available = process.platform !== 'win32' && !spawnSync(shell, ['--version'], { timeout: 2000 }).error
   test(`${shell} hook reports cd changes in an actual local shell`, { skip: !available }, () => {
@@ -71,3 +82,53 @@ for (const shell of ['bash', 'zsh', 'fish']) {
     }
   })
 }
+
+for (const shell of ['bash', 'zsh']) {
+  const available = process.platform !== 'win32' && !spawnSync(shell, ['--version']).error
+  test(`${shell} interactive hooks preserve user prompts and identify input/output without installing files`, { skip: !available }, () => {
+    const setup = shellSetupCommand(`/bin/${shell}`)!
+    const args = shell === 'bash' ? ['--noprofile', '--norc', '-i'] : ['-d', '-f', '-i']
+    const result = spawnSync('/bin/sh', ['-c', 'exec "$@" 2>&1', 'eizhu-shell-test', shell, ...args], {
+      input: [
+        "PS1='TEST> '; PS2='MORE> '",
+        shell === 'bash' ? "PROMPT_COMMAND='printf USER_HOOK'" : "precmd(){ printf USER_HOOK; }",
+        setup,
+        setup,
+        'false',
+        'printf "LAST_STATUS=%s\\n" "$?"',
+        "printf 'PAYLOAD\\n'",
+        'exit',
+      ].join('\n') + '\n',
+      timeout: 10000,
+      env: { ...process.env, TERM: 'xterm-256color' },
+    })
+    assert.equal(result.status, 0, result.stdout.toString())
+    const output = result.stdout.toString()
+    assert.ok(output.includes('USER_HOOK'))
+    assert.ok(output.includes('TEST> '))
+    if (shell === 'bash') {
+      const version = spawnSync(shell, ['-c', 'printf "%s.%s" "${BASH_VERSINFO[0]}" "${BASH_VERSINFO[1]}"']).stdout.toString().split('.').map(Number)
+      if (version[0] < 4 || version[0] === 4 && version[1] < 4) {
+        assert.ok(!output.includes('\x1b]133;B\x07'))
+        assert.ok(output.includes('\x1b]7;file://'))
+        return
+      }
+    }
+    assert.match(output, /\x1b\]133;A\x07TEST> \x1b\]133;B\x07/)
+    assert.match(output, /\x1b\]133;C\x07PAYLOAD/)
+    // Reinstalling the hook must not nest prompt wrappers or change command status.
+    assert.ok(!output.includes('\x1b]133;A\x07\x1b]133;A\x07'))
+    assert.match(output, /LAST_STATUS=1\r?\n/)
+  })
+}
+
+test('Bash PROMPT_COMMAND arrays remain arrays with their existing elements and one directory hook', { skip: process.platform === 'win32' }, () => {
+  const setup = shellSetupCommand('/bin/bash')!
+  const result = spawnSync('bash', ['-c', `PROMPT_COMMAND=('printf first' 'printf second');${setup};${setup};declare -p PROMPT_COMMAND`], { timeout: 5000 })
+  assert.equal(result.status, 0, result.stderr.toString())
+  const declaration = result.stdout.toString().split('\x07').at(-1)!
+  assert.match(declaration, /declare -a PROMPT_COMMAND/)
+  assert.ok(declaration.includes('printf first'))
+  assert.ok(declaration.includes('printf second'))
+  assert.equal(declaration.match(/__eizhu_osc7/g)?.length, 1)
+})

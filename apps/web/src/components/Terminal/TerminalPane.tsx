@@ -45,7 +45,7 @@ export function TerminalPane({ tab, isActive, isVisible = isActive }: TerminalPa
     const pickerInputRef = useRef<HTMLInputElement>(null);
     const { updateTabStatus, updateTabCwd, updateTabLatency, markTabError, markTabReconnecting, clearTabError, cancelConnection, clearTabHostKeyPrompt, } = useSessionStore();
     const { profiles, updateDetectedIcon } = useProfileStore();
-    const { fontSize, fontFamily, fontFamilyCN, terminalTheme, terminalPopupMenu, setFontSize, } = useSettingsStore();
+    const { fontSize, fontFamily, fontFamilyCN, terminalTheme, terminalCommandHighlight, terminalLogHighlight, terminalPopupMenu, setFontSize, } = useSettingsStore();
     const effectiveFontSize = fontSize;
     // 默认字体大小（用于显示相对变化）
     const DEFAULT_FONT_SIZE = DEFAULT_DESKTOP_TERMINAL_FONT_SIZE;
@@ -150,6 +150,8 @@ export function TerminalPane({ tab, isActive, isVisible = isActive }: TerminalPa
         fontFamily,
         fontFamilyCN,
         terminalTheme: effectiveTerminalTheme,
+        commandHighlight: terminalCommandHighlight,
+        logHighlight: terminalLogHighlight,
         onData: (data) => {
             if (useWorkspaceViewStore.getState().activePage !== 'terminal' || useSessionStore.getState().activeTabId !== tab.id || !tab.sessionId)
                 return;

@@ -44,7 +44,7 @@ export function SettingsPage({ onBack, initialTab = 'appearance', onTabChange }:
     useEffect(() => {
         page.current?.querySelector<HTMLElement>('[role="tab"][data-state="active"]')?.focus();
     }, []);
-    const { theme, setTheme, fontSize, setFontSize, fontFamily, setFontFamily, fontFamilyCN, setFontFamilyCN, appFontSize, setAppFontSize, appFontFamily, setAppFontFamily, terminalTheme, setTerminalTheme, terminalPopupMenu, setTerminalPopupMenu, } = useSettingsStore();
+    const { theme, setTheme, fontSize, setFontSize, fontFamily, setFontFamily, fontFamilyCN, setFontFamilyCN, appFontSize, setAppFontSize, appFontFamily, setAppFontFamily, terminalTheme, setTerminalTheme, terminalCommandHighlight, setTerminalCommandHighlight, terminalLogHighlight, setTerminalLogHighlight, terminalPopupMenu, setTerminalPopupMenu, } = useSettingsStore();
     const currentThemeLabel = terminalThemes.find((t) => t.id === terminalTheme)?.label ?? '跟随应用';
     const tabs = isDesktopRuntime() && isTestBuild()
         ? [...baseTabs.slice(0, -1), { key: 'logs' as const, label: '日志', icon: FileText }, baseTabs.at(-1)!]
@@ -157,6 +157,22 @@ export function SettingsPage({ onBack, initialTab = 'appearance', onTabChange }:
 
                   {/* 终端主题选择器 Dialog */}
                   <TerminalThemePicker open={themePickerOpen} onOpenChange={setThemePickerOpen} value={terminalTheme} onChange={setTerminalTheme}/>
+
+                  <div className="settings-field">
+                    <div className="settings-field-info">
+                      <Label htmlFor="settings-terminal-command-highlight" className="settings-field-label">命令输入高亮</Label>
+                      <span id="settings-terminal-command-highlight-desc" className="settings-field-desc">用强调色区分命令与输出，保留已有配色。支持 Bash 4.4+、Zsh 和 Fish。</span>
+                    </div>
+                    <Switch id="settings-terminal-command-highlight" aria-describedby="settings-terminal-command-highlight-desc" checked={terminalCommandHighlight} onCheckedChange={setTerminalCommandHighlight}/>
+                  </div>
+
+                  <div className="settings-field">
+                    <div className="settings-field-info">
+                      <Label htmlFor="settings-terminal-log-highlight" className="settings-field-label">日志关键词高亮</Label>
+                      <span id="settings-terminal-log-highlight-desc" className="settings-field-desc">为无颜色输出中的 ERROR、WARN、INFO 等日志等级补充颜色。</span>
+                    </div>
+                    <Switch id="settings-terminal-log-highlight" aria-describedby="settings-terminal-log-highlight-desc" checked={terminalLogHighlight} onCheckedChange={setTerminalLogHighlight}/>
+                  </div>
 
                   {/* 终端字体（英文） */}
                   <div className="settings-field">

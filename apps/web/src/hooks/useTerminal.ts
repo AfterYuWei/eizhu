@@ -5,6 +5,7 @@ import { Unicode11Addon } from '@xterm/addon-unicode11';
 import { WebLinksAddon } from '@xterm/addon-web-links';
 import { WebglAddon } from '@xterm/addon-webgl';
 import { getTerminalTheme } from '@/lib/terminalThemes';
+import { TerminalHighlighting } from '@/lib/terminalHighlighting';
 import { openExternal } from '@/lib/desktop';
 import { writeClipboardText,readClipboardText } from '@/lib/clipboard';
 import { toast } from 'sonner';
@@ -23,6 +24,8 @@ interface UseTerminalOptions {
     fontFamily?: string;
     fontFamilyCN?: string;
     terminalTheme?: string;
+    commandHighlight?: boolean;
+    logHighlight?: boolean;
     onData?: (data: string) => void;
     onFontSizeChange?: (delta: number) => void; // Ctrl+滚轮缩放时调用，delta 为 ±1
     onResize?: (cols: number, rows: number) => void; // 终端尺寸变化时调用（字体变化、容器resize）
@@ -35,9 +38,10 @@ const openLink = (uri: string) => {
     }
 };
 export function useTerminal(options: UseTerminalOptions) {
-    const { containerRef, fontSize = 14, fontFamily, fontFamilyCN, terminalTheme = 'default', onData, onFontSizeChange, onResize } = options;
+    const { containerRef, fontSize = 14, fontFamily, fontFamilyCN, terminalTheme = 'default', commandHighlight = true, logHighlight = false, onData, onFontSizeChange, onResize } = options;
     const terminalRef = useRef<Terminal | null>(null);
     const fitAddonRef = useRef<FitAddon | null>(null);
+    const highlightingRef = useRef<TerminalHighlighting | null>(null);
     const onDataRef = useRef(onData);
     const onFontSizeChangeRef = useRef(onFontSizeChange);
     const onResizeRef = useRef(onResize);
@@ -63,7 +67,7 @@ export function useTerminal(options: UseTerminalOptions) {
         const terminal = new Terminal({
             fontSize,
             fontFamily: buildFontFamily(),
-            theme: getTerminalTheme(terminalTheme),
+            theme: getTerminalTheme(terminalTheme, commandHighlight),
             allowProposedApi: true,
             // We handle right-click copy/paste ourselves (Termius-style), so disable
             // xterm's built-in right-click word selection (defaults to true on macOS).
@@ -98,6 +102,9 @@ export function useTerminal(options: UseTerminalOptions) {
         // Enable Unicode 11 character width for better CJK and emoji rendering
         terminal.unicode.activeVersion = '11';
         terminal.open(containerRef.current);
+        const highlighting = new TerminalHighlighting({ theme: terminalTheme, commands: commandHighlight, logs: logHighlight });
+        terminal.loadAddon(highlighting);
+        highlightingRef.current = highlighting;
         // 尝试加载 WebGL 渲染器以提升高频更新性能（如进度条、实时日志）
         // 如果 WebGL 不可用，会自动回退到 Canvas 渲染器
         try {
@@ -338,6 +345,7 @@ export function useTerminal(options: UseTerminalOptions) {
             terminalElement?.removeEventListener('contextmenu', handleContextMenu, true);
             terminalElement?.removeEventListener('wheel', handleWheel);
             terminal.dispose();
+            highlightingRef.current = null;
             terminalRef.current = null;
             fitAddonRef.current = null;
         };
@@ -388,8 +396,11 @@ export function useTerminal(options: UseTerminalOptions) {
         const terminal = terminalRef.current;
         if (!terminal)
             return;
-        terminal.options.theme = getTerminalTheme(terminalTheme);
-    }, [terminalTheme]);
+        terminal.options.theme = getTerminalTheme(terminalTheme, commandHighlight);
+    }, [terminalTheme, commandHighlight]);
+    useEffect(() => {
+        highlightingRef.current?.update({ theme: terminalTheme, commands: commandHighlight, logs: logHighlight });
+    }, [terminalTheme, commandHighlight, logHighlight]);
     const write = useCallback((data: string) => {
         return new Promise<void>((resolve) => { const terminal=terminalRef.current; if(terminal)terminal.write(data,resolve);else resolve() });
     }, []);
@@ -397,9 +408,11 @@ export function useTerminal(options: UseTerminalOptions) {
         terminalRef.current?.writeln(data);
     }, []);
     const clear = useCallback(() => {
+        highlightingRef.current?.reset();
         terminalRef.current?.clear();
     }, []);
     const reset = useCallback(() => {
+        highlightingRef.current?.reset();
         terminalRef.current?.reset();
     }, []);
     const fit = useCallback(() => {

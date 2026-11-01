@@ -92,6 +92,11 @@ export async function verifyStage3(window: BrowserWindow, runtime: RuntimeHost, 
             if (loadInProgress && inputs.length > 1000) inputs.splice(0, inputs.length - 1000)
             if (b.toString() === '\x03') stream.write('^C\r\nuser@synthetic$ ')
             else if (tracking && b.toString() === 'cd /tmp/stage3-project\r') stream.write('\x1b]7;file://synthetic/tmp/stage3-project\x07')
+            else if (b.toString() === 'terminal-colors-smoke\r') {
+              const prompt = '\x1b]133;A\x07user@synthetic$ \x1b]133;B\x07'
+              stream.write('\x1b[2J\x1b[H' + prompt + 'tail -n 3 app.log\r\n\x1b]133;C\x07'
+                + 'INFO 服务启动\r\nWARN 请求耗时较长\r\nERROR 数据库连接失败\r\n' + prompt + 'echo 中文')
+            }
             else if (b.toString() === 'burst') stream.write('B'.repeat(262144) + '\r\nEND_BURST\r\n')
             else stream.write(b)
           })
