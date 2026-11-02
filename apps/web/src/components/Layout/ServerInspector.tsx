@@ -33,6 +33,5 @@ export function ServerInspector({ open, overlay, onClose, onChoose }: { open: bo
         </Suspense>
       </div>)}
     </div>
-    <div className="shell-inspector-encoding">终端编码<span>UTF-8</span></div>
   </aside>
 }

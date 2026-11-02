@@ -10,7 +10,6 @@ import { ServerDetail } from './index'
 
 const { api } = vi.hoisted(() => ({ api: { createSession: vi.fn(), closeSession: vi.fn(), listFiles: vi.fn(), getInfo: vi.fn() } }))
 vi.mock('@/api/serverDetail', () => ({ serverDetailApi: api }))
-vi.mock('@/hooks/useServerMetrics', () => ({ useServerMetrics: () => {} }))
 vi.mock('@/components/Editor/EditorDialog', () => ({ EditorDialog: () => null }))
 
 function deferred<T>() {

@@ -50,7 +50,6 @@ import type {
 import type { Snippet, SnippetCreateRequest, SnippetUpdateRequest } from './models/snippet.ts'
 import type {
   ServerInfo,
-  ServerMetrics,
   HistoryEntry,
   LocalStateKey,
   TunnelConfig,
@@ -61,6 +60,7 @@ import type {
   BackupImportResult,
   DocumentDescriptor,
 } from './models/api.ts'
+import type { ServerMetricsSummary, ServerMetricKind, ServerMetricDetail } from './ssh.ts'
 
 /** Reserved domain contracts. Each operation is enabled with its runtime schema in its delivery stage. */
 export interface DomainOperations {
@@ -152,7 +152,8 @@ export interface DomainOperations {
     output: SftpListResponse
   }
   'serverDetail.getInfo': { input: { sessionId: string }; output: ServerInfo }
-  'serverDetail.getMetrics': { input: { sessionId: string }; output: ServerMetrics }
+  'serverDetail.getSummary': { input: { sessionId: string }; output: ServerMetricsSummary }
+  'serverDetail.getMetricDetail': { input: { sessionId: string; kind: ServerMetricKind }; output: ServerMetricDetail }
   'session.attach': { input: { id: string }; output: SessionMessage[] }
   'session.authRespond': { input: { requestId: string; responses: string[] }; output: void }
   'session.close': { input: { id: string }; output: void }
@@ -356,7 +357,8 @@ export const reservedOperations = [
   'profile.testNew',
   'profile.update',
   'serverDetail.getInfo',
-  'serverDetail.getMetrics',
+  'serverDetail.getSummary',
+  'serverDetail.getMetricDetail',
   'session.attach',
   'session.authRespond',
   'session.close',

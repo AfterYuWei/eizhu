@@ -393,6 +393,7 @@
 @import "./styles/terminal.css";
 @import "./styles/profile-form.css";
 @import "./styles/server-detail.css";
+@import "./styles/server-status.css";
 @import "./styles/command-palette.css";
 @import "./styles/sftp.css";
 @import "./styles/sftp-editor.css";

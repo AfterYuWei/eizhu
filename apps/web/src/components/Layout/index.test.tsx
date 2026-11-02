@@ -11,6 +11,7 @@ const { windowControls, settings } = vi.hoisted(() => ({
 vi.mock('@/components/Sidebar', () => ({ Sidebar: ({ visible }: { visible: boolean }) => <div data-sidebar-visible={String(visible)} /> }))
 vi.mock('@/components/Vault/VaultView', () => ({ VaultView: () => <input aria-label="密钥管理状态" /> }))
 vi.mock('@/components/Terminal', () => ({ TerminalView: () => <main>终端工作区</main> }))
+vi.mock('@/hooks/useServerMetrics', () => ({ useServerMetrics: vi.fn(() => ({ summary: null, summaryError: null, inspection: null, inspectionError: null })) }))
 vi.mock('@/components/Terminal/SplitControls', () => ({ TerminalSplitMenu: () => null }))
 vi.mock('@/components/Terminal/TunnelDialog', () => ({ TunnelDialog: () => null, TunnelPrompts: () => null }))
 vi.mock('@/components/ProfileForm', () => ({ ProfileForm: () => null }))
@@ -419,6 +420,8 @@ it('右侧栏只有一个入口，先选择 AI 或 SFTP，切换时保留终端�
   expect(host.querySelector('.shell-workspace-actions [aria-label="服务器详情"]')).toBeNull()
   expect(host.querySelector('.shell-workspace-actions [aria-label="AI 助手"]')).toBeNull()
   const terminal = host.querySelector('.shell-workspace-content main')!
+  const summary = host.querySelector('.server-status-bar')!
+  expect(summary.textContent).toContain('CPU—内存—硬盘—网络—')
   expect(host.querySelector('[data-inspector-open="false"]')).not.toBeNull()
   await act(async () => inspector.click())
   const picker = host.querySelector<HTMLElement>('.shell-inspector-picker')!
@@ -438,10 +441,32 @@ it('右侧栏只有一个入口，先选择 AI 或 SFTP，切换时保留终端�
   expect(picker.hidden).toBe(true)
   expect(ai.hidden).toBe(true)
   expect(host.querySelector('.shell-workspace-content main')).toBe(terminal)
+  expect(host.querySelector('.server-status-bar')).toBe(summary)
   await act(async () => inspector.click())
   expect(inspector.getAttribute('aria-expanded')).toBe('false')
   expect(host.querySelector('#desktop-right-sidebar')!.hasAttribute('hidden')).toBe(true)
   expect(host.querySelector('.statusbar')).toBeNull()
+  expect(host.querySelector('.server-status-bar')).toBe(summary)
+})
+
+it('底部摘要跟随当前终端，工具页面与设置隐藏摘要并保留终端节点', async () => {
+  await render()
+  const terminal = host.querySelector('.shell-workspace-content main')!
+  expect(host.querySelector('.server-status-bar')?.getAttribute('aria-label')).toBe('服务器 服务器状态')
+  await act(async () => useSessionStore.setState({ tabs: [
+    ...useSessionStore.getState().tabs,
+    { id: 'b', profileId: 'other', profileName: '另一台', sessionId: null, status: 'disconnected' },
+  ], activeTabId: 'b' }))
+  expect(host.querySelector('.server-status-bar')?.getAttribute('aria-label')).toBe('另一台 服务器状态')
+  await act(async () => useWorkspaceViewStore.getState().openVault())
+  expect(host.querySelector('.server-status-bar')).toBeNull()
+  await act(async () => useSessionStore.getState().setActiveTab('a'))
+  expect(host.querySelector('.server-status-bar')).not.toBeNull()
+  await act(async () => useDesktopShellStore.getState().setSettingsPage('appearance'))
+  expect(host.querySelector('.server-status-bar')).toBeNull()
+  await act(async () => useDesktopShellStore.getState().setSettingsPage(null))
+  expect(host.querySelector('.server-status-bar')).not.toBeNull()
+  expect(host.querySelector('.shell-workspace-content main')).toBe(terminal)
 })
 
 it('关闭最后一个页面后显示连接首页', async () => {

@@ -59,14 +59,17 @@
 .desktop-shell .shell-sidebar.is-preview { position: absolute; inset: 0 auto 0 0; height: 100%; margin: 0; z-index: 30; opacity: 0; transform: translateX(-24px); pointer-events: none; border-right: 1px solid var(--edge-soft); border-radius: 0 var(--r-lg) var(--r-lg) 0; box-shadow: 8px 0 24px rgba(0, 0, 0, 0.06); transition: transform 180ms cubic-bezier(0.2, 0, 0.2, 1), opacity 180ms ease; }
 .desktop-shell .shell-sidebar.is-preview-open { transform: translateX(0); opacity: 1; pointer-events: auto; }
 .desktop-shell .shell-sidebar.collapsed.is-preview-resting { transition: none; }
-.shell-top-controls-slot { flex: 0 0 calc(2 * var(--shell-icon-size) + var(--shell-icon-gap)); height: var(--shell-icon-size); }
+/* The header beneath the floating buttons must exclude their hit area too. */
+.shell-top-controls-slot { flex: 0 0 calc(2 * var(--shell-icon-size) + var(--shell-icon-gap)); height: var(--shell-icon-size); -webkit-app-region: no-drag; }
 /* Keep these controls outside both the animated sidebar and the workspace's
-   clipping/stacking context, at the same coordinates throughout hover preview. */
-.shell-fixed-top-controls { position: absolute; left: 24px; top: calc((var(--shell-top-height) - var(--shell-icon-size)) / 2); z-index: 35; }
+   clipping/stacking context, at the same coordinates throughout hover preview.
+   Exclude the whole layer from native dragging over the macOS workspace header. */
+.shell-fixed-top-controls { position: absolute; left: 24px; top: calc((var(--shell-top-height) - var(--shell-icon-size)) / 2); z-index: 35; -webkit-app-region: no-drag; }
 .desktop-shell.is-mac .shell-fixed-top-controls { left: var(--shell-mac-controls-space); }
 .shell-sidebar-top { display: flex; align-items: center; height: var(--shell-top-height); padding: 0 16px; flex-shrink: 0; }
 .desktop-shell.is-mac .shell-sidebar-top { padding-left: var(--shell-mac-controls-space); }
 .shell-top-controls, .shell-workspace-actions { display: flex; align-items: center; gap: var(--shell-icon-gap); flex-shrink: 0; }
+.shell-top-controls { -webkit-app-region: no-drag; }
 .shell-icon-button { width: var(--shell-icon-size, 32px); height: var(--shell-icon-size, 32px); padding: 0; color: var(--fg-3); border-radius: var(--r-sm); transition: background 120ms, color 120ms; }
 .shell-icon-button:hover { background: var(--shell-hover, var(--bg-hover)); color: var(--fg); }
 .shell-icon-button[aria-pressed="true"] { background: var(--shell-selected, var(--bg-active)); color: var(--fg); }
@@ -146,26 +149,43 @@
   pointer-events: none;
 }
 .desktop-shell.sidebar-is-hidden .shell-workspace { margin-left: var(--shell-outer-gap); }
-.desktop-shell .shell-workspace-header { --shell-hover: color-mix(in srgb, var(--shell-header-fg, var(--fg)) 6%, var(--shell-header-bg, var(--surface-workspace))); --shell-selected: color-mix(in srgb, var(--shell-header-fg, var(--fg)) 10%, var(--shell-header-bg, var(--surface-workspace))); display: flex; align-items: center; flex-shrink: 0; gap: 12px; height: var(--shell-header-height); min-height: max(var(--shell-header-height), calc(var(--sans-size) * 1.5 + 14px)); padding: 0 var(--shell-header-right-pad) 0 16px; background: var(--shell-header-bg, var(--surface-workspace)); user-select: none; }
-.desktop-shell .shell-workspace-header .shell-icon-button { color: var(--shell-header-fg, var(--fg-3)); }
-.desktop-shell .shell-workspace-header .shell-icon-button:hover { color: var(--shell-header-fg, var(--fg)); }
+.desktop-shell .shell-workspace-header { display: flex; align-items: center; flex-shrink: 0; gap: 12px; height: var(--shell-header-height); min-height: max(var(--shell-header-height), calc(var(--sans-size) * 1.5 + 14px)); padding: 0 var(--shell-header-right-pad) 0 16px; background: var(--surface-workspace); user-select: none; }
 .desktop-shell.is-mac.sidebar-is-hidden .shell-workspace-header { padding-left: calc(var(--shell-mac-controls-space) - var(--shell-outer-gap)); }
 .desktop-shell .shell-workspace-tabs { display: flex; flex: 1; align-items: center; gap: 4px; min-width: 0; align-self: stretch; container-type: inline-size; }
 .desktop-shell .shell-tab-scroll { flex: 0 1 auto; min-width: 0; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; overscroll-behavior-x: contain; -webkit-app-region: no-drag; }
 .desktop-shell .shell-tab-scroll::-webkit-scrollbar { display: none; }
 .desktop-shell .shell-tab-list { display: flex; align-items: center; gap: 4px; width: max-content; padding: 3px; }
-.desktop-shell .shell-tab { display: flex; align-items: center; flex: 0 0 auto; max-width: min(max(280px, calc(var(--sans-size) * 22)), calc(100cqi - 42px)); border: 1px solid transparent; border-radius: var(--r-sm); color: var(--shell-header-fg, var(--fg-3)); }
+.desktop-shell .shell-tab { display: flex; align-items: center; flex: 0 0 auto; width: max(216px, calc(var(--sans-size) * 15)); max-width: calc(100cqi - 42px); border-radius: var(--r); color: color-mix(in srgb, var(--fg) 50%, var(--surface-app)); transition: background 120ms, color 120ms, box-shadow 120ms; }
 .desktop-shell .shell-tab:hover { background: var(--shell-hover); }
-.desktop-shell .shell-tab.is-active { background: var(--shell-selected); border-color: color-mix(in srgb, var(--shell-header-fg, var(--fg)) 10%, transparent); color: var(--shell-header-fg, var(--fg)); }
-.desktop-shell .shell-tab-select { flex: 1; flex-shrink: 1; min-width: 0; min-height: 32px; height: auto; gap: 8px; padding: 3px 4px 3px 8px; justify-content: flex-start; font: inherit; color: inherit; background: transparent; }
+.desktop-shell .shell-tab.is-active { background: var(--surface-panel); box-shadow: inset 0 0 0 1px var(--edge-soft), 0 1px 1px rgba(0, 0, 0, 0.02); color: var(--fg); }
+.desktop-shell .shell-tab-select { flex: 1; flex-shrink: 1; min-width: 0; min-height: 32px; height: auto; gap: 6px; padding: 4px 8px 4px 12px; justify-content: flex-start; font: inherit; color: inherit; background: transparent; }
 .desktop-shell .shell-tab-select:hover { background: transparent; color: inherit; }
+.desktop-shell .shell-tab-select > svg { width: 14px; height: 14px; }
 .desktop-shell .shell-tab-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .desktop-shell .shell-tab-status { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; width: 13px; height: 16px; }
-.desktop-shell .shell-tab-close { flex-shrink: 0; width: 24px; height: 24px; margin-right: 3px; color: inherit; opacity: 0; pointer-events: none; }
+.desktop-shell .shell-tab-close { flex-shrink: 0; width: 24px; height: 24px; margin-right: 4px; color: inherit; opacity: 0; pointer-events: none; }
+.desktop-shell .shell-tab-close > svg { width: 12px; height: 12px; }
 .desktop-shell .shell-tab.is-active .shell-tab-close { opacity: 0.5; pointer-events: auto; }
 .desktop-shell .shell-tab:is(:hover, :focus-within) .shell-tab-close { opacity: 1; pointer-events: auto; }
-.desktop-shell .shell-tab.is-active .shell-tab-close:hover { background: color-mix(in srgb, currentColor 8%, transparent); color: inherit; }
+.desktop-shell .shell-tab .shell-tab-close:hover { background: color-mix(in srgb, currentColor 8%, transparent); color: inherit; }
 .desktop-shell .shell-tab-add { flex-shrink: 0; -webkit-app-region: no-drag; }
+/* SSH chrome shares the terminal canvas. On macOS the collapsed sidebar's
+   controls also sit over that canvas; other platforms keep a separate top row. */
+.desktop-shell.has-terminal .shell-workspace { background: var(--shell-terminal-bg); }
+.desktop-shell.has-terminal :is(.shell-workspace-header, .server-status-bar),
+.desktop-shell.is-mac.has-terminal .shell-fixed-top-controls {
+  --surface-app: var(--shell-terminal-bg);
+  --surface-panel: var(--shell-terminal-bg);
+  --surface-workspace: var(--shell-terminal-bg);
+  --fg: var(--shell-terminal-fg);
+  --fg-3: color-mix(in srgb, var(--fg) 68%, var(--shell-terminal-bg));
+  --fg-5: color-mix(in srgb, var(--fg) 40%, var(--shell-terminal-bg));
+  --edge-soft: color-mix(in srgb, var(--fg) 12%, var(--shell-terminal-bg));
+  --shell-hover: color-mix(in srgb, var(--fg) 6%, var(--shell-terminal-bg));
+  --shell-selected: color-mix(in srgb, var(--fg) 10%, var(--shell-terminal-bg));
+}
+.desktop-shell.has-terminal .shell-tab:not(.is-active) { color: var(--fg-3); }
+.desktop-shell.has-terminal .server-status-item:is(:hover, [data-state='open']) { color: var(--fg); }
 /* Window buttons belong to the window corner, outside the rounded workspace's
    clipping. macOS native controls keep their existing shared top-band layout. */
 .desktop-shell > .shell-window-controls { position: absolute; top: 0; right: 0; z-index: 40; width: var(--shell-window-controls-width); height: var(--shell-top-height); margin: 0; }
@@ -193,14 +213,13 @@
 .shell-inspector.is-overlay { position: absolute; top: 0; right: 0; bottom: 0; z-index: 25; box-shadow: var(--shadow-overlay); }
 .desktop-shell:not(.is-mac) .shell-inspector { margin-top: var(--shell-header-height); }
 .shell-inspector-heading { display: flex; flex-shrink: 0; align-items: center; justify-content: space-between; height: var(--shell-header-height); min-height: 48px; padding: 4px 8px 4px 12px; font-weight: 500; }
-.shell-inspector-switch { height: 30px; padding: 4px 7px; gap: 6px; border: 1px solid var(--edge-soft); border-radius: var(--r-sm); color: var(--fg-2); font-size: 12px; font-weight: 400; }
+.shell-inspector-switch { height: 30px; padding: 4px 7px; gap: 6px; border: 1px solid transparent; border-radius: var(--r-sm); background: transparent; color: var(--fg-2); font-size: 12px; font-weight: 400; }
 .shell-inspector-choices { flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: stretch; justify-content: center; gap: 8px; width: min(200px, calc(100% - 48px)); margin: 0 auto; padding-bottom: var(--shell-header-height); }
 .shell-inspector-choices > p { padding: 8px 12px; color: var(--fg-4); font-size: 12px; }
 .shell-inspector-choices > button { justify-content: flex-start; gap: 12px; min-height: 44px; height: auto; padding: 10px 12px; color: var(--fg-2); font-size: 13px; font-weight: 400; }
 .shell-inspector-stack { position: relative; flex: 1; min-height: 0; }
 .shell-inspector-slot { position: absolute; inset: 0; display: flex; flex-direction: column; }
 .shell-inspector-slot > .sdetail-pane { flex: 1; min-height: 0; }
-.shell-inspector-encoding { display: flex; justify-content: space-between; padding: 8px 14px; border-top: 1px solid var(--border-subtle); font-size: 11px; color: var(--fg-3); }
 .shell-home { display: flex; align-items: center; justify-content: center; flex: 1; min-height: 0; overflow: auto; padding: 48px 40px; }
 .shell-home-content { position: relative; width: min(760px, 100%); margin-top: -72px; }
 .shell-home h1 { margin: 0 0 8px; text-align: center; font-size: 36px; font-weight: 500; line-height: 1.2; letter-spacing: -1px; }
@@ -213,8 +232,7 @@
 .shell-palette .pal-item { min-height: 42px; height: auto; }
 .shell-palette .pal-item-label { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .shell-palette .pal-item-label small { font-size: 11px; color: var(--fg-3); overflow: hidden; text-overflow: ellipsis; }
-.shell-search-hint { display: flex; gap: 16px; padding: 10px 16px; border-top: 1px solid var(--border-subtle); color: var(--fg-3); font-size: 11px; }
-.desktop-shell .shell-vault-focus { border-radius: var(--r-lg); outline: 1px solid var(--desktop-focus-border); outline-offset: 2px; }
+.shell-search-hint { display: flex; gap: 16px; padding: 10px 16px; color: var(--fg-3); font-size: 11px; }
 .desktop-shell .vault-grid > [data-vault-item] > .vault-card { height: 100%; }
 @media (max-width: 960px) {
   .shell-home { padding: 32px 24px; }
@@ -237,7 +255,6 @@
 body:has(.desktop-shell) {
   --desktop-menu-row-height: 36px;
   --desktop-menu-icon-size: 16px;
-  --desktop-focus-border: color-mix(in srgb, var(--fg-3) 45%, transparent);
 }
 body:has(.desktop-shell) :is([role="menu"], [data-slot="select-content"]) {
   font: 400 var(--sans-size) / 1.5 var(--sans);
@@ -253,38 +270,38 @@ body:has(.desktop-shell) [role="menu"] :is([role="menuitem"], [role="menuitemche
   height: var(--desktop-menu-icon-size);
   flex-shrink: 0;
 }
-body:has(.desktop-shell) :is([data-slot="context-menu-content"], [data-slot="context-menu-sub-content"]) {
-  min-width: 200px;
+/* Use the context menu surface for every popup, including body portals. */
+body:has(.desktop-shell) :is([role="menu"], [data-slot="select-content"], [data-slot="popover-content"]) {
   max-width: calc(100vw - 16px);
+}
+body:has(.desktop-shell) :is([role="menu"], [data-slot="select-content"], [data-slot="popover-content"], [data-slot="tooltip-content"], [data-slot="hover-card-content"]) {
   border: 1px solid var(--edge-soft);
   border-radius: var(--r-lg);
-  padding: 6px;
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.08);
 }
-body:has(.desktop-shell) :is([data-slot="context-menu-content"], [data-slot="context-menu-sub-content"]) [role="separator"] {
+body:has(.desktop-shell) :is([role="menu"], [data-slot="select-content"]) {
+  min-width: 200px;
+}
+body:has(.desktop-shell) :is([role="menu"], [data-slot="select-viewport"]) {
+  padding: 6px;
+}
+body:has(.desktop-shell) :is([role="menu"], [data-slot="select-content"]) :is([role="separator"], [data-slot="select-separator"]) {
   margin: 6px 8px;
   background: var(--edge-soft);
 }
 
-/* Keyboard focus stays visible without the thick blue shadcn ring. This also
-   covers portals (settings selectors, dialogs and menus) in the main window. */
-body:has(.desktop-shell) :focus-visible {
+/* Remove focus rings in the main window, body portals and standalone editor.
+   Text fields keep their own surface; navigation controls use a subtle fill. */
+body:has(:is(.desktop-shell, .editor-window)) :focus {
+  outline: none;
   --tw-ring-shadow: 0 0 #0000;
+  --tw-ring-offset-shadow: 0 0 #0000;
   --tw-ring-color: transparent;
 }
-body:has(.desktop-shell) :focus-visible:not(:is([role="menu"], [role="listbox"], [role="dialog"], [role="alertdialog"], [role="tabpanel"])) {
-  outline: 1px solid var(--desktop-focus-border);
-  outline-offset: 1px;
-}
-body:has(.desktop-shell) :focus-visible:not(:is([aria-invalid="true"], [role="menu"], [role="listbox"], [role="dialog"], [role="alertdialog"], [role="tabpanel"])) { border-color: var(--desktop-focus-border); }
-body:has(.desktop-shell) :is(.shell-account-menu, .shell-account-submenu) {
-  border: 1px solid var(--edge-soft);
-  border-radius: var(--r-lg);
-  padding: 6px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);
+body:has(:is(.desktop-shell, .editor-window)) :is(button, select, a[href], [role="button"], [role="tab"]):not(:disabled):focus-visible {
+  background-image: linear-gradient(color-mix(in srgb, currentColor 8%, transparent), color-mix(in srgb, currentColor 8%, transparent));
 }
 body:has(.desktop-shell) .shell-account-menu {
   min-width: 220px;
   max-width: calc(100vw - 24px);
 }
-body:has(.desktop-shell) .shell-account-menu [role="separator"] { margin: 6px 0; background: var(--edge-soft); }

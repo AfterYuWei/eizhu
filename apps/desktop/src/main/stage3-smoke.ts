@@ -26,7 +26,7 @@ export async function verifyStage3(window: BrowserWindow, runtime: RuntimeHost, 
   const fixtureInfo =
     '===HOSTNAME===\nstage3-synthetic\n===OS===\nDebian GNU/Linux\n===OS_ID===\ndebian\n===KERNEL===\n6.1\n===ARCH===\nx86_64\n===CPUS===\n2\n===CPUMHZ===\n2400\n'
   const fixtureMetrics =
-    '===CPU1===\nT 10 0 0 90 0 0 0 0\n===CPU2===\nT 30 0 0 170 0 0 0 0\n===NET1===\neth0 1 2\n===NET2===\neth0 101 202\n===STATIC===\nMT 1000\nMU 400\nDU 100\nDT 200\n'
+    '===TIME1===\n100\n===TIME2===\n101\n===CPU1===\nT 10 0 0 90 0 0 0 0\nC0 10 0 0 90 0 0 0 0\n===CPU2===\nT 30 0 0 170 0 0 0 0\nC0 30 0 0 170 0 0 0 0\n===NET1===\neth0 1 2\n===NET2===\neth0 101 202\n===STATIC===\nMT 1000\nMU 400\nDU 100\nDT 200\nCM 2400\n===PROCESSES===\nMP\t2\t40\tapp\n===VOLUMES===\n/dev/sda 200 100 100 50% /\n'
   const tracked = (socket: net.Socket) => {
     sockets.add(socket)
     socket.on('error', () => undefined)
@@ -125,7 +125,7 @@ export async function verifyStage3(window: BrowserWindow, runtime: RuntimeHost, 
           stream.write(
             info.command === 'printf \'%s\\n\' "$SHELL"'
               ? '/bin/bash\n'
-              : info.command.includes('===CPU1===')
+              : (info.command.includes('===CPU1===') || info.command.includes('===NET1===') || info.command.includes('===STATIC==='))
               ? fixtureMetrics
               : info.command.includes('===HOSTNAME===')
                 ? fixtureInfo
@@ -379,9 +379,13 @@ export async function verifyStage3(window: BrowserWindow, runtime: RuntimeHost, 
     step('binary-completion-passed')
     const detail = await call<{ session_id: string }>('serverDetail.create', { profileId: direct })
     const info = await call<{ hostname: string }>('serverDetail.getInfo', { sessionId: detail.session_id }),
-      metrics = await call<{ cpu: number }>('serverDetail.getMetrics', { sessionId: detail.session_id })
+      metrics = await call<{ cpu: number }>('serverDetail.getSummary', { sessionId: id })
     assert.equal(info.hostname, 'stage3-synthetic')
     assert.equal(metrics.cpu, 20)
+    for (const kind of ['cpu', 'memory', 'disk', 'network'] as const) {
+      const selected = await call<{ kind: string }>('serverDetail.getMetricDetail', { sessionId: id, kind })
+      assert.equal(selected.kind, kind)
+    }
     const files = await call<{ entries: Array<{ name: string }> }>('serverDetail.listFiles', {
       sessionId: detail.session_id,
       path: '/tmp/stage3',

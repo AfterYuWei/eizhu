@@ -21,34 +21,6 @@ export interface ServerInfo {
   cpu_mhz: number // CPU frequency in MHz
 }
 
-export interface NetIfStat {
-  name: string
-  rx: number
-  tx: number
-}
-
-export interface ProcMem {
-  name: string
-  percent: number
-  rss: number
-}
-
-export interface ServerMetrics {
-  cpu: number
-  cpu_detail: number[]
-  mem_used: number
-  mem_total: number
-  mem_percent: number
-  mem_detail: ProcMem[]
-  disk_used: number
-  disk_total: number
-  disk_percent: number
-  cpu_mhz: number // CPU frequency in MHz (dynamic, real-time)
-  net_rx: number
-  net_tx: number
-  net_detail: NetIfStat[]
-}
-
 export interface HistoryEntry {
   id: string
   command: string

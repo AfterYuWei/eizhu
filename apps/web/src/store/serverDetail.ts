@@ -4,7 +4,7 @@ import { serverDetailApi } from '@/api/serverDetail'
 import { editApi } from '@/api/edit'
 import { openEditorFile } from '@/lib/editorWindow'
 import { useProfileStore } from '@/store/profile'
-import type { ServerInfo,ServerMetrics } from '@/api/serverDetail'
+import type { ServerInfo } from '@/api/serverDetail'
 
 // --- File tree node (supports lazy-loaded children) ---
 
@@ -28,9 +28,7 @@ interface ServerDetailState {
   error: string | null
   info: ServerInfo
   files: FileTreeNode[]
-  metrics: ServerMetrics
   requestId: number
-  wsConnected: boolean
   homeDir: string
   currentPath: string
   showHidden: boolean
@@ -53,9 +51,6 @@ interface ServerDetailStore {
   listFiles: (profileId: string, path: string) => Promise<void>
   navigateToParent: (profileId: string) => void
   openEditor: (profileId: string, path: string) => void
-  updateMetrics: (profileId: string, metrics: ServerMetrics) => void
-  updateInfo: (profileId: string, info: ServerInfo) => void
-  setWsConnected: (profileId: string, connected: boolean) => void
   markDisconnected: (profileId: string, error?: string) => void
   getStatus: (profileId: string) => ServerDetailState
   // Selection
@@ -84,31 +79,13 @@ const emptyInfo = (): ServerInfo => ({
   cpu_mhz: 0,
 })
 
-const emptyMetrics = (): ServerMetrics => ({
-  cpu: 0,
-  cpu_detail: [],
-  mem_used: 0,
-  mem_total: 0,
-  mem_percent: 0,
-  mem_detail: [],
-  disk_used: 0,
-  disk_total: 0,
-  disk_percent: 0,
-  cpu_mhz: 0,
-  net_rx: 0,
-  net_tx: 0,
-  net_detail: [],
-})
-
 const defaultState = (): ServerDetailState => ({
   sessionId: null,
   status: 'idle',
   error: null,
   info: emptyInfo(),
   files: [],
-  metrics: emptyMetrics(),
   requestId: 0,
-  wsConnected: false,
   homeDir: '/',
   currentPath: '/',
   showHidden: false,
@@ -430,45 +407,6 @@ export const useServerDetailStore = create<ServerDetailStore>((set, get) => ({
     void openEditorFile(detail.sessionId, 'serverDetail', path)
   },
 
-  updateMetrics: (profileId: string, metrics: ServerMetrics) => {
-    set((s) => {
-      const detail = s.details[profileId]
-      if (!detail) return s
-      return {
-        details: {
-          ...s.details,
-          [profileId]: { ...detail, metrics },
-        },
-      }
-    })
-  },
-
-  updateInfo: (profileId: string, info: ServerInfo) => {
-    set((s) => {
-      const detail = s.details[profileId]
-      if (!detail) return s
-      return {
-        details: {
-          ...s.details,
-          [profileId]: { ...detail, info },
-        },
-      }
-    })
-  },
-
-  setWsConnected: (profileId: string, connected: boolean) => {
-    set((s) => {
-      const detail = s.details[profileId]
-      if (!detail) return s
-      return {
-        details: {
-          ...s.details,
-          [profileId]: { ...detail, wsConnected: connected },
-        },
-      }
-    })
-  },
-
   markDisconnected: (profileId: string, error?: string) => {
     set((s) => {
       const detail = s.details[profileId]
@@ -480,7 +418,6 @@ export const useServerDetailStore = create<ServerDetailStore>((set, get) => ({
             ...detail,
             status: 'disconnected',
             error: error ?? detail.error,
-            wsConnected: false,
           },
         },
       }

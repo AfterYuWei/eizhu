@@ -16,7 +16,7 @@ import { TerminalStream } from './stream.ts'
 import { ShellOutput, shellSetupCommand } from './shell.ts'
 import type { BinaryPort } from './stream.ts'
 import { complete, readDirectory } from './completion.ts'
-import { INFO_COMMAND, METRICS_COMMAND, parseInfo, parseMetrics } from './metrics.ts'
+import { INFO_COMMAND, SUMMARY_COMMAND, METRIC_COMMANDS, parseInfo, parseSummary, parseMetricDetail } from './metrics.ts'
 import { TunnelListener } from './tunnel.ts'
 interface TerminalSession {
   system?: string
@@ -729,7 +729,8 @@ export class SshService {
         this.details.delete((input as { sessionId: string }).sessionId)
         return
       case 'serverDetail.getInfo':
-      case 'serverDetail.getMetrics':
+      case 'serverDetail.getSummary':
+      case 'serverDetail.getMetricDetail':
       case 'serverDetail.listFiles': {
         const d = input as { sessionId: string; path?: string; showHidden?: boolean },
           s = this.connected(d.sessionId)
@@ -758,18 +759,21 @@ export class SshService {
                 })),
             }
           }
+          const kind = operation === 'serverDetail.getMetricDetail' ? ssh[operation].input.parse(input).kind : null
+          const connection = s.connection
           const result = await execBounded(
-            s.connection.client!,
-            operation === 'serverDetail.getInfo' ? INFO_COMMAND : METRICS_COMMAND,
-            s.connection.controller.signal,
+            connection.client!,
+            operation === 'serverDetail.getInfo' ? INFO_COMMAND : kind ? METRIC_COMMANDS[kind] : SUMMARY_COMMAND,
+            connection.controller.signal,
           )
+          if (s.closed || s.connection !== connection || s.meta.status !== 'connected') fail('SSH_NOT_CONNECTED', '服务器连接已变化')
           if (result.code !== 0) fail('SSH_EXEC_FAILED', '服务器查询失败')
           if (operation === 'serverDetail.getInfo') {
             const info = parseInfo(result.output)
             s.system = JSON.stringify(info).slice(0, 4096)
             return info
           }
-          return parseMetrics(result.output)
+          return kind ? parseMetricDetail(kind, result.output) : parseSummary(result.output)
         } finally {
           s.queries--
         }

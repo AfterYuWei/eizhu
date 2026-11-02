@@ -7,7 +7,6 @@ import type { SettingsTab } from '@/components/SettingsDialog'
 import { workspaceGeneration } from '@/lib/workspaceScope'
 import { registerDesktopAction,runDesktopAction,shortcutAction } from '@/lib/desktopActions'
 import { snippetTarget,type SnippetTarget } from '@/lib/snippetInsertion'
-import { getTerminalTheme,resolveTerminalThemeId } from '@/lib/terminalThemes'
 import { DEFAULT_DESKTOP_SIDEBAR_WIDTH,MIN_DESKTOP_SIDEBAR_WIDTH,MAX_DESKTOP_SIDEBAR_WIDTH,DESKTOP_SIDEBAR_INSET } from '@/lib/desktopSidebar'
 import { Sidebar } from '@/components/Sidebar'
 import { TerminalSplitMenu } from '@/components/Terminal/SplitControls'
@@ -21,6 +20,7 @@ import { useSessionStore } from '@/store/session'
 import { useSidebarDetailStore } from '@/store/sidebarDetail'
 import { useTerminalLayoutStore } from '@/store/terminalLayout'
 import { useSettingsStore,useResolvedTheme } from '@/store/settings'
+import { getTerminalHighlightColors,getTerminalThemeMeta,resolveTerminalThemeId } from '@/lib/terminalThemes'
 import { useDesktopShellStore } from '@/store/desktopShell'
 import { useSplitSidebar } from '@/hooks/useSplitSidebar'
 import { useSidebarPreview } from '@/hooks/useSidebarPreview'
@@ -35,6 +35,7 @@ import { WorkspaceTabs } from './WorkspaceTabs'
 import { WorkspaceContent } from './WorkspaceContent'
 import { useWorkspaceViewStore } from '@/store/workspaceView'
 import { ServerInspector } from './ServerInspector'
+import { ServerStatusBar } from './ServerStatusBar'
 import { AiInspector } from '@/components/Agent/AiInspector'
 import { WorkspaceActions } from './WorkspaceActions'
 
@@ -93,7 +94,8 @@ export function Layout() {
   const terminal = activePage === 'terminal' && Boolean(activeTab?.profileId)
   const rightSidebarVisible = rightSidebar !== null && !settingsOpen && terminal
   const sidebarOverlay = workspaceWidth < inspectorWidth + 480 + 8
-  const terminalPalette = getTerminalTheme(resolveTerminalThemeId(terminalTheme, theme))
+  const terminalThemeId = resolveTerminalThemeId(terminalTheme, theme)
+  const terminalPalette = getTerminalThemeMeta(terminalThemeId)
 
   const openSettings = useCallback((tab: SettingsTab) => {
     const focused = document.activeElement
@@ -156,7 +158,7 @@ export function Layout() {
     return () => { unregister.forEach((fn) => fn()); document.removeEventListener('keydown', handler, true) }
   }, [toggleSidebar, openSettings, settingsOpen])
 
-  const topControls = <div className="shell-top-controls" data-eizhu-drag-region={desktop || undefined}>
+  const topControls = <div className="shell-top-controls">
     <ShellIconButton label={`${sidebarHidden ? '展开' : '折叠'}侧栏 (Ctrl/Cmd+Shift+B)`} showTooltip={!sidebarHidden} aria-expanded={sidebarInteractive} aria-controls="desktop-main-sidebar" data-sidebar-preview-trigger={sidebarHidden || undefined}
       onPointerEnter={(event) => { if (!suppressSidebarHover.current) preview.enter(event) }}
       onPointerLeave={(event) => { suppressSidebarHover.current = false; preview.leave(event) }}
@@ -166,7 +168,12 @@ export function Layout() {
     <ShellIconButton label="搜索服务器、密钥或命令 (Ctrl/Cmd+Shift+K)" onClick={() => setPaletteOpen(true)}><Search size={16} /></ShellIconButton>
   </div>
 
-  return <div className={`eizhu-app desktop-shell ${mac ? 'is-mac' : ''} ${sidebarHidden ? 'sidebar-is-hidden' : ''}`} style={{ '--shell-sidebar-default-width': `${DEFAULT_DESKTOP_SIDEBAR_WIDTH}px`, '--shell-sidebar-inset': `${DESKTOP_SIDEBAR_INSET}px` } as CSSProperties} role="application" aria-label="eizhu">
+  return <div className={`eizhu-app desktop-shell ${mac ? 'is-mac' : ''} ${sidebarHidden ? 'sidebar-is-hidden' : ''} ${terminal ? 'has-terminal' : ''}`} style={{
+    '--shell-sidebar-default-width': `${DEFAULT_DESKTOP_SIDEBAR_WIDTH}px`,
+    '--shell-sidebar-inset': `${DESKTOP_SIDEBAR_INSET}px`,
+    '--shell-terminal-bg': terminalPalette.theme.background,
+    '--shell-terminal-fg': getTerminalHighlightColors(terminalThemeId).command,
+  } as CSSProperties} role="application" aria-label="eizhu">
     <div className="shell-session-view" ref={sessionView} inert={settingsOpen} aria-hidden={settingsOpen || undefined}>
       <div ref={sidebarSpace} className={`shell-sidebar-space ${sidebarHidden ? 'is-collapsed' : ''} ${sidebarButtonMotion ? 'is-button-motion' : ''}`} style={{ width: sidebarHidden ? 0 : visibleSidebarWidth }}>
       <aside ref={sidebar} id="desktop-main-sidebar" className={`eizhu-sidebar shell-sidebar ${sidebarHidden && !preview.present ? 'collapsed' : ''} ${preview.present ? 'is-preview' : ''} ${preview.open ? 'is-preview-open' : ''} ${preview.instantCollapse ? 'is-preview-resting' : ''}`} style={{ width: preview.present ? DEFAULT_DESKTOP_SIDEBAR_WIDTH : visibleSidebarWidth }} aria-label="主导航" aria-hidden={!sidebarInteractive} inert={!sidebarInteractive} onPointerEnter={preview.enter} onPointerLeave={preview.leave}>
@@ -193,8 +200,7 @@ export function Layout() {
       {sidebarHidden && <div className="shell-fixed-top-controls">{topControls}</div>}
       <div className="shell-workspace-area" ref={workspace}>
       <main className="shell-workspace">
-        <header className="shell-workspace-header" data-eizhu-drag-region={desktop || undefined}
-          style={terminal ? { '--shell-header-bg': terminalPalette.background, '--shell-header-fg': terminalPalette.foreground } as CSSProperties : undefined}>
+        <header className="shell-workspace-header" data-eizhu-drag-region={desktop || undefined}>
           {sidebarHidden && <div className="shell-top-controls-slot" aria-hidden="true" />}
           <WorkspaceTabs />
           <div className="shell-workspace-actions" data-eizhu-drag-region={desktop || undefined}>
@@ -207,6 +213,7 @@ export function Layout() {
         <div className="shell-workspace-body">
           <div className="cnt-wrap shell-workspace-content"><WorkspaceContent onAddServer={() => setProfileFormOpen(true)} /></div>
         </div>
+        {terminal && activeTab && !settingsOpen && <ServerStatusBar key={`${workspaceGeneration()}:${activeTab.id}:${activeTab.sessionId}:${activeTab.status}`} tab={activeTab} />}
       </main>
       <div id="desktop-right-sidebar" className="shell-right-sidebar" hidden={!rightSidebarVisible}>
         <aside className={`shell-inspector shell-inspector-picker ${sidebarOverlay ? 'is-overlay' : ''}`} style={{ width: inspectorWidth }} hidden={!rightSidebarVisible || rightSidebar !== 'choose'} inert={!rightSidebarVisible || rightSidebar !== 'choose'} aria-label="选择侧栏内容">
