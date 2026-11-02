@@ -6,7 +6,6 @@ import type { AiTransport } from './model.ts'
 
 const config = {
   source: 'custom' as const,
-  protocol: 'chat' as const,
   endpoint: 'http://127.0.0.1:1234/v1',
   model: 'synthetic',
   apiKey: '',
@@ -40,39 +39,19 @@ test('AI endpoint boundary allows HTTPS and loopback HTTP; official origin and p
     }).success,
   )
 })
-test('chat streaming handles split UTF-8 and arguments, requiring a completed single tool call', async () => {
+test('Responses streaming handles split UTF-8, rejects incomplete streams and multiple commands', async () => {
+  const output = [
+    { type: 'function_call', call_id: 'call-1', name: 'run_command', arguments: JSON.stringify(command) },
+  ]
   const body =
-    event({
-      choices: [
-        {
-          delta: {
-            content: '检查中文 🧪',
-            tool_calls: [
-              {
-                index: 0,
-                id: 'call-1',
-                function: { name: 'run_command', arguments: JSON.stringify(command).slice(0, 15) },
-              },
-            ],
-          },
-        },
-      ],
-    }) +
-    event({
-      choices: [
-        {
-          delta: { tool_calls: [{ index: 0, function: { arguments: JSON.stringify(command).slice(15) } }] },
-          finish_reason: 'tool_calls',
-        },
-      ],
-    }) +
-    'data: [DONE]\n\n'
+    event({ type: 'response.output_text.delta', delta: '检查中文 🧪' }) +
+    event({ type: 'response.completed', response: { status: 'completed', output } })
   const result = await generateModel(stream(body), request, new AbortController().signal, () => undefined)
   assert.deepEqual(result.command, command)
   assert.equal(result.text, '检查中文 🧪')
   await assert.rejects(
     generateModel(
-      stream(body.slice(0, body.indexOf('data: ', 20))),
+      stream(event({ type: 'response.output_text.delta', delta: '中断' })),
       request,
       new AbortController().signal,
       () => undefined,
@@ -80,7 +59,12 @@ test('chat streaming handles split UTF-8 and arguments, requiring a completed si
   )
   await assert.rejects(
     generateModel(
-      stream(event({ choices: [{ delta: { tool_calls: [{ index: 1 }] } }] })),
+      stream(
+        event({
+          type: 'response.completed',
+          response: { status: 'completed', output: [...output, { ...output[0], call_id: 'call-2' }] },
+        }),
+      ),
       request,
       new AbortController().signal,
       () => undefined,
@@ -88,7 +72,7 @@ test('chat streaming handles split UTF-8 and arguments, requiring a completed si
   )
 })
 test('Responses preserves reasoning/output items for subsequent stateless tool results', async () => {
-  const req = modelRequest({ ...config, protocol: 'responses' }, '', [{ role: 'user', content: '检查' }])
+  const req = modelRequest(config, '', [{ role: 'user', content: '检查' }])
   const output = [
     { type: 'reasoning', encrypted_content: 'synthetic-encrypted' },
     { type: 'function_call', call_id: 'call-2', name: 'run_command', arguments: JSON.stringify(command) },
@@ -101,10 +85,7 @@ test('Responses preserves reasoning/output items for subsequent stateless tool r
   )
   assert.deepEqual(result.command, command)
   const next = JSON.parse(
-    modelRequest({ ...config, protocol: 'responses' }, '', [
-      result.message,
-      { role: 'tool', content: 'done', tool_call_id: 'call-2' },
-    ]).body!,
+    modelRequest(config, '', [result.message, { role: 'tool', content: 'done', callId: 'call-2' }]).body!,
   )
   assert.equal(next.input[0].encrypted_content, 'synthetic-encrypted')
   assert.equal(next.input[2].call_id, 'call-2')

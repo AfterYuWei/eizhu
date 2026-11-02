@@ -18,11 +18,18 @@ export const aiEndpointSchema = z
   }, '远程接口须使用 HTTPS，本机服务可使用 HTTP')
 export const aiPreferencesSchema = z.strictObject({
   source: z.enum(['official', 'custom']),
-  protocol: z.enum(['chat', 'responses']),
   endpoint: z.union([z.literal(''), aiEndpointSchema]),
   model: z.string().max(160),
 })
 export const aiSettingsSchema = aiPreferencesSchema.extend({ hasApiKey: z.boolean() })
+export const aiConnectionSchema = aiPreferencesSchema.extend({ apiKey: z.string().max(8192).optional() })
+export const aiModelCatalogSchema = z.strictObject({
+  models: z.array(z.strictObject({ id, name: z.string().max(160) })).max(1000),
+  defaultModel: z.string().max(160),
+  dailyTokenLimit: z.int().nonnegative().optional(),
+  remainingTokens: z.int().nonnegative().optional(),
+  message: z.string().max(1024),
+})
 export const aiCapabilitiesSchema = z.strictObject({
   available: z.boolean(),
   models: z.array(z.strictObject({ id, name: z.string().max(160) })).max(100),
@@ -109,11 +116,15 @@ export const aiAttachmentSchema = z.strictObject({
 export const ai = {
   'ai.settings': { input: z.undefined(), output: aiSettingsSchema },
   'ai.configure': {
-    input: aiPreferencesSchema.extend({ apiKey: z.string().max(8192).optional() }),
+    input: aiConnectionSchema,
     output: aiSettingsSchema,
   },
   'ai.capabilities': { input: z.undefined(), output: aiCapabilitiesSchema },
-  'ai.test': { input: z.undefined(), output: z.strictObject({ message: z.string().max(1024) }) },
+  'ai.discover': { input: aiConnectionSchema, output: aiModelCatalogSchema },
+  'ai.test': {
+    input: aiConnectionSchema.optional(),
+    output: z.strictObject({ message: z.string().max(1024) }),
+  },
   'ai.open': {
     input: z.strictObject({ sessionId: id, conversationId: z.uuid().optional() }),
     output: aiConversationSchema,
@@ -158,6 +169,8 @@ export type AiProposal = z.infer<typeof aiProposalSchema>
 export type AiResult = z.infer<typeof aiResultSchema>
 export type AiTarget = z.infer<typeof aiTargetSchema>
 export type AiCapabilities = z.infer<typeof aiCapabilitiesSchema>
+export type AiConnection = z.infer<typeof aiConnectionSchema>
+export type AiModelCatalog = z.infer<typeof aiModelCatalogSchema>
 export const aiEventSchema = z.union([
   z.strictObject({ workspaceGeneration: z.int(), conversation: aiConversationSchema }),
   z.strictObject({ workspaceGeneration: z.int(), conversationId: z.uuid(), message: aiMessageSchema }),
@@ -181,7 +194,7 @@ export const aiHttpRequestSchema = z
     if (
       r.source === 'official' &&
       (u.origin !== 'https://eizhu.yuweinfo.com' ||
-        !['/api/ai/v1/capabilities', '/api/ai/v1/chat'].includes(u.pathname))
+        !['/api/ai/v1/capabilities', '/api/ai/v1/responses'].includes(u.pathname))
     )
       ctx.addIssue({ code: 'custom', message: '官方 AI 请求地址无效' })
   })

@@ -72,8 +72,14 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
         res.end()
         return
       }
-      const data = JSON.parse(body) as { messages: Array<{ role: string }> }
-      const done = data.messages.some((m) => m.role === 'tool')
+      if (req.url === '/v1/models') {
+        res.writeHead(200, { 'content-type': 'application/json' })
+        res.end(JSON.stringify({ data: [{ id: 'synthetic-ai' }, { id: 'synthetic-second' }] }))
+        return
+      }
+      assert.equal(req.url, '/v1/responses')
+      const data = JSON.parse(body) as { input: Array<{ type?: string }> }
+      const done = data.input.some((item) => item.type === 'function_call_output')
       res.writeHead(200, { 'content-type': 'text/event-stream' })
       const command = {
         command: "printf '你好'",
@@ -81,29 +87,27 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
         purpose: '检查远端命令输出',
         impact: '只读，不修改服务器文件',
       }
-      if (modelMode === 'unsupported') {
-        res.end(
-          `data: ${JSON.stringify({ choices: [{ delta: { content: '此模型仅支持文本' }, finish_reason: 'stop' }] })}\n\n`,
-        )
-        return
-      }
-      const delta = done
-        ? {
-            content:
-              "## 检查结论\n\n命令退出码为 **3**，需要结合错误输出继续核查。\n\n- 已读取标准输出和错误输出。\n- 后续操作仍需逐条确认。\n\n```sh\nprintf '检查完成'\n```",
-          }
-        : {
-            content: '我会先检查命令输出。',
-            tool_calls: [
+      const text =
+        modelMode === 'unsupported'
+          ? '此模型仅支持文本'
+          : done
+            ? "## 检查结论\n\n命令退出码为 **3**，需要结合错误输出继续核查。\n\n- 已读取标准输出和错误输出。\n- 后续操作仍需逐条确认。\n\n```sh\nprintf '检查完成'\n```"
+            : '我会先检查命令输出。'
+      const output = [
+        { type: 'message', role: 'assistant', content: [{ type: 'output_text', text }] },
+        ...(!done && modelMode !== 'unsupported'
+          ? [
               {
-                index: 0,
-                id: 'synthetic-call',
-                function: { name: 'run_command', arguments: JSON.stringify(command) },
+                type: 'function_call',
+                call_id: 'synthetic-call',
+                name: 'run_command',
+                arguments: JSON.stringify(command),
               },
-            ],
-          }
+            ]
+          : []),
+      ]
       const payload = Buffer.from(
-        `data: ${JSON.stringify({ choices: [{ delta }] })}\n\n${modelMode === 'interrupted' ? '' : `data: ${JSON.stringify({ choices: [{ delta: {}, finish_reason: done ? 'stop' : 'tool_calls' }] })}\n\ndata: [DONE]\n\n`}`,
+        `data: ${JSON.stringify({ type: 'response.output_text.delta', delta: text })}\n\n${modelMode === 'interrupted' ? '' : `data: ${JSON.stringify({ type: 'response.completed', response: { status: 'completed', output } })}\n\n`}`,
       )
       res.write(payload.subarray(0, 37))
       res.end(payload.subarray(37))
@@ -144,7 +148,6 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
     profileId = profile.id
     const settings = await call('ai', 'configure', {
       source: 'custom',
-      protocol: 'chat',
       endpoint: `http://127.0.0.1:${httpPort}/v1`,
       model: 'synthetic-ai',
       apiKey: 'synthetic-ai-api-key',
@@ -156,6 +159,55 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
     window.webContents.reload()
     await loaded
     window.webContents.backgroundThrottling = false
+    await wait("return !!document.querySelector('.desktop-shell')")
+    await js(
+      "document.dispatchEvent(new KeyboardEvent('keydown',{key:'y',ctrlKey:true,shiftKey:true,bubbles:true}))",
+    )
+    await wait("return [...document.querySelectorAll('[role=\"tab\"]')].some(t=>t.textContent==='AI 助手')")
+    await js(
+      "const tab=[...document.querySelectorAll('[role=\"tab\"]')].find(t=>t.textContent==='AI 助手');tab.focus();tab.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}))",
+    )
+    await wait("return !!document.querySelector('#ai-model')")
+    assert.equal(
+      await js('return document.querySelectorAll(\'.ai-settings button[role="combobox"]\').length'),
+      2,
+    )
+    await js(
+      "[...document.querySelectorAll('.ai-settings button')].find(b=>b.textContent==='自动发现模型').click()",
+    )
+    await wait("return document.querySelector('.ai-notice')?.textContent.includes('已发现 2 个模型')")
+    await js(
+      "const trigger=document.querySelector('#ai-model');trigger.focus();trigger.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true}))",
+    )
+    await wait('return !!document.querySelector(\'[role="listbox"]\')')
+    await js('await document.fonts.ready;await new Promise(r=>setTimeout(r,150))')
+    const selectName = 'ai-settings-models.png'
+    await writeFile(
+      join(root, selectName),
+      (await window.webContents.capturePage(undefined, { stayAwake: true })).toPNG(),
+    )
+    screenshots.push(selectName)
+    await js(
+      "const option=[...document.querySelectorAll('[role=\"option\"]')].find(o=>o.textContent==='synthetic-second');option.focus();option.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}))",
+    )
+    await wait('return !document.querySelector(\'[role="listbox"]\')')
+    await js(
+      "[...document.querySelectorAll('.ai-settings button')].find(b=>b.textContent==='测试连接').click()",
+    )
+    await wait("return document.querySelector('.ai-notice')?.textContent.includes('连接成功')")
+    assert.equal(commands.length, 0, 'Settings test never executes its proposed command')
+    assert.equal(
+      (await call<{ model: string }>('ai', 'settings')).model,
+      'synthetic-ai',
+      'Discovering and testing a draft must not save it',
+    )
+    const settingsName = 'ai-settings-responses.png'
+    await writeFile(
+      join(root, settingsName),
+      (await window.webContents.capturePage(undefined, { stayAwake: true })).toPNG(),
+    )
+    screenshots.push(settingsName)
+    await js("document.querySelector('.settings-page-back').click()")
     await wait("return [...document.querySelectorAll('.srv')].some(r=>r.title.startsWith('AI 合成服务 ·'))")
     await js(
       "window.__aiSmoke=null;window.eizhu.events.on('eizhu-ai-message',e=>{if(e.conversation)window.__aiSmoke=e.conversation});const row=[...document.querySelectorAll('.srv')].find(r=>r.title.startsWith('AI 合成服务 ·'));row.dispatchEvent(new MouseEvent('dblclick',{bubbles:true}))",
@@ -371,6 +423,9 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
       encryptedStorage: true,
       historyDeletion: true,
       quotaAndAuthErrors: true,
+      responsesOnly: true,
+      settingsDiscoveryAndTest: true,
+      sharedSettingsSelect: true,
       incompleteStreamRejected: true,
       unsupportedToolsRejected: true,
       codeBlockCopyOnly: true,
@@ -384,7 +439,6 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
     if (profileId) await call('profile', 'delete', { id: profileId })
     await call('ai', 'configure', {
       source: 'official',
-      protocol: 'chat',
       endpoint: '',
       model: '',
       apiKey: '',

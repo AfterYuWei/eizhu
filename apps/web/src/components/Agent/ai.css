@@ -471,11 +471,3 @@
   gap: 8px;
   padding: 12px 16px;
 }
-.ai-settings select {
-  background: var(--bg);
-  color: var(--fg);
-  border: 1px solid var(--edge-soft);
-  border-radius: 6px;
-  padding: 6px 8px;
-  font-size: 12px;
-}

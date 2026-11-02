@@ -1,6 +1,6 @@
 # 官方 AI 网关接口契约
 
-本仓库已实现桌面客户端；以下为独立后端需要实现的对接契约，不表示官方服务已部署或通过真实模型验收。本次未读取、修改 `admin/`，也未向生产发送账号或 AI 请求。
+桌面客户端和独立 admin 后端均已实现以下接口；管理端支持模型配置、加密密钥、用户额度和用量查询。实施与本机隔离验收不代表官方生产服务已部署或通过真实供应商验收；未向生产发送账号或 AI 请求。
 
 ## 地址与认证
 
@@ -25,16 +25,43 @@
 
 数值仅为协议示例，部署时必须配置实际模型和额度。未配置时返回 `available: false`、空模型列表、空默认模型、零额度和明确中文说明。模型 ID 最大 160 字符，列表最多 100 项；额度为非负安全整数。每日用量按北京时间自然日统计。客户端额度展示不作为授权依据。
 
+新旧用户每日额度默认均为 0，由管理员在用户详情中分配。服务已配置时，即使用户额度为 0，仍返回模型与零剩余额度；新建对话和服务端推理请求均受额度限制。剩余量扣除已用及预占额度，不包含供应商密钥或地址。
+
 未登录或令牌失效返回 401，无权访问返回 403。客户端不会因为官方请求失败而自动将对话发送至其他服务。
 
-## POST /chat
+## POST /responses
 
-接收 OpenAI Chat Completions 兼容请求，响应 `text/event-stream`。桌面端发送：
+客户端、网关和供应商上游均使用原生 Responses API；不再提供 Chat Completions 路由、配置或转换层。响应为 `text/event-stream`。
 
-- `model`：能力接口提供的模型 ID。
-- `messages`：`system/user/assistant/tool` 消息，包括已批准命令的结果。
-- `stream: true`、`parallel_tool_calls: false`。
-- `tools`：仅提供 `run_command`，采用函数工具定义；参数如下，全部必填，禁止额外字段。
+桌面请求包含 `model`、`input`、`stream: true`、`store: false`、`include: ["reasoning.encrypted_content"]`、`parallel_tool_calls: false`，以及唯一的 `run_command` 函数工具。模型、工具定义、上游地址、密钥与 `max_output_tokens` 由服务端决定；用户不能覆盖输出预算。输入包含文本消息、原生 reasoning/message/function_call 返回项，以及匹配 `call_id` 的 `function_call_output`；不使用服务端存储的会话或 `previous_response_id`。
+
+```json
+{
+  "model": "configured-model",
+  "input": [{ "role": "user", "content": "检查服务器状态" }],
+  "stream": true,
+  "store": false,
+  "include": ["reasoning.encrypted_content"],
+  "parallel_tool_calls": false,
+  "tools": [{
+    "type": "function",
+    "name": "run_command",
+    "description": "请求用户确认一条命令",
+    "strict": true,
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "command": { "type": "string" },
+        "cwd": { "type": "string" },
+        "purpose": { "type": "string" },
+        "impact": { "type": "string" }
+      },
+      "required": ["command", "cwd", "purpose", "impact"],
+      "additionalProperties": false
+    }
+  }]
+}
+```
 
 | 参数 | 类型 | 含义 |
 |---|---|---|
@@ -43,11 +70,17 @@
 | purpose | string | 中文目的说明，最多 2048 字符 |
 | impact | string | 中文影响说明，最多 2048 字符 |
 
-流使用 `data: <JSON>\n\n`。文本增量位于 `choices[0].delta.content`；命令增量位于 `choices[0].delta.tool_calls[0]`，包含 `index: 0`、唯一 `id`、`function.name: "run_command"` 和分片的 JSON `function.arguments`。正常结束返回 `finish_reason: "stop"` 或 `"tool_calls"`，随后可返回 `data: [DONE]`。
+SSE 使用 `data: <JSON>\n\n`。网关转发 `response.output_text.delta` 的 `delta` 文本，保留完整输出项直到最终 `response.completed`。最终事件的 `response.status` 必须为 `completed`，`response.output` 中至多一个 `function_call`，工具名必须为 `run_command`，包含 `call_id` 和完整 JSON `arguments`。
 
-客户端只在完整结束且参数校验通过后展示可执行卡片。确认发生在桌面端，网关和模型均不能确认命令。执行结果通过匹配原工具调用 ID 的 `tool` 消息回传，包含状态、stdout/stderr、退出码、耗时及截断标识；结果未知时明确标记，不能当作命令失败后自动重跑。
+只有上游流完整、工具参数有效，且 `response.usage.input_tokens + output_tokens` 已持久化结算后，才发送最终完成事件。缓存输入和推理 Token 属于这两个值的明细，不重复计算。`response.incomplete`、`response.failed`、缺少可信 usage 或结算失败都不会产生完成事件；桌面不能生成可执行命令。网关错误流为 `type: "error"`，仅包含安全错误码和说明。
 
-后端应原子预占额度和并发名额，对实际用量结算并释放未使用额度；请求断开不能据此断言上游未计费。模型输出上限由后端配置，禁止信任客户端自报用量或任意上游地址。首版不提供购买、支付或订阅接口。
+确认发生在桌面端，网关和模型均不能确认命令。执行结果作为 `{ "type": "function_call_output", "call_id": "...", "output": "..." }` 回传，包含状态、stdout/stderr、退出码、耗时和截断标识。结果未知时明确标记，不能自动重跑。旧版本对话仍可查看；协议升级前的上下文须新建对话才能继续。
+
+准入预占预算为规范化上游请求的 UTF-8 字节数 + 256 Token 余量 + 模型输出上限。余额接近耗尽时可能提前拒绝；正常结算释放差额。超过预算的实际用量完整入账并停用模型。
+
+总时限 110 秒；单账号并发 2、全局并发 16、单账号每分钟 20 次，均由数据库跨实例协调。跨午夜请求计入准入时的北京时间日期。缺少可信用量的中断及进程崩溃保留预占，租约过期仅释放并发名额，不自动重放请求。
+
+管理员模型测试发送固定 Responses 请求，输出最多 256 Token，独立标记用量，不占普通用户配额；已登录且可用的管理员可在首次邮箱验证前测试。普通 AI 调用仍检查邮箱验证、账号状态和令牌撤销。桌面官方连接测试作为当前用户请求计入其额度。
 
 ## 错误与数据边界
 
@@ -63,10 +96,19 @@
 
 后端实现时只保留必要的用量、状态和耗时元数据，禁止在普通访问日志中记录令牌、完整请求正文或模型密钥。需要独立核实上游供应商的数据保留政策，不能将本地加密历史等同于云端零保留承诺。
 
-## 自配协议
+## 模型发现与连接测试
 
-用户填写的是 API 基础地址，例如 `https://api.example.invalid/v1`。桌面端分别追加 `/chat/completions` 或 `/responses`；Responses 采用原生事件格式并保留推理续接所需的返回项。模型必须支持函数工具调用，“保存并测试”会要求返回一条测试工具调用，但绝不执行该测试命令。
+设置页使用统一的共享下拉组件，包含“自动发现模型”“测试连接”“保存设置”三个独立操作；发现和测试使用当前草稿，不自动保存，也不执行命令。
+
+- 官方来源通过 `/capabilities` 发现公开模型，可选官方默认模型，同时展示今日额度。
+- 自配来源向 API 基础地址追加 `/models` 发起 GET，读取 `data[].id`（可选 `name`），最多 1000 项并按 ID 去重。列表无法读取时保留手动填写模型名的入口；发现成功不代表支持 Responses，仍须测试。
+- 自配推理只追加 `/responses`，连接测试要求返回 `run_command`，输出最多 256 Token。仅测试结果有效才提示成功，测试提议绝不进入 SSH 执行。
+- 留空 API Key 保留同一地址的已保存密钥；接口地址改变后不会向新地址发送旧密钥。“清除密钥”仅清除已保存密钥，保留当前未保存草稿。
 
 远程地址必须使用 HTTPS，HTTP 只允许 `localhost`、`127.0.0.1`、`[::1]`。禁止 URL 内嵌用户名、密码、查询串或片段。网络使用 Electron 系统代理和 TLS 校验，凭据不随重定向转发。
 
-工具流程参考：[OpenAI 官方函数调用文档](https://developers.openai.com/api/docs/guides/function-calling)。最终字段和边界以 `packages/contracts/src/ai.ts` 为准。
+协议参考：[Responses 流式事件](https://developers.openai.com/api/reference/resources/responses/streaming-events)、[模型列表](https://developers.openai.com/api/reference/resources/models/methods/list)、[函数调用](https://developers.openai.com/api/docs/guides/function-calling)。最终字段和边界以 `packages/contracts/src/ai.ts` 为准。
+
+## 本机协议验收
+
+`npm run desktop:accept:ai -- --local --port=<本机端口>` 使用桌面实际的官方请求构造和流式解码器，通过仅供验收的 transport 转发至 `127.0.0.1`。令牌只从 `EIZHU_AI_ACCEPT_TOKEN` 环境读取，不落盘；不传 `--local` 即拒绝运行。该工具验证待确认工具提议和额度结算，不执行 SSH 命令，不更改产品固定生产地址，也不代表完整 Electron 或真实供应商验收。

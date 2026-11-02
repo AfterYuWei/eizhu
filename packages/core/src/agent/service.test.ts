@@ -12,7 +12,6 @@ import type { AiTransport } from './model.ts'
 async function fixture() {
   let config: z.infer<typeof storedAiConfigSchema> = {
     source: 'custom',
-    protocol: 'chat',
     endpoint: 'http://127.0.0.1/v1',
     model: 'synthetic',
     apiKey: 'private-api-key',
@@ -72,6 +71,12 @@ async function fixture() {
   }
   const transport: AiTransport = async (request, _signal, consume) => {
     if (request.body) requests.push(request.body)
+    if (request.method === 'GET' && request.url.endsWith('/models')) {
+      await consume(
+        Buffer.from(JSON.stringify({ data: [{ id: 'synthetic' }, { id: 'other' }, { id: 'synthetic' }] })),
+      )
+      return
+    }
     if (request.method === 'GET') {
       await consume(
         Buffer.from(
@@ -88,11 +93,24 @@ async function fixture() {
       return
     }
     const command = { command: 'printf hello', cwd: '/tmp', purpose: '检查', impact: '只读' }
-    await consume(
-      Buffer.from(
-        `data: ${JSON.stringify({ choices: [{ delta: { content: '先检查', tool_calls: [{ index: 0, id: randomUUID(), function: { name: 'run_command', arguments: JSON.stringify(command) } }] }, ...(interrupted ? {} : { finish_reason: 'tool_calls' }) }] })}\n\n`,
-      ),
-    )
+    const text = `data: ${JSON.stringify({ type: 'response.output_text.delta', delta: '先检查' })}\n\n`
+    const completed = interrupted
+      ? ''
+      : `data: ${JSON.stringify({
+          type: 'response.completed',
+          response: {
+            status: 'completed',
+            output: [
+              {
+                type: 'function_call',
+                call_id: randomUUID(),
+                name: 'run_command',
+                arguments: JSON.stringify(command),
+              },
+            ],
+          },
+        })}\n\n`
+    await consume(Buffer.from(text + completed))
   }
   const service = new AgentService(
     storage,
@@ -153,6 +171,7 @@ async function fixture() {
       stdout = value
     },
     requests: () => requests,
+    records,
     restart: async () => {
       await service.close()
       return new AgentService(
@@ -205,7 +224,7 @@ test('window ownership, connection replacement, rejection and changed model inva
     const settings = aiSettingsSchema.parse(
       await f.service.execute(
         'ai.configure',
-        { source: 'custom', protocol: 'chat', endpoint: 'http://127.0.0.1/v1', model: 'other' },
+        { source: 'custom', endpoint: 'http://127.0.0.1/v1', model: 'other' },
         1,
       ),
     )
@@ -279,11 +298,7 @@ test('persisted pending proposals cannot execute after runtime restart and can b
 test('official capability contract uses account authorization and blocks exhausted quota or expired login', async () => {
   const f = await fixture()
   try {
-    await f.service.execute(
-      'ai.configure',
-      { source: 'official', protocol: 'chat', endpoint: '', model: '' },
-      1,
-    )
+    await f.service.execute('ai.configure', { source: 'official', endpoint: '', model: '' }, 1)
     const opened = aiConversationSchema.parse(await f.service.execute('ai.open', { sessionId: 'session' }, 1))
     assert.equal(opened.model, 'synthetic')
     f.setRemaining(0)
@@ -322,9 +337,50 @@ test('medium output is sent to the model once without duplicated overlapping hea
     await f.service.execute('ai.decide', { proposalId: p.id, accepted: true }, 1)
     await f.wait(() => f.requests().length === 2 && f.current().status === 'awaiting_confirmation')
     const request = JSON.parse(f.requests()[1])
-    const result = JSON.parse(request.messages.find((m: { role: string }) => m.role === 'tool').content)
+    const result = JSON.parse(
+      request.input.find((m: { type: string }) => m.type === 'function_call_output').output,
+    )
     assert.equal(result.stdout, value)
   } finally {
     await f.service.close()
+  }
+})
+
+test('model discovery and connection tests use drafts without saving or executing SSH', async () => {
+  const f = await fixture()
+  try {
+    const before = await f.service.execute('ai.settings', undefined, 1)
+    const draft = { source: 'custom', endpoint: 'http://127.0.0.1/v1', model: '' }
+    const result = (await f.service.execute('ai.discover', draft, 1)) as { models: Array<{ id: string }> }
+    assert.deepEqual(
+      result.models.map((model) => model.id),
+      ['synthetic', 'other'],
+    )
+    await f.service.execute('ai.test', { ...draft, model: 'other' }, 1)
+    assert.equal(JSON.parse(f.requests().at(-1)!).model, 'other')
+    assert.equal(JSON.parse(f.requests().at(-1)!).max_output_tokens, 256)
+    assert.deepEqual(await f.service.execute('ai.settings', undefined, 1), before)
+    assert.equal(f.calls(), 0)
+  } finally {
+    await f.service.close()
+  }
+})
+
+test('legacy conversation history stays readable and cannot resume an old protocol context', async () => {
+  const f = await fixture()
+  const record = storedAiConversationSchema.parse(f.records.get(f.c.id))
+  delete record.format
+  f.records.set(f.c.id, record)
+  const restarted = await f.restart()
+  try {
+    const read = await restarted.execute('ai.read', { profileId: 'profile', conversationId: f.c.id }, 1)
+    assert.ok(read)
+    await assert.rejects(
+      restarted.execute('ai.open', { sessionId: 'session', conversationId: f.c.id }, 1),
+      /协议已更新/,
+    )
+    assert.equal(f.calls(), 0)
+  } finally {
+    await restarted.close()
   }
 })

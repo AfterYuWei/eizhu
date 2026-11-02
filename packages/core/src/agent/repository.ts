@@ -5,6 +5,7 @@ import { LocalCipher } from '../local/crypto.ts'
 
 export const storedAiConfigSchema = aiPreferencesSchema.extend({ apiKey: z.string().max(8192) })
 export const storedAiConversationSchema = z.strictObject({
+  format: z.literal(2).optional(),
   conversation: aiConversationSchema,
   wire: z.array(z.json()).max(400),
 })
@@ -43,10 +44,9 @@ export class AgentRepository {
   execute(raw: unknown): unknown {
     const d = storageRequest.parse(raw)
     if (d.kind === 'config.read')
-      return storedAiConfigSchema.parse(
+      return storedAiConfigSchema.strip().parse(
         this.read('ai:config') ?? {
           source: 'official',
-          protocol: 'chat',
           endpoint: '',
           model: '',
           apiKey: '',

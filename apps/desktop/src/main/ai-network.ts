@@ -56,7 +56,7 @@ export const aiNetwork: AiTransport = async (raw, signal, consume) => {
           response.status === 401
             ? '登录或模型密钥已失效，请检查设置'
             : response.status === 429
-              ? 'AI 额度已用尽或请求过于频繁'
+              ? 'AI 额度不足或请求过于频繁'
               : response.status === 403
                 ? '当前账号无权使用此模型'
                 : 'AI 服务暂不可用，请检查配置或选择自配模型',

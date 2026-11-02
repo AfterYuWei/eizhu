@@ -1,0 +1,59 @@
+{
+  "date": "2026-11-02",
+  "protocol": "Responses only",
+  "syntheticUpstream": true,
+  "binaryDownloads": false,
+  "postgresql": {
+    "version": "17.11",
+    "gatewayTestsPassed": 16,
+    "protocolTestsPassed": 4,
+    "temporarySchemasRemaining": 0,
+    "businessSchemasRemaining": 1
+  },
+  "adminWeb": {
+    "testsPassed": 33,
+    "typecheck": true,
+    "lint": true,
+    "build": true
+  },
+  "desktop": {
+    "foundationPassed": 189,
+    "foundationSkipped": 1,
+    "skipReason": "Fish not installed",
+    "webPassed": 904,
+    "fixedBaselinePassed": 10,
+    "check": true,
+    "lint": true,
+    "baselineVerify": true,
+    "build": true,
+    "buildSmoke": true,
+    "dmgSmoke": true,
+    "platform": "darwin-x64"
+  },
+  "pending": [
+    "真实供应商",
+    "生产及 Nacos/代理",
+    "Docker 镜像",
+    "Windows x64",
+    "macOS arm64",
+    "Linux x64",
+    "签名与公证"
+  ],
+  "deployment": false,
+  "push": false,
+  "artifacts": {
+    "eizhu-0.5.0-test.362.e196f4a5-mac-x64.dmg": {
+      "bytes": 158292844,
+      "sha256": "6775878764f0f7cbd366273f86b7918b56201369bb8845c7e19aa51798c423e2"
+    },
+    "eizhu-0.5.0-test.362.e196f4a5-mac-x64.zip": {
+      "bytes": 157623115,
+      "sha256": "742ec3b5c35b24871088d60252405529ffc0b0c4d6570198a6abfb70f0efe764"
+    }
+  },
+  "cleanup": {
+    "projectAppRemoved": true,
+    "projectAndCurrentPackageRegistrationRemoved": true,
+    "installedAppRetained": true
+  }
+}

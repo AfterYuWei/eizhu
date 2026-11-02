@@ -15,6 +15,7 @@ import type {
   AiTarget,
   AiResult,
   AiCapabilities,
+  AiConnection,
   RuntimeContext,
 } from '@eizhu/contracts'
 import { storedAiConfigSchema, storedAiConversationSchema } from './repository.ts'
@@ -146,7 +147,7 @@ export class AgentService {
     if (a.callId) {
       a.stored.wire.push({
         role: 'tool',
-        tool_call_id: a.callId,
+        callId: a.callId,
         content: state === 'rejected' ? '用户拒绝执行，未执行任何命令。' : '授权已失效，未执行命令。',
       })
       a.callId = undefined
@@ -221,6 +222,24 @@ export class AgentService {
     )
     return aiCapabilitiesSchema.parse(JSON.parse(data + decoder.decode()))
   }
+  private async connection(input?: AiConnection) {
+    const previous = await this.config()
+    if (!input) return previous
+    if (input.source === 'custom' && !input.endpoint) fail('BAD_REQUEST', '请填写接口基础地址')
+    const { apiKey, ...settings } = input
+    return { ...settings, apiKey: apiKey ?? (settings.endpoint === previous.endpoint ? previous.apiKey : '') }
+  }
+  private async readJson(request: Parameters<AiTransport>[0], signal: AbortSignal): Promise<unknown> {
+    let data = '',
+      size = 0
+    const decoder = new TextDecoder()
+    await this.transport(request, signal, async (bytes) => {
+      size += bytes.byteLength
+      if (size > 524288) fail('AI_PROTOCOL', '模型列表超过上限')
+      data += decoder.decode(bytes, { stream: true })
+    })
+    return JSON.parse(data + decoder.decode())
+  }
   async execute(operation: AiOperation, raw: unknown, owner: number): Promise<unknown> {
     if (this.closed) fail('RUNTIME_CLOSED', 'AI 服务已关闭')
     const input = ai[operation].input.parse(raw)
@@ -247,7 +266,10 @@ export class AgentService {
             await this.save(a)
           }
           const { apiKey: supplied, ...settings } = d
-          const value = { ...settings, apiKey: supplied ?? previous.apiKey }
+          const value = {
+            ...settings,
+            apiKey: supplied ?? (settings.endpoint === previous.endpoint ? previous.apiKey : ''),
+          }
           await this.storage({ kind: 'config.write', value })
           this.active.clear()
           return { ...settings, hasApiKey: Boolean(value.apiKey) }
@@ -257,24 +279,71 @@ export class AgentService {
       }
       case 'ai.capabilities':
         return this.control((signal) => this.capabilities(signal))
-      case 'ai.test': {
-        const config = await this.config()
+      case 'ai.discover': {
+        const config = await this.connection(ai['ai.discover'].input.parse(input))
         if (config.source === 'official') {
           const cap = await this.control((signal) => this.capabilities(signal))
           if (!cap.available) fail('AI_UNAVAILABLE', cap.message || '官方 AI 暂不可用')
-          return { message: '官方 AI 已连接' }
+          return {
+            models: cap.models,
+            defaultModel: cap.defaultModel,
+            dailyTokenLimit: cap.dailyTokenLimit,
+            remainingTokens: cap.remainingTokens,
+            message: cap.message,
+          }
         }
+        const data = await this.control((signal) =>
+          this.readJson(
+            {
+              source: 'custom',
+              method: 'GET',
+              url: `${config.endpoint.replace(/\/$/, '')}/models`,
+              authorization: config.apiKey ? `Bearer ${config.apiKey}` : '',
+            },
+            signal,
+          ),
+        )
+        const list = z
+          .object({
+            data: z
+              .array(
+                z.object({ id: z.string().trim().min(1).max(160), name: z.string().max(160).optional() }),
+              )
+              .max(1000),
+          })
+          .parse(data)
+        const models = [...new Map(list.data.map((m) => [m.id, { id: m.id, name: m.name || m.id }])).values()]
+        return {
+          models,
+          defaultModel: models[0]?.id ?? '',
+          message: models.length
+            ? `已发现 ${models.length} 个模型，请测试连接确认 Responses 和工具调用支持。`
+            : '未发现模型，可手动填写模型名。',
+        }
+      }
+      case 'ai.test': {
+        const config = await this.connection(ai['ai.test'].input.parse(input))
+        let token = ''
+        if (config.source === 'official') {
+          const cap = await this.control((signal) => this.capabilities(signal))
+          if (!cap.available) fail('AI_UNAVAILABLE', cap.message || '官方 AI 暂不可用')
+          config.model ||= cap.defaultModel
+          if (!cap.models.some((m) => m.id === config.model))
+            fail('AI_MODEL_UNAVAILABLE', '请选择官方提供的模型')
+          token = await this.token()
+        }
+        if (!config.model.trim()) fail('BAD_REQUEST', '请先选择或填写模型名')
         const result = await this.control((signal) =>
           generateModel(
             this.transport,
             modelRequest(
               config,
-              '',
+              token,
               [
                 {
                   role: 'user',
                   content:
-                    '测试工具调用能力。请调用 run_command，仅提议 printf hello，目录为 /tmp，影响为只读。不会执行该测试命令。',
+                    '测试 Responses 工具调用能力。请调用 run_command，仅提议 printf hello，目录为 /tmp，影响为只读。不会执行该测试命令。',
                 },
               ],
               true,
@@ -284,8 +353,8 @@ export class AgentService {
           ),
         )
         if (!result.command)
-          fail('AI_TOOL_UNSUPPORTED', '模型未返回工具调用，请选择支持工具调用的模型或检查协议')
-        return { message: '连接成功，工具调用可用；测试命令未执行' }
+          fail('AI_TOOL_UNSUPPORTED', '模型未返回工具调用，请选择支持 Responses 工具调用的模型')
+        return { message: '连接成功，Responses 与工具调用可用；测试命令未执行' }
       }
       case 'ai.history':
         return this.storage({ kind: 'list', ...ai[operation].input.parse(input) })
@@ -335,6 +404,7 @@ export class AgentService {
             await this.storage({ kind: 'read', id: d.conversationId }),
           )
           if (stored.conversation.profileId !== target.profileId) fail('FORBIDDEN', '对话不属于当前服务器')
+          if (stored.format !== 2) fail('AI_CONTEXT_CHANGED', 'AI 协议已更新，请新建对话；原记录仍可查看')
           const previousTarget = stored.conversation.target
           if (
             previousTarget.host !== target.host ||
@@ -344,10 +414,10 @@ export class AgentService {
             fail('AI_TARGET_CHANGED', '服务器连接信息已变化，请新建对话；原记录仍可在历史中查看')
           // Historical unresolved tool calls are closed with explicit unknown/expired results before reuse.
           const wire = stored.wire.map((v) => wireMessageSchema.parse(v))
-          if (wire.at(-1)?.tool_calls?.[0])
+          if (wire.at(-1)?.callId && wire.at(-1)?.role === 'assistant')
             wire.push({
               role: 'tool',
-              tool_call_id: wire.at(-1)!.tool_calls![0].id,
+              callId: wire.at(-1)!.callId,
               content: '上次会话已中断，执行结果未知或尚未授权，请先核查，禁止自动重跑。',
             })
           stored.wire = wire.map((v) => z.json().parse(v))
@@ -370,6 +440,7 @@ export class AgentService {
             await this.storage({ kind: 'config.write', value: config })
           }
           stored = {
+            format: 2,
             conversation: {
               id: randomUUID(),
               profileId: target.profileId,
@@ -487,7 +558,7 @@ export class AgentService {
           const config = await this.config()
           const wire: WireMessage = {
             role: 'tool',
-            tool_call_id: a.callId,
+            callId: a.callId,
             content: redactAiText(
               JSON.stringify({
                 ...result,

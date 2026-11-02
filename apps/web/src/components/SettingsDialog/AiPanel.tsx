@@ -1,28 +1,36 @@
-import { useEffect, useState } from 'react'
-import type { AiCapabilities, AiSettings } from '@eizhu/contracts'
+import { useEffect, useRef, useState } from 'react'
+import type { AiConnection, AiModelCatalog, AiSettings } from '@eizhu/contracts'
 import { aiPreferencesSchema } from '@eizhu/contracts'
 import { bridge } from '@/lib/bridge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import '../Agent/ai.css'
 
 export function AiPanel() {
   const [settings, setSettings] = useState<AiSettings | null>(null)
+  const [saved, setSaved] = useState<AiSettings | null>(null)
   const [apiKey, setApiKey] = useState('')
-  const [capabilities, setCapabilities] = useState<AiCapabilities | null>(null)
+  const [catalog, setCatalog] = useState<AiModelCatalog | null>(null)
+  const [manual, setManual] = useState(false)
   const [message, setMessage] = useState('')
   const [busy, setBusy] = useState(false)
+  const locked = useRef(false)
   useEffect(() => {
     let live = true
     void bridge()
       .ai.settings()
       .then(
-        (v) => {
-          if (live) setSettings(v)
+        (value) => {
+          if (live) {
+            setSettings(value)
+            setSaved(value)
+            setManual(value.source === 'custom' && !value.model)
+          }
         },
-        (e) => {
-          if (live) setMessage(e.message)
+        (error) => {
+          if (live) setMessage(error.message)
         },
       )
     return () => {
@@ -30,70 +38,61 @@ export function AiPanel() {
     }
   }, [])
   const run = async (action: () => Promise<void>) => {
+    if (locked.current) return
+    locked.current = true
     setBusy(true)
     setMessage('')
     try {
       await action()
-    } catch (e) {
-      setMessage(e instanceof Error ? e.message : '操作失败')
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : '操作失败')
     } finally {
+      locked.current = false
       setBusy(false)
     }
   }
-  const save = async () => {
-    if (!settings) return
-    const result = await bridge().ai.configure({
-      ...aiPreferencesSchema.strip().parse(settings),
-      ...(apiKey ? { apiKey } : {}),
-    })
-    setSettings(result)
-    setApiKey('')
-    setMessage('AI 设置已保存。切换模型后请新建对话。')
-  }
+  const connection = (): AiConnection => ({
+    ...aiPreferencesSchema.strip().parse(settings),
+    ...(apiKey ? { apiKey } : {}),
+  })
+  const choices = catalog?.models ?? []
+  const models =
+    settings?.model && !choices.some((model) => model.id === settings.model)
+      ? [{ id: settings.model, name: settings.model }, ...choices]
+      : choices
   return (
     <div className="settings-section ai-settings">
       <div className="settings-section-title">AI 助手</div>
-      <p className="settings-field-desc">每条命令均需确认。对话在当前空间本地加密保存，不参与同步或备份。</p>
+      <p className="settings-field-desc">
+        仅支持 Responses API，每条命令均需确认。对话在本地加密保存，不参与同步或备份。
+      </p>
       {settings && (
         <div className="settings-card">
           <div className="settings-field">
             <Label htmlFor="ai-source">模型来源</Label>
-            <select
-              id="ai-source"
+            <Select
               value={settings.source}
               disabled={busy}
-              onChange={(e) => {
-                setCapabilities(null)
-                setSettings({
-                  ...settings,
-                  source: e.target.value === 'official' ? 'official' : 'custom',
-                  model: '',
-                })
+              onValueChange={(value) => {
+                const source = value === 'official' ? 'official' : 'custom'
+                setSettings({ ...settings, source, model: '' })
+                setCatalog(null)
+                setApiKey('')
+                setManual(source === 'custom')
+                setMessage('')
               }}
             >
-              <option value="official">官方 AI</option>
-              <option value="custom">自配模型</option>
-            </select>
+              <SelectTrigger id="ai-source" className="settings-select">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="official">官方 AI</SelectItem>
+                <SelectItem value="custom">自配模型</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
           {settings.source === 'custom' && (
             <>
-              <div className="settings-field">
-                <Label htmlFor="ai-protocol">接口协议</Label>
-                <select
-                  id="ai-protocol"
-                  value={settings.protocol}
-                  disabled={busy}
-                  onChange={(e) =>
-                    setSettings({
-                      ...settings,
-                      protocol: e.target.value === 'responses' ? 'responses' : 'chat',
-                    })
-                  }
-                >
-                  <option value="chat">Chat Completions</option>
-                  <option value="responses">Responses</option>
-                </select>
-              </div>
               <div className="ai-setting-field">
                 <Label htmlFor="ai-endpoint">接口基础地址</Label>
                 <Input
@@ -101,9 +100,15 @@ export function AiPanel() {
                   placeholder="https://api.example.com/v1"
                   value={settings.endpoint}
                   disabled={busy}
-                  onChange={(e) => setSettings({ ...settings, endpoint: e.target.value })}
+                  onChange={(event) => {
+                    setSettings({ ...settings, endpoint: event.target.value })
+                    setCatalog(null)
+                    setMessage('')
+                  }}
                 />
-                <span className="settings-field-desc">填写 API 基础地址；本机服务可使用 HTTP。</span>
+                <span className="settings-field-desc">
+                  填写 API 基础地址，客户端自动追加 /responses；本机服务可使用 HTTP。
+                </span>
               </div>
               <div className="ai-setting-field">
                 <Label htmlFor="ai-key">API Key</Label>
@@ -114,21 +119,25 @@ export function AiPanel() {
                   placeholder={settings.hasApiKey ? '已保存；留空保留原密钥' : '本机免密服务可留空'}
                   value={apiKey}
                   disabled={busy}
-                  onChange={(e) => setApiKey(e.target.value)}
+                  onChange={(event) => {
+                    setApiKey(event.target.value)
+                    setCatalog(null)
+                  }}
                 />
-                {settings.hasApiKey && (
+                {settings.hasApiKey && saved && (
                   <Button
                     variant="ghost"
                     disabled={busy}
                     onClick={() =>
                       void run(async () => {
-                        setSettings(
-                          await bridge().ai.configure({
-                            ...aiPreferencesSchema.strip().parse(settings),
-                            apiKey: '',
-                          }),
-                        )
+                        const value = await bridge().ai.configure({
+                          ...aiPreferencesSchema.strip().parse(saved),
+                          apiKey: '',
+                        })
+                        setSaved(value)
+                        setSettings({ ...settings, hasApiKey: false })
                         setApiKey('')
+                        setCatalog(null)
                         setMessage('已清除保存的密钥')
                       })
                     }
@@ -140,50 +149,94 @@ export function AiPanel() {
             </>
           )}
           <div className="ai-setting-field">
-            <Label htmlFor="ai-model">模型名</Label>
-            <Input
-              id="ai-model"
-              value={settings.model}
+            <Label htmlFor="ai-model">模型</Label>
+            <Select
+              value={manual ? 'manual' : settings.model ? `model:${settings.model}` : 'default'}
               disabled={busy}
-              placeholder={
-                settings.source === 'official' ? '留空使用官方默认模型' : '填写支持工具调用的模型名'
-              }
-              onChange={(e) => setSettings({ ...settings, model: e.target.value })}
-            />
-            {capabilities && (
+              onValueChange={(value) => {
+                setManual(value === 'manual')
+                if (value !== 'manual')
+                  setSettings({ ...settings, model: value === 'default' ? '' : value.slice(6) })
+              }}
+            >
+              <SelectTrigger id="ai-model" className="settings-select">
+                <SelectValue placeholder="自动发现或手动填写模型" />
+              </SelectTrigger>
+              <SelectContent>
+                {settings.source === 'official' && <SelectItem value="default">使用官方默认模型</SelectItem>}
+                {models.map((model) => (
+                  <SelectItem key={model.id} value={`model:${model.id}`}>
+                    {model.name}
+                  </SelectItem>
+                ))}
+                {settings.source === 'custom' && <SelectItem value="manual">手动输入模型名</SelectItem>}
+              </SelectContent>
+            </Select>
+            {settings.source === 'custom' && manual && (
+              <Input
+                aria-label="手动模型名"
+                placeholder="填写支持 Responses 工具调用的模型名"
+                value={settings.model}
+                disabled={busy}
+                onChange={(event) => setSettings({ ...settings, model: event.target.value })}
+              />
+            )}
+            {catalog && settings.source === 'official' && (
               <span className="settings-field-desc">
-                可用模型：{capabilities.models.map((m) => m.id).join('、') || '暂无'}；今日剩余{' '}
-                {capabilities.remainingTokens} / {capabilities.dailyTokenLimit} Token。{capabilities.message}
+                今日剩余 {catalog.remainingTokens} / {catalog.dailyTokenLimit} Token。{catalog.message}
               </span>
             )}
           </div>
           <div className="ai-setting-actions">
-            <Button disabled={busy} onClick={() => void run(save)}>
-              保存设置
+            <Button
+              variant="outline"
+              disabled={busy}
+              onClick={() =>
+                void run(async () => {
+                  const result = await bridge().ai.discover(connection())
+                  setCatalog(result)
+                  if (settings.source === 'custom') {
+                    if (!settings.model && result.models.length) {
+                      setSettings({ ...settings, model: result.defaultModel })
+                      setManual(false)
+                    } else setManual(!result.models.some((model) => model.id === settings.model))
+                  }
+                  setMessage(result.message || `已发现 ${result.models.length} 个模型`)
+                })
+              }
+            >
+              自动发现模型
             </Button>
             <Button
               variant="outline"
               disabled={busy}
               onClick={() =>
                 void run(async () => {
-                  await save()
-                  const result = await bridge().ai.test()
+                  const result = await bridge().ai.test(connection())
                   setMessage(result.message)
                 })
               }
             >
-              保存并测试
+              测试连接
             </Button>
-            {settings.source === 'official' && (
-              <Button
-                variant="ghost"
-                disabled={busy}
-                onClick={() => void run(async () => setCapabilities(await bridge().ai.capabilities()))}
-              >
-                查看模型与额度
-              </Button>
-            )}
+            <Button
+              disabled={busy}
+              onClick={() =>
+                void run(async () => {
+                  const value = await bridge().ai.configure(connection())
+                  setSettings(value)
+                  setSaved(value)
+                  setApiKey('')
+                  setMessage('AI 设置已保存。切换模型后请新建对话。')
+                })
+              }
+            >
+              保存设置
+            </Button>
           </div>
+          <p className="settings-field-desc">
+            发现与测试使用当前填写的配置，不会自动保存。测试只发送固定请求，不执行命令。
+          </p>
         </div>
       )}
       {message && (
@@ -192,7 +245,7 @@ export function AiPanel() {
         </p>
       )}
       <p className="settings-field-desc">
-        官方 AI 使用现有账号登录。自配模型直接连接填写的服务，切换来源前可在对话栏查看将发送的上下文。
+        官方 AI 使用现有账号登录。自配模型直接连接填写的服务；接口地址改变后，请重新填写密钥。
       </p>
     </div>
   )
