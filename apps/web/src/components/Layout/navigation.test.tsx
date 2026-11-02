@@ -80,7 +80,7 @@ it('终端标签区分同名会话，工具页面不进入标签列表', async (
 
 it('详情仅按需挂载，切换后保留 DOM 状态，隐藏时停止激活', async () => {
   useSessionStore.setState({ tabs: [{ id: 'a', profileId: 'p', profileName: '生产环境', status: 'disconnected', sessionId: null }], activeTabId: 'a' })
-  const render = async (open: boolean) => act(async () => root.render(<TooltipProvider><ServerInspector open={open} overlay={false} onClose={() => {}} /></TooltipProvider>))
+  const render = async (open: boolean) => act(async () => root.render(<TooltipProvider><ServerInspector open={open} overlay={false} onClose={() => {}} onChoose={() => {}} /></TooltipProvider>))
   await render(false)
   expect(host.querySelector('[data-detail-tab]')).toBeNull()
   await render(true)

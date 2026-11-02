@@ -13,8 +13,6 @@ interface DesktopShellStore {
   settingsPage: SettingsTab | null
   setSettingsPage: (tab: SettingsTab | null) => void
   inspectorWidth: number
-  aiWidth: number
-  setAiWidth: (width: number) => void
   collapsedGroups: Record<string, boolean>
   groupsReady: boolean
   setInspectorWidth: (width: number) => void
@@ -25,23 +23,20 @@ interface DesktopShellStore {
 export const useDesktopShellStore = create<DesktopShellStore>()(persist((set) => ({
   settingsPage: null,
   setSettingsPage: (settingsPage) => set({ settingsPage }),
-  inspectorWidth: 320,
-  aiWidth: 400,
-  setAiWidth: width => set({ aiWidth: clamp(width, 320, 560) }),
+  inspectorWidth: 400,
   collapsedGroups: {},
   groupsReady: false,
-  setInspectorWidth: (width) => set({ inspectorWidth: clamp(width, 280, 480) }),
+  setInspectorWidth: (width) => set({ inspectorWidth: clamp(width, 320, 560) }),
   toggleGroup: (id) => set((s) => ({ collapsedGroups: { ...s.collapsedGroups, [id]: !s.collapsedGroups[id] } })),
 }), {
   name: 'eizhu-desktop-shell',
   storage: createJSONStorage(() => settingsStorage),
-  partialize: ({ inspectorWidth, aiWidth }) => ({ inspectorWidth, aiWidth }),
+  partialize: ({ inspectorWidth }) => ({ inspectorWidth }),
   // Older preferences may still contain the removed split-list fields.
   merge: (persisted, current) => {
-    const saved = persisted as Partial<DesktopShellStore> | undefined
+    const saved = persisted as (Partial<DesktopShellStore> & { aiWidth?: number }) | undefined
     return { ...current,
-      aiWidth: typeof saved?.aiWidth === 'number' && Number.isFinite(saved.aiWidth) ? clamp(saved.aiWidth, 320, 560) : current.aiWidth,
-      inspectorWidth: typeof saved?.inspectorWidth === 'number' && Number.isFinite(saved.inspectorWidth) ? clamp(saved.inspectorWidth, 280, 480) : current.inspectorWidth,
+      inspectorWidth: typeof saved?.aiWidth === 'number' && Number.isFinite(saved.aiWidth) ? clamp(saved.aiWidth, 320, 560) : typeof saved?.inspectorWidth === 'number' && Number.isFinite(saved.inspectorWidth) ? clamp(saved.inspectorWidth, 320, 560) : current.inspectorWidth,
     }
   },
 }))

@@ -131,6 +131,8 @@
 .shell-resizer.is-horizontal::after { height: 2px; width: 32px; top: 3px; left: calc(50% - 16px); }
 .shell-resizer:hover::after, .shell-resizer:focus-visible::after, .shell-resizer.is-dragging::after, .shell-resizer.is-collapse-pending::after { background: var(--fg-4); }
 .desktop-shell:has(.shell-resizer.is-dragging) { user-select: none; }
+.shell-workspace-area { position: relative; display: flex; flex: 1; min-width: 0; min-height: 0; }
+.shell-right-sidebar { display: contents; }
 .desktop-shell .shell-workspace { position: relative; display: flex; flex-direction: column; flex: 1; min-width: 0; min-height: 0; border: 0; border-radius: var(--r-xl); overflow: hidden; isolation: isolate; background: var(--surface-workspace); }
 /* Paint the frame above the header, terminal and inspector so opaque content
    cannot cover the hairline. Keep it out of layout and pointer hit testing. */
@@ -186,10 +188,15 @@
 .desktop-shell .sftp-root, .desktop-shell .vault-view { background: var(--surface-panel); }
 .desktop-shell .sftp-pane { border-radius: 0; }
 .desktop-shell .term-empty-state { margin: 0; border: 0; border-radius: 0; box-shadow: none; }
-.shell-inspector { position: relative; flex-shrink: 0; display: flex; flex-direction: column; min-width: 0; max-width: calc(100% - 24px); min-height: 0; background: var(--surface-panel); border-left: 1px solid var(--edge-soft); }
-.shell-inspector > .shell-resizer { position: absolute; left: -4px; top: 0; bottom: 0; }
-.shell-inspector.is-overlay { position: absolute; top: 0; right: 0; bottom: 0; z-index: 10; box-shadow: var(--shadow-overlay); }
-.shell-inspector-heading { display: flex; align-items: center; justify-content: space-between; min-height: 40px; padding: 4px 10px 4px 14px; font-weight: 500; }
+.shell-inspector { position: relative; flex-shrink: 0; display: flex; flex-direction: column; min-width: 0; max-width: calc(100% - 24px); min-height: 0; margin-left: var(--shell-outer-gap); border: 1px solid var(--shell-workspace-border); border-radius: var(--r-xl); overflow: hidden; background: var(--surface-panel); }
+.shell-inspector > .shell-resizer { position: absolute; left: 0; top: 0; bottom: 0; z-index: 5; }
+.shell-inspector.is-overlay { position: absolute; top: 0; right: 0; bottom: 0; z-index: 25; box-shadow: var(--shadow-overlay); }
+.desktop-shell:not(.is-mac) .shell-inspector { margin-top: var(--shell-header-height); }
+.shell-inspector-heading { display: flex; flex-shrink: 0; align-items: center; justify-content: space-between; height: var(--shell-header-height); min-height: 48px; padding: 4px 8px 4px 12px; font-weight: 500; }
+.shell-inspector-switch { height: 30px; padding: 4px 7px; gap: 6px; border: 1px solid var(--edge-soft); border-radius: var(--r-sm); color: var(--fg-2); font-size: 12px; font-weight: 400; }
+.shell-inspector-choices { flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: stretch; justify-content: center; gap: 8px; width: min(200px, calc(100% - 48px)); margin: 0 auto; padding-bottom: var(--shell-header-height); }
+.shell-inspector-choices > p { padding: 8px 12px; color: var(--fg-4); font-size: 12px; }
+.shell-inspector-choices > button { justify-content: flex-start; gap: 12px; min-height: 44px; height: auto; padding: 10px 12px; color: var(--fg-2); font-size: 13px; font-weight: 400; }
 .shell-inspector-stack { position: relative; flex: 1; min-height: 0; }
 .shell-inspector-slot { position: absolute; inset: 0; display: flex; flex-direction: column; }
 .shell-inspector-slot > .sdetail-pane { flex: 1; min-height: 0; }

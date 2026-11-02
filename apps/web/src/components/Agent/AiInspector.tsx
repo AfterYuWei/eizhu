@@ -1,5 +1,18 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { Bot, Copy, FileText, History, Plus, Send, Settings2, Square, Trash2, X } from 'lucide-react'
+import {
+  ArrowDown,
+  ArrowUp,
+  Bot,
+  ChevronDown,
+  FileText,
+  Hand,
+  History,
+  Plus,
+  Settings2,
+  Square,
+  Trash2,
+  X,
+} from 'lucide-react'
 import type { AiConversation, AiSettings } from '@eizhu/contracts'
 import { useAiStore } from '@/store/ai'
 import { useSessionStore } from '@/store/session'
@@ -7,34 +20,33 @@ import { useDesktopShellStore } from '@/store/desktopShell'
 import { bridge } from '@/lib/bridge'
 import { terminalActions } from '@/lib/terminalActions'
 import { workspaceGeneration } from '@/lib/workspaceScope'
-import { writeClipboardText } from '@/lib/clipboard'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { ShellIconButton, ShellResizeHandle } from '@/components/Layout/ShellControls'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { AiMessage } from './AiMessage'
 import './ai.css'
 
 type Attachment = { name: string; content: string }
-const labels = {
-  pending: '等待确认',
-  running: '执行中',
-  completed: '已结束',
-  unknown: '结果未知',
-  rejected: '已拒绝',
-  expired: '已失效',
-}
-
 export function AiInspector({
   open,
   overlay,
   onClose,
+  onChoose,
 }: {
   open: boolean
   overlay: boolean
   onClose: () => void
+  onChoose: () => void
 }) {
   const { tabs, activeTabId } = useSessionStore()
   const tab = tabs.find((t) => t.id === activeTabId)
-  const { aiWidth, setAiWidth, setSettingsPage } = useDesktopShellStore()
+  const { inspectorWidth, setInspectorWidth, setSettingsPage } = useDesktopShellStore()
   const {
     tabs: conversationsByTab,
     conversations,
@@ -49,6 +61,9 @@ export function AiInspector({
   const draft = drafts[tab?.id ?? ''] ?? { text: '', attachments: [] }
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [showContext, setShowContext] = useState(false)
+  const [showJump, setShowJump] = useState(false)
+  const composer = useRef<HTMLTextAreaElement>(null)
   const [history, setHistory] = useState<Array<Pick<AiConversation, 'id' | 'title' | 'updatedAt'>> | null>(
     null,
   )
@@ -150,7 +165,7 @@ export function AiInspector({
   return (
     <aside
       className={`shell-inspector ai-inspector ${overlay ? 'is-overlay' : ''}`}
-      style={{ width: aiWidth }}
+      style={{ width: inspectorWidth }}
       hidden={!open}
       inert={!open}
       aria-label="AI 助手"
@@ -162,17 +177,22 @@ export function AiInspector({
       }}
     >
       <ShellResizeHandle
-        label="调整 AI 助手宽度"
-        value={aiWidth}
+        label="调整右侧栏宽度"
+        value={inspectorWidth}
         min={320}
         max={560}
-        onChange={setAiWidth}
+        onChange={setInspectorWidth}
         reverse
       />
       <div className="shell-inspector-heading">
-        <span>
-          <Bot size={15} /> AI 助手
-        </span>
+        <Button
+          variant="ghost"
+          className="shell-inspector-switch"
+          aria-label="切换侧栏内容"
+          onClick={onChoose}
+        >
+          <Bot size={15} /> AI <ChevronDown size={13} />
+        </Button>
         <div className="ai-inline-actions">
           <ShellIconButton
             label="新建 AI 对话"
@@ -194,21 +214,10 @@ export function AiInspector({
           <ShellIconButton label="AI 设置" onClick={() => setSettingsPage('ai')}>
             <Settings2 size={15} />
           </ShellIconButton>
-          <ShellIconButton label="关闭 AI 助手" onClick={onClose}>
+          <ShellIconButton label="关闭右侧栏" onClick={onClose}>
             <X size={15} />
           </ShellIconButton>
         </div>
-      </div>
-      <div className="ai-server">
-        <strong>{tab?.profileName || '请选择服务器'}</strong>
-        <span>
-          {tab?.username}@{tab?.host}
-          {tab?.port ? `:${tab.port}` : ''}
-        </span>
-        <small>
-          {settings?.source === 'custom' ? '自配模型' : '官方 AI'} ·{' '}
-          {conversation?.model || settings?.model || '默认模型'}
-        </small>
       </div>
       {(error || conversation?.error) && (
         <div className="ai-notice" role="alert">
@@ -277,141 +286,95 @@ export function AiInspector({
         </div>
       ) : (
         <>
-          <div
-            ref={messages}
-            className="ai-messages"
-            aria-label="AI 对话记录"
-            onScroll={(e) => {
-              const node = e.currentTarget
-              follow.current = node.scrollHeight - node.scrollTop - node.clientHeight < 48
-            }}
-          >
-            {!conversation?.messages.length && (
-              <div className="ai-empty">
-                描述你要完成的任务，AI 会先给出命令，确认后才执行。
-                <br />
-                支持非交互命令和免密 sudo。
-              </div>
-            )}
-            {conversation?.messages.map((m) => (
-              <article className={`ai-message is-${m.role}`} key={m.id}>
-                <div className="ai-message-role">{m.role === 'user' ? '你' : 'AI'}</div>
-                {m.text && <div className="ai-message-text">{m.text}</div>}
-                {m.proposal && (
-                  <div className="ai-command">
-                    <div className="ai-command-heading">
-                      <strong>{labels[m.proposal.state]}</strong>
-                      <ShellIconButton
-                        label="复制 AI 命令"
-                        onClick={() => void act(() => writeClipboardText(m.proposal!.command))}
-                      >
-                        <Copy size={13} />
-                      </ShellIconButton>
-                    </div>
-                    <p>{m.proposal.purpose}</p>
-                    <div className="ai-command-target">
-                      {conversation.target.username}@{conversation.target.host}:{conversation.target.port}
-                      <br />
-                      目录：{m.proposal.cwd}
-                    </div>
-                    <pre>{m.proposal.command}</pre>
-                    <p className="ai-impact">影响：{m.proposal.impact}</p>
-                    {m.proposal.state === 'pending' && (
-                      <>
-                        <label className="ai-timeout">
-                          超时（秒）
-                          <input
-                            type="number"
-                            min={1}
-                            max={600}
-                            defaultValue={m.proposal.timeoutSeconds}
-                            disabled={loading}
-                            onBlur={(e) => {
-                              const seconds = Number(e.target.value)
-                              if (Number.isInteger(seconds) && seconds >= 1 && seconds <= 600)
-                                void act(() =>
-                                  bridge().ai.setTimeout({ proposalId: m.proposal!.id, seconds }),
-                                )
-                              else e.target.value = String(m.proposal!.timeoutSeconds)
-                            }}
-                          />
-                        </label>
-                        <div className="ai-inline-actions">
-                          <Button
-                            size="sm"
-                            disabled={!connected || loading || busy}
-                            onClick={() =>
-                              void act(() =>
-                                bridge().ai.decide({ proposalId: m.proposal!.id, accepted: true }),
-                              )
-                            }
-                          >
-                            执行此命令
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            disabled={loading || busy}
-                            onClick={() =>
-                              void act(() =>
-                                bridge().ai.decide({ proposalId: m.proposal!.id, accepted: false }),
-                              )
-                            }
-                          >
-                            拒绝
-                          </Button>
-                        </div>
-                      </>
-                    )}
-                    {m.proposal.result && (
-                      <div className="ai-result">
-                        {m.proposal.result.stdout && (
-                          <>
-                            <small>stdout</small>
-                            <pre>{m.proposal.result.stdout}</pre>
-                          </>
-                        )}
-                        {m.proposal.result.stderr && (
-                          <>
-                            <small>stderr</small>
-                            <pre>{m.proposal.result.stderr}</pre>
-                          </>
-                        )}
-                        <p>
-                          {m.proposal.result.exitCode === null
-                            ? '退出码未知'
-                            : `退出码 ${m.proposal.result.exitCode}`}{' '}
-                          · {(m.proposal.result.elapsedMs / 1000).toFixed(1)} 秒
-                          {m.proposal.result.truncated ? ' · 输出已截断' : ''}
-                        </p>
-                        {m.proposal.result.message && <p>{m.proposal.result.message}</p>}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </article>
-            ))}
-            {conversation?.status === 'thinking' && (
-              <p className="ai-notice" role="status">
-                AI 正在分析…
-              </p>
+          <div className="ai-transcript">
+            <div
+              ref={messages}
+              className="ai-messages"
+              aria-label="AI 对话记录"
+              onScroll={(e) => {
+                const node = e.currentTarget
+                follow.current = node.scrollHeight - node.scrollTop - node.clientHeight < 48
+                setShowJump(!follow.current)
+              }}
+            >
+              {!conversation?.messages.length && (
+                <div className="ai-empty">
+                  描述你要完成的任务，AI 会先给出命令，确认后才执行。
+                  <br />
+                  支持非交互命令和免密 sudo。
+                </div>
+              )}
+              {conversation?.messages.map((m, index) => (
+                <AiMessage
+                  key={m.id}
+                  message={m}
+                  target={conversation.target}
+                  busy={Boolean(loading || busy || !connected)}
+                  onError={setError}
+                  onDecide={(proposalId, accepted) => {
+                    void act(() => bridge().ai.decide({ proposalId, accepted }))
+                  }}
+                  onTimeout={(proposalId, seconds) => {
+                    void act(() => bridge().ai.setTimeout({ proposalId, seconds }))
+                  }}
+                  onAsk={() => {
+                    const request = conversation.messages
+                      .slice(0, index)
+                      .reverse()
+                      .find((message) => message.role === 'user')
+                    if (request) updateDraft({ text: request.text.slice(0, 16384), attachments: [] })
+                    composer.current?.focus()
+                  }}
+                  onContinue={(text) => {
+                    void act(async () => {
+                      if (!tab?.sessionId) return
+                      await openConversation(tab.id, tab.sessionId, undefined, true)
+                      updateDraft({
+                        text: ('请基于下面的回复继续：\n\n' + text).slice(0, 16384),
+                        attachments: [],
+                      })
+                      composer.current?.focus()
+                    })
+                  }}
+                />
+              ))}
+              {conversation?.status === 'thinking' && (
+                <p className="ai-notice" role="status">
+                  AI 正在分析…
+                </p>
+              )}
+            </div>
+            {showJump && (
+              <ShellIconButton
+                className="ai-jump-latest"
+                label="滚动到最新回复"
+                onClick={() => {
+                  follow.current = true
+                  setShowJump(false)
+                  if (messages.current) messages.current.scrollTop = messages.current.scrollHeight
+                }}
+              >
+                <ArrowDown size={16} />
+              </ShellIconButton>
             )}
           </div>
           <div className="ai-composer">
-            <details className="ai-context">
-              <summary>查看将发送的上下文</summary>
-              <pre>
-                {JSON.stringify(
-                  conversation?.target ?? { host: tab?.host, username: tab?.username, cwd: tab?.cwd },
-                  null,
-                  2,
-                )}
-              </pre>
-              <p>
-                聊天内容、手动附件和 AI 命令结果会发送至
-                {settings?.source === 'custom' ? settings.endpoint : '官方 AI 服务'}；切换服务前可在此核对。
-              </p>
-            </details>
+            {showContext && (
+              <details className="ai-context" open>
+                <summary>查看将发送的上下文</summary>
+                <pre>
+                  {JSON.stringify(
+                    conversation?.target ?? { host: tab?.host, username: tab?.username, cwd: tab?.cwd },
+                    null,
+                    2,
+                  )}
+                </pre>
+                <p>
+                  聊天内容、手动附件和 AI 命令结果会发送至
+                  {settings?.source === 'custom' ? settings.endpoint : '官方 AI 服务'}；切换服务前可在此核对。
+                </p>
+              </details>
+            )}
             {draft.attachments.map((a, i) => (
               <details className="ai-attachment" key={`${a.name}-${i}`}>
                 <summary>
@@ -431,67 +394,104 @@ export function AiInspector({
               </details>
             ))}
             <Textarea
+              ref={composer}
               aria-label="描述运维需求"
-              placeholder={connected ? '描述需求…（Enter 发送，Shift+Enter 换行）' : '请先连接服务器'}
+              placeholder={connected ? '描述需求，或添加上下文' : '请先连接服务器'}
               value={draft.text}
-              disabled={!connected || busy || loading}
+              disabled={!connected || loading}
               maxLength={16384}
               onChange={(e) => updateDraft({ text: e.target.value })}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
                   e.preventDefault()
-                  if (draft.text.trim()) void send()
+                  if (!busy && !loading && draft.text.trim()) void send()
                 }
               }}
             />
             <div className="ai-composer-actions">
               <div className="ai-inline-actions">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  disabled={!connected || loading || busy || draft.attachments.length >= 8}
-                  onClick={() => {
-                    const content = terminalActions(tab!.id)?.selection?.()
-                    if (content)
-                      updateDraft({
-                        attachments: [
-                          ...draft.attachments,
-                          { name: '终端选区', content: content.slice(0, 65536) },
-                        ],
-                      })
-                    else setError('请先在当前终端选择要附加的内容')
-                  }}
-                >
-                  附加选区
-                </Button>
-                <ShellIconButton
-                  label="附加文本文件"
-                  disabled={!connected || loading || busy || draft.attachments.length >= 8}
-                  onClick={() => void attachFile()}
-                >
-                  <FileText size={15} />
-                </ShellIconButton>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <ShellIconButton
+                      label="添加上下文"
+                      disabled={!connected || loading || draft.attachments.length >= 8}
+                    >
+                      <Plus size={18} />
+                    </ShellIconButton>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start">
+                    <DropdownMenuItem
+                      onSelect={() => {
+                        void attachFile()
+                      }}
+                    >
+                      <FileText size={15} />
+                      附加文本文件
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onSelect={() => {
+                        const content = tab && terminalActions(tab.id)?.selection?.()
+                        if (content)
+                          updateDraft({
+                            attachments: [
+                              ...draft.attachments,
+                              { name: '终端选区', content: content.slice(0, 65536) },
+                            ],
+                          })
+                        else setError('请先在当前终端选择要附加的内容')
+                      }}
+                    >
+                      附加终端选区
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => setShowContext((value) => !value)}>
+                      {showContext ? '收起上下文预览' : '查看将发送的上下文'}
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+                <span className="ai-approval-mode" title="每条命令执行前均需确认" aria-label="逐条确认模式">
+                  <Hand size={16} />
+                </span>
               </div>
-              {busy ? (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={loading}
-                  onClick={() => void act(() => bridge().ai.cancel({ conversationId: conversation.id }))}
-                >
-                  <Square size={13} />
-                  停止
-                </Button>
-              ) : (
-                <Button
-                  size="sm"
-                  disabled={!connected || loading || !conversation || !draft.text.trim()}
-                  onClick={() => void send()}
-                >
-                  <Send size={13} />
-                  发送
-                </Button>
-              )}
+              <div className="ai-inline-actions ai-composer-end">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" className="ai-model-picker" aria-label="选择 AI 模型">
+                      <span>{conversation?.model || settings?.model || '选择模型'}</span>
+                      <ChevronDown size={12} />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem disabled>
+                      {settings?.source === 'custom' ? '自配模型' : '官方 AI'} ·{' '}
+                      {conversation?.model || settings?.model || '默认模型'}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => setSettingsPage('ai')}>配置模型</DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+                {busy ? (
+                  <Button
+                    size="icon-sm"
+                    className="ai-submit"
+                    variant="ghost"
+                    aria-label="停止"
+                    disabled={loading}
+                    onClick={() => void act(() => bridge().ai.cancel({ conversationId: conversation.id }))}
+                  >
+                    <Square size={15} />
+                  </Button>
+                ) : (
+                  <Button
+                    size="icon-sm"
+                    className="ai-submit"
+                    variant="ghost"
+                    aria-label="发送"
+                    disabled={!connected || loading || !conversation || !draft.text.trim()}
+                    onClick={() => void send()}
+                  >
+                    <ArrowUp size={18} />
+                  </Button>
+                )}
+              </div>
             </div>
           </div>
         </>

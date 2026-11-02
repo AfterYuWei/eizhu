@@ -1,0 +1,36 @@
+{
+  "date": "2026-11-02",
+  "platform": "darwin",
+  "arch": "x64",
+  "packaged": false,
+  "version": "0.5.0-test.359.69cd5913",
+  "sourceDigest": "dfd40a7f164541ca12add4cbe9bb3266203724bb1c2b5166e35a48d6a6280173",
+  "sharedSidebar": {
+    "gap": 8,
+    "topAligned": true,
+    "heightAligned": true,
+    "radius": 16,
+    "independent": true
+  },
+  "aiAndSftpSwitchPreservesConversation": true,
+  "sftpFollowsTerminalDirectory": true,
+  "typecheck": true,
+  "lint": true,
+  "webTestsPassed": 898,
+  "baselineVerify": true,
+  "desktopRegression": {
+    "aiDesktop": true,
+    "stage2": true,
+    "stage3": true,
+    "stage4": true,
+    "stage5": true,
+    "stage6": true,
+    "workspaceTabs": true,
+    "accountClosure": true,
+    "syncDesktop": true
+  },
+  "pending": [
+    "本轮 UI 未重新打包安装产物",
+    "Windows / Linux / macOS arm64 界面实测"
+  ]
+}

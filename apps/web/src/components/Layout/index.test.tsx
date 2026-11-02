@@ -410,15 +410,37 @@ it('恢复已有分屏布局时收起侧栏，仍能手动展开', async () => {
   expect(sidebar().classList.contains('collapsed')).toBe(false)
 })
 
-it('侧栏保留图标加文字，工作区操作仅图标，详情默认关闭', async () => {
+it('右侧栏只有一个入口，先选择 AI 或 SFTP，切换时保留终端节点', async () => {
   await render()
   const nav = host.querySelector('nav[aria-label="功能导航"]')!
   expect([...nav.querySelectorAll('button')].map((b) => b.querySelector('span')?.textContent)).toEqual(['新建连接', 'SFTP 文件', '密钥管理', '命令片段'])
-  const inspector = host.querySelector<HTMLButtonElement>('[aria-label="服务器详情"]')!
+  const inspector = host.querySelector<HTMLButtonElement>('.shell-workspace-actions [aria-label="右侧栏"]')!
   expect(inspector.textContent).toBe('')
+  expect(host.querySelector('.shell-workspace-actions [aria-label="服务器详情"]')).toBeNull()
+  expect(host.querySelector('.shell-workspace-actions [aria-label="AI 助手"]')).toBeNull()
+  const terminal = host.querySelector('.shell-workspace-content main')!
   expect(host.querySelector('[data-inspector-open="false"]')).not.toBeNull()
   await act(async () => inspector.click())
+  const picker = host.querySelector<HTMLElement>('.shell-inspector-picker')!
+  expect(picker.hidden).toBe(false)
+  expect(inspector.getAttribute('aria-expanded')).toBe('true')
+  expect(picker.textContent).toContain('从这里开始')
+  await act(async () => [...picker.querySelectorAll('button')].find(b => b.textContent === 'AI')!.click())
+  const ai = host.querySelector<HTMLElement>('.ai-inspector')!
+  expect(ai.hidden).toBe(false)
+  expect(host.querySelector('[data-inspector-open="false"]')).not.toBeNull()
+  expect(host.querySelector('.shell-workspace')!.contains(ai)).toBe(false)
+  await act(async () => ai.querySelector<HTMLButtonElement>('[aria-label="切换侧栏内容"]')!.click())
+  expect(ai.hidden).toBe(true)
+  expect(picker.hidden).toBe(false)
+  await act(async () => [...picker.querySelectorAll('button')].find(b => b.textContent === 'SFTP')!.click())
   expect(host.querySelector('[data-inspector-open="true"]')).not.toBeNull()
+  expect(picker.hidden).toBe(true)
+  expect(ai.hidden).toBe(true)
+  expect(host.querySelector('.shell-workspace-content main')).toBe(terminal)
+  await act(async () => inspector.click())
+  expect(inspector.getAttribute('aria-expanded')).toBe('false')
+  expect(host.querySelector('#desktop-right-sidebar')!.hasAttribute('hidden')).toBe(true)
   expect(host.querySelector('.statusbar')).toBeNull()
 })
 

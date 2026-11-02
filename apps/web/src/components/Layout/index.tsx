@@ -1,6 +1,6 @@
 import { Loading } from '@/components/ui/loading'
 import { lazy,Suspense,useCallback,useEffect,useRef,useState,type CSSProperties } from 'react'
-import { Bot,FolderUp,KeyRound,PanelLeft,PanelLeftClose,PanelRight,Plus,Search,SquareTerminal } from 'lucide-react'
+import { Bot,FolderOpen,FolderUp,KeyRound,PanelLeft,PanelLeftClose,PanelRight,Plus,Search,SquareTerminal,X } from 'lucide-react'
 import { TunnelDialog,TunnelPrompts } from '@/components/Terminal/TunnelDialog'
 import type { SettingsTab } from '@/components/SettingsDialog'
 import { workspaceGeneration } from '@/lib/workspaceScope'
@@ -25,7 +25,7 @@ import { useSplitSidebar } from '@/hooks/useSplitSidebar'
 import { useSidebarPreview } from '@/hooks/useSidebarPreview'
 import { useWindowControls } from '@/hooks/useWindowControls'
 import { WindowControls } from '@/components/WindowControls'
-import { ShellIconButton } from './ShellControls'
+import { ShellIconButton,ShellResizeHandle } from './ShellControls'
 import { SidebarResizeHandle } from './SidebarResizeHandle'
 import { useAccountDialogStore } from '@/store/accountDialog'
 import { useAccountStore } from '@/store/account'
@@ -71,9 +71,8 @@ export function Layout() {
   const settingsPage = useDesktopShellStore((s) => s.settingsPage)
   const settingsTab = settingsPage ?? 'appearance'
   const settingsOpen = settingsPage !== null
-  const [inspectorOpen, setInspectorOpen] = useState(false)
-  const [aiOpen, setAiOpen] = useState(false)
-  const aiWidth = useDesktopShellStore(s => s.aiWidth)
+  const [rightSidebar, setRightSidebar] = useState<'choose' | 'ai' | 'sftp' | null>(null)
+  const setInspectorWidth = useDesktopShellStore(s => s.setInspectorWidth)
   const [workspaceWidth, setWorkspaceWidth] = useState(window.innerWidth)
   const workspace = useRef<HTMLDivElement>(null)
   const sessionView = useRef<HTMLDivElement>(null)
@@ -91,6 +90,8 @@ export function Layout() {
   const { fetchProfiles, fetchGroups } = useProfileStore()
   const activeTab = tabs.find((tab) => tab.id === activeTabId)
   const terminal = activePage === 'terminal' && Boolean(activeTab?.profileId)
+  const rightSidebarVisible = rightSidebar !== null && !settingsOpen && terminal
+  const sidebarOverlay = workspaceWidth < inspectorWidth + 480 + 8
   const terminalPalette = getTerminalTheme(resolveTerminalThemeId(terminalTheme, theme))
 
   const openSettings = useCallback((tab: SettingsTab) => {
@@ -189,6 +190,7 @@ export function Layout() {
         collapseSidebar()
       }} />
       {sidebarHidden && <div className="shell-fixed-top-controls">{topControls}</div>}
+      <div className="shell-workspace-area" ref={workspace}>
       <main className="shell-workspace">
         <header className="shell-workspace-header" data-eizhu-drag-region={desktop || undefined}
           style={terminal ? { '--shell-header-bg': terminalPalette.background, '--shell-header-fg': terminalPalette.foreground } as CSSProperties : undefined}>
@@ -196,18 +198,25 @@ export function Layout() {
           <WorkspaceTabs />
           <div className="shell-workspace-actions" data-eizhu-drag-region={desktop || undefined}>
             <TerminalSplitMenu iconOnly />
-            {terminal && <ShellIconButton label="服务器详情" aria-pressed={inspectorOpen} onClick={() => { setAiOpen(false); setInspectorOpen((v) => !v) }}><PanelRight size={16} /></ShellIconButton>}
-            {terminal && <ShellIconButton label="AI 助手" aria-pressed={aiOpen} onClick={() => { setInspectorOpen(false); setAiOpen(v => !v) }}><Bot size={16} /></ShellIconButton>}
+            {terminal && <ShellIconButton label="右侧栏" aria-expanded={rightSidebarVisible} aria-controls="desktop-right-sidebar" aria-pressed={rightSidebarVisible} onClick={() => setRightSidebar(value => value === null ? 'choose' : null)}><PanelRight size={16} /></ShellIconButton>}
             {activePage === 'terminal' && activeTab && <WorkspaceActions terminal={terminal} />}
           </div>
           {showControls && <div className="shell-window-controls-space" aria-hidden="true" />}
         </header>
-        <div className="shell-workspace-body" ref={workspace}>
+        <div className="shell-workspace-body">
           <div className="cnt-wrap shell-workspace-content"><WorkspaceContent onAddServer={() => setProfileFormOpen(true)} /></div>
-          <AiInspector key={workspaceGeneration()} open={aiOpen && !settingsOpen && terminal} overlay={workspaceWidth < aiWidth + 480} onClose={() => setAiOpen(false)} />
-          <ServerInspector open={inspectorOpen && !settingsOpen} overlay={workspaceWidth < inspectorWidth + 480} onClose={() => setInspectorOpen(false)} />
         </div>
       </main>
+      <div id="desktop-right-sidebar" className="shell-right-sidebar" hidden={!rightSidebarVisible}>
+        <aside className={`shell-inspector shell-inspector-picker ${sidebarOverlay ? 'is-overlay' : ''}`} style={{ width: inspectorWidth }} hidden={!rightSidebarVisible || rightSidebar !== 'choose'} inert={!rightSidebarVisible || rightSidebar !== 'choose'} aria-label="选择侧栏内容">
+          <ShellResizeHandle label="调整右侧栏宽度" value={inspectorWidth} min={320} max={560} onChange={setInspectorWidth} reverse />
+          <div className="shell-inspector-heading"><span>侧栏</span><ShellIconButton label="关闭右侧栏" onClick={() => setRightSidebar(null)}><X size={15} /></ShellIconButton></div>
+          <div className="shell-inspector-choices"><p>从这里开始</p><Button variant="ghost" onClick={() => setRightSidebar('ai')}><Bot size={18} /><span>AI</span></Button><Button variant="ghost" onClick={() => setRightSidebar('sftp')}><FolderOpen size={18} /><span>SFTP</span></Button></div>
+        </aside>
+        <AiInspector key={workspaceGeneration()} open={rightSidebarVisible && rightSidebar === 'ai'} overlay={sidebarOverlay} onClose={() => setRightSidebar(null)} onChoose={() => setRightSidebar('choose')} />
+        <ServerInspector open={rightSidebarVisible && rightSidebar === 'sftp'} overlay={sidebarOverlay} onClose={() => setRightSidebar(null)} onChoose={() => setRightSidebar('choose')} />
+      </div>
+      </div>
     </div>
     {showControls && <WindowControls className="shell-window-controls" maximized={maximized} onMinimize={minimize} onToggleMaximize={toggleMaximize} onClose={close} />}
     <TunnelDialog open={tunnelsOpen} onOpenChange={setTunnelsOpen} /><TunnelPrompts />

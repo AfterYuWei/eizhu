@@ -88,7 +88,10 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
         return
       }
       const delta = done
-        ? { content: '检查完成：命令退出码为 3，请结合警告核查。后续操作仍需确认。' }
+        ? {
+            content:
+              "## 检查结论\n\n命令退出码为 **3**，需要结合错误输出继续核查。\n\n- 已读取标准输出和错误输出。\n- 后续操作仍需逐条确认。\n\n```sh\nprintf '检查完成'\n```",
+          }
         : {
             content: '我会先检查命令输出。',
             tool_calls: [
@@ -171,20 +174,66 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
       ),
     )
     await wait(
-      'return !!document.querySelector(\'button[aria-label="AI 助手"]\')&&!document.querySelector(\'[role="dialog"]\')',
+      'return !!document.querySelector(\'button[aria-label="右侧栏"]\')&&!document.querySelector(\'[role="dialog"]\')',
     )
-    await js('document.querySelector(\'button[aria-label="AI 助手"]\').click()')
+    await js('document.querySelector(\'button[aria-label="右侧栏"]\').click()')
+    await wait("return !!document.querySelector('.shell-inspector-picker:not([hidden])')")
+    window.setContentSize(1280, 800)
+    await js('await document.fonts.ready;await new Promise(r=>setTimeout(r,150))')
+    const sidebarFrame = await js<{
+      gap: number
+      topAligned: boolean
+      heightAligned: boolean
+      radius: number
+      independent: boolean
+    }>(
+      "const main=document.querySelector('.shell-workspace'),pane=document.querySelector('.shell-inspector-picker');const a=main.getBoundingClientRect(),b=pane.getBoundingClientRect();return {gap:b.left-a.right,topAligned:Math.abs(a.top-b.top)<=1,heightAligned:Math.abs(a.height-b.height)<=1,radius:parseFloat(getComputedStyle(pane).borderRadius),independent:!main.contains(pane)}",
+    )
+    assert.ok(
+      sidebarFrame.gap >= 7 &&
+        sidebarFrame.topAligned &&
+        sidebarFrame.heightAligned &&
+        sidebarFrame.radius >= 12 &&
+        sidebarFrame.independent,
+    )
+    const pickerName = 'right-sidebar-picker.png'
+    await writeFile(
+      join(root, pickerName),
+      (await window.webContents.capturePage(undefined, { stayAwake: true })).toPNG(),
+    )
+    screenshots.push(pickerName)
+    await js(
+      "[...document.querySelectorAll('.shell-inspector-choices button')].find(b=>b.textContent==='AI').click()",
+    )
     await wait("return !!window.__aiSmoke&&!!document.querySelector('.ai-composer textarea:not([disabled])')")
     await js(
       "const input=document.querySelector('.ai-composer textarea');Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(input,'检查命令输出');input.dispatchEvent(new Event('input',{bubbles:true}))",
     )
-    await js("[...document.querySelectorAll('.ai-composer button')].find(b=>b.textContent==='发送').click()")
+    await js('document.querySelector(\'.ai-composer button[aria-label="发送"]\').click()')
     await wait(
       "return window.__aiSmoke?.status==='awaiting_confirmation'&&!!document.querySelector('.ai-command')",
     )
     assert.equal(commands.length, 0, 'No SSH exec before user confirmation')
     const proposed = aiConversationSchema.parse(await js('return window.__aiSmoke'))
     const proposalId = proposed.messages.at(-1)!.proposal!.id
+    await js('document.querySelector(\'.ai-command button[aria-label="复制命令"]\').click()')
+    await wait(
+      `return window.eizhu.clipboard.read().then(text=>text===${JSON.stringify(proposed.messages.at(-1)!.proposal!.command)})`,
+    )
+    assert.equal(
+      await js("return document.querySelectorAll('.ai-command-heading button').length"),
+      0,
+      'Copy belongs to the code block rather than the whole card',
+    )
+    assert.equal(commands.length, 0, 'Copying a code block must not execute the command')
+    await wait('return !document.querySelector(\'.ai-code-block [role="status"]\')')
+    await js('document.activeElement?.blur();await new Promise(r=>setTimeout(r,100))')
+    const approvalName = 'ai-chat-approval.png'
+    await writeFile(
+      join(root, approvalName),
+      (await window.webContents.capturePage(undefined, { stayAwake: true })).toPNG(),
+    )
+    screenshots.push(approvalName)
     await js(
       "[...document.querySelectorAll('.ai-command button')].find(b=>b.textContent==='执行此命令').click()",
     )
@@ -202,6 +251,26 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
     assert.equal(result.exitCode, 3)
     assert.equal(result.stdout, '你好 🧪\n')
     assert.equal(result.stderr, 'synthetic warning\n')
+    for (const [label, expected] of [
+      ['标准输出', result.stdout],
+      ['错误输出', result.stderr],
+    ]) {
+      await js('document.querySelector(d).click()', `.ai-command button[aria-label="复制${label}"]`)
+      await wait(`return window.eizhu.clipboard.read().then(text=>text===${JSON.stringify(expected)})`)
+    }
+    assert.ok(
+      await js<boolean>(
+        "return ['.ai-message.is-assistant','.ai-command','.ai-result'].every(selector=>{const s=getComputedStyle(document.querySelector(selector));return parseFloat(s.borderTopWidth)===0&&parseFloat(s.borderBottomWidth)===0})",
+      ),
+      'AI content uses spacing and surfaces rather than internal divider lines',
+    )
+    await wait('return !document.querySelector(\'.ai-code-block [role="status"]\')')
+    assert.equal(await js("return document.querySelector('.ai-markdown h2')?.textContent"), '检查结论')
+    await js('document.querySelector(\'.ai-markdown button[aria-label="复制代码"]\').click()')
+    await wait(
+      `return window.eizhu.clipboard.read().then(text=>text===${JSON.stringify("printf '检查完成'\n")})`,
+    )
+    await wait('return !document.querySelector(\'.ai-code-block [role="status"]\')')
     assert.ok(commands[0].startsWith("cd -- '/tmp' && exec sh -c "))
     assert.ok(!requests.join('').includes('synthetic-ai-ssh-password'))
     const rows = await call<Array<{ id: string }>>('ai', 'history', { profileId })
@@ -235,6 +304,16 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
       )
       screenshots.push(name)
     }
+    await js(
+      "document.documentElement.classList.remove('dark');document.documentElement.classList.add('light');document.querySelector('.ai-messages').scrollTop=0;await new Promise(r=>setTimeout(r,100))",
+    )
+    const startName = 'ai-chat-start.png'
+    await writeFile(
+      join(root, startName),
+      (await window.webContents.capturePage(undefined, { stayAwake: true })).toPNG(),
+    )
+    screenshots.push(startName)
+    await js('document.querySelector(\'.ai-inspector button[aria-label="滚动到最新回复"]\').click()')
     window.setContentSize(900, 720)
     await wait("return document.querySelector('.ai-inspector')?.classList.contains('is-overlay')")
     const name = 'ai-chat-narrow.png'
@@ -243,6 +322,23 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
       (await window.webContents.capturePage(undefined, { stayAwake: true })).toPNG(),
     )
     screenshots.push(name)
+    await js('document.querySelector(\'.ai-inspector button[aria-label="切换侧栏内容"]\').click()')
+    await js(
+      "[...document.querySelectorAll('.shell-inspector-choices button')].find(b=>b.textContent==='SFTP').click()",
+    )
+    await wait(
+      "return !!document.querySelector('.shell-inspector:not([hidden]) .sdetail-pane')&&document.querySelector('.ai-inspector').hidden",
+    )
+    await js(
+      'document.querySelector(\'.shell-inspector:not([hidden]) button[aria-label="切换侧栏内容"]\').click()',
+    )
+    await js(
+      "[...document.querySelectorAll('.shell-inspector-choices button')].find(b=>b.textContent==='AI').click()",
+    )
+    await wait(
+      "return !document.querySelector('.ai-inspector').hidden&&document.querySelector('.ai-command')?.textContent.includes('退出码 3')",
+    )
+    assert.equal(commands.length, 1, 'Switching sidebar content must retain the conversation without replay')
     const sessionId = proposed.target.sessionId
     for (const mode of ['quota', 'unauthorized', 'interrupted'] as const) {
       modelMode = mode
@@ -277,6 +373,9 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
       quotaAndAuthErrors: true,
       incompleteStreamRejected: true,
       unsupportedToolsRejected: true,
+      codeBlockCopyOnly: true,
+      borderlessAiContent: true,
+      sharedSidebar: sidebarFrame,
       screenshots,
     }
   } finally {

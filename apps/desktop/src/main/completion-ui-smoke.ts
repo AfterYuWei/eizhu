@@ -93,7 +93,8 @@ export async function verifyCompletionUi(
     }
     // Exercise the CWD event through the real renderer and inspector, including
     // the initial directory emitted before the connection-ready metadata.
-    await js(`document.querySelector('button[aria-label="服务器详情"]').click()`)
+    await js(`document.querySelector('button[aria-label="右侧栏"]').click()`)
+    await js(`[...document.querySelectorAll('.shell-inspector-choices button')].find(b=>b.textContent==='SFTP').click()`)
     await wait(
       () => js<boolean>(`return document.querySelector('.sdetail-pane[aria-hidden="false"] .sdetail-file-path')?.textContent==='/tmp/stage3'&&!!document.querySelector('button[title="自动跟随已开启：点击关闭"]')`),
       'inspector follows initial shell directory',
@@ -104,7 +105,7 @@ export async function verifyCompletionUi(
       'inspector follows shell cd',
     )
     await capture('server-detail-follow-cwd.png')
-    await js(`document.querySelector('button[aria-label="关闭服务器详情"]').click()`)
+    await js(`document.querySelector('.shell-inspector:not([hidden]) button[aria-label="关闭右侧栏"]').click()`)
     let cases = 0
     for (const command of [
       'git',
