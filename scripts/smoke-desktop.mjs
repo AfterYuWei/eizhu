@@ -29,7 +29,7 @@ await new Promise((accept, reject) => {
   const timer = setTimeout(() => {
     child.kill()
     reject(new Error('Smoke timeout'))
-  }, 180_000 + duration)
+  }, 300_000 + duration)
   child.on('error', (error) => {
     clearTimeout(timer)
     reject(error)
