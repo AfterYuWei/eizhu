@@ -339,7 +339,6 @@
 .pf-footer > [data-variant='outline']:hover { background: var(--bg-hover); }
 .pf-footer > .pf-btn-submit { border: 1px solid var(--border); background: var(--bg-active); color: var(--fg); }
 .pf-footer > .pf-btn-submit:hover { background: var(--bg-hover); }
-.pf-dialog-content :is(button, input, textarea):focus-visible { outline: 1px solid var(--desktop-focus-border, var(--border)); outline-offset: 2px; --tw-ring-shadow: 0 0 #0000; }
 @media (max-width: 480px) {
   .pf-header { padding-left: 16px; }
   .pf-tab-list[data-slot='tabs-list'] { margin-inline: 16px; gap: 16px; }

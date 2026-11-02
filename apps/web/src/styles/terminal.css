@@ -280,7 +280,6 @@
 .desktop-shell .connection-picker-server:last-child:nth-child(odd) { grid-column: 1 / -1; }
 .desktop-shell .connection-picker-server:hover,
 .desktop-shell .connection-picker-server:focus-visible { background: var(--shell-hover); }
-.desktop-shell .connection-picker-grid .connection-picker-server:focus-visible { outline-offset: -2px; }
 .desktop-shell .connection-picker-icon {
   display: grid;
   place-items: center;

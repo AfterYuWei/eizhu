@@ -52,7 +52,7 @@
 :is(.snippet-manager, .snippet-quick-picker) [data-slot='button']:is([data-variant='default'], [data-variant='outline']) { border: 1px solid var(--border); background: var(--bg-active); color: var(--fg); }
 :is(.snippet-manager, .snippet-quick-picker) [data-slot='button']:is([data-variant='default'], [data-variant='outline']):hover { background: var(--bg-hover); }
 .snippet-manager .snippet-delete { color: var(--red); }
-:is(.snippet-manager, .snippet-quick-picker) :is(button, input, textarea, pre):focus-visible { outline: 1px solid var(--desktop-focus-border, var(--border)); outline-offset: 2px; box-shadow: none; }
+:is(.snippet-manager, .snippet-quick-picker) :is(button, input, textarea, pre):focus-visible { box-shadow: none; }
 .snippet-manager-body { min-height: 0; overflow-y: auto; padding: 0 24px 24px; scrollbar-width: thin; }
 .snippet-fields { display: flex; flex-direction: column; gap: 20px; min-width: 0; margin: 0; padding: 0; border: 0; }
 .snippet-basic-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }

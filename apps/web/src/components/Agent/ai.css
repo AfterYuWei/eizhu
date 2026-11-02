@@ -2,10 +2,6 @@
   font-size: 14px;
   color: var(--fg);
 }
-.ai-inspector .shell-inspector-switch {
-  border-color: transparent;
-  background: transparent;
-}
 .ai-inspector button[data-variant='default'],
 .ai-settings button[data-variant='default'] {
   background: var(--fg);
@@ -319,9 +315,6 @@
   background: var(--surface-panel);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.025);
 }
-.ai-composer:focus-within {
-  border-color: var(--fg-4);
-}
 .ai-inspector .ai-composer textarea {
   min-height: 74px;
   max-height: 180px;
@@ -334,9 +327,6 @@
   line-height: 22px;
   box-shadow: none;
   resize: none;
-}
-.ai-inspector .ai-composer textarea:focus-visible {
-  box-shadow: none;
 }
 .ai-composer textarea::placeholder {
   color: var(--fg-4);

@@ -1,8 +1,10 @@
 // @vitest-environment jsdom
-import { act } from 'react'
+import { act, useState } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { beforeEach, afterEach, expect, it, vi } from 'vitest'
 import { CommandPalette } from './index'
+import { ShellIconButton } from '@/components/Layout/ShellControls'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import { useProfileStore } from '@/store/profile'
 import { resetWorkspaceView, useWorkspaceViewStore } from '@/store/workspaceView'
 import { useSessionStore } from '@/store/session'
@@ -30,7 +32,7 @@ beforeEach(async () => {
   setWorkspaceGeneration(1)
   host = document.createElement('div'); document.body.append(host); root = createRoot(host)
 })
-afterEach(async () => { await act(async () => root.unmount()); host.remove(); vi.restoreAllMocks() })
+afterEach(async () => { await act(async () => root.unmount()); host.remove(); vi.useRealTimers(); vi.unstubAllGlobals(); vi.restoreAllMocks() })
 async function render() { await act(async () => root.render(<CommandPalette open onClose={close} />)) }
 async function query(value: string) {
   const input = document.querySelector<HTMLInputElement>('[role="combobox"]')!
@@ -39,6 +41,43 @@ async function query(value: string) {
     input.dispatchEvent(new Event('input', { bubbles: true }))
   })
 }
+
+it.each(['Escape', '外部点击'])('%s 关闭面板恢复入口焦点时不弹出提示，之后键盘聚焦和鼠标悬停仍显示提示', async (dismiss) => {
+  vi.useFakeTimers()
+  vi.stubGlobal('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} })
+  function SearchEntry() {
+    const [open, setOpen] = useState(false)
+    return <TooltipProvider>
+      <ShellIconButton label="搜索入口" onClick={() => setOpen(true)}>⌕</ShellIconButton>
+      <CommandPalette open={open} onClose={() => setOpen(false)} />
+    </TooltipProvider>
+  }
+  await act(async () => root.render(<SearchEntry />))
+  const entry = host.querySelector<HTMLButtonElement>('button[aria-label="搜索入口"]')!
+  await act(async () => { entry.focus(); entry.click() })
+  expect(document.activeElement?.getAttribute('role')).toBe('combobox')
+  await act(async () => vi.advanceTimersByTime(1))
+  if (dismiss === 'Escape') {
+    await act(async () => document.activeElement!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })))
+  } else {
+    const outside = new Event('pointerdown', { bubbles: true, cancelable: true })
+    Object.assign(outside, { button: 0, pointerType: 'mouse' })
+    await act(async () => { document.body.dispatchEvent(outside); document.body.click() })
+  }
+  await act(async () => vi.advanceTimersByTime(500))
+  expect(document.querySelector('[role="dialog"]')).toBeNull()
+  expect(document.activeElement).toBe(entry)
+  expect(document.querySelector('[role="tooltip"]')).toBeNull()
+
+  await act(async () => { entry.blur(); entry.focus() })
+  expect(document.querySelector('[role="tooltip"]')?.textContent).toBe('搜索入口')
+  await act(async () => entry.blur())
+  const move = new Event('pointermove', { bubbles: true })
+  Object.assign(move, { pointerType: 'mouse' })
+  await act(async () => entry.dispatchEvent(move))
+  await act(async () => vi.advanceTimersByTime(400))
+  expect(document.querySelector('[role="tooltip"]')?.textContent).toBe('搜索入口')
+})
 
 it('统一显示服务器、密钥、命令，选择服务器复用已有会话', async () => {
   const open = vi.fn()

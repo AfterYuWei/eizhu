@@ -1,6 +1,6 @@
 /* ═══════════════════ SFTP FILE MANAGER ═══════════════════ */
-/* 保持原有双栏、路径工具栏和紧凑队列布局，仅更新局部视觉样式。 */
-:is(.sftp-root, .sftp-dialog) {
+/* 页面、右侧文件栏与弹窗共用中性配色，保留各自的紧凑布局。 */
+:is(.sftp-root, .sftp-dialog, .sdetail-pane) {
   --bg: var(--surface-panel);
   --bg-panel: var(--surface-panel);
   --bg-elevated: var(--surface-app);
@@ -45,10 +45,7 @@
   flex-shrink: 0;
 }
 .sftp-actions-sep {
-  width: 1px;
-  height: 14px;
-  background: var(--border-subtle);
-  margin: 0 3px;
+  width: 7px;
   flex-shrink: 0;
 }
 .sftp-act-btn {
@@ -125,7 +122,6 @@
   gap: 8px;
   padding: 6px 8px 0;
   flex-shrink: 0;
-  border-bottom: 1px solid var(--border-subtle);
   min-height: 34px;
 }
 .sftp-pane-title {
@@ -334,7 +330,6 @@
   top: 0;
   background: var(--bg);
   z-index: 2;
-  border-bottom: 1px solid var(--border-subtle);
   margin-bottom: 2px;
 }
 .sftp-list-head .sftp-cell {
@@ -678,7 +673,7 @@ body.ptr-dragging * {
 .sftp-dir-mode-footer [data-slot='button']:hover { background: var(--bg-hover); }
 .sftp-dir-mode-footer [data-slot='button'][type='submit'] { border-color: var(--fg); background: var(--fg); color: var(--bg-panel); }
 .sftp-dir-mode-footer [data-slot='button'][type='submit']:hover { background: color-mix(in srgb, var(--fg) 85%, var(--bg-panel)); }
-.sftp-dir-mode :is([data-slot='button'], [data-slot='checkbox'], .sftp-dir-mode-path):focus-visible { outline: 1px solid var(--desktop-focus-border, var(--border)); outline-offset: 2px; box-shadow: none; }
+.sftp-dir-mode :is([data-slot='button'], [data-slot='checkbox'], .sftp-dir-mode-path):focus-visible { box-shadow: none; }
 .sftp-trow[draggable="true"] {
   cursor: grab;
 }
@@ -785,7 +780,6 @@ body.ptr-dragging * {
   min-height: 0;
   max-height: 180px;
   overflow: hidden;
-  border-top: 1px solid var(--border-subtle);
   background: var(--bg-panel);
   container: sftp-transfers / inline-size;
 }
@@ -807,10 +801,9 @@ body.ptr-dragging * {
 .sftp-tx-filter[aria-pressed='true'] { background: var(--bg-active); color: var(--fg); }
 .sftp-tx:not(.collapsed) .sftp-tx-toggle { flex: 0 0 auto; }
 .sftp-tx:not(.collapsed) :is(.sftp-tx-count, .sftp-tx-attention, .sftp-tx-mini-bar, .sftp-tx-speed) { display: none; }
-.sftp-tx-list { flex: 1; min-height: 0; overflow-y: auto; border-top: 1px solid var(--border-subtle); padding: 0 12px; }
+.sftp-tx-list { flex: 1; min-height: 0; overflow-y: auto; padding: 0 12px; }
 .sftp-tx-list[hidden] { display: none; }
 .sftp-tx-item { display: grid; grid-template-columns: 16px minmax(0, 1.4fr) minmax(90px, 0.8fr) 124px 90px 76px; align-items: center; gap: 8px; min-height: 36px; padding: 4px 0; }
-.sftp-tx-item + .sftp-tx-item { border-top: 1px solid var(--border-subtle); }
 .sftp-tx-item:hover { background: var(--bg-hover); }
 .sftp-tx-dir { display: flex; align-items: center; justify-content: center; color: var(--sftp-muted); }
 .sftp-tx-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg); font: 400 var(--sans-size) / 1.5 var(--sans); }

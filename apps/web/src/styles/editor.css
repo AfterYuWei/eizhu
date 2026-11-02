@@ -123,8 +123,7 @@
   color: var(--fg);
 }
 .editor-tab:focus-within {
-  outline: 1px solid var(--editor-muted);
-  outline-offset: 1px;
+  background: var(--bg-hover);
 }
 .editor-tab-icon {
   flex-shrink: 0;
@@ -305,8 +304,6 @@
   border-color: transparent;
 }
 .editor-btn:focus-visible {
-  outline: 1px solid var(--editor-muted);
-  outline-offset: 2px;
   box-shadow: none;
 }
 .editor-save-shortcut {

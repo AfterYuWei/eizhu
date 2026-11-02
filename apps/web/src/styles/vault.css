@@ -1690,7 +1690,7 @@
 .desktop-shell .vault-list-entry:hover { background: var(--shell-hover); }
 .desktop-shell .vault-list-entry.is-selected { background: var(--shell-selected); }
 .desktop-shell .vault-list-item { display: flex; align-items: flex-start; gap: 10px; flex: 1; min-width: 0; width: 100%; min-height: 60px; padding: 9px; border: 0; border-radius: 8px; background: transparent; color: var(--fg); text-align: left; font: inherit; }
-.desktop-shell .vault-list-item:focus-visible { outline: 1px solid var(--desktop-focus-border); outline-offset: -1px; }
+.desktop-shell .vault-list-item:focus-visible { background: var(--shell-hover); }
 .desktop-shell .vault-list-item:disabled { opacity: .6; }
 .desktop-shell .vault-list-item > svg { flex-shrink: 0; margin-top: 3px; color: var(--vault-muted); }
 .desktop-shell .vault-list-item-copy { flex: 1; min-width: 0; }

@@ -89,7 +89,13 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
         if (executing.current) return
         const active = useSessionStore.getState().tabs.find((tab) => tab.id === useSessionStore.getState().activeTabId)
         if (useWorkspaceViewStore.getState().activePage === 'terminal' && active?.profileId) focusActiveTerminal()
-        else if (returnFocus.current?.isConnected) returnFocus.current.focus()
+        else if (returnFocus.current?.isConnected) {
+          const target = returnFocus.current
+          // Restore keyboard focus without reopening the trigger's tooltip.
+          target.setAttribute('data-tooltip-focus-restore', '')
+          target.focus()
+          target.removeAttribute('data-tooltip-focus-restore')
+        }
       }}>
       <DialogTitle className="sr-only">搜索服务器、密钥或命令</DialogTitle>
       <div className="pal-inp-wrap"><Search size={17} /><Input ref={inputRef} className="pal-inp focus-visible:ring-0" placeholder="搜索服务器、密钥或命令…" value={query}

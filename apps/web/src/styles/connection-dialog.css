@@ -27,7 +27,7 @@
 .connection-dialog [data-slot='button']:is([data-variant='outline'], [data-variant='ghost']):hover { background: var(--connection-hover); color: var(--fg); }
 .connection-dialog [data-slot='button'].connection-primary-action { background: var(--fg); color: var(--surface-overlay); }
 .connection-dialog [data-slot='button'].connection-primary-action:hover { background: color-mix(in srgb, var(--fg) 85%, var(--surface-overlay)); color: var(--surface-overlay); }
-.connection-dialog :is(button, [tabindex]):focus-visible { outline: 1px solid var(--fg-4); outline-offset: 2px; box-shadow: none; }
+.connection-dialog :is(button, [tabindex]):focus-visible { box-shadow: none; }
 
 .connection-dialog-header { display: flex; flex: none; align-items: center; gap: 12px; min-width: 0; padding: 20px 24px 8px; }
 .connection-server-icon { display: grid; place-items: center; flex: none; width: 36px; height: 36px; border-radius: var(--r-sm); background: var(--connection-group); color: var(--connection-muted); }
