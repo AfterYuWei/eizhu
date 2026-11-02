@@ -13,8 +13,8 @@ export function shellSetupCommand(output: string): string | undefined {
         String.raw` __eizhu_osc7(){ local s=$?;printf "\033]7;file://%s\007" "$(pwd -P 2>/dev/null)";`,
         // PS0 is a pre-execution prompt in Bash 4.4+. Older Bash keeps CWD tracking only.
         String.raw`if (( BASH_VERSINFO[0]>4 || (BASH_VERSINFO[0]==4 && BASH_VERSINFO[1]>=4) ));then case "$PS1" in *'\[\e]133;A\a\]'*) ;; *) PS1='\[\e]133;A\a\]'"$PS1"'\[\e]133;B\a\]';;esac;case "$PS2" in *'\[\e]133;A;k=s\a\]'*) ;; *) PS2='\[\e]133;A;k=s\a\]'"$PS2"'\[\e]133;B\a\]';;esac;fi;return "$s";};`,
-        // Append without flattening an existing PROMPT_COMMAND array or replacing user hooks.
-        String.raw`case "$(declare -p PROMPT_COMMAND 2>/dev/null)" in 'declare -a'*) case " ${'${PROMPT_COMMAND[*]}'} " in *' __eizhu_osc7 '*) ;; *) PROMPT_COMMAND+=(__eizhu_osc7);;esac;; *) case ";${'${PROMPT_COMMAND-}'};" in *';__eizhu_osc7;'*) ;; *) PROMPT_COMMAND="${'${PROMPT_COMMAND:+$PROMPT_COMMAND;}'}__eizhu_osc7";;esac;;esac;`,
+        // Keep arrays intact. A newline also preserves scalar hooks ending in ;, & or a comment.
+        String.raw`case "$(declare -p PROMPT_COMMAND 2>/dev/null)" in 'declare -a'*) case " ${'${PROMPT_COMMAND[*]}'} " in *' __eizhu_osc7 '*) ;; *) PROMPT_COMMAND+=(__eizhu_osc7);;esac;; *) case ";${'${PROMPT_COMMAND-}'};" in *';__eizhu_osc7;'*|*$'\n__eizhu_osc7;'*) ;; *) PROMPT_COMMAND="${'${PROMPT_COMMAND-}'}"$'\n__eizhu_osc7';;esac;;esac;`,
         String.raw`if (( BASH_VERSINFO[0]>4 || (BASH_VERSINFO[0]==4 && BASH_VERSINFO[1]>=4) ));then case "${'${PS0-}'}" in *'\e]133;C\a'*) ;; *) PS0='\e]133;C\a'"${'${PS0-}'}";;esac;fi;__eizhu_osc7`,
       ].join('')
     } else if (name === 'zsh') {

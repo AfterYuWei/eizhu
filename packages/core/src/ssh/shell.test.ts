@@ -91,7 +91,7 @@ for (const shell of ['bash', 'zsh']) {
     const result = spawnSync('/bin/sh', ['-c', 'exec "$@" 2>&1', 'eizhu-shell-test', shell, ...args], {
       input: [
         "PS1='TEST> '; PS2='MORE> '",
-        shell === 'bash' ? "PROMPT_COMMAND='printf USER_HOOK'" : "precmd(){ printf USER_HOOK; }",
+        shell === 'bash' ? "PROMPT_COMMAND='printf USER_HOOK; '" : "precmd(){ printf USER_HOOK; }",
         setup,
         setup,
         'false',
@@ -104,6 +104,7 @@ for (const shell of ['bash', 'zsh']) {
     })
     assert.equal(result.status, 0, result.stdout.toString())
     const output = result.stdout.toString()
+    assert.ok(!output.includes('syntax error'), output)
     assert.ok(output.includes('USER_HOOK'))
     assert.ok(output.includes('TEST> '))
     if (shell === 'bash') {
@@ -119,6 +120,43 @@ for (const shell of ['bash', 'zsh']) {
     // Reinstalling the hook must not nest prompt wrappers or change command status.
     assert.ok(!output.includes('\x1b]133;A\x07\x1b]133;A\x07'))
     assert.match(output, /LAST_STATUS=1\r?\n/)
+  })
+}
+
+for (const promptCommand of [
+  '',
+  'printf USER_HOOK',
+  'printf USER_HOOK;',
+  'printf USER_HOOK; ',
+  'history -a; ',
+  'printf USER_HOOK # user comment',
+  'printf USER_HOOK &',
+  'printf USER_HOOK\n',
+  'printf USER_HOOK;__eizhu_osc7',
+]) {
+  test(`Bash preserves and executes scalar PROMPT_COMMAND ${JSON.stringify(promptCommand)}`, { skip: process.platform === 'win32' }, () => {
+    const setup = shellSetupCommand('/bin/bash')!
+    const result = spawnSync('bash', ['--noprofile', '--norc', '-c', [
+      'PROMPT_COMMAND=$1',
+      setup,
+      setup,
+      // Run the prompt in a function so its hook can preserve the last command status.
+      'render_prompt(){ eval "$PROMPT_COMMAND"; }',
+      'false; render_prompt; status=$?',
+      'wait',
+      'printf "\\nLAST_STATUS=%s\\n" "$status"',
+      'printf "PROMPT_COMMAND=%s" "$PROMPT_COMMAND"',
+    ].join('\n'), 'eizhu-shell-test', promptCommand], { timeout: 5000 })
+    assert.equal(result.status, 0, result.stderr.toString())
+    assert.equal(result.stderr.toString(), '')
+    const output = result.stdout.toString()
+    const command = output.slice(output.indexOf('PROMPT_COMMAND=') + 'PROMPT_COMMAND='.length)
+    assert.ok(command.startsWith(promptCommand))
+    assert.equal(command.match(/__eizhu_osc7/g)?.length, 1)
+    assert.equal(output.match(/\x1b\]7;file:\/\//g)?.length, 3)
+    if (promptCommand.includes('USER_HOOK')) assert.ok(output.includes('USER_HOOK'))
+    // Without a user hook, our hook must preserve the previous command's failure.
+    if (!promptCommand) assert.match(output, /LAST_STATUS=1\n/)
   })
 }
 
