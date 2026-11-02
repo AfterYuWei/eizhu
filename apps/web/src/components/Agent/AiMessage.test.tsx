@@ -62,7 +62,7 @@ it('Markdown code is copied without surrounding reply, language label or display
   })
   expect(host.querySelector('h2')?.textContent).toBe('统计口径')
   expect(host.querySelectorAll('li')).toHaveLength(2)
-  expect(host.querySelector('.ai-avatar')?.textContent).toBe('AI')
+  expect(host.querySelector('[role="img"][aria-label="AI 头像"]')).not.toBeNull()
   expect(host.querySelectorAll('.ai-code-number')).toHaveLength(2)
   await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="复制代码"]')!.click())
   expect(api.clipboard.write).toHaveBeenCalledWith({ text: 'SELECT name\nFROM users;\n' })

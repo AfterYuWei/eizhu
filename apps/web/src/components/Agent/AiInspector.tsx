@@ -2,7 +2,6 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import {
   ArrowDown,
   ArrowUp,
-  Bot,
   ChevronDown,
   FileText,
   Hand,
@@ -18,6 +17,7 @@ import { useAiStore } from '@/store/ai'
 import { useSessionStore } from '@/store/session'
 import { useDesktopShellStore } from '@/store/desktopShell'
 import { bridge } from '@/lib/bridge'
+import { AiIcon } from '@/lib/serverIcons'
 import { terminalActions } from '@/lib/terminalActions'
 import { workspaceGeneration } from '@/lib/workspaceScope'
 import { Button } from '@/components/ui/button'
@@ -191,7 +191,7 @@ export function AiInspector({
           aria-label="切换侧栏内容"
           onClick={onChoose}
         >
-          <Bot size={15} /> AI <ChevronDown size={13} />
+          <AiIcon size={15} /> AI <ChevronDown size={13} />
         </Button>
         <div className="ai-inline-actions">
           <ShellIconButton

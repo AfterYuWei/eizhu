@@ -3,6 +3,7 @@ import Markdown from 'react-markdown'
 import { ArrowUpRight, Check, ChevronRight, Copy, RefreshCw } from 'lucide-react'
 import type { AiConversation, AiTarget } from '@eizhu/contracts'
 import { bridge } from '@/lib/bridge'
+import { AiIcon } from '@/lib/serverIcons'
 import { writeClipboardText } from '@/lib/clipboard'
 import { ShellIconButton } from '@/components/Layout/ShellControls'
 import { Button } from '@/components/ui/button'
@@ -125,8 +126,8 @@ export function AiMessage({
   return (
     <article className="ai-message is-assistant">
       <div className="ai-message-role">
-        <span className="ai-avatar" aria-label="AI 头像">
-          AI
+        <span className="ai-avatar" role="img" aria-label="AI 头像">
+          <AiIcon size={18} />
         </span>
         <span>AI</span>
       </div>

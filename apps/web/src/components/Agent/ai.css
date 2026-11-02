@@ -69,12 +69,7 @@
   flex-shrink: 0;
   width: 18px;
   height: 18px;
-  border-radius: 4px;
-  background: var(--fg);
-  color: var(--surface-panel);
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: -0.5px;
+  color: var(--fg-3);
 }
 .ai-task-details {
   margin: -2px 0 16px;

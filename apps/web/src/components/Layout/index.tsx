@@ -1,6 +1,7 @@
 import { Loading } from '@/components/ui/loading'
 import { lazy,Suspense,useCallback,useEffect,useRef,useState,type CSSProperties } from 'react'
-import { Bot,FolderOpen,FolderUp,KeyRound,PanelLeft,PanelLeftClose,PanelRight,Plus,Search,SquareTerminal,X } from 'lucide-react'
+import { FolderOpen,FolderUp,KeyRound,PanelLeft,PanelLeftClose,PanelRight,Plus,Search,SquareTerminal,X } from 'lucide-react'
+import { AiIcon } from '@/lib/serverIcons'
 import { TunnelDialog,TunnelPrompts } from '@/components/Terminal/TunnelDialog'
 import type { SettingsTab } from '@/components/SettingsDialog'
 import { workspaceGeneration } from '@/lib/workspaceScope'
@@ -211,7 +212,7 @@ export function Layout() {
         <aside className={`shell-inspector shell-inspector-picker ${sidebarOverlay ? 'is-overlay' : ''}`} style={{ width: inspectorWidth }} hidden={!rightSidebarVisible || rightSidebar !== 'choose'} inert={!rightSidebarVisible || rightSidebar !== 'choose'} aria-label="选择侧栏内容">
           <ShellResizeHandle label="调整右侧栏宽度" value={inspectorWidth} min={320} max={560} onChange={setInspectorWidth} reverse />
           <div className="shell-inspector-heading"><span>侧栏</span><ShellIconButton label="关闭右侧栏" onClick={() => setRightSidebar(null)}><X size={15} /></ShellIconButton></div>
-          <div className="shell-inspector-choices"><p>从这里开始</p><Button variant="ghost" onClick={() => setRightSidebar('ai')}><Bot size={18} /><span>AI</span></Button><Button variant="ghost" onClick={() => setRightSidebar('sftp')}><FolderOpen size={18} /><span>SFTP</span></Button></div>
+          <div className="shell-inspector-choices"><p>从这里开始</p><Button variant="ghost" onClick={() => setRightSidebar('ai')}><AiIcon size={18} /><span>AI</span></Button><Button variant="ghost" onClick={() => setRightSidebar('sftp')}><FolderOpen size={18} /><span>SFTP</span></Button></div>
         </aside>
         <AiInspector key={workspaceGeneration()} open={rightSidebarVisible && rightSidebar === 'ai'} overlay={sidebarOverlay} onClose={() => setRightSidebar(null)} onChoose={() => setRightSidebar('choose')} />
         <ServerInspector open={rightSidebarVisible && rightSidebar === 'sftp'} overlay={sidebarOverlay} onClose={() => setRightSidebar(null)} onChoose={() => setRightSidebar('choose')} />

@@ -70,6 +70,23 @@ import { DEFAULT_SERVER_ICON } from '@/lib/serverIconKeys'
 
 type ServerIconComponent = ComponentType<LucideProps>
 
+export const AiIcon = forwardRef<SVGSVGElement, LucideProps>(({ size = 24, color = 'currentColor', ...props }, ref) => (
+  <svg
+    aria-hidden="true"
+    {...props}
+    ref={ref}
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill={color}
+    stroke="none"
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <path d="M10 6C10 12 8 14 2 14C8 14 10 16 10 22C10 16 12 14 18 14C12 14 10 12 10 6ZM19 2C19 4.25 18.25 5 16 5C18.25 5 19 5.75 19 8C19 5.75 19.75 5 22 5C19.75 5 19 4.25 19 2Z" />
+  </svg>
+))
+AiIcon.displayName = 'AiIcon'
+
 function simpleIcon(icon: SimpleIcon): ServerIconComponent {
   const Component = forwardRef<SVGSVGElement, LucideProps>(({ size = 24, color = 'currentColor', ...props }, ref) => (
     <svg
