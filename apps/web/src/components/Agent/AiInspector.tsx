@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import {
   ArrowDown,
   ArrowUp,
+  Bot,
   ChevronDown,
   FileText,
   Hand,
@@ -298,10 +299,14 @@ export function AiInspector({
               }}
             >
               {!conversation?.messages.length && (
-                <div className="ai-empty">
-                  描述你要完成的任务，AI 会先给出命令，确认后才执行。
-                  <br />
-                  支持非交互命令和免密 sudo。
+                <div className="ai-welcome">
+                  <div className="ai-welcome-title">
+                    <span className="ai-welcome-icon" aria-hidden="true">
+                      <Bot size={21} strokeWidth={1.8} />
+                    </span>
+                    <h2>运维路上，有我同行</h2>
+                  </div>
+                  <p className="ai-welcome-subtitle">复杂的事不必一口气解开，我们可以一步一步来。</p>
                 </div>
               )}
               {conversation?.messages.map((m, index) => (
@@ -396,7 +401,7 @@ export function AiInspector({
             <Textarea
               ref={composer}
               aria-label="描述运维需求"
-              placeholder={connected ? '描述需求，或添加上下文' : '请先连接服务器'}
+              placeholder={connected ? '告诉我你想从哪里开始……' : '请先连接服务器'}
               value={draft.text}
               disabled={!connected || loading}
               maxLength={16384}

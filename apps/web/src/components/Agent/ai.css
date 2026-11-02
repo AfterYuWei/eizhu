@@ -26,6 +26,49 @@
   padding: 16px 20px 20px;
   overscroll-behavior: contain;
 }
+.ai-messages {
+  display: flex;
+  flex-direction: column;
+}
+.ai-welcome {
+  display: flex;
+  flex: 1 0 auto;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-height: 280px;
+  padding: 28px 4px;
+  text-align: center;
+}
+.ai-welcome-title {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.ai-welcome-title h2 {
+  margin: 0;
+  color: var(--fg);
+  font-size: 21px;
+  line-height: 1.3;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+}
+.ai-welcome-icon {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--green) 22%, var(--surface-panel));
+  color: var(--green);
+}
+.ai-welcome-subtitle {
+  margin: 10px 0 0;
+  color: var(--fg-2);
+  font-size: 13px;
+  line-height: 1.6;
+}
 .ai-empty {
   color: var(--fg-3);
   line-height: 1.8;
@@ -33,6 +76,7 @@
   font-size: 14px;
 }
 .ai-message {
+  flex: 0 0 auto;
   margin: 0 0 32px;
 }
 .ai-message.is-user {
