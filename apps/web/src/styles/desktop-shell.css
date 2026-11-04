@@ -25,6 +25,12 @@
   color: var(--fg-2);
   position: relative;
 }
+/* The separate Windows/Linux title row stays compact; workspace tabs retain
+   their own height. The window buttons must reach the top edge. */
+.desktop-shell:not(.is-mac) {
+  --shell-top-height: 40px;
+  --shell-header-height: 48px;
+}
 .dark .desktop-shell {
   --surface-app: #171717;
   --surface-panel: #202020;
@@ -181,8 +187,7 @@
 .desktop-shell > .shell-window-controls .tb-btn { width: var(--shell-window-button-width); height: 100%; }
 /* Windows/Linux reserve a separate top row for custom window controls. The
    workspace starts below it; macOS keeps its native controls beside the header. */
-.desktop-shell:not(.is-mac) .shell-workspace { margin-top: var(--shell-header-height); }
-.desktop-shell:not(.is-mac) > .shell-window-controls { top: var(--shell-outer-gap); height: var(--shell-header-height); }
+.desktop-shell:not(.is-mac) .shell-workspace { margin-top: calc(var(--shell-top-height) - var(--shell-outer-gap)); }
 .desktop-shell:not(.is-mac) .shell-window-controls-space { display: none; }
 .shell-window-controls-space { flex: 0 0 calc(var(--shell-window-controls-width) - var(--shell-outer-gap) - var(--shell-header-right-pad)); align-self: stretch; }
 .shell-workspace-body { display: flex; flex: 1; min-height: 0; min-width: 0; position: relative; overflow: hidden; }
@@ -200,7 +205,7 @@
 .shell-inspector { position: relative; flex-shrink: 0; display: flex; flex-direction: column; min-width: 0; max-width: calc(100% - 24px); min-height: 0; margin-left: var(--shell-outer-gap); border: 0; border-radius: var(--r-xl); overflow: hidden; background: var(--surface-panel); }
 .shell-inspector > .shell-resizer { position: absolute; left: 0; top: 0; bottom: 0; z-index: 5; }
 .shell-inspector.is-overlay { position: absolute; top: 0; right: 0; bottom: 0; z-index: 25; box-shadow: var(--shadow-overlay); }
-.desktop-shell:not(.is-mac) .shell-inspector { margin-top: var(--shell-header-height); }
+.desktop-shell:not(.is-mac) .shell-inspector { margin-top: calc(var(--shell-top-height) - var(--shell-outer-gap)); }
 .shell-inspector-heading { display: flex; flex-shrink: 0; align-items: center; justify-content: space-between; height: var(--shell-header-height); min-height: 48px; padding: 4px 8px 4px 12px; font-weight: 500; }
 .shell-inspector-switch { height: 30px; padding: 4px 7px; gap: 6px; border: 0; border-radius: var(--r-sm); background: transparent; color: var(--fg-2); font-size: 12px; font-weight: 400; }
 .shell-inspector-choices { flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: stretch; justify-content: center; gap: 8px; width: min(200px, calc(100% - 48px)); margin: 0 auto; padding-bottom: var(--shell-header-height); }
