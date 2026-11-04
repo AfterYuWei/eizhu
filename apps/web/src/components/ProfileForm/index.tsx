@@ -100,7 +100,7 @@ export function ProfileForm({ open, onOpenChange, profile, presetGroupId }: Prof
     const validateConnection = () => {
         const id = !form.host.trim() ? 'host' : !form.username.trim() ? 'username' : null;
         if (!id) return true;
-        changeTab('connection');
+        changeTab(id === 'host' ? 'connection' : 'auth');
         setError(id === 'host' ? '请填写主机' : '请填写用户名');
         requestAnimationFrame(() => formRef.current?.querySelector<HTMLInputElement>(`#${id}`)?.focus());
         return false;
@@ -345,14 +345,6 @@ export function ProfileForm({ open, onOpenChange, profile, presetGroupId }: Prof
             </div>
           </div>
 
-          <div className="pf-grid-2 pf-grid-equal">
-          <div className="pf-field">
-            <Label htmlFor="username" className="pf-label">
-              用户名
-            </Label>
-            <Input id="username" value={form.username} onChange={(event) => setForm({ ...form, username: event.target.value })} placeholder="例如：root" required disabled={isPasswordVault} className="pf-input-mono"/>
-          </div>
-
           <div className="pf-field">
             <Label htmlFor="profile-group" className="pf-label">分组</Label>
             <Select value={form.group_id || '__none__'} onValueChange={(value) => setForm({ ...form, group_id: value === '__none__' ? '' : value })}>
@@ -361,17 +353,24 @@ export function ProfileForm({ open, onOpenChange, profile, presetGroupId }: Prof
             </Select>
           </div>
 
-          </div>
               </div>
             </TabsContent>
             <TabsContent value="auth" forceMount hidden={activeTab !== 'auth'} data-profile-tab="auth" className="pf-panel">
               <div className="pf-group" role="group" aria-label="SSH 身份认证">
+          <div className="pf-grid-2 pf-grid-equal">
+          <div className="pf-field">
+            <Label htmlFor="username" className="pf-label">
+              用户名
+            </Label>
+            <Input id="username" value={form.username} onChange={(event) => setForm({ ...form, username: event.target.value })} placeholder="例如：root" required disabled={isPasswordVault} className="pf-input-mono"/>
+          </div>
           <div className="pf-field">
             <Label htmlFor="profile-auth" className="pf-label">认证方式</Label>
             <Select value={form.auth_type} onValueChange={handleAuthTypeChange}>
               <SelectTrigger id="profile-auth" className="w-full"><SelectValue placeholder="请选择"/></SelectTrigger>
               <SelectContent>{authOptions.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent>
             </Select>
+          </div>
           </div>
 
           {form.auth_type === 'vault' ? (<div className="pf-field" role="group" aria-labelledby="profile-vault-label">

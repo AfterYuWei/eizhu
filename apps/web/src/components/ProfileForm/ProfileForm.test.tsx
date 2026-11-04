@@ -34,9 +34,9 @@ afterEach(async () => { await act(async () => root.unmount()); host.remove(); vi
 
 it('跨页签保留草稿，从备注页提交完整连接与认证信息', async () => {
   await render()
-  await act(async () => { fill('host', 'server.example.test'); fill('username', 'deploy') })
+  await act(async () => fill('host', 'server.example.test'))
   await tab('身份认证')
-  await act(async () => fill('password', '测试密码'))
+  await act(async () => { fill('username', 'deploy'); fill('password', '测试密码') })
   await tab('代理与备注')
   await act(async () => fill('note', '测试备注'))
   await tab('基本连接')
@@ -59,7 +59,9 @@ it('隐藏页签漏填必填项时自动显示该页并聚焦第一个字段，�
   expect(document.querySelector('[role="alert"]')).toBeNull()
   await tab('代理与备注')
   await act(async () => { button('测试连接').click(); await new Promise(resolve => setTimeout(resolve, 10)) })
+  expect(button('身份认证').getAttribute('aria-selected')).toBe('true')
   expect(document.activeElement).toBe(input('username'))
+  expect(document.querySelector('[role="alert"]')?.textContent).toBe('请填写用户名')
   expect(profileApi.testNew).not.toHaveBeenCalled()
 })
 
@@ -85,16 +87,21 @@ it('代理端口无效时定位代理页，修正后可在任意页测试已有�
   expect(update).toHaveBeenCalledWith('server', expect.objectContaining({ password: '', proxy: expect.not.objectContaining({ password: expect.anything() }) }))
 })
 
-it('只输入空白的主机或用户名仍会定位基本连接页', async () => {
+it('只输入空白的主机或用户名会定位各自所属页签', async () => {
   await render()
-  await act(async () => { fill('host', '   '); fill('username', 'deploy') })
+  await act(async () => fill('host', '   '))
   await tab('身份认证')
+  await act(async () => fill('username', 'deploy'))
   await act(async () => { button('创建').click(); await new Promise(resolve => setTimeout(resolve, 10)) })
+  expect(button('基本连接').getAttribute('aria-selected')).toBe('true')
   expect(document.activeElement).toBe(input('host'))
   expect(create).not.toHaveBeenCalled()
-  await act(async () => { fill('host', 'server.example.test'); fill('username', '   ') })
+  await act(async () => fill('host', 'server.example.test'))
+  await tab('身份认证')
+  await act(async () => fill('username', '   '))
   await tab('代理与备注')
   await act(async () => { button('测试连接').click(); await new Promise(resolve => setTimeout(resolve, 10)) })
+  expect(button('身份认证').getAttribute('aria-selected')).toBe('true')
   expect(document.activeElement).toBe(input('username'))
   expect(profileApi.testNew).not.toHaveBeenCalled()
 })
