@@ -1,5 +1,5 @@
 import { workspaceGeneration } from '@/lib/workspaceScope'
-import { normalizeCommandError } from '@eizhu/contracts'
+import { normalizeCommandError, SFTP_TRANSFER_CHUNK_BYTES } from '@eizhu/contracts'
 import { bridge } from '@/lib/bridge'
 import type {
   TransferTask,
@@ -12,7 +12,7 @@ import type {
   SftpMoveResponse,
 } from '@/types/sftp'
 
-const IPC_CHUNK_BYTES = 512 * 1024
+const IPC_CHUNK_BYTES = SFTP_TRANSFER_CHUNK_BYTES
 
 /** Node.js SFTP session info. */
 export type { SftpSessionInfo } from '@eizhu/contracts/models/api'

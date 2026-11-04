@@ -74,6 +74,14 @@ export async function runSmoke(options: {
     console.error('EIZHU_SMOKE_BOOTSTRAP_STATE',JSON.stringify(state));throw error
   }
   step('renderer-ready')
+  if (process.argv.includes('--sftp-smoke')) {
+    const stage4 = await verifyStage4(window, options.runtime(), windows, root, options.assets)
+    assert.equal(stage4.passed, true)
+    const report = { platform: process.platform, arch: process.arch, packaged: app.isPackaged, stage4 }
+    await writeFile(join(root, 'sftp-smoke.json'), JSON.stringify(report, null, 2) + '\n')
+    console.log('EIZHU_SFTP_SMOKE_OK', JSON.stringify(report))
+    return
+  }
   const firstWindowMs = performance.now() - options.startedAt
   const health = await options.runtime().call('runtime.health')
   const crypto = await options.runtime().call('runtime.smoke')

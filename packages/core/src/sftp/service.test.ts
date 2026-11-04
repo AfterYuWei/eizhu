@@ -11,6 +11,7 @@ import type { SshService } from '../ssh/service.ts'
 import type { TransferTask, SftpUploadBeginResponse } from '@eizhu/contracts/models/sftp'
 import { hash } from './editor.ts'
 import { restoreCheckpoint, type Checkpoint, type CheckpointProgress } from './checkpoint.ts'
+import { SFTP_TRANSFER_CHUNK_BYTES } from '@eizhu/contracts'
 async function setup() {
   const root = await mkdtemp(join(tmpdir(), 'eizhu-transfer-')),
     saved = new Map<string, Checkpoint>(),
@@ -516,6 +517,95 @@ const beginUpload = (x: Awaited<ReturnType<typeof setup>>, name: string, size: n
     sessionId: x.session, name, destDir: x.dest, overwrite: false, size, lastModified: 1,
   }) as Promise<SftpUploadBeginResponse>
 
+test('预读仅领先一块，暂停等待在途读取并只保存已确认数据，重启可继续', async (t) => {
+  const x = await setup(), source = displayPath(join(x.root, 'large.bin'))
+  const open = FileEndpoint.prototype.open, writing = deferred(), releaseWrite = deferred(), releaseRead = deferred()
+  const reads: number[] = []
+  let inputClosed = false, paused = false, service = x.service
+  t.mock.method(FileEndpoint.prototype, 'open', async function (this: FileEndpoint, path: string, ...args: [boolean?, boolean?]) {
+    const handle = await open.call(this, path, ...args)
+    if (path === source && !args[0]) {
+      const read = handle.read, close = handle.close
+      handle.read = async (offset, length) => {
+        reads.push(offset)
+        if (offset === SFTP_TRANSFER_CHUNK_BYTES) await releaseRead.promise
+        return read(offset, length)
+      }
+      handle.close = async () => { inputClosed = true; await close() }
+    } else if (path.endsWith('.part') && args[0]) {
+      const write = handle.write
+      handle.write = async (offset, bytes) => {
+        if (offset === 0) { writing.resolve(); await releaseWrite.promise }
+        await write(offset, bytes)
+      }
+    }
+    return handle
+  })
+  try {
+    const bytes = Buffer.alloc(3 * SFTP_TRANSFER_CHUNK_BYTES + 17, 73)
+    await writeFile(nativePath(source), bytes)
+    const copied = await service.execute('sftp.transfer', {
+      sourceSessionId: x.session, targetSessionId: x.session, paths: [source], destDir: x.dest,
+      directoryMode: 'preserve', conflictResolution: 'ask',
+    }) as { tasks: TransferTask[] }
+    await writing.promise
+    assert.deepEqual(reads, [0, SFTP_TRANSFER_CHUNK_BYTES])
+    const pausing = service.execute('sftp.pauseTransfer', { taskId: copied.tasks[0].id })
+      .then((task) => { paused = true; return task as TransferTask })
+    releaseWrite.resolve()
+    await new Promise((resolve) => setImmediate(resolve))
+    assert.equal(paused, false)
+    assert.equal(inputClosed, false)
+    releaseRead.resolve()
+    const task = await pausing
+    assert.equal(task.status, 'paused')
+    assert.equal(task.confirmed_offset, SFTP_TRANSFER_CHUNK_BYTES)
+    assert.equal(inputClosed, true)
+    assert.deepEqual(reads, [0, SFTP_TRANSFER_CHUNK_BYTES])
+    await service.close()
+    service = x.make()
+    await service.execute('sftp.createSession', { profileId: 'local' })
+    await service.execute('sftp.resumeTransfer', { taskId: task.id })
+    assert.equal((await terminal(service, task.id)).status, 'completed')
+    assert.deepEqual(await readFile(join(x.root, 'dest', 'large.bin')), bytes)
+  } finally {
+    releaseRead.resolve(); releaseWrite.resolve()
+    await service.close()
+    await rm(x.root, { recursive: true, force: true })
+  }
+})
+
+test('预读提前失败时先确认当前块，失败不会提交目标或保存未写入偏移', async (t) => {
+  const x = await setup(), source = displayPath(join(x.root, 'large.bin'))
+  const open = FileEndpoint.prototype.open
+  t.mock.method(FileEndpoint.prototype, 'open', async function (this: FileEndpoint, path: string, ...args: [boolean?, boolean?]) {
+    const handle = await open.call(this, path, ...args)
+    if (path === source && !args[0]) {
+      const read = handle.read
+      handle.read = (offset, length) => offset === SFTP_TRANSFER_CHUNK_BYTES
+        ? Promise.reject(new Error('synthetic prefetch failure')) : read(offset, length)
+    }
+    return handle
+  })
+  try {
+    await writeFile(nativePath(source), Buffer.alloc(2 * SFTP_TRANSFER_CHUNK_BYTES + 17, 73))
+    const copied = await x.service.execute('sftp.transfer', {
+      sourceSessionId: x.session, targetSessionId: x.session, paths: [source], destDir: x.dest,
+      directoryMode: 'preserve', conflictResolution: 'ask',
+    }) as { tasks: TransferTask[] }
+    const task = await terminal(x.service, copied.tasks[0].id)
+    assert.equal(task.status, 'failed')
+    assert.equal(task.confirmed_offset, SFTP_TRANSFER_CHUNK_BYTES)
+    const files = await readdir(join(x.root, 'dest'))
+    assert.equal(files.length, 1)
+    assert.ok(files[0].endsWith('.part'))
+    assert.equal((await readFile(join(x.root, 'dest', files[0]))).length, SFTP_TRANSFER_CHUNK_BYTES)
+  } finally {
+    await x.service.close()
+    await rm(x.root, { recursive: true, force: true })
+  }
+})
+
 test('多块上传与复制完成时不再整文件回读，阶段事件强制送达', async (t) => {
   const x = await setup()
   const open = FileEndpoint.prototype.open
@@ -526,7 +616,7 @@ test('多块上传与复制完成时不再整文件回读，阶段事件强制�
     return h
   })
   try {
-    const block = Buffer.alloc(512 * 1024, 91), size = 8 * 1024 * 1024 + 17
+    const block = Buffer.alloc(SFTP_TRANSFER_CHUNK_BYTES, 91), size = 8 * 1024 * 1024 + 17
     const begin = await beginUpload(x, 'large.bin', size)
     for (let offset = 0, sequence = 0; offset < size; sequence++) {
       const data = block.subarray(0, Math.min(block.length, size - offset))

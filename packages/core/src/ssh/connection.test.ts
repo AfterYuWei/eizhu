@@ -6,7 +6,7 @@ import { failureOf } from '@eizhu/contracts'
 import { SshConnection } from './connection.ts'
 import type { ConnectionHop } from './plan.ts'
 
-const { Server, utils } = ssh2
+const { Server, Client, utils } = ssh2
 const key = utils.generateKeyPairSync('ed25519')
 const plan = (port: number): ConnectionHop[] => [
   {
@@ -63,7 +63,8 @@ test('refused TCP connections report the port failure before any host-key or aut
 })
 
 for (const scenario of ['success', 'authentication', 'hostkey'] as const) {
-  test(`SSH stages and sanitized diagnostics follow the real ${scenario} handshake`, async () => {
+  test(`SSH stages and sanitized diagnostics follow the real ${scenario} handshake`, async (t) => {
+    const noDelay = t.mock.method(Client.prototype, 'setNoDelay')
     const server = new Server({ hostKeys: [key.private] }, (client) => {
       client.on('error', () => {})
       client.on('authentication', (context) => {
@@ -81,7 +82,11 @@ for (const scenario of ['success', 'authentication', 'hostkey'] as const) {
         disconnected: () => {},
         stage: (stage, message) => logs.push({ stage, message }),
       })
-      if (scenario === 'success') await pending
+      if (scenario === 'success') {
+        await pending
+        assert.equal(noDelay.mock.calls.length, 1)
+        assert.deepEqual(noDelay.mock.calls[0].arguments, [true])
+      }
       else
         await assert.rejects(
           pending,

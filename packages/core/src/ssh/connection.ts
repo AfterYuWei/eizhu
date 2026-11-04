@@ -111,6 +111,9 @@ export class SshConnection {
           return
         }
         client.once('ready', () => {
+          // SFTP sends request bursts separated by ACK/checkpoint barriers.
+          // Flush the final small packet instead of waiting for a delayed TCP ACK.
+          client.setNoDelay(true)
           cleanup()
           resolve()
         })

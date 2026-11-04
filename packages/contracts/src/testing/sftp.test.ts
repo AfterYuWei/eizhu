@@ -1,15 +1,22 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { sftp, sftpEventSchema } from '../sftp.ts'
+import { sftp, sftpEventSchema, SFTP_TRANSFER_CHUNK_BYTES } from '../sftp.ts'
 test('文件 IPC 拒绝越界分块、NUL、遍历文件名及伪造事件', () => {
   assert.equal(
     sftp['sftp.uploadChunk'].input.safeParse({
       uploadId: 'x',
       sequence: 0,
-      data: new Uint8Array(512 * 1024 + 1),
+      data: new Uint8Array(SFTP_TRANSFER_CHUNK_BYTES + 1),
     }).success,
     false,
   )
+  assert.equal(sftp['sftp.uploadChunk'].input.safeParse({
+    uploadId: 'x', sequence: 0, data: new Uint8Array(SFTP_TRANSFER_CHUNK_BYTES),
+  }).success, true)
+  assert.equal(sftp['sftp.downloadChunk'].input.safeParse({
+    taskId: 'x', offset: 0, maxBytes: SFTP_TRANSFER_CHUNK_BYTES + 1,
+  }).success, false)
+  assert.equal(sftp['sftp.downloadChunk'].output.safeParse(new Uint8Array(SFTP_TRANSFER_CHUNK_BYTES + 1)).success, false)
   assert.equal(
     sftp['sftp.uploadBegin'].input.safeParse({
       sessionId: 'x',

@@ -14,6 +14,7 @@ import { displayPath, nativePath } from '@eizhu/core/sftp/endpoint'
 import type { RuntimeHost } from './runtime-host.ts'
 import type { Windows } from './windows.ts'
 import { verifyEditorLayout } from './editor-layout-smoke.ts'
+import { SFTP_TRANSFER_CHUNK_BYTES } from '@eizhu/contracts'
 
 function legacyFiles(sftp: SFTPWrapper) {
   const files = new Map<string, Buffer>([['/legacy.txt', Buffer.from('原文件必须保留')]])
@@ -172,14 +173,14 @@ export async function verifyStage4(
     }
     throw new Error('Stage4 wait timeout')
   }
-  const completed = async (id: string) =>
+  const completed = async (id: string, timeout = 15000) =>
     wait(async () => {
       const t = (
         await call<Array<{ id: string; status: string; error_message?: string }>>('sftp.listTransfers', {})
       ).find((t) => t.id === id)
       if (t?.status === 'failed') throw new Error(t.error_message)
       return t?.status === 'completed' ? true : undefined
-    })
+    }, timeout)
   try {
     const profile = await call<{ id: string }>('profile.create', {
       request: {
@@ -345,7 +346,7 @@ export async function verifyStage4(
       size: largeBytes, lastModified: 42,
     })
     await window.webContents.executeJavaScript(`(async()=>{
-      const data=new Uint8Array(524288).fill(73);
+      const data=new Uint8Array(${SFTP_TRANSFER_CHUNK_BYTES}).fill(73);
       for(let offset=0,sequence=0;offset<${largeBytes};sequence++){
         const chunk=data.subarray(0,Math.min(data.length,${largeBytes}-offset));
         await window.eizhu.sftp.uploadChunk({uploadId:${JSON.stringify(large.upload_id)},sequence,data:chunk});
@@ -354,19 +355,41 @@ export async function verifyStage4(
     })()`)
     const finishStarted = Date.now()
     await call('sftp.uploadFinish', { uploadId: large.upload_id })
-    await completed(large.tasks[0].id)
+    await completed(large.tasks[0].id, 120000)
     const finalizeMs = Date.now() - finishStarted
     const largePath = join(remote, 'dest', 'large-upload.bin')
     assert.equal((await stat(largePath)).size, largeBytes)
     const actualHash = createHash('sha256')
     for await (const block of createReadStream(largePath)) actualHash.update(block)
     const expectedHash = createHash('sha256')
-    const expectedBlock = Buffer.alloc(512 * 1024, 73)
+    const expectedBlock = Buffer.alloc(SFTP_TRANSFER_CHUNK_BYTES, 73)
     for (let offset = 0; offset < largeBytes; offset += expectedBlock.length)
       expectedHash.update(expectedBlock.subarray(0, Math.min(expectedBlock.length, largeBytes - offset)))
     assert.equal(actualHash.digest('hex'), expectedHash.digest('hex'))
     const largeUploadMs = Date.now() - largeStarted
     step(`large-upload-${largeBytes}-committed`)
+    const largeTransfers: Array<{ direction: string; bytes: number; elapsedMs: number; sha256: boolean }> = []
+    for (const direction of ['download', 'upload'] as const) {
+      const started = Date.now()
+      const copied = await call<{ tasks: Array<{ id: string }> }>('sftp.transfer', {
+        sourceSessionId: direction === 'download' ? sessionId : localId,
+        targetSessionId: direction === 'download' ? localId : sessionId,
+        paths: [direction === 'download' ? displayPath(largePath) : localPath + '/large-upload.bin'],
+        destDir: direction === 'download' ? localPath : dest + '/renamed',
+        conflictResolution: 'ask', directoryMode: 'preserve', background: true,
+      })
+      await completed(copied.tasks[0].id, 120000)
+      const elapsedMs = Date.now() - started
+      const copiedPath = direction === 'download' ? join(local, 'large-upload.bin') : join(remote, 'dest', 'renamed', 'large-upload.bin')
+      const digest = createHash('sha256')
+      for await (const block of createReadStream(copiedPath)) digest.update(block)
+      const reference = createHash('sha256')
+      for (let offset = 0; offset < largeBytes; offset += expectedBlock.length)
+        reference.update(expectedBlock.subarray(0, Math.min(expectedBlock.length, largeBytes - offset)))
+      assert.equal(digest.digest('hex'), reference.digest('hex'))
+      largeTransfers.push({ direction, bytes: largeBytes, elapsedMs, sha256: true })
+      step(`large-${direction}-${largeBytes}-committed`)
+    }
     const download = await call<{ tasks: Array<{ id: string }> }>('sftp.download', {
       sessionId,
       paths: [source + '/large.bin'],
@@ -375,7 +398,7 @@ export async function verifyStage4(
     const staged = await runtime.call<{ path: string }>('sftp.downloadPath', { taskId: download.tasks[0].id })
     assert.equal((await readFile(nativePath(staged.path))).length, 2 * 1024 * 1024 + 17)
     const pulled = await window.webContents.executeJavaScript(
-      `(async()=>{let offset=0;while(true){const b=await window.eizhu.sftp.downloadChunk({taskId:${JSON.stringify(download.tasks[0].id)},offset,maxBytes:524288});if(!b.length)break;offset+=b.length}return offset})()`,
+      `(async()=>{let offset=0;while(true){const b=await window.eizhu.sftp.downloadChunk({taskId:${JSON.stringify(download.tasks[0].id)},offset,maxBytes:${SFTP_TRANSFER_CHUNK_BYTES}});if(!b.length)break;offset+=b.length}return offset})()`,
     )
     assert.equal(pulled, 2 * 1024 * 1024 + 17)
     const transfer = await call<{ tasks: Array<{ id: string }> }>('sftp.transfer', {
@@ -601,6 +624,7 @@ export async function verifyStage4(
       hostKeyConfirmation: true,
       streaming: true,
       largeUpload: { bytes: largeBytes, elapsedMs: largeUploadMs, finalizeMs, sha256: true },
+      largeTransfers,
       resume: true,
       relay: true,
       tarGz: true,

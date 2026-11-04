@@ -1,7 +1,7 @@
 import { Readable } from 'node:stream'
 import { createGzip } from 'node:zlib'
 import { posix } from 'node:path'
-import { fail } from '@eizhu/contracts'
+import { fail, SFTP_TRANSFER_CHUNK_BYTES } from '@eizhu/contracts'
 import { FileEndpoint } from './endpoint.ts'
 import type { FileStat } from './endpoint.ts'
 export interface ArchiveEntry {
@@ -50,7 +50,7 @@ export async function* fileBytes(
   try {
     while (offset < item.size) {
       signal?.throwIfAborted()
-      const b = await h.read(offset, Math.min(512 * 1024, item.size - offset))
+      const b = await h.read(offset, Math.min(SFTP_TRANSFER_CHUNK_BYTES, item.size - offset))
       if (!b.length) fail('SOURCE_CHANGED', '源文件大小发生变化')
       offset += b.length
       yield b

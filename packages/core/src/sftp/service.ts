@@ -3,7 +3,7 @@ import type { Hash } from 'node:crypto'
 import { posix, join } from 'node:path'
 import { homedir } from 'node:os'
 import { mkdir } from 'node:fs/promises'
-import { fail, failureOf, sftp } from '@eizhu/contracts'
+import { fail, failureOf, sftp, SFTP_TRANSFER_CHUNK_BYTES } from '@eizhu/contracts'
 import type { RuntimeContext } from '@eizhu/contracts'
 import type { SftpSessionInfo } from '@eizhu/contracts/models/api'
 import type { TransferTask, SftpTreeNode, SftpConflictInfo } from '@eizhu/contracts/models/sftp'
@@ -580,6 +580,7 @@ export class SftpService {
       } else if (stage) fail('CHECKPOINT_CHANGED', '暂存文件状态与检查点不一致')
       const input = await source.open(f.source)
       let output: FileHandle | undefined
+      let reading: Promise<Buffer> | undefined
       const digest = createHash('sha256')
       try {
         output = await target.open(f.temporary, true, !f.offset)
@@ -587,7 +588,7 @@ export class SftpService {
           let p = 0
           while (p < f.offset) {
             job.controller.signal.throwIfAborted()
-            const b = await input.read(p, Math.min(512 * 1024, f.offset - p))
+            const b = await input.read(p, Math.min(SFTP_TRANSFER_CHUNK_BYTES, f.offset - p))
             if (!b.length) fail('SOURCE_CHANGED', '源文件发生变化')
             digest.update(b)
             p += b.length
@@ -596,10 +597,20 @@ export class SftpService {
             fail('CHECKPOINT_CHANGED', '源文件与检查点不一致，请重新开始')
         }
         await this.phase(job, 'transferring')
+        if (f.offset < f.stat.size)
+          reading = input.read(f.offset, Math.min(SFTP_TRANSFER_CHUNK_BYTES, f.stat.size - f.offset))
         while (f.offset < f.stat.size) {
           job.controller.signal.throwIfAborted()
-          const b = await input.read(f.offset, Math.min(512 * 1024, f.stat.size - f.offset))
+          const b = await reading!
+          reading = undefined
           if (!b.length) fail('SOURCE_CHANGED', '源文件已截断')
+          const nextOffset = f.offset + b.length
+          if (nextOffset < f.stat.size) {
+            reading = input.read(nextOffset, Math.min(SFTP_TRANSFER_CHUNK_BYTES, f.stat.size - nextOffset))
+            // Prefetch is bounded to one block. Observe failures immediately;
+            // the next iteration reports them after the current ACK/checkpoint.
+            void reading.catch(() => undefined)
+          }
           await output.write(f.offset, b)
           await output.sync()
           digest.update(b)
@@ -611,6 +622,8 @@ export class SftpService {
         }
         await this.phase(job, 'verifying')
       } finally {
+        // Pause/error must drain prefetched requests before closing the handle.
+        await reading?.catch(() => undefined)
         await Promise.allSettled([input.close(), output?.close()]).then((closed) => {
           for (const result of closed) if (result.status === 'rejected') throw result.reason
         })
@@ -1123,7 +1136,7 @@ export class SftpService {
         try {
           let offset = 0
           while (offset < f.offset) {
-            const b = await h.read(offset, Math.min(512 * 1024, f.offset - offset))
+            const b = await h.read(offset, Math.min(SFTP_TRANSFER_CHUNK_BYTES, f.offset - offset))
             if (!b.length) fail('CHECKPOINT_CHANGED', '暂存文件已截断')
             j.digest.update(b)
             offset += b.length

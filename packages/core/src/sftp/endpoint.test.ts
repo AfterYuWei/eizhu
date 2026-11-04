@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { EventEmitter } from 'node:events'
 import type { SFTPWrapper } from 'ssh2'
 import { FileEndpoint } from './endpoint.ts'
+import { SFTP_TRANSFER_CHUNK_BYTES } from '@eizhu/contracts'
 
 class Channel extends EventEmitter {
   position = 0
@@ -49,7 +50,7 @@ test('远端 CLOSE 没有响应时 20 秒超时并关闭通道，禁止挂起到
   await endpoint.close()
 })
 
-test('写入使用 16 个有界并发包，乱序确认或单包失败都等待整批结束', async (t) => {
+test('写入最多 64 个并发包，单包失败等待整批结束且不发送后续窗口', async (t) => {
   const channel = new Channel(), endpoint = new FileEndpoint(channel as unknown as SFTPWrapper)
   const requests: Array<{ offset: number; length: number; done: (error?: Error) => void }> = []
   t.mock.method(channel, 'write', (_h: Buffer, _b: Buffer, _off: number, length: number, offset: number, done: (error?: Error) => void) => {
@@ -57,23 +58,24 @@ test('写入使用 16 个有界并发包，乱序确认或单包失败都等待�
   })
   const handle = await endpoint.open('/large.part', true, true)
   let settled = false
-  const writing = handle.write(0, Buffer.alloc(512 * 1024)).finally(() => { settled = true })
+  const writing = handle.write(0, Buffer.alloc(SFTP_TRANSFER_CHUNK_BYTES + 17)).finally(() => { settled = true })
   const rejected = assert.rejects(writing, /synthetic failure/)
-  assert.equal(requests.length, 16)
+  assert.equal(requests.length, 64)
   assert.ok(requests.every((r, i) => r.offset === i * 32768 && r.length === 32768))
-  requests[15].done(new Error('synthetic failure'))
+  requests[63].done(new Error('synthetic failure'))
   await Promise.resolve()
   assert.equal(settled, false)
-  for (const request of requests.slice(0, 15).reverse()) request.done()
+  for (const request of requests.slice(0, 63).reverse()) request.done()
   await rejected
+  assert.equal(requests.length, 64)
   const closing = handle.close()
   channel.closeAck!()
   await closing
   await endpoint.close()
 })
 
-test('并发读取处理短读、乱序响应和非整块 EOF，不丢失字节', async () => {
-  const bytes = Buffer.alloc(512 * 1024 - 17)
+test('并发读取处理短读和非整块 EOF，单次分配不超过 2 MiB', async () => {
+  const bytes = Buffer.alloc(SFTP_TRANSFER_CHUNK_BYTES + 17)
   for (let i = 0; i < bytes.length; i++) bytes[i] = i % 251
   class Reader extends Channel {
     lstat(_path: string, done: (error: null, attrs: unknown) => void) {
@@ -87,8 +89,9 @@ test('并发读取处理短读、乱序响应和非整块 EOF，不丢失字节'
   }
   const channel = new Reader(), endpoint = new FileEndpoint(channel as unknown as SFTPWrapper)
   const handle = await endpoint.open('/large.bin')
-  assert.deepEqual(await handle.read(0, 512 * 1024), bytes)
-  assert.equal((await handle.read(bytes.length, 512 * 1024)).length, 0)
+  assert.deepEqual(await handle.read(0, 2 * SFTP_TRANSFER_CHUNK_BYTES), bytes.subarray(0, SFTP_TRANSFER_CHUNK_BYTES))
+  assert.deepEqual(await handle.read(SFTP_TRANSFER_CHUNK_BYTES, SFTP_TRANSFER_CHUNK_BYTES), bytes.subarray(SFTP_TRANSFER_CHUNK_BYTES))
+  assert.equal((await handle.read(bytes.length, SFTP_TRANSFER_CHUNK_BYTES)).length, 0)
   const closing = handle.close()
   channel.closeAck!()
   await closing

@@ -18,6 +18,8 @@
     "desktop:build": "node scripts/build-desktop.mjs",
     "desktop:package": "node scripts/package-desktop.mjs",
     "desktop:smoke": "node scripts/smoke-desktop.mjs",
+    "desktop:smoke:sftp": "node scripts/smoke-sftp.mjs",
+    "benchmark:sftp": "node scripts/benchmark-sftp.mjs",
     "desktop:stress": "node scripts/smoke-desktop.mjs --duration=60000",
     "check": "tsc -p tsconfig.node.json --noEmit && npm run check --workspace @eizhu/web",
     "lint": "eslint apps/desktop packages scripts/*.mjs && npm run lint --workspace @eizhu/web",

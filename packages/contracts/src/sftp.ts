@@ -1,5 +1,7 @@
 import { z } from 'zod'
 import { authPromptSchema } from './ssh.ts'
+// One bounded transfer block: 64 SFTP packets, shared by IPC and file I/O.
+export const SFTP_TRANSFER_CHUNK_BYTES = 2 * 1024 * 1024
 const id = z.string().min(1).max(160)
 export const filePathSchema = z
   .string()
@@ -172,7 +174,7 @@ export const sftp = {
   'sftp.uploadChunk': {
     input: z.strictObject({
       uploadId: id,
-      data: z.instanceof(Uint8Array).refine((v) => v.byteLength > 0 && v.byteLength <= 512 * 1024),
+      data: z.instanceof(Uint8Array).refine((v) => v.byteLength > 0 && v.byteLength <= SFTP_TRANSFER_CHUNK_BYTES),
       sequence: uint,
     }),
     output: done,
@@ -214,8 +216,8 @@ export const sftp = {
   },
   'sftp.exportDownload': { input: task, output: z.string().nullable() },
   'sftp.downloadChunk': {
-    input: task.extend({ offset: uint, maxBytes: uint.min(1).max(512 * 1024) }),
-    output: z.instanceof(Uint8Array).refine((v) => v.byteLength <= 512 * 1024),
+    input: task.extend({ offset: uint, maxBytes: uint.min(1).max(SFTP_TRANSFER_CHUNK_BYTES) }),
+    output: z.instanceof(Uint8Array).refine((v) => v.byteLength <= SFTP_TRANSFER_CHUNK_BYTES),
   },
   'sftp.downloadClose': { input: task, output: done },
   'sftp.readFile': { input: at, output: fileReadSchema },

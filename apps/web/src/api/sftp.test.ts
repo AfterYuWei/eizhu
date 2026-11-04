@@ -20,6 +20,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { sftpApi } from './sftp'
 import { setWorkspaceGeneration } from '@/lib/workspaceScope'
+import { SFTP_TRANSFER_CHUNK_BYTES } from '@eizhu/contracts'
 
 afterEach(() => {
   invoke.mockReset()
@@ -67,7 +68,7 @@ describe('sftpApi', () => {
   })
 
   it('上传逐块发送并等待 Node.js 确认，不读取完整 ArrayBuffer', async () => {
-    const bytes = new Uint8Array(1024 * 1024 + 7).fill(3)
+    const bytes = new Uint8Array(2 * SFTP_TRANSFER_CHUNK_BYTES + 7).fill(3)
     const file = new File([bytes], '测试.bin')
     const arrayBuffer = vi.fn(() => {
       throw new Error('不应整文件读取')
@@ -100,7 +101,7 @@ describe('sftpApi', () => {
     expect(arrayBuffer).not.toHaveBeenCalled()
     const chunks = invoke.mock.calls.filter(([command]) => command === 'sftp.uploadChunk')
     expect(chunks).toHaveLength(3)
-    expect(chunks.every(([, chunk]) => (chunk.data as Uint8Array).byteLength <= 512 * 1024)).toBe(true)
+    expect(chunks.every(([, chunk]) => (chunk.data as Uint8Array).byteLength <= SFTP_TRANSFER_CHUNK_BYTES)).toBe(true)
     expect(chunks[0][1].uploadId).toBe('ul-1')
   })
 
@@ -124,12 +125,12 @@ describe('sftpApi', () => {
     expect(actual).toEqual([...expected])
     const pulls = invoke.mock.calls.filter(([command]) => command === 'sftp.downloadChunk')
     expect(pulls.map(([, args]) => args.offset)).toEqual([0, 2, 4, 5])
-    expect(pulls.every(([, args]) => args.maxBytes === 512 * 1024)).toBe(true)
+    expect(pulls.every(([, args]) => args.maxBytes === SFTP_TRANSFER_CHUNK_BYTES)).toBe(true)
     expect(invoke).toHaveBeenCalledWith('sftp.downloadClose', { taskId: 'tx-3' })
   })
 
   it('合并浏览器小块，等待写入确认后才发下一块或提交', async () => {
-    const bytes = Uint8Array.from({ length: 1024 * 1024 + 7 }, (_, index) => index % 251)
+    const bytes = Uint8Array.from({ length: 2 * SFTP_TRANSFER_CHUNK_BYTES + 7 }, (_, index) => index % 251)
     const file = new File([bytes], 'large.bin')
     Object.defineProperty(file, 'stream', {
       value: () =>
@@ -160,7 +161,7 @@ describe('sftpApi', () => {
     expect(invoke.mock.calls.some(([name]) => name === 'sftp.uploadFinish')).toBe(false)
     acknowledge()
     await upload
-    expect(sent.map((chunk) => chunk.length)).toEqual([512 * 1024, 512 * 1024, 7])
+    expect(sent.map((chunk) => chunk.length)).toEqual([SFTP_TRANSFER_CHUNK_BYTES, SFTP_TRANSFER_CHUNK_BYTES, 7])
     const actual = new Uint8Array(bytes.length)
     let offset = 0
     for (const chunk of sent) {

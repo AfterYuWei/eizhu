@@ -2,7 +2,7 @@ import * as fs from 'node:fs/promises'
 import { constants } from 'node:fs'
 import { posix, win32, resolve, dirname, join, sep } from 'node:path'
 import type { SFTPWrapper, Stats, FileEntry, Attributes } from 'ssh2'
-import { DesktopError, fail } from '@eizhu/contracts'
+import { DesktopError, fail, SFTP_TRANSFER_CHUNK_BYTES } from '@eizhu/contracts'
 import type { SftpEntry } from '@eizhu/contracts/models/sftp'
 
 export interface FileStat {
@@ -19,8 +19,8 @@ export interface FileHandle {
   close(): Promise<void>
   sync(): Promise<void>
 }
-// SFTP supports multiple outstanding requests. Keep a bounded 512 KiB window
-// with 32 KiB packets rather than waiting one network round trip per packet.
+// Keep 32 KiB packets for server compatibility, with at most 64 outstanding
+// requests (2 MiB) per read/write instead of a 16-request stop-and-wait window.
 const PACKET_BYTES = 32 * 1024
 async function settle<T>(requests: Promise<T>[]): Promise<T[]> {
   const results = await Promise.allSettled(requests)
@@ -268,7 +268,7 @@ export class FileEndpoint {
     let closed: Promise<void> | undefined
     const handle: FileHandle = {
       read: async (offset, length) => {
-        const buffer = Buffer.alloc(Math.min(length, 512 * 1024))
+        const buffer = Buffer.alloc(Math.min(length, SFTP_TRANSFER_CHUNK_BYTES))
         let n: number
         if (channel) {
           const requests: Promise<number>[] = []
@@ -303,8 +303,8 @@ export class FileEndpoint {
       write: async (offset, bytes) => {
         const buffer = Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength)
         if (channel) {
-          for (let window = 0; window < buffer.length; window += 512 * 1024) {
-            const end = Math.min(window + 512 * 1024, buffer.length)
+          for (let window = 0; window < buffer.length; window += SFTP_TRANSFER_CHUNK_BYTES) {
+            const end = Math.min(window + SFTP_TRANSFER_CHUNK_BYTES, buffer.length)
             const requests: Promise<void>[] = []
             for (let start = window; start < end; start += PACKET_BYTES) {
               const length = Math.min(PACKET_BYTES, end - start)
