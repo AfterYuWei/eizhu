@@ -23,6 +23,21 @@ beforeEach(async () => {
 })
 afterEach(resetWorkspaceView)
 
+it('端口映射是单例工具页面，不创建 SSH 会话，关闭返回原终端或连接首页', async () => {
+  const id = useSessionStore.getState().openDraftTab()
+  const tabs = useSessionStore.getState().tabs
+  useWorkspaceViewStore.getState().openPortMapping()
+  useWorkspaceViewStore.getState().openPortMapping()
+  expect(useWorkspaceViewStore.getState()).toMatchObject({ activePage: 'port-mapping', portMappingOpened: true })
+  expect(useSessionStore.getState().tabs).toBe(tabs)
+  useWorkspaceViewStore.getState().closePortMapping()
+  expect(useSessionStore.getState().activeTabId).toBe(id)
+  expect(useWorkspaceViewStore.getState()).toMatchObject({ activePage: 'terminal', portMappingOpened: false })
+  useWorkspaceViewStore.getState().openPortMapping()
+  await resetWorkspaceView()
+  expect(useWorkspaceViewStore.getState()).toMatchObject({ activePage: 'terminal', portMappingOpened: false })
+})
+
 it('两个工具各自复用当前空间的页面，普通导航不改变内部连接、目录或选择', async () => {
   const id = useSessionStore.getState().openDraftTab()
   await useWorkspaceViewStore.getState().openSftp('p', '/work')

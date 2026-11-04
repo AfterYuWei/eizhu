@@ -50,6 +50,32 @@ const render = async (tabs: SessionTab[], activeTabId = tabs[0]?.id ?? null) => 
 const buttons = () => [...host.querySelectorAll<HTMLButtonElement>('[role="tab"]')]
 const key = async (button: HTMLElement, value: string) => act(async () => button.dispatchEvent(new KeyboardEvent('keydown', { key: value, bubbles: true, cancelable: true })))
 
+it('端口映射标签只有一个且排在终端之后，参与键盘切换，关闭后恢复终端焦点', async () => {
+  await render([terminal('a'), terminal('b')], 'b')
+  await act(async () => { useWorkspaceViewStore.getState().openPortMapping(); useWorkspaceViewStore.getState().openPortMapping() })
+  expect(buttons()).toHaveLength(3)
+  expect(buttons()[2].textContent).toBe('端口映射')
+  expect(buttons().map((b) => b.tabIndex)).toEqual([-1, -1, 0])
+  expect(buttons()[2].getAttribute('aria-controls')).toBe('workspace-port-mapping')
+  await key(buttons()[2], 'Home')
+  expect(document.activeElement).toBe(buttons()[0])
+  await key(buttons()[0], 'End')
+  expect(document.activeElement).toBe(buttons()[2])
+  expect(useWorkspaceViewStore.getState().activePage).toBe('port-mapping')
+  await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="关闭端口映射页面"]')!.click())
+  expect(buttons()).toHaveLength(2)
+  expect(document.activeElement).toBe(buttons()[0])
+  expect(useSessionStore.getState().tabs).toHaveLength(2)
+})
+
+it('无终端时端口映射可关闭，焦点返回新建连接入口', async () => {
+  await render([])
+  await act(async () => useWorkspaceViewStore.getState().openPortMapping())
+  await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="关闭端口映射页面"]')!.click())
+  expect(buttons()).toHaveLength(0)
+  expect(document.activeElement).toBe(host.querySelector('.shell-tab-add'))
+})
+
 it('SSH 标签仅显示延迟色点或状态图标，完整状态保留在无障碍名称中，草稿不显示连接信息', async () => {
   await render([
     terminal('a', { latency: 32 }), terminal('b', { latency: 0 }), terminal('c'),

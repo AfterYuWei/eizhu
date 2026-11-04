@@ -579,12 +579,12 @@ export async function verifyStage4(
     const inFlight = await call<{ upload_id: string; tasks: Array<{ id: string }> }>('sftp.uploadBegin', {
       sessionId: uiSession.id, name: 'navigation-inflight.txt', destDir: remote, size: 6, overwrite: false, lastModified: 42,
     })
-    await window.webContents.executeJavaScript(`window.__stage4Sftp=document.querySelector('.sftp-root');document.querySelectorAll('.shell-primary-nav > button')[2].click()`)
+    await window.webContents.executeJavaScript(`window.__stage4Sftp=document.querySelector('.sftp-root');document.querySelector('.shell-primary-nav [aria-controls="workspace-vault"]').click()`)
     await wait(async () => (await window.webContents.executeJavaScript(`document.querySelector('#workspace-sftp').hidden`)) ? true : undefined)
     await window.webContents.executeJavaScript(`document.dispatchEvent(new KeyboardEvent('keydown',{key:'w',ctrlKey:true,shiftKey:true,bubbles:true,cancelable:true}));document.querySelectorAll('.shell-primary-nav > button')[1].click()`)
     await wait(async () => (await window.webContents.executeJavaScript(`!document.querySelector('#workspace-sftp').hidden`)) ? true : undefined)
     assert.equal(await window.webContents.executeJavaScript(`document.querySelector('.sftp-root')===window.__stage4Sftp&&document.querySelectorAll('.sftp-root').length===1&&!document.querySelector('#workspace-sftp').hidden`), true)
-    assert.equal(await window.webContents.executeJavaScript(`document.querySelectorAll('.shell-tab-list [role="tab"]').length`), 0)
+    assert.equal(await window.webContents.executeJavaScript(`document.querySelectorAll('.shell-workspace-tabs .shell-tab-list [role="tab"]').length`), 0)
     const reopenedSessions = await call<Array<{ id: string }>>('sftp.listSessions')
     assert.deepEqual(reopenedSessions.map((session) => session.id).sort(), fileSessions.map((session) => session.id).sort())
     await window.webContents.executeJavaScript(`window.eizhu.sftp.uploadChunk({uploadId:${JSON.stringify(inFlight.upload_id)},sequence:0,data:new TextEncoder().encode('123456')})`)
@@ -592,7 +592,7 @@ export async function verifyStage4(
     await completed(inFlight.tasks[0].id)
     assert.equal(await readFile(join(remote, 'navigation-inflight.txt'), 'utf8'), '123456')
     // 普通导航保持连接；烟测结束时通过内部断开按钮释放合成服务器。
-    await window.webContents.executeJavaScript(`document.querySelectorAll('.sftp-ptab-x').forEach(button=>button.click());document.querySelector('.shell-tab-add').click();delete window.__stage4Sftp`)
+    await window.webContents.executeJavaScript(`document.querySelectorAll('.sftp-ptab .shell-tab-close').forEach(button=>button.click());document.querySelector('.shell-tab-add').click();delete window.__stage4Sftp`)
     await wait(async () => (await window.webContents.executeJavaScript(`document.querySelector('#workspace-sftp').hidden`)) ? true : undefined)
     await window.webContents.executeJavaScript(`document.querySelector('.shell-tab-close').click()`)
     step('sftp-ui-captured')

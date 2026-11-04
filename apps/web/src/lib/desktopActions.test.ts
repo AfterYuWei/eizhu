@@ -29,6 +29,16 @@ it('新建连接创建终端标签，SFTP 使用独立页面', async () => {
   expect(useSessionStore.getState().tabs).toHaveLength(1)
   expect(useWorkspaceViewStore.getState().activePage).toBe('sftp')
 })
+it('端口映射沿用快捷键，关闭当前页面不关闭后台终端', async () => {
+  const id = useSessionStore.getState().openDraftTab()
+  expect(shortcutAction({ key: 'L', ctrlKey: true, metaKey: false, shiftKey: true, altKey: false, isComposing: false })).toBe('tunnels')
+  await executeDesktopAction('tunnels')
+  await executeDesktopAction('tunnels')
+  expect(useWorkspaceViewStore.getState().activePage).toBe('port-mapping')
+  await executeDesktopAction('close')
+  expect(useWorkspaceViewStore.getState()).toMatchObject({ activePage: 'terminal', portMappingOpened: false })
+  expect(useSessionStore.getState().tabs.map((tab) => tab.id)).toEqual([id])
+})
 it('SSH command quotes operands, omits secrets and flags incomplete routing', () => {
   const result = sshCommand({ host: "h'; touch /tmp/injected", username: '中文', port: 2222, proxy: { type: 'jump' }, options: '' })
   expect(result.command).toBe("ssh -p 2222 -l '中文' -- 'h'\\''; touch /tmp/injected'")

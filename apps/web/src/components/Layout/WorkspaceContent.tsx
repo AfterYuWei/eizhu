@@ -3,14 +3,16 @@ import { lazy, Suspense } from 'react'
 import { TerminalView } from '@/components/Terminal'
 import { useSessionStore } from '@/store/session'
 import { useWorkspaceViewStore } from '@/store/workspaceView'
+import { workspaceGeneration } from '@/lib/workspaceScope'
 import { ConnectionHome } from './ConnectionHome'
 
 const SftpView = lazy(() => import('@/components/Sftp/SftpView').then((m) => ({ default: m.SftpView })))
 const VaultView = lazy(() => import('@/components/Vault/VaultView').then((m) => ({ default: m.VaultView })))
+const PortMappingView = lazy(() => import('@/components/PortMapping/PortMappingView').then((m) => ({ default: m.PortMappingView })))
 
 export function WorkspaceContent({ onAddServer }: { onAddServer: () => void }) {
   const hasTerminals = useSessionStore((state) => state.tabs.length > 0)
-  const { activePage, sftpStore, vaultOpened } = useWorkspaceViewStore()
+  const { activePage, sftpStore, vaultOpened, portMappingOpened } = useWorkspaceViewStore()
   return <>
     <div className="shell-page" hidden={activePage !== 'terminal'} inert={activePage !== 'terminal'}>
       {hasTerminals ? <TerminalView /> : <ConnectionHome onAddServer={onAddServer} />}
@@ -20,6 +22,9 @@ export function WorkspaceContent({ onAddServer }: { onAddServer: () => void }) {
     </section>}
     {vaultOpened && <section id="workspace-vault" className="shell-page" aria-label="密钥管理" hidden={activePage !== 'vault'} inert={activePage !== 'vault'}>
       <Suspense fallback={<Loading />}><VaultView /></Suspense>
+    </section>}
+    {portMappingOpened && <section key={workspaceGeneration()} id="workspace-port-mapping" role="tabpanel" aria-labelledby="workspace-tab-port-mapping" className="shell-page" hidden={activePage !== 'port-mapping'} inert={activePage !== 'port-mapping'}>
+      <Suspense fallback={<Loading />}><PortMappingView active={activePage === 'port-mapping'} /></Suspense>
     </section>}
   </>
 }

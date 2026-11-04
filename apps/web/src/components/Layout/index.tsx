@@ -1,8 +1,8 @@
 import { Loading } from '@/components/ui/loading'
 import { lazy,Suspense,useCallback,useEffect,useRef,useState,type CSSProperties } from 'react'
-import { FolderOpen,FolderUp,KeyRound,PanelLeft,PanelLeftClose,PanelRight,Plus,Search,SquareTerminal,X } from 'lucide-react'
+import { FolderOpen,FolderUp,KeyRound,PanelLeft,PanelLeftClose,PanelRight,Plus,Search,SquareTerminal,Waypoints,X } from 'lucide-react'
 import { AiIcon } from '@/lib/serverIcons'
-import { TunnelDialog,TunnelPrompts } from '@/components/Terminal/TunnelDialog'
+import { TunnelPrompts } from '@/components/Terminal/TunnelPrompts'
 import type { SettingsTab } from '@/components/SettingsDialog'
 import { workspaceGeneration } from '@/lib/workspaceScope'
 import { registerDesktopAction,runDesktopAction,shortcutAction } from '@/lib/desktopActions'
@@ -44,7 +44,7 @@ const SnippetDialog = lazy(() => import('@/components/Snippets/SnippetDialog').t
 
 export function Layout() {
   const { tabs, activeTabId } = useSessionStore()
-  const { activePage, openSftp, openVault } = useWorkspaceViewStore()
+  const { activePage, openSftp, openVault, openPortMapping } = useWorkspaceViewStore()
   const { sidebarWidth, setSidebarWidth, terminalTheme } = useSettingsStore()
   const theme = useResolvedTheme()
   const splitActive = useTerminalLayoutStore((s) => s.tree?.type === 'split')
@@ -66,7 +66,6 @@ export function Layout() {
   }, [sidebarHidden, setSidebarWidth, toggleSidebarVisibility])
   const inspectorWidth = useDesktopShellStore((s) => s.inspectorWidth)
   const [paletteOpen, setPaletteOpen] = useState(false)
-  const [tunnelsOpen, setTunnelsOpen] = useState(false)
   const [snippetsOpen, setSnippetsOpen] = useState(false)
   const [snippetQuick, setSnippetQuick] = useState<{ target: SnippetTarget | null } | null>(null)
   const [profileFormOpen, setProfileFormOpen] = useState(false)
@@ -138,7 +137,6 @@ export function Layout() {
   }, [tabs])
   useEffect(() => {
     const unregister = [
-      registerDesktopAction('tunnels', () => setTunnelsOpen(true)),
       registerDesktopAction('palette', () => setPaletteOpen((v) => !v)),
       registerDesktopAction('sync-settings', () => openSettings('sync')),
       registerDesktopAction('account-settings', () => { const account = useAccountStore.getState().status; if (!account?.loggedIn || account.sessionState === 'reauth_required') useAccountDialogStore.getState().open('login', account?.user?.email); else openSettings('account') }),
@@ -181,6 +179,7 @@ export function Layout() {
         <nav className="shell-primary-nav" aria-label="功能导航">
           <Button variant="ghost" className={activePage === 'terminal' && (!tabs.length || !activeTab?.profileId) ? 'is-active' : ''} onClick={() => runDesktopAction('new')}><Plus size={16} /><span>新建连接</span><kbd>{mac ? '⇧⌘T' : 'Ctrl+Shift+T'}</kbd></Button>
           <Button variant="ghost" className={activePage === 'sftp' ? 'is-active' : ''} aria-current={activePage === 'sftp' ? 'page' : undefined} aria-controls="workspace-sftp" onClick={() => void openSftp()}><FolderUp size={16} /><span>SFTP 文件</span></Button>
+          <Button variant="ghost" className={activePage === 'port-mapping' ? 'is-active' : ''} aria-current={activePage === 'port-mapping' ? 'page' : undefined} aria-controls="workspace-port-mapping" onClick={openPortMapping}><Waypoints size={16} /><span>端口映射</span></Button>
           <Button variant="ghost" className={activePage === 'vault' ? 'is-active' : ''} aria-current={activePage === 'vault' ? 'page' : undefined} aria-controls="workspace-vault" onClick={openVault}><KeyRound size={16} /><span>密钥管理</span></Button>
           <Button variant="ghost" onClick={() => runDesktopAction('snippets')}><SquareTerminal size={16} /><span>命令片段</span></Button>
         </nav>
@@ -227,7 +226,7 @@ export function Layout() {
       </div>
     </div>
     {showControls && <WindowControls className="shell-window-controls" maximized={maximized} onMinimize={minimize} onToggleMaximize={toggleMaximize} onClose={close} />}
-    <TunnelDialog open={tunnelsOpen} onOpenChange={setTunnelsOpen} /><TunnelPrompts />
+    <TunnelPrompts key={workspaceGeneration()} />
     <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
     <ProfileForm open={profileFormOpen} onOpenChange={setProfileFormOpen} />
     {snippetsOpen && <Suspense fallback={null}><SnippetDialog key={workspaceGeneration()} open onOpenChange={setSnippetsOpen} /></Suspense>}

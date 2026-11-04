@@ -1,0 +1,27 @@
+{
+  "date": "2026-11-04",
+  "check": "passed",
+  "lint": "passed",
+  "foundation": {
+    "passed": 198,
+    "skipped": 1
+  },
+  "baselineTests": {
+    "passed": 10
+  },
+  "web": {
+    "files": 84,
+    "passed": 935
+  },
+  "confirmationAndContractTests": 8,
+  "focusedWebAndApiTests": 13,
+  "baselineVerify": "passed",
+  "desktopBuild": "passed",
+  "packageBuild": "passed-offline-unsigned",
+  "packageSmoke": "passed",
+  "opensshCases": 30,
+  "publicBindCases": 12,
+  "publicBindInterfaceProbes": 12,
+  "externalPublicInternet": "pending",
+  "diffCheck": "passed"
+}

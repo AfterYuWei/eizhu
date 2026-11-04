@@ -18,6 +18,7 @@
     "desktop:build": "node scripts/build-desktop.mjs",
     "desktop:package": "node scripts/package-desktop.mjs",
     "desktop:smoke": "node scripts/smoke-desktop.mjs",
+    "desktop:smoke:tunnels": "node --experimental-strip-types scripts/smoke-tunnels-openssh.mjs",
     "desktop:smoke:sftp": "node scripts/smoke-sftp.mjs",
     "benchmark:sftp": "node scripts/benchmark-sftp.mjs",
     "desktop:stress": "node scripts/smoke-desktop.mjs --duration=60000",

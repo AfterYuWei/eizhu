@@ -12,6 +12,7 @@ vi.mock('@/components/Terminal', () => ({ TerminalView: () => <textarea aria-lab
 vi.mock('./ConnectionHome', () => ({ ConnectionHome: () => <p>连接首页</p> }))
 vi.mock('@/components/Sftp/SftpView', () => ({ SftpView: () => <input aria-label="SFTP 状态" /> }))
 vi.mock('@/components/Vault/VaultView', () => ({ VaultView: () => <input aria-label="密钥状态" /> }))
+vi.mock('@/components/PortMapping/PortMappingView', () => ({ PortMappingView: ({ active }: { active: boolean }) => <input aria-label="映射页面状态" data-active={String(active)} /> }))
 let root: Root
 let host: HTMLDivElement
 beforeEach(async () => {
@@ -56,4 +57,19 @@ it('无终端也可打开工具页，首次按需挂载、重复切换保留唯�
   expect(host.querySelector('textarea')).toBe(terminal)
   expect([sftp.value, vault.value, terminal.value]).toEqual(['目录和选择状态', '密钥筛选', '终端输入'])
   expect(store.getState().transfers).toBe(tasks)
+})
+
+it('映射页面按需打开，切换时保留终端和 SFTP，关闭不卸载其他工具', async () => {
+  await act(async () => { await useWorkspaceViewStore.getState().openSftp(); useSessionStore.getState().openDraftTab(); root.render(<WorkspaceContent onAddServer={() => {}} />); await vi.dynamicImportSettled() })
+  const terminal = host.querySelector('textarea')
+  await act(async () => { useWorkspaceViewStore.getState().openPortMapping(); await vi.dynamicImportSettled() })
+  const mapping = host.querySelector('[aria-label="映射页面状态"]')!
+  expect(mapping).not.toBeNull()
+  expect(mapping.getAttribute('data-active')).toBe('true')
+  await act(async () => useWorkspaceViewStore.getState().openVault())
+  expect(mapping.getAttribute('data-active')).toBe('false')
+  await act(async () => useWorkspaceViewStore.getState().closePortMapping())
+  expect(host.querySelector('[aria-label="映射页面状态"]')).toBeNull()
+  expect(host.querySelector('textarea')).toBe(terminal)
+  expect(host.querySelector('[aria-label="SFTP 状态"]')).not.toBeNull()
 })

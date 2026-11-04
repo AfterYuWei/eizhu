@@ -318,7 +318,7 @@ export async function runSmoke(options: {
     monaco,
     firstWindowMs,
     processMetrics: app.getAppMetrics().map(({ type, memory, cpu }) => ({ type, memory, cpu })),
-    screenshots: ['home-light.png', 'home-dark.png', 'editor-empty.png', ...aiDesktop.screenshots, ...workspaceTabs.screenshots, ...accountClosure.screenshots, ...syncDesktop.screenshots, ...stage3.completionUi.screenshots],
+    screenshots: ['home-light.png', 'home-dark.png', 'editor-empty.png', ...aiDesktop.screenshots, ...workspaceTabs.screenshots, ...accountClosure.screenshots, ...syncDesktop.screenshots, ...stage3.completionUi.screenshots, ...stage3.portMapping.screenshots],
     screenshotContrast,
   }
   await writeFile(join(root, 'smoke.json'), JSON.stringify(report, null, 2))

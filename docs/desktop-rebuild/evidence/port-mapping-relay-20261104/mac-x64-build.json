@@ -1,0 +1,106 @@
+{
+  "platform": "darwin",
+  "arch": "x64",
+  "packaged": false,
+  "validation": {
+    "focusedTests": 19,
+    "typecheck": true,
+    "lint": true,
+    "baselineVerify": true,
+    "diffCheck": true,
+    "desktopBuild": true,
+    "desktopSmoke": true
+  },
+  "portMapping": {
+    "passed": true,
+    "syntheticSsh": true,
+    "modes": [
+      "local",
+      "remote",
+      "dynamic"
+    ],
+    "rendererToTcp": true,
+    "singletonTab": true,
+    "independentLifecycle": true,
+    "actualPortClipboard": true,
+    "formValidation": true,
+    "saveOnly": true,
+    "delete": true,
+    "responsive": true,
+    "publicConfirmation": true,
+    "publicUnconfirmedRejected": true,
+    "stalePublicConfirmationRejected": true,
+    "publicRestartRequiresConfirmation": true,
+    "independentModeDrafts": true,
+    "remotePublicListener": true,
+    "selectableTarget": true,
+    "nativeFormFont": true,
+    "reactiveFlowPreview": true,
+    "reducedMotion": true,
+    "relayChecks": [
+      {
+        "kind": "local",
+        "aligned": true,
+        "downward": true,
+        "nodePause": true,
+        "singlePacket": true,
+        "branchOrder": [],
+        "branchEndErrors": []
+      },
+      {
+        "kind": "remote",
+        "aligned": true,
+        "downward": true,
+        "nodePause": true,
+        "singlePacket": true,
+        "branchOrder": [],
+        "branchEndErrors": []
+      },
+      {
+        "kind": "dynamic",
+        "aligned": true,
+        "downward": true,
+        "nodePause": true,
+        "singlePacket": true,
+        "branchOrder": [
+          0,
+          1,
+          2
+        ],
+        "branchEndErrors": [
+          0,
+          0,
+          0
+        ]
+      }
+    ],
+    "screenshots": [
+      "port-mapping-light.png",
+      "port-mapping-dark.png",
+      "port-mapping-large-narrow.png",
+      "port-mapping-form.png",
+      "port-mapping-flow-detail.png",
+      "port-mapping-form-dark.png",
+      "port-mapping-dynamic-flow.png",
+      "port-mapping-public-form.png",
+      "port-mapping-remote-listener.png",
+      "port-mapping-form-large-narrow.png",
+      "port-mapping-form-narrow-flow.png",
+      "port-mapping-public-confirm.png"
+    ]
+  },
+  "desktopRegression": {
+    "terminal": true,
+    "sftp": true,
+    "backup": true,
+    "account": true,
+    "sync": true,
+    "workspaceTabs": true,
+    "ai": true
+  },
+  "limits": [
+    "构建输出验收，未生成或测试本轮安装包",
+    "SSH、账号及同步使用本机隔离合成服务",
+    "未执行 Windows x64、macOS arm64、Linux x64 或签名/公证验收"
+  ]
+}

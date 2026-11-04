@@ -6,6 +6,7 @@ import type { WorkspaceStatus } from './foundation.ts'
 import type { SyncStatus } from './models/sync.ts'
 import type { TransferTask } from './models/sftp.ts'
 import type { TunnelStatus } from './models/api.ts'
+import type { SshGlobalEvent } from './ssh.ts'
 export * from './foundation.ts'
 export * from './ai.ts'
 export * from './errors.ts'
@@ -50,14 +51,7 @@ export interface DesktopEvents {
   'eizhu-update-progress': import('./update.ts').UpdateProgress
   'eizhu-workspace-changed': WorkspaceStatus
   'eizhu-sync-message': { workspaceGeneration: number; status: SyncStatus; refresh?: boolean }
-  'eizhu-session-message': (
-    | SessionMessage
-    | {
-        type: 'tunnel_status' | 'tunnel_auth_closed' | 'tunnel_auth_request' | 'tunnel_host_key_request'
-        payload: unknown
-        session_id: string
-      }
-  ) & { workspaceGeneration?: number }
+  'eizhu-session-message': (SessionMessage | SshGlobalEvent) & { workspaceGeneration?: number }
   'eizhu-sftp-message': {
     type: string
     payload?: Partial<TransferTask> & { task_id?: string; session_id?: string }

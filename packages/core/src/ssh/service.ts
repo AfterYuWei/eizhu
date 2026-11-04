@@ -3,7 +3,7 @@ import { executeAgentCommand } from '../agent/executor.ts'
 import type { AiTarget, AiProposal } from '@eizhu/contracts'
 import { posix } from 'node:path'
 import type { ClientChannel } from 'ssh2'
-import { ssh, fail, failureOf, DesktopError } from '@eizhu/contracts'
+import { ssh, fail, failureOf, DesktopError, isPublicTunnelBind } from '@eizhu/contracts'
 import type { RuntimeContext } from '@eizhu/contracts'
 import type { Session, SessionCreateRequest } from '@eizhu/contracts/models/session'
 import type { SessionMessage, ConnectionLogEntry } from '@eizhu/contracts/models/sessionMessage'
@@ -796,8 +796,10 @@ export class SshService {
         this.tunnels.delete(id)
         return result
       }
-      case 'tunnel.start':
-        return this.startTunnel((input as { id: string }).id)
+      case 'tunnel.start': {
+        const { id, confirmedConfig } = ssh[operation].input.parse(input)
+        return this.startTunnel(id, confirmedConfig)
+      }
       case 'tunnel.stop':
         return this.stopTunnel((input as { id: string }).id)
       default:
@@ -821,12 +823,16 @@ export class SshService {
     Object.assign(t.state, changes, { revision: t.state.revision + 1 })
     this.global('tunnel_status', t.config.id, t.state)
   }
-  private async startTunnel(id: string) {
+  private async startTunnel(id: string, confirmedConfig?: TunnelConfig) {
     const existing = this.tunnels.get(id)
     if (existing && !existing.closed && ['running', 'connecting'].includes(existing.state.status))
       return existing.state
     const configs = await this.database.call<TunnelConfig[]>('tunnel.list'),
       config = configs.find((c) => c.id === id) ?? fail('NOT_FOUND', '隧道不存在')
+    if (confirmedConfig && (['id', 'name', 'profile_id', 'kind', 'bind_host', 'bind_port', 'target_host', 'target_port'] as const).some((field) => confirmedConfig[field] !== config[field]))
+      fail('TUNNEL_CONFIG_CHANGED', '映射配置已变化，请重新核对后启动')
+    if (isPublicTunnelBind(config.bind_host) && !confirmedConfig)
+      fail('TUNNEL_PUBLIC_CONFIRM_REQUIRED', '对外监听需要再次确认后才能启动')
     if (existing) await this.stopTunnel(id)
     const t: Tunnel = {
       config,

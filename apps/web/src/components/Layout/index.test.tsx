@@ -13,7 +13,7 @@ vi.mock('@/components/Vault/VaultView', () => ({ VaultView: () => <input aria-la
 vi.mock('@/components/Terminal', () => ({ TerminalView: () => <main>终端工作区</main> }))
 vi.mock('@/hooks/useServerMetrics', () => ({ useServerMetrics: vi.fn(() => ({ summary: null, summaryError: null, inspection: null, inspectionError: null })) }))
 vi.mock('@/components/Terminal/SplitControls', () => ({ TerminalSplitMenu: () => null }))
-vi.mock('@/components/Terminal/TunnelDialog', () => ({ TunnelDialog: () => null, TunnelPrompts: () => null }))
+vi.mock('@/components/Terminal/TunnelPrompts', () => ({ TunnelPrompts: () => null }))
 vi.mock('@/components/ProfileForm', () => ({ ProfileForm: () => null }))
 vi.mock('./ServerInspector', () => ({ ServerInspector: ({ open }: { open: boolean }) => <div data-inspector-open={String(open)} /> }))
 vi.mock('@/components/CommandPalette', () => ({ CommandPalette: () => null }))
@@ -77,7 +77,7 @@ async function render() { await act(async () => root.render(<TooltipProvider><La
 
 it('侧栏打开片段管理，快捷键打开独立快选器并固定调用时的终端', async () => {
   await render()
-  await act(async () => host.querySelectorAll<HTMLButtonElement>('.shell-primary-nav > button')[3].click())
+  await act(async () => host.querySelectorAll<HTMLButtonElement>('.shell-primary-nav > button')[4].click())
   expect(document.querySelector('[aria-label="片段管理"]')).not.toBeNull()
   expect(document.querySelector('[aria-label="快速调用片段"]')).toBeNull()
   await act(async () => root.render(null))
@@ -135,10 +135,10 @@ it('悬停临时展开可操作导航，离开后淡出且保留原宽度和收�
   expect(host.querySelector('.shell-top-controls-slot button')).toBeNull()
   expect(host.querySelector('.shell-fixed-top-controls')?.closest('[inert]')).toBeNull()
   expect(host.querySelector('.shell-workspace-content main')).toBe(terminal)
-  await act(async () => host.querySelectorAll<HTMLButtonElement>('.shell-primary-nav > button')[2].click())
+  await act(async () => host.querySelector<HTMLButtonElement>('[aria-controls="workspace-vault"]')!.click())
   expect(useWorkspaceViewStore.getState().activePage).toBe('vault')
   expect(useSessionStore.getState().tabs).toHaveLength(1)
-  host.querySelectorAll<HTMLButtonElement>('.shell-primary-nav > button')[2].focus()
+  host.querySelector<HTMLButtonElement>('[aria-controls="workspace-vault"]')!.focus()
   await hover(sidebar(), 'pointerout')
   await act(async () => vi.advanceTimersByTime(SIDEBAR_PREVIEW_CLOSE_DELAY_MS))
   expect(sidebar().classList.contains('is-preview')).toBe(true)
@@ -414,7 +414,7 @@ it('恢复已有分屏布局时收起侧栏，仍能手动展开', async () => {
 it('右侧栏只有一个入口，先选择 AI 或 SFTP，切换时保留终端节点', async () => {
   await render()
   const nav = host.querySelector('nav[aria-label="功能导航"]')!
-  expect([...nav.querySelectorAll('button')].map((b) => b.querySelector('span')?.textContent)).toEqual(['新建连接', 'SFTP 文件', '密钥管理', '命令片段'])
+  expect([...nav.querySelectorAll('button')].map((b) => b.querySelector('span')?.textContent)).toEqual(['新建连接', 'SFTP 文件', '端口映射', '密钥管理', '命令片段'])
   const inspector = host.querySelector<HTMLButtonElement>('.shell-workspace-actions [aria-label="右侧栏"]')!
   expect(inspector.textContent).toBe('')
   expect(host.querySelector('.shell-workspace-actions [aria-label="服务器详情"]')).toBeNull()

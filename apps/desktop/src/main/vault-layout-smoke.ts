@@ -86,7 +86,8 @@ export async function verifyVaultLayout(window: BrowserWindow, root: string) {
       const l=list.getBoundingClientRect(),d=detail.getBoundingClientRect(),c=columns.getBoundingClientRect();
       return {gap:d.left-l.right,round:parseFloat(getComputedStyle(list).borderRadius),toolbarLine:getComputedStyle(document.querySelector('.vault-toolbar')).borderBottomWidth,fits:d.right<=c.right+1&&list.scrollWidth<=list.clientWidth+1,controlsEnabled:!document.querySelector('.vault-toolbar-search').disabled&&[...document.querySelectorAll('.vault-toolbar-actions button')].every(el=>!el.disabled)};
     })()`)
-    assert.ok(geometry.gap >= 20 && geometry.round === 12 && geometry.toolbarLine === '0px' && geometry.fits && geometry.controlsEnabled)
+    // DESIGN.md uses a frameless list; the prior 12px panel assertion predates that change.
+    assert.ok(geometry.gap >= 20 && geometry.round === 0 && geometry.toolbarLine === '0px' && geometry.fits && geometry.controlsEnabled, JSON.stringify(geometry))
     await capture('vault-layout-light.png', 'light')
     await capture('vault-layout-dark.png', 'dark')
     window.setContentSize(1000, 680)

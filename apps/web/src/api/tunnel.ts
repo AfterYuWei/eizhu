@@ -8,6 +8,6 @@ export const tunnelApi = {
   statuses: () => bridge().tunnel.statuses(),
   save: (config: TunnelConfig) => bridge().tunnel.save({ config }),
   remove: (id: string) => bridge().tunnel.delete({ id }),
-  start: (id: string) => bridge().tunnel.start({ id }),
+  start: (id: string, confirmedConfig?: TunnelConfig) => bridge().tunnel.start({ id, ...(confirmedConfig ? { confirmedConfig } : {}) }),
   stop: (id: string) => bridge().tunnel.stop({ id }),
 }

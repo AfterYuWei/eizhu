@@ -2,15 +2,18 @@ import { create } from 'zustand'
 import { createSftpStore, type SftpStoreApi } from './sftp'
 import { workspaceGeneration } from '@/lib/workspaceScope'
 
-type WorkspacePage = 'terminal' | 'sftp' | 'vault'
+type WorkspacePage = 'terminal' | 'sftp' | 'vault' | 'port-mapping'
 
 interface WorkspaceViewState {
   activePage: WorkspacePage
   sftpStore: SftpStoreApi | null
   vaultOpened: boolean
+  portMappingOpened: boolean
   showTerminal: () => void
   openSftp: (profileId?: string, path?: string) => Promise<void>
   openVault: () => void
+  openPortMapping: () => void
+  closePortMapping: () => void
 }
 
 let serversReady: Promise<void> = Promise.resolve()
@@ -22,8 +25,11 @@ export const useWorkspaceViewStore = create<WorkspaceViewState>((set, get) => ({
   activePage: 'terminal',
   sftpStore: null,
   vaultOpened: false,
+  portMappingOpened: false,
   showTerminal: () => set({ activePage: 'terminal' }),
   openVault: () => set({ activePage: 'vault', vaultOpened: true }),
+  openPortMapping: () => set({ activePage: 'port-mapping', portMappingOpened: true }),
+  closePortMapping: () => set((state) => ({ portMappingOpened: false, activePage: state.activePage === 'port-mapping' ? 'terminal' : state.activePage })),
   openSftp: async (profileId, path) => {
     let store = get().sftpStore
     if (!store) {

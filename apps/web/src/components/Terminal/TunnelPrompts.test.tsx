@@ -6,7 +6,7 @@ const { listenMock } = vi.hoisted(() => ({ listenMock: vi.fn() }))
 vi.mock('@/lib/bridge', () => ({ listen: listenMock }))
 vi.mock('./AuthPromptDialog', () => ({ AuthPromptDialog: ({ request }: { request?: { name: string } }) => request ? <p>{request.name}</p> : null }))
 vi.mock('@/components/ConnectionDialog', () => ({ ConnectionDialog: () => null }))
-import { TunnelPrompts } from './TunnelDialog'
+import { TunnelPrompts } from './TunnelPrompts'
 import { setWorkspaceGeneration } from '@/lib/workspaceScope'
 it('并发隧道认证排队，结束通知清除旧请求，过滤旧账号事件', async () => {
   ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true

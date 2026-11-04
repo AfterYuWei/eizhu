@@ -7,6 +7,7 @@ import type { RuntimeHost } from './runtime-host.ts'
 import { SocketReader, proxyHandshake } from '@eizhu/core/ssh/network'
 import { measureDesktopLoad } from './load-smoke.ts'
 import { verifyCompletionUi } from './completion-ui-smoke.ts'
+import { verifyPortMapping } from './port-mapping-smoke.ts'
 import type { ConnectionStatePayload } from '@eizhu/contracts/models/sessionMessage'
 
 /** Synthetic loopback peers only. Runs in the actual packaged Electron process tree. */
@@ -664,6 +665,8 @@ export async function verifyStage3(window: BrowserWindow, runtime: RuntimeHost, 
     )
     await call('session.close', { id: denied.session_id })
     step('proxy-rejection-passed')
+    const portMapping = await verifyPortMapping(window, root, tunnelProfile, echoPort)
+    step('port-mapping-ui-passed')
     const busy = await call<{ id: string }>('tunnel.save', {
       config: {
         id: '',
@@ -748,6 +751,7 @@ export async function verifyStage3(window: BrowserWindow, runtime: RuntimeHost, 
       hostKey: { wrongRejected: true, staleRejected: true, permanent: true },
       completion: true,
       completionUi,
+      portMapping,
       completionMatrix: { generators: 10, queries: completionMatrix.length + 1, transport: 'preload/main/utilityProcess/SSH/SFTP', syntheticCommands: true },
       historyPrivacy: true,
       details: true,

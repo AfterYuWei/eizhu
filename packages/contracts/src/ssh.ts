@@ -83,12 +83,13 @@ export const sessionMessageSchema = z.discriminatedUnion('type', [
     }),
   }),
 ])
+export const isPublicTunnelBind = (host: string): boolean => host === '0.0.0.0' || host === '::'
 export const tunnelConfigSchema = z.strictObject({
   id: z.string().max(160),
   name: z.string().trim().min(1).max(512),
   profile_id: id,
   kind: z.enum(['local', 'remote', 'dynamic']),
-  bind_host: z.enum(['127.0.0.1', '::1', 'localhost']),
+  bind_host: z.enum(['127.0.0.1', '::1', 'localhost', '0.0.0.0', '::']),
   bind_port: z.int().min(0).max(65535),
   target_host: z
     .string()
@@ -128,6 +129,7 @@ export const sshGlobalEventSchema = z.union([
     workspaceGeneration: z.int(),
   }),
 ])
+export type SshGlobalEvent = z.infer<typeof sshGlobalEventSchema>
 const generator = z.enum([
   'paths',
   'git-branches',
@@ -328,7 +330,7 @@ export const ssh = {
   'tunnel.list': { input: empty, output: z.array(tunnelConfigSchema).max(128) },
   'tunnel.save': { input: z.strictObject({ config: tunnelConfigSchema }), output: tunnelConfigSchema },
   'tunnel.delete': { input: byId, output: ready },
-  'tunnel.start': { input: byId, output: tunnelStatusSchema },
+  'tunnel.start': { input: byId.extend({ confirmedConfig: tunnelConfigSchema.optional() }), output: tunnelStatusSchema },
   'tunnel.stop': { input: byId, output: ready },
   'tunnel.statuses': { input: empty, output: z.array(tunnelStatusSchema).max(128) },
   'serverDetail.create': {

@@ -9,7 +9,7 @@ import { workspaceGeneration } from './workspaceScope'
 import type { Profile } from '@/types/profile'
 
 export const desktopActions = [
-  { id: 'tunnels', label: 'SSH 隧道管理', key: 'l' },
+  { id: 'tunnels', label: '端口映射', key: 'l', keywords: 'SSH 隧道 本地转发 远端转发 SOCKS5' },
   { id: 'split-right', label: '向右分屏', key: 'h' },
   { id: 'split-down', label: '向下分屏', key: 'j' },
   { id: 'focus-next', label: '聚焦下一个窗格', key: 'n' },
@@ -71,7 +71,11 @@ export async function executeDesktopAction(id: DesktopActionId, tabId?: string):
     else if (id === 'maximize-pane') useTerminalLayoutStore.getState().maximize()
     else if (id === 'merge-panes') useTerminalLayoutStore.getState().merge()
     else if (id === 'new') useSessionStore.getState().openDraftTab()
-    else if (id === 'close') { const active = tabId ?? (terminalPage ? useSessionStore.getState().activeTabId : null); if (active) await useSessionStore.getState().closeTab(active) }
+    else if (id === 'tunnels') useWorkspaceViewStore.getState().openPortMapping()
+    else if (id === 'close') {
+      if (!tabId && useWorkspaceViewStore.getState().activePage === 'port-mapping') useWorkspaceViewStore.getState().closePortMapping()
+      else { const active = tabId ?? (terminalPage ? useSessionStore.getState().activeTabId : null); if (active) await useSessionStore.getState().closeTab(active) }
+    }
     else if (id === 'sftp') { const tab = activeTerminal(); await useWorkspaceViewStore.getState().openSftp(tab?.profileId, tab?.cwd) }
     else {
       const tab = activeTerminal()

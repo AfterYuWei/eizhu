@@ -207,7 +207,7 @@ export interface DomainOperations {
   'tunnel.delete': { input: { id: string }; output: void }
   'tunnel.list': { input: void; output: TunnelConfig[] }
   'tunnel.save': { input: { config: TunnelConfig }; output: TunnelConfig }
-  'tunnel.start': { input: { id: string }; output: TunnelStatus }
+  'tunnel.start': { input: { id: string; confirmedConfig?: TunnelConfig }; output: TunnelStatus }
   'tunnel.statuses': { input: void; output: TunnelStatus[] }
   'tunnel.stop': { input: { id: string }; output: void }
   'vault.create': { input: { request: VaultCreateRequest }; output: VaultItem }

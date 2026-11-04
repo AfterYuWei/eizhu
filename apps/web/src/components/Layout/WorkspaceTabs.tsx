@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef } from 'react'
-import { CircleAlert, LoaderCircle, Plus, SquareTerminal, X } from 'lucide-react'
+import { CircleAlert, LoaderCircle, Plus, SquareTerminal, Waypoints, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useSessionStore, type SessionTab } from '@/store/session'
@@ -31,18 +31,21 @@ function ConnectionIndicator({ tab }: { tab: SessionTab }) {
 
 export function WorkspaceTabs() {
   const { tabs, activeTabId, setActiveTab } = useSessionStore()
-  const activePage = useWorkspaceViewStore((state) => state.activePage)
+  const { activePage, portMappingOpened, openPortMapping, closePortMapping } = useWorkspaceViewStore()
   const profiles = useProfileStore((state) => state.profiles)
   const scroll = useRef<HTMLDivElement>(null)
   const add = useRef<HTMLButtonElement>(null)
   const focusOnRemoval = useRef<string | null>(null)
+  const mappingWasOpen = useRef(portMappingOpened)
 
   useLayoutEffect(() => {
-    if (!focusOnRemoval.current || tabs.some((tab) => tab.id === focusOnRemoval.current)) return
+    const mappingClosed = mappingWasOpen.current && !portMappingOpened
+    mappingWasOpen.current = portMappingOpened
+    if (!mappingClosed && (!focusOnRemoval.current || tabs.some((tab) => tab.id === focusOnRemoval.current))) return
     focusOnRemoval.current = null
     const selected = scroll.current?.querySelector<HTMLButtonElement>('[aria-selected="true"]')
     ;(selected ?? add.current)?.focus()
-  }, [tabs])
+  }, [tabs, portMappingOpened])
 
   useEffect(() => {
     const host = scroll.current
@@ -60,11 +63,20 @@ export function WorkspaceTabs() {
     }
     host.addEventListener('wheel', wheel, { passive: false })
     return () => { observer.disconnect(); host.removeEventListener('wheel', wheel) }
-  }, [activePage, activeTabId, tabs.length])
+  }, [activePage, activeTabId, tabs.length, portMappingOpened])
 
   return <div className="shell-workspace-tabs">
     <div className="shell-tab-scroll" ref={scroll}>
-      <div className="shell-tab-list" role="tablist" aria-label="已打开页面" aria-orientation="horizontal">
+      <div className="shell-tab-list" role="tablist" aria-label="已打开页面" aria-orientation="horizontal"
+        onKeyDown={(event) => {
+          if (!(event.target instanceof HTMLElement) || event.target.getAttribute('role') !== 'tab' || !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key) || event.altKey || event.ctrlKey || event.metaKey) return
+          event.preventDefault()
+          const items = [...event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]')]
+          const index = items.findIndex((item) => item === event.target)
+          const next = event.key === 'Home' ? 0 : event.key === 'End' ? items.length - 1 : (index + (event.key === 'ArrowRight' ? 1 : -1) + items.length) % items.length
+          items[next]?.click()
+          items[next]?.focus()
+        }}>
         {tabs.map((tab, index) => {
           const name = tab.profileName
           const sameName = (item: SessionTab) => item.profileName === name
@@ -81,19 +93,12 @@ export function WorkspaceTabs() {
               <TooltipTrigger asChild>
                 <Button type="button" variant="ghost" role="tab" className="shell-tab-select"
                   id={`workspace-tab-${tab.id}`} aria-controls={`workspace-panel-${tab.id}`}
-                  aria-selected={active} aria-label={[label, status].filter(Boolean).join(' · ')} tabIndex={active || (activePage !== 'terminal' && tab.id === (activeTabId ?? tabs[0]?.id)) ? 0 : -1}
+                  aria-selected={active} aria-label={[label, status].filter(Boolean).join(' · ')} tabIndex={active || (activePage !== 'terminal' && activePage !== 'port-mapping' && tab.id === (activeTabId ?? tabs[0]?.id)) ? 0 : -1}
                   onClick={(event) => {
                     setActiveTab(tab.id)
                     if (event.detail > 0) requestAnimationFrame(() => {
                       if (useSessionStore.getState().activeTabId === tab.id) focusActiveTerminal()
                     })
-                  }}
-                  onKeyDown={(event) => {
-                    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key) || event.altKey || event.ctrlKey || event.metaKey) return
-                    event.preventDefault()
-                    const nextIndex = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : (index + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length
-                    setActiveTab(tabs[nextIndex].id)
-                    scroll.current?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[nextIndex]?.focus()
                   }}>
                   <Icon size={16} aria-hidden="true" />
                   <span className="shell-tab-name">{label}</span>
@@ -109,6 +114,16 @@ export function WorkspaceTabs() {
               }}><X size={13} /></ShellIconButton>
           </div>
         })}
+        {portMappingOpened && <div role="presentation" className={cn('shell-tab', activePage === 'port-mapping' && 'is-active')}>
+          <Tooltip><TooltipTrigger asChild>
+            <Button type="button" variant="ghost" role="tab" className="shell-tab-select" id="workspace-tab-port-mapping" aria-controls="workspace-port-mapping"
+              aria-selected={activePage === 'port-mapping'} tabIndex={activePage === 'port-mapping' || (!tabs.length && activePage !== 'terminal') ? 0 : -1} onClick={openPortMapping}>
+              <Waypoints size={16} aria-hidden="true" /><span className="shell-tab-name">端口映射</span>
+            </Button>
+          </TooltipTrigger><TooltipContent side="bottom" sideOffset={8}>端口映射 · 关闭页面不会停止映射</TooltipContent></Tooltip>
+          <ShellIconButton label="关闭端口映射页面" className="shell-tab-close" tabIndex={activePage === 'port-mapping' ? 0 : -1}
+            onClick={closePortMapping}><X size={13} /></ShellIconButton>
+        </div>}
       </div>
     </div>
     <ShellIconButton ref={add} label="新建连接 (Ctrl/Cmd+Shift+T)" className="shell-tab-add" onClick={() => runDesktopAction('new')}><Plus size={16} /></ShellIconButton>
