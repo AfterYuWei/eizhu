@@ -2,11 +2,24 @@ import { useEffect, useRef, useState } from 'react'
 import type { AiConnection, AiModelCatalog, AiSettings } from '@eizhu/contracts'
 import { aiPreferencesSchema } from '@eizhu/contracts'
 import { bridge } from '@/lib/bridge'
+import { HelpIcon } from '@/lib/serverIcons'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import '../Agent/ai.css'
+
+function AiSettingsHelp({ label, children }: { label: string; children: string }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger type="button" aria-label={label} className="ai-setting-help">
+        <HelpIcon size={14} aria-hidden="true" />
+      </TooltipTrigger>
+      <TooltipContent>{children}</TooltipContent>
+    </Tooltip>
+  )
+}
 
 export function AiPanel() {
   const [settings, setSettings] = useState<AiSettings | null>(null)
@@ -62,14 +75,21 @@ export function AiPanel() {
       : choices
   return (
     <div className="settings-section ai-settings">
-      <div className="settings-section-title">AI 助手</div>
-      <p className="settings-field-desc">
-        仅支持 Responses API，每条命令均需确认。对话在本地加密保存，不参与同步或备份。
-      </p>
+      <div className="settings-section-title">
+        AI 助手
+        <AiSettingsHelp label="AI 助手使用说明">
+          仅支持 Responses API，每条命令均需确认。对话在本地加密保存，不参与同步或备份。
+        </AiSettingsHelp>
+      </div>
       {settings && (
         <div className="settings-card">
           <div className="settings-field">
-            <Label htmlFor="ai-source">模型来源</Label>
+            <div className="ai-setting-label">
+              <Label htmlFor="ai-source">模型来源</Label>
+              <AiSettingsHelp label="模型来源说明">
+                官方 AI 使用现有账号登录。自定义模型直接连接填写的服务；接口地址改变后，请重新填写密钥。
+              </AiSettingsHelp>
+            </div>
             <Select
               value={settings.source}
               disabled={busy}
@@ -87,14 +107,19 @@ export function AiPanel() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="official">官方 AI</SelectItem>
-                <SelectItem value="custom">自配模型</SelectItem>
+                <SelectItem value="custom">自定义</SelectItem>
               </SelectContent>
             </Select>
           </div>
           {settings.source === 'custom' && (
             <>
               <div className="ai-setting-field">
-                <Label htmlFor="ai-endpoint">接口基础地址</Label>
+                <div className="ai-setting-label">
+                  <Label htmlFor="ai-endpoint">接口基础地址</Label>
+                  <AiSettingsHelp label="接口基础地址说明">
+                    填写 API 基础地址，客户端自动追加 /responses；本机服务可使用 HTTP。
+                  </AiSettingsHelp>
+                </div>
                 <Input
                   id="ai-endpoint"
                   placeholder="https://api.example.com/v1"
@@ -106,9 +131,6 @@ export function AiPanel() {
                     setMessage('')
                   }}
                 />
-                <span className="settings-field-desc">
-                  填写 API 基础地址，客户端自动追加 /responses；本机服务可使用 HTTP。
-                </span>
               </div>
               <div className="ai-setting-field">
                 <Label htmlFor="ai-key">API Key</Label>
@@ -233,10 +255,10 @@ export function AiPanel() {
             >
               保存设置
             </Button>
+            <AiSettingsHelp label="模型发现与连接测试说明">
+              发现与测试使用当前填写的配置，不会自动保存。测试只发送固定请求，不执行命令。
+            </AiSettingsHelp>
           </div>
-          <p className="settings-field-desc">
-            发现与测试使用当前填写的配置，不会自动保存。测试只发送固定请求，不执行命令。
-          </p>
         </div>
       )}
       {message && (
@@ -244,9 +266,6 @@ export function AiPanel() {
           {message}
         </p>
       )}
-      <p className="settings-field-desc">
-        官方 AI 使用现有账号登录。自配模型直接连接填写的服务；接口地址改变后，请重新填写密钥。
-      </p>
     </div>
   )
 }

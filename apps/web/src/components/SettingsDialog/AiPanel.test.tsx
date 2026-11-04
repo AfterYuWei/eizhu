@@ -3,6 +3,7 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { AiPanel } from './AiPanel'
+import { TooltipProvider } from '@/components/ui/tooltip'
 
 const mocks = vi.hoisted(() => ({ settings: vi.fn(), discover: vi.fn(), test: vi.fn(), configure: vi.fn() }))
 vi.mock('@/lib/bridge', () => ({ bridge: () => ({ ai: mocks }) }))
@@ -11,6 +12,14 @@ let host: HTMLDivElement, root: Root
 const button = (label: string) =>
   [...host.querySelectorAll('button')].find((value) => value.textContent === label)!
 const input = (selector: string) => host.querySelector<HTMLInputElement>(selector)!
+const render = () =>
+  act(async () =>
+    root.render(
+      <TooltipProvider>
+        <AiPanel />
+      </TooltipProvider>,
+    ),
+  )
 const change = async (selector: string, value: string) =>
   act(async () => {
     const target = input(selector)
@@ -38,10 +47,11 @@ afterEach(async () => {
 })
 
 it('uses shared dropdowns and tests discovered draft models without saving', async () => {
-  await act(async () => root.render(<AiPanel />))
+  await render()
   expect(host.querySelectorAll('button[role="combobox"]')).toHaveLength(2)
   expect(host.querySelector('select:not([aria-hidden="true"])')).toBeNull()
-  expect(host.textContent).toContain('仅支持 Responses API')
+  expect(host.textContent).not.toContain('仅支持 Responses API')
+  expect(host.querySelector('button[aria-label="AI 助手使用说明"]')).not.toBeNull()
   await change('#ai-endpoint', 'http://127.0.0.1:9001/v1')
   await change('#ai-key', 'draft-provider-key')
   await act(async () => button('自动发现模型').click())
@@ -69,7 +79,7 @@ it('uses shared dropdowns and tests discovered draft models without saving', asy
 
 it('keeps manual drafts after discovery failure and blocks duplicate tests', async () => {
   mocks.discover.mockRejectedValue(new Error('该服务未提供模型列表'))
-  await act(async () => root.render(<AiPanel />))
+  await render()
   await change('[aria-label="手动模型名"]', 'manual-model')
   await act(async () => button('自动发现模型').click())
   expect(input('[aria-label="手动模型名"]').value).toBe('manual-model')
@@ -94,7 +104,7 @@ it('keeps manual drafts after discovery failure and blocks duplicate tests', asy
 
 it('clears the saved key while preserving unsaved connection drafts', async () => {
   mocks.configure.mockResolvedValue({ ...saved, hasApiKey: false })
-  await act(async () => root.render(<AiPanel />))
+  await render()
   await change('#ai-endpoint', 'http://127.0.0.1:9002/v1')
   await change('[aria-label="手动模型名"]', 'draft-model')
   await act(async () => button('清除密钥').click())

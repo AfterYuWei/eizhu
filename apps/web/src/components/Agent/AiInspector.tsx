@@ -467,7 +467,7 @@ export function AiInspector({
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
                     <DropdownMenuItem disabled>
-                      {settings?.source === 'custom' ? '自配模型' : '官方 AI'} ·{' '}
+                      {settings?.source === 'custom' ? '自定义' : '官方 AI'} ·{' '}
                       {conversation?.model || settings?.model || '默认模型'}
                     </DropdownMenuItem>
                     <DropdownMenuItem onSelect={() => setSettingsPage('ai')}>配置模型</DropdownMenuItem>

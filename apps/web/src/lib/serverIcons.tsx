@@ -70,6 +70,8 @@ import { DEFAULT_SERVER_ICON } from '@/lib/serverIconKeys'
 
 type ServerIconComponent = ComponentType<LucideProps>
 
+export { CircleHelp as HelpIcon } from 'lucide-react'
+
 export const AiIcon = forwardRef<SVGSVGElement, LucideProps>(({ size = 24, color = 'currentColor', ...props }, ref) => (
   <svg
     aria-hidden="true"

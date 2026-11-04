@@ -501,7 +501,32 @@
 }
 .ai-setting-actions {
   display: flex;
+  align-items: center;
   flex-wrap: wrap;
   gap: 8px;
   padding: 12px 16px;
+}
+.desktop-shell .settings-page .ai-setting-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.desktop-shell .settings-page .ai-setting-help {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  padding: 4px;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--settings-muted);
+  cursor: help;
+}
+.desktop-shell .settings-page .ai-setting-help:hover,
+.desktop-shell .settings-page .ai-setting-help:focus-visible {
+  background: var(--bg-hover);
+  color: var(--fg);
 }
