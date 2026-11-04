@@ -75,7 +75,7 @@ export function EditorDialog() {
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel>继续编辑</AlertDialogCancel>
-              <AlertDialogAction className="border bg-background text-foreground hover:bg-accent" onClick={() => void reloadFile(activeTabId!)}>重新加载</AlertDialogAction>
+              <AlertDialogAction className="bg-background text-foreground hover:bg-accent" onClick={() => void reloadFile(activeTabId!)}>重新加载</AlertDialogAction>
               <AlertDialogAction className="bg-destructive text-white hover:bg-destructive/90" onClick={closeAll}>放弃修改</AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>

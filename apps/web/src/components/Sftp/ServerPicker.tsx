@@ -17,7 +17,7 @@ interface ServerPickerProps {
 }
 /** Server selection dialog. Servers are grouped by their group (like the
  *  sidebar), with ungrouped servers rendered last. The currently active
- *  terminal tab's server is highlighted with an accent border. Picking a
+ *  terminal tab's server is highlighted with a neutral background. Picking a
  *  server connects it as a new tab in the target pane. */
 export function ServerPicker({ open, pane, onClose }: ServerPickerProps) {
     const { tabs, activeTabId } = useSessionStore();

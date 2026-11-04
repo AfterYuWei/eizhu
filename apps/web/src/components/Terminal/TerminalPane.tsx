@@ -605,7 +605,7 @@ export function TerminalPane({ tab, isActive, isVisible = isActive }: TerminalPa
                 right: 12,
                 padding: '6px 12px',
                 background: 'var(--bg-panel)',
-                border: '1px solid var(--border)',
+                border: 0,
                 borderRadius: 6,
                 boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
                 fontFamily: 'ui-sans-serif, system-ui',

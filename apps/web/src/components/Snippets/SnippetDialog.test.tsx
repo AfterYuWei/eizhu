@@ -41,10 +41,17 @@ it('列表选择与搜索仅展示对应片段详情，切换条目重置删除�
   await inputValue('[aria-label="搜索片段"]', '没有匹配')
   expect(document.querySelector('.snippet-code')).toBeNull()
   expect(document.body.textContent).toContain('暂无匹配片段')
+  expect(document.body.textContent).not.toContain('选择片段以查看内容')
+  await act(async () => button('清除搜索').click())
+  expect(document.querySelectorAll('.snippet-list-item')).toHaveLength(2)
+  expect(document.querySelector('.snippet-code')?.textContent).toBe('ls -la')
 })
 it('搜索状态下新建后定位到保存的片段', async () => {
+  vi.mocked(snippetApi.list).mockResolvedValue([])
   vi.mocked(snippetApi.create).mockResolvedValue({ ...snippet, id: 'new', name: '新片段', content: 'pwd' })
   await act(async () => root.render(<SnippetDialog open onOpenChange={() => {}} />))
+  expect(document.body.textContent).toContain('暂无命令片段')
+  expect(document.body.textContent).not.toContain('选择片段以查看内容')
   await inputValue('[aria-label="搜索片段"]', 'linux')
   await act(async () => button('新建片段').click())
   await inputValue('#snippet-name', '新片段')
@@ -83,7 +90,7 @@ it('deletes only after the second explicit selection and removes the accepted ro
   expect(snippetApi.delete).not.toHaveBeenCalled()
   await act(async () => button('确认删除').click())
   expect(snippetApi.delete).toHaveBeenCalledWith('one')
-  expect(document.body.textContent).toContain('暂无匹配片段')
+  expect(document.body.textContent).toContain('暂无命令片段')
 })
 
 it('共享预览保留管理界面的明确执行入口', async () => {

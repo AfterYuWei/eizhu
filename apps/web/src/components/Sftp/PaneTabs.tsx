@@ -18,6 +18,11 @@ export function PaneTabs({ pane, onPickServer }: PaneTabsProps) {
   const store = useSftpStore()
   const tabs = pane === 'left' ? store.leftTabs : store.rightTabs
   const activeId = pane === 'left' ? store.activeLeftTabId : store.activeRightTabId
+  const scroll = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    scroll.current?.querySelector('[aria-selected="true"]')?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' })
+  }, [activeId, tabs.length])
 
   const makeTarget = (tab: SftpTab): SftpDropTarget | null =>
     tab.sessionId
@@ -50,59 +55,61 @@ export function PaneTabs({ pane, onPickServer }: PaneTabsProps) {
 
   return (
     <div className="sftp-pane-hdr">
-      <div className="sftp-tabs">
-        {tabs.map((tab: SftpTab) => {
-          const active = tab.id === activeId
-          const dropTarget = store.dropTarget?.tabId === tab.id && store.dropTarget.kind === 'tab'
-          const Icon = resolveServerIcon('server')
-          const target = makeTarget(tab)
-          return (
-            <div
-              key={tab.id}
-              className={`sftp-ptab ${active ? 'active' : ''} ${dropTarget ? 'drop-target' : ''}`}
-              role="tab"
-              aria-selected={active}
-              tabIndex={0}
-              onClick={() => store.setActiveTab(pane, tab.id)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault()
-                  store.setActiveTab(pane, tab.id)
-                }
-              }}
-              title={`${tab.server.name} — ${tab.server.username}@${tab.server.host}${tab.server.port ? ':' + tab.server.port : ''}`}
-              data-drag-payload={target ? dropPayloadAttr({ kind: 'sftp', target }) : undefined}
-            >
-              <Icon size={12} className="sftp-ptab-icon" />
-              <span className="sftp-ptab-name">{tab.server.name}</span>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-xs"
-                className="sftp-ptab-x"
-                aria-label={`断开 ${tab.server.name}`}
-                onClick={(e) => {
-                  e.stopPropagation()
-                  store.closeTab(pane, tab.id)
+      <div className="sftp-tabs shell-tab-scroll" ref={scroll}>
+        <div className="shell-tab-list" role="tablist" aria-label={pane === 'left' ? '左侧文件连接' : '右侧文件连接'}>
+          {tabs.map((tab: SftpTab) => {
+            const active = tab.id === activeId
+            const dropTarget = store.dropTarget?.tabId === tab.id && store.dropTarget.kind === 'tab'
+            const Icon = resolveServerIcon('server')
+            const target = makeTarget(tab)
+            return (
+              <div
+                key={tab.id}
+                className={`sftp-ptab shell-tab ${active ? 'is-active' : ''} ${dropTarget ? 'drop-target' : ''}`}
+                role="tab"
+                aria-selected={active}
+                tabIndex={0}
+                onClick={() => store.setActiveTab(pane, tab.id)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    store.setActiveTab(pane, tab.id)
+                  }
                 }}
+                title={`${tab.server.name} — ${tab.server.username}@${tab.server.host}${tab.server.port ? ':' + tab.server.port : ''}`}
+                data-drag-payload={target ? dropPayloadAttr({ kind: 'sftp', target }) : undefined}
               >
-                <X size={11} />
-              </Button>
-            </div>
+                <Icon size={14} className="sftp-ptab-icon" />
+                <span className="sftp-ptab-name shell-tab-name">{tab.server.name}</span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  className="shell-icon-button shell-tab-close"
+                  aria-label={`断开 ${tab.server.name}`}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    store.closeTab(pane, tab.id)
+                  }}
+                >
+                  <X size={13} />
+                </Button>
+              </div>
           )
         })}
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-xs"
-          className="sftp-ptab-add"
-          title="连接新服务器"
-          aria-label="连接新服务器"
-          onClick={onPickServer}
-        >
-          <Plus size={13} />
-        </Button>
+        </div>
       </div>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-sm"
+        className="shell-icon-button shell-tab-add"
+        title="连接新服务器"
+        aria-label="连接新服务器"
+        onClick={onPickServer}
+      >
+        <Plus size={16} />
+      </Button>
     </div>
   )
 }

@@ -70,7 +70,7 @@ export function SnippetDialog({ open, onOpenChange }: { open: boolean; onOpenCha
   const matches = snippets.filter((s) => `${s.name} ${s.description} ${s.tags.join(' ')} ${s.content}`.toLowerCase().includes(query.toLowerCase()))
   const selected = matches.find((s) => s.id === selectedId) ?? matches[0]
   return <Dialog open={open} onOpenChange={(next) => { if (!busy) onOpenChange(next) }}>
-    <DialogContent className="snippet-manager" onCloseAutoFocus={(e) => { e.preventDefault(); focusActiveTerminal() }}>
+    <DialogContent className={cn('snippet-manager', !preview && !draft && !matches.length && 'is-empty')} onCloseAutoFocus={(e) => { e.preventDefault(); focusActiveTerminal() }}>
       <DialogHeader className="snippet-manager-heading">
         <DialogTitle>{preview ? '预览命令片段' : draft ? (draft.id ? '编辑片段' : '新建片段') : '命令片段'}</DialogTitle>
         <DialogDescription>保存在当前工作空间，支持完整备份。单行只插入，多行先预览。</DialogDescription>
@@ -88,19 +88,22 @@ export function SnippetDialog({ open, onOpenChange }: { open: boolean; onOpenCha
         </fieldset>
         <div className="snippet-footer"><Button type="button" variant="outline" disabled={busy} onClick={() => setDraft(null)}>取消</Button><Button type="submit" disabled={busy}>{busy ? '保存中…' : '保存'}</Button></div>
       </form> : <>
-        <div className="snippet-toolbar"><div className="snippet-search"><Search size={16} aria-hidden="true" /><Input aria-label="搜索片段" placeholder="搜索名称、标签或内容…" value={query} onChange={(e) => { setQuery(e.target.value); setDeleteId(null) }} /></div><Button disabled={busy} onClick={() => setDraft({ ...emptyDraft })}><Plus size={16} aria-hidden="true" />新建片段</Button></div>
-        <div className="snippet-columns">
-          <aside className="snippet-list snippet-group" aria-label="片段列表" aria-busy={loading}>
+        <div className="snippet-toolbar"><div className="snippet-search"><Search size={16} aria-hidden="true" /><Input aria-label="搜索片段" placeholder="搜索名称、标签或内容…" value={query} onChange={(e) => { setQuery(e.target.value); setDeleteId(null) }} /></div><Button className="snippet-create" disabled={busy} onClick={() => setDraft({ ...emptyDraft })}><Plus size={16} aria-hidden="true" />新建片段</Button></div>
+        {loading ? <div className="snippet-empty" role="status">正在读取片段…</div> : loadError ? <div className="snippet-empty" role="alert">片段读取失败<Button variant="outline" size="sm" onClick={() => setAttempt((value) => value + 1)}>重试</Button></div> : !selected ? <div className="snippet-empty" role="status">
+          <SquareTerminal size={28} aria-hidden="true" />
+          <p className="snippet-empty-title">{query ? '暂无匹配片段' : '暂无命令片段'}</p>
+          <p className="snippet-hint">{query ? '试试其他关键词，或清除搜索查看全部片段。' : '保存常用命令，使用时快速插入终端。'}</p>
+          {query ? <Button variant="outline" onClick={() => setQuery('')}>清除搜索</Button> : <Button className="snippet-create" disabled={busy} onClick={() => setDraft({ ...emptyDraft })}><Plus size={16} aria-hidden="true" />新建片段</Button>}
+        </div> : <div className="snippet-columns">
+          <aside className="snippet-list" aria-label="片段列表">
             <div className="snippet-list-items">
-              {loading ? <p className="snippet-empty" role="status">正在读取片段…</p> : loadError ? <div className="snippet-empty" role="alert">片段读取失败<Button variant="outline" size="sm" onClick={() => setAttempt((value) => value + 1)}>重试</Button></div> : matches.map((s) => <button type="button" key={s.id} disabled={busy} className={cn('snippet-list-item', selected?.id === s.id && 'is-selected')} aria-current={selected?.id === s.id ? 'true' : undefined} onClick={() => { setSelectedId(s.id); setDeleteId(null) }}>
+              {matches.map((s) => <button type="button" key={s.id} disabled={busy} className={cn('snippet-list-item', selected.id === s.id && 'is-selected')} aria-current={selected.id === s.id ? 'true' : undefined} onClick={() => { setSelectedId(s.id); setDeleteId(null) }}>
                 <SquareTerminal size={16} aria-hidden="true" /><span><span className="snippet-list-name">{s.name}</span><span className="snippet-list-summary">{s.description || s.content.split(/[\r\n]/, 1)[0]}</span></span>
               </button>)}
-              {!loading && !loadError && !matches.length && <p className="snippet-empty">暂无匹配片段{!snippets.length && <span>点击「新建片段」保存常用命令。</span>}</p>}
             </div>
-            {!loading && !loadError && <p className="snippet-list-count">{query ? `找到 ${matches.length} 个片段` : `共 ${snippets.length} 个片段`}</p>}
+            <p className="snippet-list-count">{query ? `找到 ${matches.length} 个片段` : `共 ${snippets.length} 个片段`}</p>
           </aside>
           <section className="snippet-detail" aria-label="片段详情">
-            {!loading && !loadError && selected ? <>
               <header className="snippet-detail-heading"><h2>{selected.name}</h2><div className="snippet-detail-actions"><Button variant="ghost" disabled={busy} onClick={() => setDraft({ ...selected, tags: selected.tags.join(', ') })}>编辑</Button><Button variant="ghost" className="snippet-delete" disabled={busy} onClick={() => {
                 if (deleteId !== selected.id) { setDeleteId(selected.id); return }
                 void run(async () => { await snippetApi.delete(selected.id); setSnippets((items) => items.filter((item) => item.id !== selected.id)); setDeleteId(null) })
@@ -110,9 +113,8 @@ export function SnippetDialog({ open, onOpenChange }: { open: boolean; onOpenCha
               <div className="snippet-group"><div className="snippet-group-heading"><h3>命令内容</h3><Button variant="ghost" disabled={busy} onClick={() => void run(async () => { await writeClipboardText(selected.content); toast.success('已复制片段') })}>复制</Button></div><pre className="snippet-code" tabIndex={0} aria-label="命令内容">{selected.content}</pre></div>
               <p className="snippet-hint">插入时保留终端已有输入，不附加回车。多行命令会先打开预览。</p>
               <div className="snippet-footer"><Button variant="outline" disabled={busy} onClick={() => setPreview({ snippet: selected, target: snippetTarget() })}>预览与执行</Button><Button disabled={busy} onClick={() => insert(selected)}>插入终端</Button></div>
-            </> : <p className="snippet-empty">{loading ? '正在读取片段…' : loadError ? '请重试读取片段' : '选择片段以查看内容'}</p>}
           </section>
-        </div>
+        </div>}
       </>}
     </DialogContent>
   </Dialog>

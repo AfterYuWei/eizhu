@@ -51,7 +51,7 @@
 }
 
 .vault-toolbar-search:hover:not(:focus-visible) {
-  border-color: var(--input-hover-border);
+  border-color: transparent;
   background: var(--input-hover-bg);
 }
 
@@ -89,7 +89,7 @@
   flex-direction: column;
   gap: 10px;
   padding: 12px;
-  border: 1px solid var(--border);
+  border: 0;
   border-radius: var(--r-lg);
   background: var(--bg-panel);
   transition: background 0.12s, border-color 0.12s, box-shadow 0.12s;
@@ -438,7 +438,7 @@
   padding: 10px;
   margin-top: 6px;
   background: var(--bg-elevated);
-  border: 1px solid var(--border-subtle);
+  border: 0;
   border-radius: 6px;
 }
 
@@ -488,224 +488,6 @@
 .vault-gen-pwd-actions {
   display: flex;
   justify-content: flex-end;
-}
-
-/* ── 密钥对生成弹窗 ── */
-.vault-gen-dialog-content {
-  width: min(920px, calc(100vw - 32px));
-  max-width: 920px;
-  max-height: min(90vh, calc(100dvh - 32px));
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  overflow: hidden;
-  padding: 18px;
-}
-
-.vault-gen-header {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin-bottom: 0;
-  flex-shrink: 0;
-  padding-right: 32px;
-}
-
-.vault-gen-header-top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.vault-gen-body {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  min-height: 0;
-  overflow-y: auto;
-}
-
-.vault-gen-shell,
-.vault-gen-result-shell {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.vault-gen-shell {
-  padding: 14px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-lg);
-  background: color-mix(in srgb, var(--dialog-bg) 96%, var(--bg-elevated));
-  box-shadow: var(--shadow-surface);
-}
-
-.vault-gen-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px 12px;
-}
-
-.vault-gen-grid-compact {
-  align-items: start;
-}
-
-.vault-gen-field-span-2 {
-  grid-column: 1 / -1;
-}
-
-.vault-gen-certificate,
-.vault-gen-result-panel {
-  padding: 12px;
-  border: 1px solid var(--border);
-  border-radius: var(--r);
-  background: color-mix(in srgb, var(--dialog-bg) 96%, var(--bg-elevated));
-}
-
-.vault-gen-certificate-input {
-  min-height: 72px;
-  max-height: 92px;
-  resize: none;
-}
-
-.vault-gen-result-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.08fr);
-  gap: 12px;
-  align-items: start;
-}
-
-.vault-gen-summary {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.vault-gen-summary-item {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-  padding: 12px 14px;
-  border: 1px solid var(--border);
-  border-radius: var(--r);
-  background: color-mix(in srgb, var(--dialog-bg) 93%, var(--bg-elevated));
-}
-
-.vault-gen-summary-item-wide {
-  grid-column: 1 / -1;
-}
-
-.vault-gen-summary-label {
-  color: var(--fg-4);
-  font-size: 11px;
-  font-weight: 500;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
-.vault-gen-summary-value {
-  color: var(--fg-2);
-  font-size: 13px;
-  font-weight: 500;
-  line-height: 1.45;
-  word-break: break-word;
-}
-
-.vault-gen-summary-value-mono {
-  font-family: var(--mono);
-  font-size: 12px;
-}
-
-.vault-gen-primary {
-  min-width: 128px;
-  border-radius: var(--r-pill);
-  padding-inline: 18px;
-}
-
-.vault-gen-secondary {
-  border-radius: var(--r-pill);
-}
-
-.vault-gen-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
-  margin-top: 0;
-  padding-top: 2px;
-}
-
-.vault-gen-footer-actions {
-  justify-content: flex-end;
-}
-
-.vault-gen-footer-result {
-  justify-content: flex-end;
-}
-
-.vault-gen-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.vault-gen-result-field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.vault-gen-result-label {
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--fg-2);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.vault-gen-output {
-  background: var(--bg-input) !important;
-  border-color: var(--border) !important;
-  resize: none;
-}
-
-.vault-gen-output-public {
-  min-height: 96px;
-  max-height: 96px;
-}
-
-.vault-gen-output-private {
-  min-height: 160px;
-  max-height: 160px;
-}
-
-@media (max-width: 720px) {
-  .vault-gen-grid,
-  .vault-gen-result-grid,
-  .vault-gen-summary {
-    grid-template-columns: 1fr;
-  }
-
-  .vault-gen-header-top,
-  .vault-gen-footer,
-  .vault-gen-actions {
-    align-items: stretch;
-  }
-
-  .vault-gen-header-top,
-  .vault-gen-footer {
-    flex-direction: column;
-  }
-
-  .vault-gen-primary,
-  .vault-gen-secondary,
-  .vault-gen-actions > button {
-    width: 100%;
-  }
 }
 
 /* ── 空态/错误态/加载态 ── */
@@ -783,14 +565,14 @@
 }
 
 .vault-select-search:hover:not(:focus-visible) {
-  border-color: var(--input-hover-border);
+  border-color: transparent;
   background: var(--input-hover-bg);
 }
 
 .vault-select-list {
   max-height: 360px;
   overflow-y: auto;
-  border: 1px solid var(--border-subtle);
+  border: 0;
   border-radius: 6px;
 }
 
@@ -843,7 +625,7 @@
   font-size: 13px;
   color: var(--fg-2);
   background: var(--bg-elevated);
-  border: 1px solid var(--border);
+  border: 0;
   border-radius: 6px;
   cursor: pointer;
   transition: border-color 0.15s;
@@ -995,7 +777,7 @@
   flex-direction: column;
   gap: 4px;
   padding: 10px 12px;
-  border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
+  border: 0;
   border-radius: var(--r);
   background: color-mix(in srgb, var(--bg-panel) 74%, transparent);
   backdrop-filter: blur(6px);
@@ -1030,7 +812,7 @@
 .vault-detail-secret-input {
   height: 40px;
   background: var(--bg-input) !important;
-  border-color: var(--border) !important;
+  border-color: transparent !important;
 }
 
 .vault-detail-secret-hint {
@@ -1112,8 +894,7 @@
   min-width: 0;
 }
 
-.vault-sheet-title-wrap .text-lg,
-.vault-gen-header .text-lg {
+.vault-sheet-title-wrap .text-lg {
   letter-spacing: -0.02em;
   line-height: 1.15;
 }
@@ -1167,7 +948,7 @@
   gap: 10px;
   min-width: 0;
   padding: 14px;
-  border: 1px solid var(--border);
+  border: 0;
   border-radius: var(--r-lg);
   background: color-mix(in srgb, var(--dialog-bg) 97%, var(--bg-elevated));
   box-shadow: var(--shadow-surface);
@@ -1205,7 +986,7 @@
   align-items: center;
   max-width: 100%;
   padding: 5px 10px;
-  border: 1px solid var(--border);
+  border: 0;
   border-radius: var(--r-pill);
   background: var(--bg-panel);
   color: var(--fg-2);
@@ -1286,7 +1067,7 @@
   resize: none;
   overflow: auto;
   background: var(--bg-input) !important;
-  border-color: var(--border) !important;
+  border-color: transparent !important;
 }
 
 .vault-sheet-output-short {
@@ -1340,7 +1121,7 @@
   flex-direction: column;
   gap: 4px;
   padding: 10px 12px;
-  border: 1px solid var(--border-subtle);
+  border: 0;
   border-radius: var(--r);
   background: color-mix(in srgb, var(--dialog-bg) 94%, var(--bg-elevated));
 }
@@ -1395,7 +1176,7 @@
   gap: 4px;
   min-width: 0;
   padding: 12px;
-  border: 1px solid var(--border-subtle);
+  border: 0;
   border-radius: var(--r);
   background: color-mix(in srgb, var(--dialog-bg) 95%, var(--bg-elevated));
 }
@@ -1509,7 +1290,7 @@
 /* 基本信息 - 上层 */
 .vault-form-basic {
   padding: 14px;
-  border: 1px solid var(--border);
+  border: 0;
   border-radius: var(--r-lg);
   background: color-mix(in srgb, var(--dialog-bg) 97%, var(--bg-elevated));
   box-shadow: var(--shadow-surface);
@@ -1545,7 +1326,7 @@
   flex-direction: column;
   gap: 10px;
   padding: 14px;
-  border: 1px solid var(--border);
+  border: 0;
   border-radius: var(--r-lg);
   background: color-mix(in srgb, var(--dialog-bg) 97%, var(--bg-elevated));
   box-shadow: var(--shadow-surface);
@@ -1592,7 +1373,7 @@
   flex-direction: column;
   gap: 10px;
   padding: 14px;
-  border: 1px solid var(--border);
+  border: 0;
   border-radius: var(--r-lg);
   background: color-mix(in srgb, var(--dialog-bg) 97%, var(--bg-elevated));
   box-shadow: var(--shadow-surface);
@@ -1625,7 +1406,7 @@
   resize: none;
   overflow: auto;
   background: var(--bg-input) !important;
-  border-color: var(--border) !important;
+  border-color: transparent !important;
 }
 
 .vault-form-key-hidden {
@@ -1641,7 +1422,7 @@
 /* Passphrase 行 */
 .vault-form-passphrase-row {
   padding: 12px 14px;
-  border: 1px solid var(--border);
+  border: 0;
   border-radius: var(--r-lg);
   background: color-mix(in srgb, var(--dialog-bg) 97%, var(--bg-elevated));
   box-shadow: var(--shadow-surface);
@@ -1662,7 +1443,7 @@
   }
 }
 
-/* 密钥管理沿用桌面设置页的分组表面，列表和详情通过留白分隔。 */
+/* 密钥管理采用无框双栏，详情通过留白和细分隔线分组。 */
 .desktop-shell .vault-master-detail {
   --vault-muted: color-mix(in srgb, var(--fg) 62%, var(--surface-panel));
   background: var(--surface-panel);
@@ -1670,25 +1451,33 @@
   font: 400 var(--sans-size) / 1.5 var(--sans);
   container-type: inline-size;
 }
-.desktop-shell .vault-master-detail .vault-toolbar { flex-wrap: wrap; gap: 8px; padding: 24px 28px 20px; border: 0; background: transparent; }
-.desktop-shell .vault-master-detail .vault-toolbar-title { gap: 6px; font-size: inherit; font-weight: 500; color: var(--fg); }
-.desktop-shell .vault-master-detail .vault-toolbar-filter { min-width: 96px; }
-.desktop-shell .vault-master-detail .vault-toolbar-search { min-width: 120px; max-width: 260px; height: auto; min-height: 32px; font-size: max(12px, calc(var(--sans-size) - 2px)); }
+.desktop-shell .vault-master-detail .vault-toolbar { flex-direction: column; align-items: stretch; gap: 20px; padding: 24px 28px; border: 0; background: transparent; }
+.desktop-shell .vault-toolbar-heading, .desktop-shell .vault-toolbar-controls { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; min-width: 0; }
+.desktop-shell .vault-master-detail .vault-toolbar-title { margin: 0; font-size: calc(var(--sans-size) + 2px); font-weight: 500; color: var(--fg); }
+.desktop-shell .vault-master-detail .vault-toolbar-filter { display: flex; flex-wrap: wrap; gap: 2px; min-width: 0; }
+.desktop-shell .vault-master-detail .vault-toolbar-filter [data-slot='button'] { color: var(--vault-muted); font-size: max(12px, calc(var(--sans-size) - 2px)); }
+.desktop-shell .vault-master-detail .vault-toolbar-filter [aria-pressed='true'] { color: var(--fg); background: color-mix(in srgb, var(--fg) 6%, var(--surface-panel)); }
+.desktop-shell .vault-toolbar-search-field { position: relative; flex: 0 1 260px; min-width: 160px; }
+.desktop-shell .vault-toolbar-search-field > svg { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--vault-muted); pointer-events: none; }
 .desktop-shell .vault-master-detail .vault-toolbar-actions { flex-wrap: wrap; }
-.desktop-shell .vault-master-detail :is(input, [data-slot='select-trigger']) { min-height: 30px; height: auto; padding: 4px 10px; border-color: var(--border); border-radius: var(--r-sm); background: var(--bg-active); color: var(--fg); box-shadow: none; }
-.desktop-shell .vault-master-detail [data-slot='button'] { min-height: 30px; height: auto; padding: 4px 10px; border-radius: var(--r-sm); font-weight: 400; box-shadow: none; }
+.desktop-shell .vault-master-detail :is(input, [data-slot='select-trigger']) { min-height: 30px; height: auto; padding: 4px 10px; border-color: transparent; border-radius: var(--r-sm); background: var(--bg-active); color: var(--fg); box-shadow: none; }
+.desktop-shell .vault-master-detail .vault-toolbar-search { width: 100%; min-width: 0; max-width: none; height: auto; min-height: 32px; padding-left: 32px; font-size: max(12px, calc(var(--sans-size) - 2px)); background: var(--surface-panel); border-color: transparent; }
+.desktop-shell .vault-master-detail [data-slot='button'] { min-height: 30px; height: auto; padding: 4px 10px; border: 0; border-radius: var(--r-sm); font-weight: 400; box-shadow: none; }
 .desktop-shell .vault-master-detail [data-slot='button'][data-variant='outline'],
-.desktop-shell .vault-master-detail [data-slot='button'][data-variant='default'] { color: var(--fg); background: var(--bg-active); border: 1px solid var(--border); }
+.desktop-shell .vault-master-detail [data-slot='button'][data-variant='default'] { color: var(--fg); background: var(--bg-active); }
 .desktop-shell .vault-master-detail [data-slot='button'][data-variant='outline']:hover,
-.desktop-shell .vault-master-detail [data-slot='button'][data-variant='default']:hover { background: var(--bg-hover); }
-.desktop-shell .vault-columns { display: grid; grid-template-columns: 258px minmax(0, 1fr); flex: 1; min-height: 0; gap: 28px; padding: 0 28px 28px; overflow: hidden; }
-.desktop-shell .vault-list-panel { display: flex; flex-direction: column; min-height: 0; min-width: 0; padding: 8px; border: 1px solid var(--edge-soft); border-radius: var(--r-lg); background: var(--surface-app); overflow: hidden; }
+.desktop-shell .vault-master-detail [data-slot='button'][data-variant='default']:hover { background: color-mix(in srgb, var(--fg) 6%, var(--bg-active)); }
+.desktop-shell .vault-master-detail :is(.vault-toolbar-actions, .vault-empty) [data-variant='default'] { color: var(--surface-panel); background: var(--fg); }
+.desktop-shell .vault-master-detail :is(.vault-toolbar-actions, .vault-empty) [data-variant='default']:hover { background: color-mix(in srgb, var(--fg) 88%, var(--surface-panel)); }
+.desktop-shell .vault-columns { display: grid; grid-template-columns: 230px minmax(0, 1fr); flex: 1; min-height: 0; gap: 32px; padding: 0 28px 28px; overflow: hidden; }
+.desktop-shell .vault-columns.is-empty { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
+.desktop-shell .vault-list-panel { display: flex; flex-direction: column; min-height: 0; min-width: 0; padding: 0; border: 0; border-radius: 0; background: transparent; overflow: hidden; }
 .desktop-shell .vault-list-content { display: flex; flex: 1; flex-direction: column; min-height: 0; }
 .desktop-shell .vault-list-items { min-height: 0; overflow-y: auto; scrollbar-width: none; }
 .desktop-shell .vault-list-items::-webkit-scrollbar { display: none; }
 .desktop-shell .vault-list-entry { display: flex; align-items: center; min-width: 0; margin-bottom: 2px; border-radius: 8px; }
 .desktop-shell .vault-list-entry:hover { background: var(--shell-hover); }
-.desktop-shell .vault-list-entry.is-selected { background: var(--shell-selected); }
+.desktop-shell .vault-list-entry.is-selected { background: color-mix(in srgb, var(--fg) 6%, var(--surface-panel)); }
 .desktop-shell .vault-list-item { display: flex; align-items: flex-start; gap: 10px; flex: 1; min-width: 0; width: 100%; min-height: 60px; padding: 9px; border: 0; border-radius: 8px; background: transparent; color: var(--fg); text-align: left; font: inherit; }
 .desktop-shell .vault-list-item:focus-visible { background: var(--shell-hover); }
 .desktop-shell .vault-list-item:disabled { opacity: .6; }
@@ -1705,41 +1494,66 @@
 .desktop-shell .vault-detail-heading > div:first-child { min-width: 0; }
 .desktop-shell .vault-detail-meta { margin-top: 4px; color: var(--vault-muted); font-size: max(12px, calc(var(--sans-size) - 2px)); }
 .desktop-shell .vault-detail-heading-actions { display: flex; gap: 5px; flex-shrink: 0; }
-.desktop-shell .vault-detail-group { min-width: 0; padding: 13px 16px 16px; border: 1px solid var(--edge-soft); border-radius: var(--r-lg); background: var(--surface-app); }
-.desktop-shell .vault-detail-group + .vault-detail-group { margin-top: 28px; }
+.desktop-shell .vault-detail-group { min-width: 0; padding: 0 0 24px; border: 0; border-radius: 0; background: transparent; }
+.desktop-shell .vault-detail-group + .vault-detail-group { margin-top: 0; padding-top: 20px; border-top: 1px solid var(--edge-soft); }
 .desktop-shell .vault-detail-group-head { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; min-height: 30px; margin-bottom: 8px; }
 .desktop-shell .vault-detail-content-actions { display: flex; gap: 2px; }
 .desktop-shell .vault-detail-content-actions [data-slot='button'] { gap: 4px; padding: 4px 6px; color: var(--vault-muted); font-size: max(12px, calc(var(--sans-size) - 2px)); }
 .desktop-shell .vault-detail-content-actions [data-slot='button']:hover { color: var(--fg); }
-.desktop-shell .vault-detail-secret { margin: 0; padding-top: 8px; min-width: 0; white-space: pre-wrap; overflow-wrap: anywhere; font: 400 max(12px, calc(var(--sans-size) - 2px)) / 1.7 var(--mono); user-select: text; }
-.desktop-shell .vault-detail-secret.is-multiline { min-height: 82px; max-height: 220px; overflow-y: auto; }
+.desktop-shell .vault-detail-secret { margin: 0; padding: 0; min-width: 0; white-space: pre-wrap; overflow-wrap: anywhere; font: 400 max(12px, calc(var(--sans-size) - 2px)) / 1.7 var(--mono); user-select: text; }
+.desktop-shell .vault-detail-secret.is-multiline { max-height: 220px; overflow-y: auto; }
 .desktop-shell .vault-detail-note { display: flex; gap: 14px; margin-bottom: 20px; overflow-wrap: anywhere; }
 .desktop-shell .vault-detail-note > span { flex-shrink: 0; color: var(--vault-muted); }
 .desktop-shell .vault-reference-group { padding: 0; }
-.desktop-shell .vault-reference-toggle { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; min-height: 68px; padding: 13px 16px; border: 0; border-radius: var(--r-lg); background: transparent; color: var(--fg); font: inherit; text-align: left; }
+.desktop-shell .vault-reference-toggle { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; min-height: 32px; padding: 0; border: 0; border-radius: 0; background: transparent; color: var(--fg); font: inherit; text-align: left; }
 .desktop-shell .vault-reference-toggle > span:last-child { display: flex; align-items: center; gap: 7px; color: var(--vault-muted); }
-.desktop-shell .vault-reference-list { padding: 0 16px 14px; color: var(--vault-muted); font-size: max(12px, calc(var(--sans-size) - 2px)); }
+.desktop-shell .vault-reference-list { padding: 8px 0 0; color: var(--vault-muted); font-size: max(12px, calc(var(--sans-size) - 2px)); }
 .desktop-shell .vault-reference-list p { margin: 0; }
 .desktop-shell .vault-reference-row { display: flex; align-items: center; gap: 8px; padding-block: 6px; overflow-wrap: anywhere; }
 .desktop-shell .vault-reference-row > svg { flex-shrink: 0; }
 .desktop-shell .vault-detail-placeholder { padding: 16px 0; color: var(--vault-muted); }
 .vault-editor-fields { display: flex; flex-direction: column; gap: 20px; min-inline-size: 0; margin: 0; padding: 0; border: 0; }
 .vault-editor-status { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 0; font-size: 13px; }
-.desktop-shell .vault-inline-editor :is(.vault-form-basic, .vault-form-password-panel, .vault-form-key-panel, .vault-form-passphrase-row) { padding: 16px; background: var(--surface-app); border-color: var(--edge-soft); border-radius: var(--r-lg); box-shadow: none; }
+.desktop-shell .vault-inline-editor :is(.vault-form-basic, .vault-form-password-panel, .vault-form-key-panel, .vault-form-passphrase-row) { padding: 16px; background: var(--surface-app); border: 0; border-radius: var(--r-lg); box-shadow: none; }
+.desktop-shell .vault-inline-editor :is(input, [data-slot='select-trigger']) { border-color: transparent; }
+.desktop-shell .vault-inline-editor .vault-form-key-textarea { background: var(--bg-active) !important; border-color: transparent !important; box-shadow: none; }
 .desktop-shell .vault-inline-editor .vault-form-basic-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
 .desktop-shell .vault-inline-editor .vault-form-credential { gap: 28px; }
+.desktop-shell .vault-inline-editor .vault-form-password-head { flex-direction: row; flex-wrap: wrap; }
+.desktop-shell .vault-inline-editor .vault-form-password-actions { flex-wrap: wrap; }
 .desktop-shell .vault-inline-editor .vault-sheet-footer { border: 0; padding-top: 0; }
 .desktop-shell .vault-inline-editor .pf-label { color: var(--fg); font-weight: 400; }
 .desktop-shell .vault-inline-editor .vault-form-password-hint { color: var(--vault-muted); }
+.desktop-shell .vault-form-key-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; min-width: 0; }
+.desktop-shell .vault-form-key-generate-action { display: flex; align-items: flex-end; justify-content: flex-end; }
+.desktop-shell .vault-inline-editor .vault-form-key-head, .desktop-shell .vault-inline-editor .vault-form-key-actions { flex-wrap: wrap; }
+.desktop-shell .vault-inline-editor .vault-gen-pwd { padding: 8px 0 0; border: 0; background: transparent; box-shadow: none; }
+.desktop-shell .vault-gen-pwd [data-slot='checkbox'] { border-color: transparent; background: var(--bg-active); color: var(--fg); box-shadow: none; }
+.desktop-shell .vault-gen-pwd [data-slot='checkbox'][data-state='checked'] { background: var(--fg); color: var(--surface-panel); }
+.desktop-shell .vault-gen-pwd [data-slot='slider-track'] { background: color-mix(in srgb, var(--fg) 12%, var(--surface-app)); }
+.desktop-shell .vault-gen-pwd [data-slot='slider-range'] { background: var(--fg); }
+.desktop-shell .vault-gen-pwd [data-slot='slider-thumb'] { border: 0; background: var(--fg); box-shadow: none; }
+.desktop-shell .vault-gen-pwd [data-slot='slider-thumb']:is(:hover, :focus-visible) { background: var(--fg-3); }
 .desktop-shell .vault-master-detail :is(.vault-error, .vault-empty) { flex: 1; min-height: 0; padding: 20px 8px; }
 .desktop-shell .vault-master-detail .vault-empty-title { font-size: inherit; }
 .desktop-shell .vault-master-detail .vault-empty-desc { color: var(--vault-muted); font-size: max(12px, calc(var(--sans-size) - 2px)); }
+/* 确认弹窗通过 Portal 渲染，使用独立的桌面样式作用域。 */
+body:has(.desktop-shell) .vault-confirm-dialog { width: min(440px, calc(100vw - 32px)); gap: 20px; color: var(--fg); font: 400 var(--sans-size) / 1.5 var(--sans); }
+body:has(.desktop-shell) .vault-confirm-dialog [data-slot='alert-dialog-header'] { text-align: left; }
+body:has(.desktop-shell) .vault-confirm-dialog [data-slot='alert-dialog-title'] { font: 500 calc(var(--sans-size) + 2px) / 1.5 var(--sans); }
+body:has(.desktop-shell) .vault-confirm-dialog [data-slot='alert-dialog-description'] { color: color-mix(in srgb, var(--fg) 62%, var(--dialog-bg)); font: inherit; }
+body:has(.desktop-shell) .vault-confirm-dialog [data-slot='alert-dialog-footer'] { flex-direction: row; flex-wrap: wrap; justify-content: flex-end; }
+body:has(.desktop-shell) .vault-confirm-dialog :is([data-slot='alert-dialog-cancel'], [data-slot='alert-dialog-action']) { min-height: 32px; height: auto; padding: 6px 12px; border: 0; border-radius: var(--r-sm); background: var(--bg-active); color: var(--fg); font: inherit; box-shadow: none; }
+body:has(.desktop-shell) .vault-confirm-dialog [data-slot='alert-dialog-action'] { background: color-mix(in srgb, var(--fg) 6%, var(--bg-active)); }
+body:has(.desktop-shell) .vault-confirm-dialog :is([data-slot='alert-dialog-cancel'], [data-slot='alert-dialog-action']):hover { background: color-mix(in srgb, var(--fg) 10%, var(--bg-active)); }
 @container (max-width: 800px) {
   .desktop-shell .vault-master-detail .vault-toolbar { padding: 20px 20px 16px; }
-  .desktop-shell .vault-columns { grid-template-columns: 220px minmax(0, 1fr); gap: 20px; padding: 0 20px 20px; }
+  .desktop-shell .vault-columns { grid-template-columns: 190px minmax(0, 1fr); gap: 24px; padding: 0 20px 20px; }
 }
 @container (max-width: 520px) {
   .desktop-shell .vault-columns { grid-template-columns: 1fr; grid-template-rows: minmax(140px, 30%) minmax(0, 1fr); }
   .desktop-shell .vault-master-detail .vault-toolbar-actions { margin-left: 0; }
+  .desktop-shell .vault-toolbar-search-field { flex-basis: 100%; }
   .desktop-shell .vault-inline-editor .vault-form-basic-grid { grid-template-columns: 1fr; }
+  .desktop-shell .vault-form-key-options { grid-template-columns: 1fr; }
 }

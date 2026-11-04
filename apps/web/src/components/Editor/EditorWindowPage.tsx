@@ -334,7 +334,7 @@ export function EditorWindowPage() {
           <AlertDialogFooter>
             <AlertDialogCancel disabled={closingBusy}>继续编辑</AlertDialogCancel>
             <AlertDialogAction
-              className="border bg-background text-foreground hover:bg-accent"
+              className="bg-background text-foreground hover:bg-accent"
               disabled={closingBusy}
               onClick={(event) => {
                 event.preventDefault()

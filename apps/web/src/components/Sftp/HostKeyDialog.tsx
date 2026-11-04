@@ -26,7 +26,7 @@ export function HostKeyDialog() {
               : `这是首次通过 SFTP 连接 ${pending?.serverName ?? '服务器'}。`}
           </AlertDialogDescription>
         </AlertDialogHeader>
-        <div className="space-y-2 rounded-md border border-[var(--border)] bg-[var(--bg)] p-3 text-xs">
+        <div className="space-y-2 rounded-md bg-[var(--surface-app)] p-3 text-xs">
           {pending?.knownFingerprint && (
             <p className="break-all"><span className="text-[var(--fg-4)]">历史：</span>{pending.knownFingerprint}</p>
           )}

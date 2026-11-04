@@ -13,7 +13,6 @@ body:has(.desktop-shell) .account-dialog-heading {
   flex-direction: column;
   gap: 6px;
   padding: 20px 48px 18px 20px;
-  border-bottom: 1px solid var(--border-subtle);
 }
 body:has(.desktop-shell) .account-dialog-heading [data-slot='dialog-title'] {
   font-size: 16px;
@@ -86,7 +85,6 @@ body:has(.desktop-shell) .account-dialog-footer {
   align-items: center;
   min-height: 32px;
   padding-top: 12px;
-  border-top: 1px solid var(--border-subtle);
 }
 body:has(.desktop-shell) .account-dialog-footer button {
   font-size: 12px;
@@ -96,7 +94,7 @@ body:has(.desktop-shell) .account-primary {
 }
 body:has(.desktop-shell) .account-recovery-note {
   padding: 12px;
-  border: 1px solid var(--border);
+  border: 0;
   border-radius: var(--r-sm);
 }
 @keyframes account-step-in {
@@ -153,7 +151,6 @@ body:has(.desktop-shell) .account-dialog-actions {
   justify-content: flex-end;
   gap: 8px;
   padding-top: 16px;
-  border-top: 1px solid var(--border-subtle);
 }
 .account-submit-row { display: flex; align-items: center; gap: 12px; }
 .account-dialog-actions > .inline-error, .account-submit-row > .inline-error { flex: 1; }
@@ -172,7 +169,7 @@ body:has(.desktop-shell) .account-submit-row:has(.inline-error) .account-primary
   height: 40px;
   flex-shrink: 0;
   overflow: hidden;
-  border: 1px solid var(--border);
+  border: 0;
   border-radius: var(--r-sm);
   background: var(--bg-active);
   color: var(--fg-2);

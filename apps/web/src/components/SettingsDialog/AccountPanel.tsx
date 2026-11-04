@@ -9,7 +9,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { runDesktopAction } from '@/lib/desktopActions'
@@ -98,7 +97,6 @@ export function AccountPanel() {
                       <Repeat2 />
                       切换账号
                     </DropdownMenuItem>
-                    <DropdownMenuSeparator />
                     <DropdownMenuItem variant="destructive" onSelect={() => void logout()}>
                       <LogOut />
                       退出账号

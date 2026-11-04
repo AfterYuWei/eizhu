@@ -1,18 +1,17 @@
 import { Loading } from '@/components/ui/loading'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Plus, KeyRound, AlertTriangle } from 'lucide-react'
+import { Plus, AlertTriangle, Search } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { useVaultStore } from '@/store/vault'
 import { useWorkspaceViewStore } from '@/store/workspaceView'
+import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { VaultList } from './VaultList'
 import { VaultDetail } from './VaultDetail'
 import { VaultForm, type VaultEditorState } from './VaultFormDialog'
-import { VaultGenerateDialog } from './VaultGenerateDialog'
 import type { VaultItem, ProfileRef } from '@/types/vault'
 
 const FILTER_OPTIONS = [{ value: 'all', label: '全部' }, { value: 'password', label: '密码' }, { value: 'private_key', label: '私钥' }] as const
@@ -27,11 +26,11 @@ export function VaultView() {
   const [editing, setEditing] = useState<VaultItem | null>(null)
   const [editorState, setEditorState] = useState<VaultEditorState>({ dirty: false, busy: false })
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null)
-  const [genOpen, setGenOpen] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null)
   const [deleting, setDeleting] = useState(false)
   const lastFocused = useRef<string | null>(null)
   const selected = items.find((item) => item.id === selectedId) ?? items[0] ?? null
+  const showInspector = editorOpen || selected !== null
 
   useEffect(() => { void fetchList() }, [fetchList])
   const finishEditing = useCallback(() => {
@@ -70,33 +69,35 @@ export function VaultView() {
 
   return <div className="vault-view vault-master-detail">
     <div className="vault-toolbar">
-      <span className="vault-toolbar-title"><KeyRound size={16} aria-hidden="true" />密钥管理</span>
-      <div className="vault-toolbar-filter">
-        <Select value={filterType} onValueChange={(value) => afterEditing(() => setFilterType(value as typeof filterType))} disabled={editorState.busy}>
-          <SelectTrigger className="w-full" aria-label="凭据类型"><SelectValue placeholder="请选择" /></SelectTrigger>
-          <SelectContent>{FILTER_OPTIONS.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent>
-        </Select>
+      <div className="vault-toolbar-heading">
+        <h1 className="vault-toolbar-title">密钥管理</h1>
+        <div className="vault-toolbar-actions">
+          <Button type="button" size="sm" disabled={editorState.busy} onClick={() => startEditor(null)}><Plus size={14} />新建凭据</Button>
+        </div>
       </div>
-      <Input type="search" aria-label="搜索凭据" className="vault-toolbar-search" placeholder="搜索名称/用户名/备注…" value={searchQuery} disabled={editorState.busy} onChange={(event) => { const value = event.target.value; afterEditing(() => setSearchQuery(value)) }} />
-      <div className="vault-toolbar-actions">
-        <Button type="button" variant="outline" size="sm" disabled={editorState.busy} onClick={() => afterEditing(() => setGenOpen(true))}><KeyRound size={14} />生成密钥对</Button>
-        <Button type="button" variant="outline" size="sm" disabled={editorState.busy} onClick={() => startEditor(null)}><Plus size={14} />新建凭据</Button>
+      <div className="vault-toolbar-controls">
+        <div className="vault-toolbar-filter" role="group" aria-label="凭据类型">
+          {FILTER_OPTIONS.map((option) => <Button key={option.value} type="button" variant="ghost" size="sm" aria-pressed={filterType === option.value} disabled={editorState.busy} onClick={() => afterEditing(() => setFilterType(option.value))}>{option.label}</Button>)}
+        </div>
+        <div className="vault-toolbar-search-field">
+          <Search size={14} aria-hidden="true" />
+          <Input type="search" aria-label="搜索凭据" className="vault-toolbar-search" placeholder="搜索名称/用户名/备注…" value={searchQuery} disabled={editorState.busy} onChange={(event) => { const value = event.target.value; afterEditing(() => setSearchQuery(value)) }} />
+        </div>
       </div>
     </div>
-    <div className="vault-columns">
+    <div className={cn('vault-columns', !showInspector && 'is-empty')}>
       <aside className="vault-list-panel" aria-label="凭据列表区域">
         <VaultList selectedId={selected?.id ?? null} disabled={editorState.busy} onSelect={(item) => afterEditing(() => setSelectedId(item.id))} onCreate={() => startEditor(null)} />
       </aside>
-      <section className="vault-inspector" aria-label={editorOpen ? '编辑凭据' : '凭据详情'}>
+      {showInspector && <section className="vault-inspector" aria-label={editorOpen ? '编辑凭据' : '凭据详情'}>
         {editorOpen ? <div className="vault-inline-editor">
           <header className="vault-detail-heading"><h2>{editing ? '编辑凭据' : '新建凭据'}</h2></header>
           <VaultForm key={editorInstance} item={editing} onStateChange={setEditorState} onOpenChange={(open) => { if (!open) afterEditing(() => {}) }} onSaved={handleSaved} />
         </div> : selected && !error ? active && <VaultDetail key={`${selected.id}:${selected.updated_at}`} item={selected} onEdit={startEditor} onDelete={(item, refs) => setDeleteTarget({ item, refs })} /> : loading ? <Loading /> : <div className="vault-detail-placeholder">选择凭据以查看详情</div>}
-      </section>
+      </section>}
     </div>
-    <VaultGenerateDialog open={genOpen} onOpenChange={setGenOpen} />
     <AlertDialog open={pendingAction !== null} onOpenChange={(open) => { if (!open) setPendingAction(null) }}>
-      <AlertDialogContent>
+      <AlertDialogContent className="vault-confirm-dialog">
         <AlertDialogHeader><AlertDialogTitle>放弃未保存的修改？</AlertDialogTitle><AlertDialogDescription>当前凭据的修改尚未保存。</AlertDialogDescription></AlertDialogHeader>
         <AlertDialogFooter><AlertDialogCancel>继续编辑</AlertDialogCancel><AlertDialogAction onClick={() => { pendingAction?.(); setPendingAction(null) }}>放弃修改</AlertDialogAction></AlertDialogFooter>
       </AlertDialogContent>

@@ -90,9 +90,9 @@ export function GroupForm({ open, onOpenChange, group, defaultParentId }: GroupF
               {GROUP_ICONS.map((def) => {
             const Selected = def.Icon;
             const active = (icon || 'folder') === def.key;
-            return (<Button key={def.key} type="button" variant="ghost" size="icon-sm" title={def.label} onClick={() => setIcon(def.key)} className={`flex h-8 w-8 items-center justify-center rounded-md border transition-colors ${active
-                    ? 'border-primary bg-primary/10 text-primary'
-                    : 'border-input text-muted-foreground hover:bg-accent hover:text-accent-foreground'}`} aria-label={`选择图标 ${def.label}`} aria-pressed={active}>
+            return (<Button key={def.key} type="button" variant="ghost" size="icon-sm" title={def.label} onClick={() => setIcon(def.key)} className={`flex h-8 w-8 items-center justify-center rounded-md border-0 transition-colors ${active
+                    ? 'bg-primary/10 text-primary'
+                    : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'}`} aria-label={`选择图标 ${def.label}`} aria-pressed={active}>
                     <Selected size={15}/>
                   </Button>);
         })}

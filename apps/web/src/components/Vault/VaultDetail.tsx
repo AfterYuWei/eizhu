@@ -98,7 +98,7 @@ export function VaultDetail({ item, onEdit, onDelete }: VaultDetailProps) {
     <header className="vault-detail-heading">
       <div><h2>{item.name || '未命名'}</h2><div className="vault-detail-meta">{VAULT_TYPE_LABELS[item.type]} · {Number.isNaN(date.getTime()) ? '更新时间未知' : `${date.toLocaleDateString('zh-CN')} 更新`}</div></div>
       <div className="vault-detail-heading-actions">
-        <Button type="button" variant="outline" size="sm" onClick={() => onEdit(item)}><Pencil size={14} />编辑</Button>
+        <Button type="button" variant="ghost" size="sm" onClick={() => onEdit(item)}><Pencil size={14} />编辑</Button>
         <DropdownMenu>
           <DropdownMenuTrigger asChild><Button type="button" variant="ghost" size="icon-sm" aria-label="更多凭据操作"><MoreHorizontal size={16} /></Button></DropdownMenuTrigger>
           <DropdownMenuContent align="end"><DropdownMenuItem disabled={busy} variant="destructive" onSelect={() => void requestDelete()}><Trash2 size={14} />删除凭据</DropdownMenuItem></DropdownMenuContent>

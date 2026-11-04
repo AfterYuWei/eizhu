@@ -13,7 +13,7 @@
 .settings-page-layout { display: flex; height: 100%; min-height: 0; gap: 0; }
 .settings-page-sidebar { display: flex; flex-direction: column; flex: 0 0 275px; min-width: 0; overflow: hidden; padding: 0 16px 16px; background: var(--surface-sidebar); }
 .settings-page-titlebar { height: 48px; flex-shrink: 0; margin: 0 -16px; }
-.settings-page-back-row { flex-shrink: 0; padding-bottom: 8px; border-bottom: 1px solid var(--edge-soft); }
+.settings-page-back-row { flex-shrink: 0; padding-bottom: 8px; }
 .settings-page .settings-page-back { justify-content: flex-start; width: 100%; min-height: var(--desktop-menu-row-height, 36px); height: auto; padding: 7px 9px; gap: 8px; font-weight: 400; }
 .settings-page-profile { display: grid; grid-template-columns: 32px minmax(0, 1fr); column-gap: 8px; row-gap: 2px; flex-shrink: 0; padding: 22px 4px 24px; }
 .settings-page-profile .shell-avatar { grid-row: span 2; width: 32px; height: 32px; align-self: center; }
@@ -36,38 +36,37 @@
 .desktop-shell .settings-page .settings-field-info { gap: 4px; }
 .desktop-shell .settings-page .settings-field-desc { margin: 0; color: var(--settings-muted); font-size: max(12px, calc(var(--sans-size) - 2px)); line-height: 1.6; overflow-wrap: anywhere; }
 .desktop-shell .settings-page .settings-content :is(h2, h3) { color: var(--fg); font-size: var(--sans-size); font-weight: 500; line-height: 1.5; }
-.desktop-shell .settings-page :where(.settings-content) :is(.settings-card, .backup-card) { min-width: 0; margin: 0; overflow: hidden; border: 1px solid var(--edge-soft); border-radius: var(--r-lg); background: var(--surface-app); }
+.desktop-shell .settings-page :where(.settings-content) :is(.settings-card, .backup-card) { min-width: 0; margin: 0; overflow: hidden; border: 0; border-radius: var(--r-lg); background: var(--surface-app); }
 .desktop-shell .settings-page :where(.settings-content) .backup-card { padding: 20px; gap: 16px; }
-.desktop-shell .settings-page .settings-card > .settings-field + .settings-field { border-top: 1px solid var(--edge-soft); }
-.desktop-shell .settings-page .settings-card > .settings-divider { margin: 0; background: var(--edge-soft); }
-.desktop-shell .settings-page .settings-content :is(input, [data-slot='select-trigger'], .settings-theme-btn) { min-height: 30px; height: auto; padding: 4px 10px; border-color: var(--border); border-radius: var(--r-sm); background: var(--bg-active); color: var(--fg); box-shadow: none; }
+.desktop-shell .settings-page .settings-content :is(input, [data-slot='select-trigger'], .settings-theme-btn) { min-height: 30px; height: auto; padding: 4px 10px; border-color: transparent; border-radius: var(--r-sm); background: var(--bg-active); color: var(--fg); box-shadow: none; }
 .desktop-shell .settings-page .settings-content :is(.settings-select, .settings-theme-btn) { width: 240px; max-width: 100%; flex-shrink: 0; }
 .desktop-shell .settings-page .settings-number-input { width: 80px !important; background: var(--bg-active) !important; color: var(--fg) !important; }
 .desktop-shell .settings-page .settings-number-unit { color: var(--settings-muted); font-size: max(12px, calc(var(--sans-size) - 2px)); }
 .desktop-shell .settings-page .settings-field-icon { color: var(--settings-muted); }
 .desktop-shell .settings-page .settings-content [data-slot='button'] { min-height: 30px; height: auto; padding: 4px 10px; font-weight: 400; box-shadow: none; }
-.desktop-shell .settings-page .settings-content [data-variant='default'][data-slot='button'] { color: var(--fg); border: 1px solid var(--border); background: var(--bg-active); }
+.desktop-shell .settings-page .settings-content [data-variant='default'][data-slot='button'] { color: var(--fg); border: 0; background: var(--bg-active); }
 .desktop-shell .settings-page .settings-content [data-variant='default'][data-slot='button']:hover { background: var(--bg-hover); }
-.desktop-shell .settings-page .settings-content [data-variant='outline'][data-slot='button'] { border-color: var(--border); background: transparent; }
+.desktop-shell .settings-page .settings-content [data-variant='outline'][data-slot='button'] { border-color: transparent; background: var(--bg-active); }
 .desktop-shell .settings-page .settings-content .settings-theme-btn[data-slot='button'] { background: var(--bg-active); }
 .desktop-shell .settings-page [data-slot='switch-thumb'] { background: light-dark(var(--surface-panel), var(--fg)); }
 .settings-page :is(button, input, [role='combobox']) { font-family: var(--sans); font-size: var(--sans-size); line-height: 1.5; }
 .desktop-shell .settings-page .settings-stack { display: flex; flex-direction: column; gap: 20px; }
 .desktop-shell .settings-page .settings-stack > .settings-section-title { margin-bottom: -8px; }
 .desktop-shell .settings-page .settings-stack > .backup-card > [data-slot='button'] { align-self: flex-end; }
-.desktop-shell .settings-page .settings-status { display: inline-flex; align-items: center; flex-shrink: 0; padding: 4px 10px; border: 1px solid var(--edge-soft); border-radius: var(--r-sm); background: var(--bg-active); color: var(--settings-muted); font-size: max(12px, calc(var(--sans-size) - 2px)); }
-.desktop-shell .settings-page .settings-card-footer { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--edge-soft); }
+.desktop-shell .settings-page .settings-status { display: inline-flex; align-items: center; flex-shrink: 0; padding: 4px 10px; border: 0; border-radius: var(--r-sm); background: var(--bg-active); color: var(--settings-muted); font-size: max(12px, calc(var(--sans-size) - 2px)); }
+.desktop-shell .settings-page .settings-card-footer { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 8px; padding: 12px 16px; }
 .desktop-shell .settings-page .account-form-card { width: min(100%, 480px); padding: 16px; }
 .desktop-shell .settings-page .settings-card-toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; padding: 16px; }
 .desktop-shell .settings-page .settings-empty { margin: 0; padding: 20px 16px; color: var(--settings-muted); font-size: max(12px, calc(var(--sans-size) - 2px)); line-height: 1.6; }
-.desktop-shell .settings-page .about-version-value { max-width: 100%; padding: 4px 10px; border-color: var(--border); border-radius: var(--r-sm); background: var(--bg-active); color: var(--fg); font-size: var(--sans-size); line-height: 1.5; overflow-wrap: anywhere; }
+.desktop-shell .settings-page .about-version-value { max-width: 100%; padding: 4px 10px; border-color: transparent; border-radius: var(--r-sm); background: var(--bg-active); color: var(--fg); font-size: var(--sans-size); line-height: 1.5; overflow-wrap: anywhere; }
 .desktop-shell .settings-page .about-release-notes { max-width: none; }
-.desktop-shell .settings-page .settings-subtabs { flex-direction: row; justify-content: flex-start; width: 100%; height: auto; gap: 24px; padding: 0; border: 0; border-bottom: 1px solid var(--edge-soft); border-radius: 0; background: transparent; }
-.desktop-shell .settings-page .settings-subtabs > [role='tab'] { width: auto; flex: 0 0 auto; min-height: 36px; height: auto; padding: 0 0 10px; border: 0; border-radius: 0; font: 400 var(--sans-size) / 1.5 var(--sans); color: var(--settings-muted); background: transparent; box-shadow: none; }
-.desktop-shell .settings-page .settings-subtabs > [role='tab'][data-state='active'] { color: var(--fg); background: transparent; }
-.desktop-shell .settings-page .settings-subtabs > [role='tab']::after { inset: auto 0 -1px; height: 2px; width: auto; background: var(--fg-2); }
+.desktop-shell .settings-page .settings-subtabs { flex-direction: row; justify-content: flex-start; width: 100%; height: auto; gap: 8px; padding: 0; border: 0; border-radius: 0; background: transparent; }
+.desktop-shell .settings-page .settings-subtabs > [role='tab'] { width: auto; flex: 0 0 auto; min-height: 36px; height: auto; padding: 6px 10px; border: 0; border-radius: var(--r-sm); font: 400 var(--sans-size) / 1.5 var(--sans); color: var(--settings-muted); background: transparent; box-shadow: none; }
+.desktop-shell .settings-page .settings-subtabs > [role='tab']:hover { color: var(--fg); background: var(--bg-hover); }
+.desktop-shell .settings-page .settings-subtabs > [role='tab'][data-state='active'] { color: var(--fg); background: var(--bg-active); }
+.desktop-shell .settings-page .settings-subtabs > [role='tab']::after { display: none; }
 .desktop-shell .settings-page .settings-history-list { max-height: 260px; overflow: auto; }
-.desktop-shell .settings-page .settings-history-entry { display: flex; align-items: flex-start; gap: 16px; padding: 14px 16px; border-top: 1px solid var(--edge-soft); }
+.desktop-shell .settings-page .settings-history-entry { display: flex; align-items: flex-start; gap: 16px; padding: 14px 16px; }
 .desktop-shell .settings-page .settings-history-entry > div { flex: 1; min-width: 0; }
 .desktop-shell .settings-page .settings-history-entry code { color: var(--fg); font-size: max(12px, calc(var(--sans-size) - 2px)); overflow-wrap: anywhere; white-space: pre-wrap; }
 .desktop-shell .settings-page .settings-history-search { width: 300px; max-width: 100%; }
@@ -76,7 +75,7 @@
 .desktop-shell .settings-page .log-toolbar > [data-slot='tabs'] { min-width: 0; }
 .desktop-shell .settings-page .log-actions { flex-wrap: wrap; }
 .desktop-shell .settings-page .log-path { margin: 0; padding: 0 16px 12px; color: var(--settings-muted); font-size: max(12px, calc(var(--sans-size) - 2px)); line-height: 1.5; }
-.desktop-shell .settings-page .log-viewer { min-height: 260px; max-height: 430px; margin: 0; padding: 16px; border: 0; border-top: 1px solid var(--edge-soft); border-bottom: 1px solid var(--edge-soft); border-radius: 0; background: transparent; color: var(--fg); font-size: max(12px, calc(var(--sans-size) - 2px)); }
+.desktop-shell .settings-page .log-viewer { min-height: 260px; max-height: 430px; margin: 0; padding: 16px; border: 0; border-radius: 0; background: transparent; color: var(--fg); font-size: max(12px, calc(var(--sans-size) - 2px)); }
 .desktop-shell .settings-page .settings-log-note { padding: 12px 16px; }
 
 /* 以内容区可用宽度换行，字体放大后允许行自然增高。 */
@@ -85,7 +84,7 @@
   .desktop-shell .settings-page .settings-field > :is(.settings-select, .settings-theme-btn, .settings-history-search) { width: 100%; }
   .desktop-shell .settings-page .settings-number-group { align-self: flex-end; }
   .desktop-shell .settings-page .settings-status { align-self: flex-start; }
-  .desktop-shell .settings-page .settings-subtabs { gap: 16px; flex-wrap: wrap; }
+  .desktop-shell .settings-page .settings-subtabs { flex-wrap: wrap; }
 }
 
 @media (max-width: 960px) {

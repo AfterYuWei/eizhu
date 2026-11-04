@@ -48,7 +48,7 @@ export function DeleteConfirmDialog({ open, onOpenChange, entries, onConfirm, }:
             确定要删除以下 {summary.join('和')} 吗？此操作无法撤销。
           </p>
 
-          <div className="max-h-[300px] overflow-y-auto border rounded-md p-2 space-y-1">
+          <div className="max-h-[300px] overflow-y-auto rounded-md bg-[var(--surface-app)] p-2 space-y-1">
             {entries.map((entry) => (<div key={entry.path} className="flex items-center gap-2 px-2 py-1 text-sm rounded hover:bg-muted">
                 {entry.is_dir ? (<Folder className="h-4 w-4 text-muted-foreground flex-shrink-0"/>) : (<FileText className="h-4 w-4 text-gray-500 flex-shrink-0"/>)}
                 <span className="truncate">{entry.name}</span>

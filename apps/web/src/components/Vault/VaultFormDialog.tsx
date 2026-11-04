@@ -1,5 +1,5 @@
 import { useEffect,useId,useRef,useState } from 'react';
-import { ChevronDown,Copy,Dices,Download,Eye,EyeOff,FileText,Terminal,Upload } from 'lucide-react';
+import { ChevronDown,Copy,Dices,Download,Eye,EyeOff,FileText,KeyRound,Terminal,Upload } from 'lucide-react';
 import { Dialog,DialogContent,DialogHeader,DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { InlineError } from '@/components/ui/inline-error';
@@ -131,6 +131,9 @@ export function VaultForm({ item, onOpenChange, onStateChange, onSaved }: VaultF
     const [loadAttempt, setLoadAttempt] = useState(0);
     const [showGenerator, setShowGenerator] = useState(false);
     const [showPrivateKey, setShowPrivateKey] = useState(false);
+    const [keyAlgorithm, setKeyAlgorithm] = useState('ed25519');
+    const [keyComment, setKeyComment] = useState('');
+    const [generating, setGenerating] = useState(false);
     const publicKeyFileRef = useRef<HTMLInputElement>(null);
     const privateKeyFileRef = useRef<HTMLInputElement>(null);
     useEffect(() => {
@@ -161,7 +164,8 @@ export function VaultForm({ item, onOpenChange, onStateChange, onSaved }: VaultF
         return () => { cancelled = true; };
     }, [item, loadAttempt]);
     const dirty = !isSameForm(form, initialForm);
-    useEffect(() => { onStateChange?.({ dirty, busy: loading }); }, [dirty, loading, onStateChange]);
+    const busy = loading || generating;
+    useEffect(() => { onStateChange?.({ dirty, busy }); }, [dirty, busy, onStateChange]);
     const readFile = (file: File, field: 'private_key' | 'public_key') => {
         if (file.size > 100 * 1024) {
             toast.warning('文件过大，请控制在 100KB 以内');
@@ -183,7 +187,32 @@ export function VaultForm({ item, onOpenChange, onStateChange, onSaved }: VaultF
     const updateField = <K extends keyof VaultCreateRequest>(key: K, value: VaultCreateRequest[K]) => {
         setForm((current) => ({ ...current, [key]: value }));
     };
-    const canSubmit = !loading && !credentialLoading && !credentialError && (!isEditing || dirty);
+    const canSubmit = !busy && !credentialLoading && !credentialError && (!isEditing || dirty);
+    const handleGenerateKeyPair = async () => {
+        if (busy) return;
+        setGenerating(true);
+        setError('');
+        try {
+            const result = await vaultApi.generateKeyPair({
+                algo: keyAlgorithm === 'ed25519' ? 'ed25519' : 'rsa',
+                bits: keyAlgorithm === 'rsa-2048' ? 2048 : keyAlgorithm === 'rsa-4096' ? 4096 : undefined,
+                passphrase: form.passphrase || undefined,
+            });
+            const comment = keyComment.trim();
+            setForm((current) => ({
+                ...current,
+                private_key: result.private_key,
+                public_key: comment ? `${result.public_key} ${comment}` : result.public_key,
+            }));
+            toast.success('SSH 密钥对已生成');
+        }
+        catch (err) {
+            setError(err instanceof Error ? err.message : '生成密钥对失败');
+        }
+        finally {
+            setGenerating(false);
+        }
+    };
     const handleExportPrivateKey = async () => {
         const privateKey = form.private_key?.trim();
         if (!privateKey) {
@@ -276,7 +305,7 @@ export function VaultForm({ item, onOpenChange, onStateChange, onSaved }: VaultF
     };
     return (<form onSubmit={handleSubmit} id={formId} className="vault-form vault-sheet-form">
       {credentialLoading && <p role="status" className="vault-editor-status">正在读取凭据…</p>}
-      <fieldset className="vault-editor-fields" disabled={loading || credentialLoading || credentialError}>
+      <fieldset className="vault-editor-fields" disabled={busy || credentialLoading || credentialError}>
       {/* 基本信息 - 上层 */}
       <section className="vault-form-basic">
         <div className="vault-form-basic-grid">
@@ -311,6 +340,32 @@ export function VaultForm({ item, onOpenChange, onStateChange, onSaved }: VaultF
                 updateField('password', password);
                 setShowGenerator(false);
             }}/>) : (<>
+            {!isEditing && <div className="vault-form-key-options" aria-label="密钥生成选项">
+              <div className="pf-field">
+                <Label htmlFor={`${formId}-algorithm`} className="pf-label">密钥算法</Label>
+                <Select value={keyAlgorithm} onValueChange={setKeyAlgorithm}>
+                  <SelectTrigger id={`${formId}-algorithm`} className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ed25519">ED25519（推荐）</SelectItem>
+                    <SelectItem value="rsa-2048">RSA 2048</SelectItem>
+                    <SelectItem value="rsa-4096">RSA 4096</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="pf-field">
+                <Label htmlFor={`${formId}-comment`} className="pf-label">公钥注释（可选）</Label>
+                <Input id={`${formId}-comment`} value={keyComment} onChange={(event) => setKeyComment(event.target.value)} placeholder="例如：ops@example.com" />
+              </div>
+              <div className="pf-field vault-form-passphrase-field">
+                <Label htmlFor={`${formId}-passphrase`} className="pf-label">私钥口令（可选）</Label>
+                <Input id={`${formId}-passphrase`} type="password" value={form.passphrase ?? ''} onChange={(event) => updateField('passphrase', event.target.value)} placeholder="留空表示不加密私钥" className="pf-input-mono" />
+              </div>
+              <div className="vault-form-key-generate-action">
+                <Button type="button" variant="outline" size="sm" onClick={() => void handleGenerateKeyPair()} disabled={busy}>
+                  <KeyRound size={14} />{generating ? '生成中…' : form.private_key?.trim() ? '重新生成密钥对' : '生成密钥对'}
+                </Button>
+              </div>
+            </div>}
             <section className="vault-form-key-panel">
               <div className="vault-form-key-head">
                 <span className="vault-form-key-title">私钥</span>
@@ -381,12 +436,12 @@ export function VaultForm({ item, onOpenChange, onStateChange, onSaved }: VaultF
             }}/>
             </section>
 
-            <div className="vault-form-passphrase-row">
+            {isEditing && <div className="vault-form-passphrase-row">
               <div className="pf-field vault-form-passphrase-field">
                 <Label htmlFor={`${formId}-passphrase`} className="pf-label">私钥口令（可选）</Label>
                 <Input id={`${formId}-passphrase`} type="password" value={form.passphrase ?? ''} onChange={(event) => updateField('passphrase', event.target.value)} placeholder="请输入密码短语..." className="pf-input-mono"/>
               </div>
-            </div>
+            </div>}
           </>)}
       </div>
       </fieldset>
@@ -395,7 +450,7 @@ export function VaultForm({ item, onOpenChange, onStateChange, onSaved }: VaultF
         <InlineError message={credentialError ? '读取凭据失败，原有内容已保留。' : error} className="vault-sheet-error"/>
         <div className="vault-sheet-footer-actions">
           {credentialError && <Button type="button" variant="outline" size="sm" onClick={() => setLoadAttempt((value) => value + 1)}>重试</Button>}
-          <Button type="button" variant="outline" disabled={loading} onClick={() => onOpenChange(false)} className="pf-btn-cancel">
+          <Button type="button" variant="outline" disabled={busy} onClick={() => onOpenChange(false)} className="pf-btn-cancel">
             取消
           </Button>
           <Button type="submit" form={formId} disabled={!canSubmit} className="pf-btn-submit">
