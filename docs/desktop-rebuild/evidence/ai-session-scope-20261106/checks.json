@@ -1,0 +1,26 @@
+{
+  "sourceCommit": "28704c762887ab2fb41f021ebb0631e47945f379",
+  "check": true,
+  "lint": true,
+  "web": {
+    "files": 87,
+    "passed": 986
+  },
+  "foundation": {
+    "passed": 259,
+    "skipped": 2,
+    "skipReason": "Fish not installed"
+  },
+  "fixedBaselineTests": 10,
+  "focusedInspectorTests": 17,
+  "baselineVerify": true,
+  "architectureVerify": true,
+  "electronAiSmoke": true,
+  "packagedSmoke": "not-run-this-ui-followup",
+  "productionCodeScope": "renderer-only",
+  "nativeServices": "unchanged",
+  "testServices": "loopback-synthetic model and SSH; installed OpenSSH SFTP",
+  "downloadedBinaries": false,
+  "pushed": false,
+  "temporaryWorktreeRemoved": true
+}
