@@ -360,7 +360,10 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
     assert.equal(await js("return document.querySelector('.ai-inspector').checkVisibility()"), true)
     assert.equal(await js("return document.querySelector('.ai-scope-summary').textContent"), '连接范围 · 2')
     assert.equal(await js("return !!document.querySelector('.ai-scope')"), false)
-    assert.equal(await js("return document.querySelector('[aria-label=执行模式]').textContent"), '执行前确认')
+    assert.equal(
+      await js("return document.querySelector('#ai-permission-picker').getAttribute('aria-label')"),
+      '执行模式：执行前确认',
+    )
     await js(
       "const input=document.querySelector('.ai-composer textarea');Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(input,'合成验收：检查两个连接');input.dispatchEvent(new Event('input',{bubbles:true}))",
     )
@@ -371,6 +374,12 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
     assert.equal(
       await js(
         "const s=document.querySelector('.ai-command-summary'),p=s.querySelector('.ai-command-purpose').getBoundingClientRect(),t=s.querySelector('.ai-command-status').getBoundingClientRect();return p.width>40&&p.bottom<=t.top+1",
+      ),
+      true,
+    )
+    assert.equal(
+      await js(
+        "return !!document.querySelector('.ai-composer #ai-permission-picker')&&!document.querySelector('.ai-session-controls button')",
       ),
       true,
     )
@@ -654,6 +663,25 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
         assert.ok(dark ? brightness < 130 : brightness > 160, 'Composer theme must be painted before capture')
         await writeFile(join(root, name), capture.toPNG())
         screenshots.push(name)
+        await wait("return !document.getElementById('ai-permission-picker').disabled")
+        await js(
+          "document.getElementById('ai-permission-picker').dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}))",
+        )
+        await wait("return document.querySelectorAll('.ai-permission-menu [role=menuitemradio]').length===3")
+        await wait(
+          "const e=document.querySelector('.ai-permission-menu'),r=e.getBoundingClientRect();return e.scrollWidth<=e.clientWidth+1&&r.left>=0&&r.right<=innerWidth+1&&r.top>=0&&r.bottom<=innerHeight+1",
+        )
+        await js('await document.fonts.ready;await new Promise(r=>setTimeout(r,150))')
+        const menuName = 'ai-permission-' + width + (dark ? '-dark' : '-light') + '.png'
+        await writeFile(
+          join(root, menuName),
+          (await window.webContents.capturePage(undefined, { stayAwake: true })).toPNG(),
+        )
+        screenshots.push(menuName)
+        await js(
+          "document.querySelector('.ai-permission-menu').dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))",
+        )
+        await wait("return !document.querySelector('.ai-permission-menu')")
       }
     await js(
       "document.querySelector('.ai-inspector').style.width='';document.documentElement.classList.remove('dark')",
@@ -806,6 +834,8 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
       scopeFollowsOpenSshSessions: true,
       scopeReadOnly: true,
       executionModeExplained: true,
+      executionModeInsideComposer: true,
+      permissionPopupLayout: true,
       composerCliAvailabilityFiltered: true,
       composerCandidateModelSelection: true,
       composerSwitchExpiresApprovalAndPreservesDraft: true,

@@ -1,34 +1,59 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Plus, Square, History, ChevronDown, Settings2, ArrowUp, Bot, FileText, X } from 'lucide-react'
-import type { AiConversation, AiBackend, AiCapabilities, AiCliStatus, AiModelCatalog } from '@eizhu/contracts'
+import { Plus, Square, History, ChevronDown, Settings2, ArrowUp, FileText, X } from 'lucide-react'
+import type {
+  AiConversation,
+  AiBackend,
+  AiCapabilities,
+  AiCliStatus,
+  AiModelCatalog,
+  AiProvider,
+} from '@eizhu/contracts'
 import { useAiStore } from '@/store/ai'
 import { useSessionStore } from '@/store/session'
 import { useDesktopShellStore } from '@/store/desktopShell'
 import { bridge } from '@/lib/bridge'
-import { AiIcon } from '@/lib/serverIcons'
+import { AiIcon, AiAgentIcon, AiModeCheckIcon, AI_PERMISSION_ICONS } from '@/lib/serverIcons'
 import { useAccountStore } from '@/store/account'
 import { workspaceGeneration } from '@/lib/workspaceScope'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { ShellIconButton, ShellResizeHandle } from '@/components/Layout/ShellControls'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectGroup,
-  SelectLabel,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuGroup,
 } from '@/components/ui/dropdown-menu'
 import { AiMessage } from './AiMessage'
 import { AiApproval } from './AiApproval'
 import './ai.css'
+const permissionModes = [
+  {
+    value: 'observer',
+    label: '只读观察',
+    short: '只读',
+    description: '仅允许读取，不执行命令或修改文件',
+    Icon: AI_PERMISSION_ICONS.observer,
+  },
+  {
+    value: 'confirm',
+    label: '执行前确认',
+    short: '审批',
+    description: '命令执行和文件修改前由你审批',
+    Icon: AI_PERMISSION_ICONS.confirm,
+  },
+  {
+    value: 'auto',
+    label: '自动执行',
+    short: '自动',
+    description: '在当前SSH会话范围内直接执行',
+    Icon: AI_PERMISSION_ICONS.auto,
+  },
+] as const
+
 type Draft = { text: string; attachments: Array<{ name: string; content: string }> }
 export function AiInspector({
   open,
@@ -46,6 +71,7 @@ export function AiInspector({
   const { selectedId, conversations, select, put, progress, forget, settings, setSettings } = useAiStore()
   const conversation = selectedId ? conversations[selectedId] : undefined
   const conversationId = conversation?.id
+  const mode = permissionModes.find((m) => m.value === (conversation?.permission ?? 'confirm'))!
   const loggedIn = useAccountStore((s) => s.status?.loggedIn)
   const [cliStatuses, setCliStatuses] = useState<AiCliStatus[]>([])
   const [official, setOfficial] = useState<AiCapabilities | null>(null)
@@ -72,18 +98,21 @@ export function AiInspector({
     conversation?.status === 'executing' ||
     conversation?.status === 'awaiting_confirmation'
   const update = (value: Partial<Draft>) => setDrafts((s) => ({ ...s, [key]: { ...draft, ...value } }))
-  const act = useCallback(async (action: () => Promise<unknown>) => {
-    const generation = workspaceGeneration()
-    setLoading(true)
-    setError('')
-    try {
-      await action()
-    } catch (e) {
-      if (generation === workspaceGeneration()) setError(e instanceof Error ? e.message : '操作失败')
-    } finally {
-      if (generation === workspaceGeneration()) setLoading(false)
-    }
-  }, [setLoading, setError])
+  const act = useCallback(
+    async (action: () => Promise<unknown>) => {
+      const generation = workspaceGeneration()
+      setLoading(true)
+      setError('')
+      try {
+        await action()
+      } catch (e) {
+        if (generation === workspaceGeneration()) setError(e instanceof Error ? e.message : '操作失败')
+      } finally {
+        if (generation === workspaceGeneration()) setLoading(false)
+      }
+    },
+    [setLoading, setError],
+  )
   useEffect(() => {
     if (!open || !conversationId || sessionKey === targetKey || !window.eizhu) return
     let live = true
@@ -139,6 +168,7 @@ export function AiInspector({
       label: string
       backend: AiBackend
       models: AiModelCatalog['models']
+      provider?: Pick<AiProvider, 'name' | 'endpoint'>
     }> = []
     if (!settings?.enabled) return choices
     if (official?.available && official.models.length)
@@ -153,6 +183,7 @@ export function AiInspector({
       if (!models.has(provider.model))
         models.set(provider.model, { id: provider.model, name: provider.model })
       choices.push({
+        provider,
         value: 'provider:' + provider.id,
         label: provider.name,
         models: [...models.values()],
@@ -315,37 +346,6 @@ export function AiInspector({
           >
             连接范围 · {sessionIds.length}
           </span>
-          <Select
-            value={conversation?.permission ?? 'confirm'}
-            disabled={!conversation || loading}
-            onValueChange={(value) => {
-              if (conversation && (value === 'observer' || value === 'confirm' || value === 'auto'))
-                void act(async () =>
-                  put(await bridge().ai.permission({ conversationId: conversation.id, permission: value })),
-                )
-            }}
-          >
-            <SelectTrigger
-              aria-label="执行模式"
-              title={
-                conversation?.permission === 'observer'
-                  ? '只允许结构化读取，不能执行shell命令或修改文件'
-                  : conversation?.permission === 'auto'
-                    ? '在当前SSH会话范围内直接执行，无需逐次审批'
-                    : '执行shell命令或修改文件前，需要你确认操作'
-              }
-            >
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectGroup>
-                <SelectLabel>执行模式</SelectLabel>
-                <SelectItem value="observer">只读观察</SelectItem>
-                <SelectItem value="confirm">执行前确认</SelectItem>
-                <SelectItem value="auto">自动执行</SelectItem>
-              </SelectGroup>
-            </SelectContent>
-          </Select>
         </div>
       </div>
       <div className="ai-transcript">
@@ -530,6 +530,54 @@ export function AiInspector({
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  id="ai-permission-picker"
+                  variant="ghost"
+                  className="ai-permission-picker"
+                  aria-label={'执行模式：' + mode.label}
+                  title={mode.description}
+                  disabled={!conversation || loading || !settings?.enabled}
+                >
+                  <mode.Icon size={14} />
+                  <span>{mode.short}</span>
+                  <ChevronDown size={12} />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent side="top" align="start" className="ai-permission-menu">
+                <DropdownMenuLabel>AI操作权限</DropdownMenuLabel>
+                <DropdownMenuGroup aria-label="执行模式">
+                  {permissionModes.map((item) => (
+                    <DropdownMenuItem
+                      key={item.value}
+                      role="menuitemradio"
+                      aria-checked={mode.value === item.value}
+                      onSelect={() => {
+                        if (conversation && item.value !== mode.value)
+                          void act(async () =>
+                            put(
+                              await bridge().ai.permission({
+                                conversationId: conversation.id,
+                                permission: item.value,
+                              }),
+                            ),
+                          )
+                      }}
+                    >
+                      <item.Icon size={16} />
+                      <span className="ai-permission-copy">
+                        <span>{item.label}</span>
+                        <small>{item.description}</small>
+                      </span>
+                      {mode.value === item.value && (
+                        <AiModeCheckIcon size={14} className="ai-permission-check" />
+                      )}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
             <Select
               value={agent?.value ?? ''}
               disabled={loading || !settings?.enabled}
@@ -547,13 +595,16 @@ export function AiInspector({
                 aria-label="选择Agent"
                 title={agent?.label}
               >
-                <Bot size={13} />
-                <SelectValue placeholder="Agent" />
+                <AiAgentIcon kind={agent?.backend.kind} provider={agent?.provider} size={14} />
+                <SelectValue placeholder="Agent">{agent?.label}</SelectValue>
               </SelectTrigger>
               <SelectContent>
                 {agents.map((a) => (
                   <SelectItem key={a.value} value={a.value}>
-                    {a.label}
+                    <span className="ai-agent-option">
+                      <AiAgentIcon kind={a.backend.kind} provider={a.provider} size={16} />
+                      {a.label}
+                    </span>
                   </SelectItem>
                 ))}
                 {!agents.length && (

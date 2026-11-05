@@ -22,6 +22,7 @@ const api = vi.hoisted(() => ({
     cliStatus: vi.fn(),
     capabilities: vi.fn(),
     backend: vi.fn(),
+    permission: vi.fn(),
   },
   document: { pick: vi.fn(), readText: vi.fn(), release: vi.fn() },
   events: { on: vi.fn(() => () => {}) },
@@ -140,6 +141,10 @@ beforeEach(async () => {
       messages: c.messages.filter((m) => !m.tool),
     }),
   )
+  api.ai.permission.mockImplementation(async ({ permission }) => ({
+    ...useAiStore.getState().conversations.chat,
+    permission,
+  }))
   api.ai.cancel.mockResolvedValue(undefined)
   api.ai.read.mockImplementation(async ({ conversationId }: { conversationId: string }) => ({
     ...useAiStore.getState().conversations[conversationId],
@@ -280,10 +285,42 @@ it('closing all SSH sessions stops the Agent and blocks sending', async () => {
   await fill('不能执行')
   expect(button('发送').disabled).toBe(true)
 })
-it('execution modes explain confirmation instead of using an ambiguous label', async () => {
-  const control = host.querySelector('[aria-label="执行模式"]')!
-  expect(control.textContent).toBe('执行前确认')
-  expect(control.getAttribute('title')).toContain('执行shell命令或修改文件前')
+it('permission control is inside the input card and explains all three remote modes', async () => {
+  const control = host.querySelector<HTMLButtonElement>('#ai-permission-picker')!
+  expect(host.querySelector('.ai-composer #ai-permission-picker')).toBe(control)
+  expect(host.querySelector('.ai-session-controls #ai-permission-picker')).toBeNull()
+  expect(control.getAttribute('aria-label')).toBe('执行模式：执行前确认')
+  expect(control.getAttribute('title')).toContain('命令执行和文件修改前由你审批')
+  await act(async () => control.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })))
+  const options = [...document.querySelectorAll<HTMLElement>('[role=menuitemradio]')]
+  expect(options).toHaveLength(3)
+  expect(options[1].getAttribute('aria-checked')).toBe('true')
+  expect(options[0].textContent).toContain('不执行命令或修改文件')
+  expect(options[2].textContent).toContain('当前SSH会话范围内')
+  await act(async () => options[2].click())
+  expect(api.ai.permission).toHaveBeenCalledWith({ conversationId: 'chat', permission: 'auto' })
+  expect(control.getAttribute('aria-label')).toBe('执行模式：自动执行')
+})
+it('supplier icon follows the provider and available native CLI instead of a robot', async () => {
+  await act(async () =>
+    useAiStore
+      .getState()
+      .setSettings({
+        ...useAiStore.getState().settings!,
+        providers: [
+          {
+            ...useAiStore.getState().settings!.providers[0],
+            name: 'DeepSeek',
+            endpoint: 'https://api.deepseek.com',
+          },
+        ],
+      }),
+  )
+  await choose('ai-agent-picker', 'DeepSeek')
+  expect(host.querySelector('#ai-agent-picker [data-ai-brand=deepseek]')).not.toBeNull()
+  expect(host.querySelector('#ai-agent-picker .lucide-bot')).toBeNull()
+  await choose('ai-agent-picker', 'Codex')
+  expect(host.querySelector('#ai-agent-picker [data-ai-brand=codex]')).not.toBeNull()
 })
 
 it('idle Agent retains independent and all-task stop controls for running jobs', async () => {

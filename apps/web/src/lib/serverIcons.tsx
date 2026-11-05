@@ -15,11 +15,26 @@ MemoryStick,
 Layers,
 Gauge,
 ServerCog,
+Blocks,
+Orbit,
+ScanEye,
+ListChecks,
+Zap,
 type LucideProps,
 } from 'lucide-react'
+import type { AiBackend, AiProvider } from '@eizhu/contracts'
 import { createElement,forwardRef,type ComponentType } from 'react'
 import {
 siAlmalinux,
+siAlibabacloud,
+siAnthropic,
+siClaudecode,
+siDeepseek,
+siGooglegemini,
+siMoonshotai,
+siOllama,
+siOpenrouter,
+siQwen,
 siAlpinelinux,
 siArchlinux,
 siCentos,
@@ -70,7 +85,7 @@ import { DEFAULT_SERVER_ICON } from '@/lib/serverIconKeys'
 
 type ServerIconComponent = ComponentType<LucideProps>
 
-export { CircleHelp as HelpIcon } from 'lucide-react'
+export { CircleHelp as HelpIcon, Check as AiModeCheckIcon } from 'lucide-react'
 
 export const AiIcon = forwardRef<SVGSVGElement, LucideProps>(({ size = 24, color = 'currentColor', ...props }, ref) => (
   <svg
@@ -106,6 +121,42 @@ function simpleIcon(icon: SimpleIcon): ServerIconComponent {
   ))
   Component.displayName = `${icon.title}ServerIcon`
   return Component
+}
+
+export const AI_PERMISSION_ICONS = { observer: ScanEye, confirm: ListChecks, auto: Zap }
+
+const AI_PROVIDER_ICONS = [
+  { match: /deepseek/i, key: 'deepseek', Icon: simpleIcon(siDeepseek) },
+  { match: /anthropic|claude/i, key: 'anthropic', Icon: simpleIcon(siAnthropic) },
+  { match: /dashscope|qwen|通义|百炼/i, key: 'qwen', Icon: simpleIcon(siQwen) },
+  { match: /aliyun|阿里云/i, key: 'aliyun', Icon: simpleIcon(siAlibabacloud) },
+  { match: /gemini|generativelanguage\.googleapis/i, key: 'gemini', Icon: simpleIcon(siGooglegemini) },
+  { match: /moonshot|kimi/i, key: 'moonshot', Icon: simpleIcon(siMoonshotai) },
+  { match: /openrouter/i, key: 'openrouter', Icon: simpleIcon(siOpenrouter) },
+  { match: /ollama/i, key: 'ollama', Icon: simpleIcon(siOllama) },
+  { match: /openai/i, key: 'openai', Icon: Orbit },
+]
+const ClaudeCodeIcon = simpleIcon(siClaudecode)
+
+/** Provider marks use installed local assets and inherit the interface foreground. */
+export function AiAgentIcon({
+  kind,
+  provider,
+  ...props
+}: LucideProps & {
+  kind?: AiBackend['kind']
+  provider?: Pick<AiProvider, 'name' | 'endpoint'>
+}) {
+  if (kind === 'official') return <AiIcon {...props} data-ai-brand="eizhu" />
+  if (kind === 'codex') return <Terminal {...props} data-ai-brand="codex" />
+  if (kind === 'claude') return <ClaudeCodeIcon {...props} data-ai-brand="claude-code" />
+  const brand = AI_PROVIDER_ICONS.find((entry) =>
+    entry.match.test(
+      kind === 'deepseek' ? 'deepseek' : provider ? provider.endpoint + ' ' + provider.name : '',
+    ),
+  )
+  const attributes = { ...props, 'aria-hidden': true, 'data-ai-brand': brand?.key ?? 'custom' }
+  return createElement(brand?.Icon ?? Blocks, attributes)
 }
 
 function officialImageIcon(
