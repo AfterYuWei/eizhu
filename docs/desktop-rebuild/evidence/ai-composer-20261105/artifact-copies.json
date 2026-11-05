@@ -1,0 +1,22 @@
+[
+  {
+    "path": "artifacts/desktop/eizhu-0.5.0-test.393.82517ec4-mac-x64.dmg",
+    "sha256": "5e7ec72a80c9a46aaa59f93b8a3838f1cbaedd24f1a38badb490e01bf8065772",
+    "bytes": 158749839
+  },
+  {
+    "path": "artifacts/desktop/eizhu-0.5.0-test.393.82517ec4-mac-x64.dmg.blockmap",
+    "sha256": "ca4c8e40d11737890b84228e94ef0bc9da3ae5d722c5fb8ba86b05fd4ba336b9",
+    "bytes": 166195
+  },
+  {
+    "path": "artifacts/desktop/eizhu-0.5.0-test.393.82517ec4-mac-x64.zip",
+    "sha256": "3cd804087e144a078f17011e2191b56b7488be67129a73fd36751138014bd937",
+    "bytes": 158096261
+  },
+  {
+    "path": "artifacts/desktop/eizhu-0.5.0-test.393.82517ec4-mac-x64.zip.blockmap",
+    "sha256": "17112d31d0054fbcea21a836f382e9af23d4f1520f6112746da08667e7fa9d55",
+    "bytes": 165346
+  }
+]
