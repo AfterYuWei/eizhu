@@ -8,10 +8,10 @@ import { join } from 'node:path'
 import { ShellOutput, shellSetupCommand } from './shell.ts'
 
 test('detects supported login shells without sending syntax to unknown shells', () => {
-  for (const name of ['bash', 'zsh', 'fish']) {
+  for (const name of ['bash', 'zsh', 'fish', 'sh']) {
     assert.ok(shellSetupCommand(`login banner\n/usr/local/bin/${name}\n`)?.includes('__eizhu_osc7'))
   }
-  assert.equal(shellSetupCommand('/bin/sh\n'), undefined)
+  assert.equal(shellSetupCommand('/bin/unsupported-shell\n'), undefined)
   assert.equal(shellSetupCommand(''), undefined)
 })
 

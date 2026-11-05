@@ -1,4 +1,7 @@
 import { AiStreamRelay } from '@eizhu/core/agent/relay'
+import { CliAgentHost } from './ai-cli.ts'
+import { z } from 'zod'
+import { aiCliSchema, failureOf } from '@eizhu/contracts'
 import { aiNetwork } from './ai-network.ts'
 import type { AiTransport } from '@eizhu/core/agent/model'
 import { SyncEventRelay } from '@eizhu/core/sync/relay'
@@ -11,7 +14,14 @@ import { utilityProcess } from 'electron'
 import type { UtilityProcess, MessagePortMain } from 'electron'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
-import { DesktopError, sameContext, eventSchemas, isDesktopEvent, offlineWorkspace, contextSchema } from '@eizhu/contracts'
+import {
+  DesktopError,
+  sameContext,
+  eventSchemas,
+  isDesktopEvent,
+  offlineWorkspace,
+  contextSchema,
+} from '@eizhu/contracts'
 import type { RuntimeContext, Failure, WorkspaceIdentity } from '@eizhu/contracts'
 import { validateWorkspace } from '@eizhu/core/account/workspace'
 import { stopProcess } from './process-shutdown.ts'
@@ -22,7 +32,15 @@ export class RuntimeHost {
   private child?: UtilityProcess
   private pending = new Map<string, Pending>()
   private stopping?: Promise<void>
-  onEvent?: (name: 'eizhu-session-message'|'eizhu-sftp-message'|'eizhu-account-message'|'eizhu-sync-message'|'eizhu-ai-message', payload: unknown) => void
+  onEvent?: (
+    name:
+      | 'eizhu-session-message'
+      | 'eizhu-sftp-message'
+      | 'eizhu-account-message'
+      | 'eizhu-sync-message'
+      | 'eizhu-ai-message',
+    payload: unknown,
+  ) => void
   readonly context: RuntimeContext
   workspace: WorkspaceIdentity
   private requestedWorkspace?: WorkspaceIdentity
@@ -30,12 +48,35 @@ export class RuntimeHost {
   private directory: string
   private failed: () => void
   private key: Buffer
-  private events:SyncEventRelay
+  private events: SyncEventRelay
   private agentStreams: AiStreamRelay
+  private agents: CliAgentHost
+  private agentRuns = new Map<string, AbortController>()
+  private agentTools = new Map<
+    string,
+    { runId: string; resolve: (value: unknown) => void; reject: (error: unknown) => void }
+  >()
   private fixtureAccountTransport?: Transport
-  constructor(root: string, directory: string, generation: number, failed: () => void, key: Buffer, workspace?: WorkspaceIdentity, fixtureAccountTransport?: Transport, fixtureEventStream?:EventStream, fixtureAiTransport?: AiTransport) {
-    this.agentStreams = new AiStreamRelay(message => this.child?.postMessage({ ...message, context: this.context }), fixtureAiTransport ?? aiNetwork)
-    this.events=new SyncEventRelay(message=>this.child?.postMessage({...message as object,context:this.context}),fixtureEventStream??syncEventStream)
+  constructor(
+    root: string,
+    directory: string,
+    generation: number,
+    failed: () => void,
+    key: Buffer,
+    workspace?: WorkspaceIdentity,
+    fixtureAccountTransport?: Transport,
+    fixtureEventStream?: EventStream,
+    fixtureAiTransport?: AiTransport,
+  ) {
+    this.agents = new CliAgentHost(directory, root)
+    this.agentStreams = new AiStreamRelay(
+      (message) => this.child?.postMessage({ ...message, context: this.context }),
+      fixtureAiTransport ?? aiNetwork,
+    )
+    this.events = new SyncEventRelay(
+      (message) => this.child?.postMessage({ ...(message as object), context: this.context }),
+      fixtureEventStream ?? syncEventStream,
+    )
     this.root = root
     this.directory = directory
     this.failed = failed
@@ -61,32 +102,137 @@ export class RuntimeHost {
         child.kill()
       }, 30_000)
       child.on('message', (message) => {
+        if (typeof message.type === 'string' && message.type.startsWith('ai.agent.')) {
+          if (!sameContext(message.context, this.context) || typeof message.id !== 'string') return
+          const send = (data: object) => {
+            if (this.child === child) child.postMessage({ ...data, context: this.context })
+          }
+          if (message.type === 'ai.agent.abort') {
+            this.agentRuns.get(message.id)?.abort()
+            return
+          }
+          if (message.type === 'ai.agent.tool.result') {
+            const p = this.agentTools.get(message.callId)
+            if (!p || p.runId !== message.id) return
+            this.agentTools.delete(message.callId)
+            if (message.error) p.reject(new DesktopError(message.error))
+            else p.resolve(message.result)
+            return
+          }
+          if (this.agentRuns.size >= 4 || this.agentRuns.has(message.id)) {
+            send({
+              type: 'ai.agent.end',
+              id: message.id,
+              error: { code: 'AI_BUSY', message: 'Agent请求过多' },
+            })
+            return
+          }
+          const controller = new AbortController()
+          this.agentRuns.set(message.id, controller)
+          const work = async () => {
+            if (message.type === 'ai.agent.status')
+              return this.agents.status(z.array(aiCliSchema).max(3).parse(message.input))
+            if (message.type !== 'ai.agent.run') throw new Error('Invalid agent message')
+            const input = z
+              .strictObject({
+                conversationId: z.uuid(),
+                cli: aiCliSchema,
+                prompt: z.string().max(524288),
+                nativeSession: z.string().max(512).optional(),
+              })
+              .parse(message.input)
+            return this.agents.run(
+              input,
+              controller.signal,
+              (text) => send({ type: 'ai.agent.text', id: message.id, text }),
+              (name, args) =>
+                new Promise((resolve, reject) => {
+                  if (controller.signal.aborted) {
+                    reject(new Error('Aborted'))
+                    return
+                  }
+                  const callId = randomUUID(),
+                    abort = () => {
+                      this.agentTools.delete(callId)
+                      reject(new Error('Aborted'))
+                    }
+                  controller.signal.addEventListener('abort', abort, { once: true })
+                  this.agentTools.set(callId, {
+                    runId: message.id,
+                    resolve: (value) => {
+                      controller.signal.removeEventListener('abort', abort)
+                      resolve(value)
+                    },
+                    reject: (error) => {
+                      controller.signal.removeEventListener('abort', abort)
+                      reject(error)
+                    },
+                  })
+                  send({ type: 'ai.agent.tool', id: message.id, callId, name, args })
+                }),
+              () => send({ type: 'ai.agent.revoked', id: message.id }),
+            )
+          }
+          void work()
+            .then(
+              (result) => send({ type: 'ai.agent.end', id: message.id, result }),
+              (error) => send({ type: 'ai.agent.end', id: message.id, error: failureOf(error) }),
+            )
+            .finally(() => {
+              controller.abort()
+              this.agentRuns.delete(message.id)
+            })
+          return
+        }
         if (['ai.stream.open', 'ai.stream.ack', 'ai.stream.abort'].includes(message.type)) {
           if (!sameContext(message.context, this.context) || typeof message.id !== 'string') return
           if (message.type === 'ai.stream.open') this.agentStreams.open(message.id, message.request)
-          else if (message.type === 'ai.stream.ack') this.agentStreams.acknowledge(message.id, message.sequence)
+          else if (message.type === 'ai.stream.ack')
+            this.agentStreams.acknowledge(message.id, message.sequence)
           else this.agentStreams.abort(message.id)
           return
         }
-        if (['sync.events.open','sync.events.ack','sync.events.abort'].includes(message.type)) {
-          if(!sameContext(message.context,this.context)||typeof message.id!=='string')return
-          if(message.type==='sync.events.open')this.events.open(message.id,message.request)
-          else if(message.type==='sync.events.ack')this.events.acknowledge(message.id,message.sequence)
+        if (['sync.events.open', 'sync.events.ack', 'sync.events.abort'].includes(message.type)) {
+          if (!sameContext(message.context, this.context) || typeof message.id !== 'string') return
+          if (message.type === 'sync.events.open') this.events.open(message.id, message.request)
+          else if (message.type === 'sync.events.ack') this.events.acknowledge(message.id, message.sequence)
           else this.events.abort(message.id)
           return
         }
-        if (message.type === 'cloud.abort'||message.type==='account.abort') { if(sameContext(message.context,this.context))this.network.get(message.id)?.abort(); return }
-        if (message.type === 'cloud.request'||message.type==='account.request') {
-          if (!sameContext(message.context,this.context) || typeof message.id !== 'string') return
+        if (message.type === 'cloud.abort' || message.type === 'account.abort') {
+          if (sameContext(message.context, this.context)) this.network.get(message.id)?.abort()
+          return
+        }
+        if (message.type === 'cloud.request' || message.type === 'account.request') {
+          if (!sameContext(message.context, this.context) || typeof message.id !== 'string') return
           const responseType = message.type === 'account.request' ? 'account.response' : 'cloud.response'
-          if(this.network.size>=8||this.network.has(message.id)){child.postMessage({type:responseType,id:message.id,error:true});return}
-          const controller = new AbortController(); this.network.set(message.id,controller)
-          const timeout = setTimeout(()=>controller.abort(),20000)
-          const task = message.type === 'account.request' ? accountRequest(message.request, controller.signal, this.fixtureAccountTransport) : cloudRequest(message.request,controller.signal)
-          void task.then(value=>{
-            if(this.child===child)child.postMessage({type:responseType,id:message.id,value})
-            if(responseType==='account.response')value.body.fill(0)
-          },()=>{if(this.child===child)child.postMessage({type:responseType,id:message.id,error:true})}).catch(()=>undefined).finally(()=>{clearTimeout(timeout);this.network.delete(message.id)})
+          if (this.network.size >= 8 || this.network.has(message.id)) {
+            child.postMessage({ type: responseType, id: message.id, error: true })
+            return
+          }
+          const controller = new AbortController()
+          this.network.set(message.id, controller)
+          const timeout = setTimeout(() => controller.abort(), 20000)
+          const task =
+            message.type === 'account.request'
+              ? accountRequest(message.request, controller.signal, this.fixtureAccountTransport)
+              : cloudRequest(message.request, controller.signal)
+          void task
+            .then(
+              (value) => {
+                if (this.child === child) child.postMessage({ type: responseType, id: message.id, value })
+                if (responseType === 'account.response') value.body.fill(0)
+              },
+              () => {
+                if (this.child === child)
+                  child.postMessage({ type: responseType, id: message.id, error: true })
+              },
+            )
+            .catch(() => undefined)
+            .finally(() => {
+              clearTimeout(timeout)
+              this.network.delete(message.id)
+            })
           return
         }
 
@@ -94,22 +240,43 @@ export class RuntimeHost {
           message.type === 'event' &&
           sameContext(message.context, this.context) &&
           isDesktopEvent(message.name) &&
-          ['eizhu-session-message','eizhu-sftp-message','eizhu-account-message','eizhu-sync-message','eizhu-ai-message'].includes(message.name)
+          [
+            'eizhu-session-message',
+            'eizhu-sftp-message',
+            'eizhu-account-message',
+            'eizhu-sync-message',
+            'eizhu-ai-message',
+          ].includes(message.name)
         ) {
-          const parsed = eventSchemas[message.name as 'eizhu-session-message'|'eizhu-sftp-message'|'eizhu-account-message'|'eizhu-sync-message'|'eizhu-ai-message'].safeParse(message.payload)
+          const parsed = eventSchemas[
+            message.name as
+              | 'eizhu-session-message'
+              | 'eizhu-sftp-message'
+              | 'eizhu-account-message'
+              | 'eizhu-sync-message'
+              | 'eizhu-ai-message'
+          ].safeParse(message.payload)
           if (parsed.success) this.onEvent?.(message.name, parsed.data)
         }
         if (message.type === 'ready') {
           clearTimeout(timer)
           try {
-            const context = contextSchema.parse(message.context), workspace = validateWorkspace(message.workspace)
-            if (context.runtimeId !== this.context.runtimeId || context.generation !== this.context.generation
-              || context.workspaceId !== workspace.id || (this.requestedWorkspace && workspace.id !== this.requestedWorkspace.id))
+            const context = contextSchema.parse(message.context),
+              workspace = validateWorkspace(message.workspace)
+            if (
+              context.runtimeId !== this.context.runtimeId ||
+              context.generation !== this.context.generation ||
+              context.workspaceId !== workspace.id ||
+              (this.requestedWorkspace && workspace.id !== this.requestedWorkspace.id)
+            )
               throw new Error('Unexpected workspace')
             this.workspace = workspace
             this.context.workspaceId = workspace.id
             resolve()
-          } catch { reject(new Error('Runtime workspace identity mismatch')); child.kill() }
+          } catch {
+            reject(new Error('Runtime workspace identity mismatch'))
+            child.kill()
+          }
         }
         if (message.type === 'fatal') {
           clearTimeout(timer)
@@ -138,7 +305,7 @@ export class RuntimeHost {
         workers: this.directory,
         key: this.key,
         workspace: this.requestedWorkspace,
-        localHome:process.argv.includes('--smoke-test')?join(this.root,'stage4','local'):undefined,
+        localHome: process.argv.includes('--smoke-test') ? join(this.root, 'stage4', 'local') : undefined,
       })
     })
   }
@@ -151,12 +318,19 @@ export class RuntimeHost {
       return Promise.reject(new DesktopError({ code: 'QUEUE_FULL', message: '请求过多，请稍后重试' }))
     const id = randomUUID()
     return new Promise<T>((resolve, reject) => {
-      const timer = setTimeout(() => {
-        this.pending.delete(id)
-        reject(
-          new DesktopError({ code: 'REQUEST_TIMEOUT', message: '请求超时，操作结果未知；请检查当前状态' }),
-        )
-      }, operation === 'ai.dispatch' ? 180_000 : (operation.startsWith('account.')||operation.startsWith('sync.')) ? 60_000 : 30_000)
+      const timer = setTimeout(
+        () => {
+          this.pending.delete(id)
+          reject(
+            new DesktopError({ code: 'REQUEST_TIMEOUT', message: '请求超时，操作结果未知；请检查当前状态' }),
+          )
+        },
+        operation === 'ai.dispatch'
+          ? 180_000
+          : operation.startsWith('account.') || operation.startsWith('sync.')
+            ? 60_000
+            : 30_000,
+      )
       this.pending.set(id, { resolve: (value) => resolve(value as T), reject, timer })
       this.child!.postMessage({ id, context: this.context, operation, input })
     })
@@ -179,19 +353,28 @@ export class RuntimeHost {
       )
     }
     this.pending.clear()
-    for(const controller of this.network.values())controller.abort()
+    for (const controller of this.network.values()) controller.abort()
     this.network.clear()
+    for (const controller of this.agentRuns.values()) controller.abort()
+    void this.agents.close()
     void this.events.close()
     void this.agentStreams.close()
   }
   close(): Promise<void> {
     if (this.stopping) return this.stopping
-    this.stopping = (this.child ? stopProcess(this.child, { graceful: 25000, forced: 5000 }) : Promise.resolve())
+    this.stopping = (
+      this.child ? stopProcess(this.child, { graceful: 25000, forced: 5000 }) : Promise.resolve()
+    )
       .catch((cause) => {
         this.stopping = undefined
         throw cause
       })
-      .finally(async () => {this.rejectPending();await this.events.close(); await this.agentStreams.close()})
+      .finally(async () => {
+        this.rejectPending()
+        await this.events.close()
+        await this.agentStreams.close()
+        await this.agents.close()
+      })
     return this.stopping
   }
 }

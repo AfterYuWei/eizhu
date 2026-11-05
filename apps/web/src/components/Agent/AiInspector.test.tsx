@@ -1,110 +1,80 @@
 // @vitest-environment jsdom
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import type { AiConversation, AiProposal } from '@eizhu/contracts'
+import { beforeEach, afterEach, expect, it, vi } from 'vitest'
+import type { AiConversation } from '@eizhu/contracts'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useAiStore } from '@/store/ai'
 import { useSessionStore } from '@/store/session'
 import { AiInspector } from './AiInspector'
-
-const { api, terminalFocus } = vi.hoisted(() => ({
-  api: {
-    ai: { settings: vi.fn(), decide: vi.fn(), setTimeout: vi.fn(), send: vi.fn() },
-    events: { on: vi.fn(() => () => {}) },
-    clipboard: { write: vi.fn() },
+const api = vi.hoisted(() => ({
+  ai: {
+    settings: vi.fn(),
+    decide: vi.fn(),
+    open: vi.fn(),
+    send: vi.fn(),
+    scope: vi.fn(),
+    cancel: vi.fn(),
+    stopJob: vi.fn(),
+    history: vi.fn(),
   },
-  terminalFocus: vi.fn(),
+  events: { on: vi.fn(() => () => {}) },
+  clipboard: { write: vi.fn() },
 }))
 vi.mock('@/lib/bridge', () => ({ bridge: () => api }))
-vi.mock('@/lib/terminalActions', () => ({ terminalActions: () => ({ focus: terminalFocus }) }))
-let host: HTMLDivElement, root: Root
-let conversation: AiConversation
-const proposal: AiProposal = {
-  id: 'proposal',
-  command: 'docker ps -a',
-  cwd: '/root',
-  purpose: '查看容器',
-  impact: '只读查询',
-  timeoutSeconds: 60,
-  state: 'pending',
-}
-const updateProposal = (state: AiProposal['state']) => {
-  conversation = {
-    ...conversation,
-    status: state === 'pending' ? 'awaiting_confirmation' : state === 'running' ? 'executing' : 'idle',
-    messages: [
-      conversation.messages[0],
-      { id: 'command', role: 'assistant', text: '我先查看容器状态。', proposal: { ...proposal, state } },
-    ],
-  }
-  useAiStore.getState().put(conversation)
-}
-const putProposal = (state: AiProposal['state'] = 'pending') => act(async () => updateProposal(state))
+let host: HTMLDivElement, root: Root, c: AiConversation
 const button = (label: string) =>
   [...host.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent === label)!
-const input = async (selector: string, value: string) => {
-  await act(async () => {
-    const field = host.querySelector<HTMLInputElement | HTMLTextAreaElement>(selector)!
-    const prototype =
-      field instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype
-    Object.getOwnPropertyDescriptor(prototype, 'value')!.set!.call(field, value)
-    field.dispatchEvent(new Event('input', { bubbles: true }))
-  })
-}
 beforeEach(async () => {
   ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
   vi.clearAllMocks()
   vi.stubGlobal('eizhu', api)
   api.ai.settings.mockResolvedValue({
-    source: 'custom',
-    endpoint: 'http://127.0.0.1',
-    model: 'test-model',
-    hasApiKey: true,
+    providers: [],
+    clis: [],
+    defaultBackend: { kind: 'official', model: '' },
   })
+  api.ai.decide.mockResolvedValue(undefined)
   api.clipboard.write.mockResolvedValue(undefined)
-  conversation = {
-    id: 'conversation',
-    profileId: 'profile',
-    title: '查看容器',
+  c = {
+    id: 'chat',
+    title: '检查',
     updatedAt: 0,
-    source: 'custom',
-    model: 'test-model',
+    backend: { kind: 'official', model: '' },
+    permission: 'confirm',
+    revision: 4,
+    targets: [
+      {
+        sessionId: 'a',
+        profileId: 'p',
+        host: 'a.invalid',
+        username: 'test',
+        port: 22,
+        cwd: '/tmp',
+        system: 'Linux',
+      },
+    ],
+    messages: [{ id: 'u', role: 'user', text: '检查' }],
+    jobs: [],
+    summary: '',
     status: 'idle',
     error: '',
-    messages: [{ id: 'user', role: 'user', text: '查看容器' }],
-    target: {
-      profileId: 'profile',
-      sessionId: 'session',
-      host: 'example.invalid',
-      port: 22,
-      username: 'root',
-      cwd: '/root',
-      system: '',
-    },
   }
   useAiStore.setState(
-    {
-      ...useAiStore.getInitialState(),
-      open: vi.fn().mockResolvedValue(undefined),
-      tabs: { tab: conversation.id },
-      conversations: { [conversation.id]: conversation },
-    },
+    { ...useAiStore.getInitialState(), selectedId: c.id, conversations: { [c.id]: c } },
     true,
   )
   useSessionStore.setState(
     {
       ...useSessionStore.getInitialState(),
+      activeTabId: 'tab-a',
       tabs: [
-        { id: 'tab', profileId: 'profile', profileName: '服务器', status: 'connected', sessionId: 'session' },
+        { id: 'tab-a', sessionId: 'a', profileId: 'p', profileName: '主机A', status: 'connected' },
+        { id: 'tab-b', sessionId: 'b', profileId: 'q', profileName: '主机B', status: 'connected' },
       ],
-      activeTabId: 'tab',
     },
     true,
   )
-  api.ai.decide.mockImplementation(async ({ accepted }: { accepted: boolean }) => {
-    updateProposal(accepted ? 'running' : 'rejected')
-  })
   host = document.createElement('div')
   document.body.append(host)
   root = createRoot(host)
@@ -120,80 +90,92 @@ afterEach(async () => {
   await act(async () => root.unmount())
   host.remove()
   vi.unstubAllGlobals()
-  useAiStore.setState(useAiStore.getInitialState(), true)
-  useSessionStore.setState(useSessionStore.getInitialState(), true)
 })
-
-it('approval replaces the composer, copies without execution, and rejection restores the draft', async () => {
-  await input('textarea', '接下来检查内存')
-  await putProposal()
-  expect(host.querySelector('.ai-composer [aria-label="命令执行审批"]')).not.toBeNull()
-  expect(host.querySelector('textarea')).toBeNull()
-  expect(host.querySelector('.ai-messages .ai-approval')).toBeNull()
-  expect(button('允许执行').closest('.ai-composer')).not.toBeNull()
-  expect(api.ai.decide).not.toHaveBeenCalled()
-  await act(async () =>
-    host.querySelector<HTMLButtonElement>('.ai-approval [aria-label="复制命令"]')!.click(),
-  )
-  expect(api.clipboard.write).toHaveBeenCalledWith({ text: proposal.command })
-  expect(api.ai.decide).not.toHaveBeenCalled()
-  await act(async () => button('拒绝').click())
-  expect(api.ai.decide).toHaveBeenCalledWith({ proposalId: proposal.id, accepted: false })
-  expect(host.querySelector<HTMLTextAreaElement>('textarea')?.value).toBe('接下来检查内存')
-  expect(host.querySelector('.ai-approval')).toBeNull()
-  expect(terminalFocus).not.toHaveBeenCalled()
-})
-
-it('approval executes directly without timeout controls or a timeout settings request', async () => {
-  await putProposal()
-  expect(host.querySelector('.ai-approval input')).toBeNull()
-  expect(host.querySelector('.ai-approval')?.textContent).not.toContain('超时')
-  await act(async () => button('允许执行').click())
-  expect(api.ai.decide).toHaveBeenCalledWith({ proposalId: proposal.id, accepted: true })
-  expect(api.ai.setTimeout).not.toHaveBeenCalled()
-  expect(terminalFocus).toHaveBeenCalledOnce()
-  expect(host.querySelector('.ai-approval')).toBeNull()
-  expect(host.querySelector('.ai-command-status')?.textContent).toBe('执行中')
-  expect(host.querySelector('textarea')).not.toBeNull()
-})
-
-it('approval failure retains the approval for review', async () => {
-  api.ai.decide.mockRejectedValueOnce(new Error('审批失败'))
-  await putProposal()
-  await act(async () => button('允许执行').click())
-  expect(host.querySelector('.ai-approval')).not.toBeNull()
-  expect(host.querySelector('[role="alert"]')?.textContent).toContain('审批失败')
-  expect(terminalFocus).not.toHaveBeenCalled()
-})
-
-it('disconnection disables the pending approval and history cannot recreate one', async () => {
-  await putProposal()
-  await act(async () =>
-    useSessionStore.setState({
-      tabs: [
-        { id: 'tab', profileId: 'profile', profileName: '服务器', status: 'disconnected', sessionId: null },
-      ],
-    }),
-  )
-  expect(button('允许执行').disabled).toBe(true)
-  expect(button('拒绝').disabled).toBe(true)
-  await act(async () => useAiStore.getState().put({ ...conversation, status: 'idle' }))
-  expect(host.querySelector('.ai-approval')).toBeNull()
-  expect(api.ai.decide).not.toHaveBeenCalled()
-})
-
-it('one assistant turn shares its avatar and only the interpretation has reply actions', async () => {
-  await putProposal('completed')
-  await act(async () =>
-    useAiStore.getState().put({
-      ...conversation,
+async function pending() {
+  await act(async () => {
+    c = {
+      ...c,
+      status: 'awaiting_confirmation',
       messages: [
-        ...conversation.messages,
-        { id: 'interpretation', role: 'assistant', text: '所有容器均在运行。' },
+        ...c.messages,
+        {
+          id: 'tool',
+          role: 'tool',
+          text: '',
+          tool: {
+            id: 'call',
+            name: 'terminal_execute',
+            args: { sessionId: 'a' },
+            sessionId: 'a',
+            state: 'pending',
+            preview: 'printf hello',
+            error: '',
+          },
+        },
       ],
-    }),
+    }
+    useAiStore.getState().put(c)
+  })
+}
+it('changing terminal tab preserves the independent conversation and never opens another chat', async () => {
+  await act(async () => useSessionStore.setState({ activeTabId: 'tab-b' }))
+  expect(useAiStore.getState().selectedId).toBe('chat')
+  expect(api.ai.open).not.toHaveBeenCalled()
+  expect(host.textContent).toContain('检查')
+})
+it('approval is fixed at the bottom; copy cannot execute; decision includes revision and scope', async () => {
+  await pending()
+  expect(host.querySelector('.ai-messages .ai-approval')).toBeNull()
+  expect(host.querySelector('.ai-composer .ai-approval')).not.toBeNull()
+  await act(async () =>
+    host.querySelector<HTMLButtonElement>('.ai-approval [aria-label="复制操作预览"]')!.click(),
   )
-  expect(host.querySelectorAll('[aria-label="AI 头像"]')).toHaveLength(1)
-  expect(host.querySelectorAll('.ai-reply-actions')).toHaveLength(1)
-  expect(host.querySelector('.is-continuation')?.textContent).toContain('所有容器均在运行')
+  expect(api.clipboard.write).toHaveBeenCalledWith({ text: 'printf hello' })
+  expect(api.ai.decide).not.toHaveBeenCalled()
+  await act(async () => button('对话内允许此工具').click())
+  expect(api.ai.decide).toHaveBeenCalledWith({
+    conversationId: 'chat',
+    callId: 'call',
+    decision: 'conversation',
+    revision: 4,
+  })
+})
+it('disconnected target disables approval even when a different terminal is connected', async () => {
+  await pending()
+  await act(async () =>
+    useSessionStore.setState((s) => ({
+      tabs: s.tabs.map((t) => (t.sessionId === 'a' ? { ...t, status: 'disconnected' } : t)),
+    })),
+  )
+  expect(button('允许本次').disabled).toBe(true)
+  expect(button('对话内允许此工具').disabled).toBe(true)
+})
+it('approval failures remain visible and do not silently grant access', async () => {
+  api.ai.decide.mockRejectedValue(new Error('审批已失效'))
+  await pending()
+  await act(async () => button('允许本次').click())
+  expect(host.querySelector('.ai-approval')).not.toBeNull()
+  expect(host.querySelector('[role="alert"]')?.textContent).toBe('审批已失效')
+})
+it('connection scope applies an explicit selected set instead of following the active tab', async () => {
+  api.ai.scope.mockResolvedValue(c)
+  await act(async () => button('连接范围 · 1').click())
+  const boxes = host.querySelectorAll<HTMLInputElement>('.ai-scope input')
+  await act(async () => boxes[1].click())
+  await act(async () => button('应用连接范围').click())
+  expect(api.ai.scope).toHaveBeenCalledWith({ conversationId: 'chat', sessionIds: ['a', 'b'] })
+})
+
+it('idle Agent retains independent and all-task stop controls for running jobs', async () => {
+  await act(async () => {
+    c = {
+      ...c,
+      status: 'idle',
+      jobs: [{ id: 'job1', sessionId: 'a', command: 'sleep 30', status: 'running' }],
+    }
+    useAiStore.getState().put(c)
+  })
+  api.ai.stopJob.mockResolvedValue({ ...c, jobs: [] })
+  await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="停止任务 job1"]')!.click())
+  expect(api.ai.stopJob).toHaveBeenCalledWith({ conversationId: 'chat', jobId: 'job1' })
 })

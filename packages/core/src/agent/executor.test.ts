@@ -178,7 +178,7 @@ for (const reason of ['cancel', 'timeout', 'disconnect', 'already-cancelled'] as
   })
 }
 
-for (const shell of ['bash', 'zsh', 'fish'] as const) {
+for (const shell of ['bash', 'zsh', 'fish', 'sh'] as const) {
   const available = process.platform !== 'win32' && !spawnSync(shell, ['--version'], { timeout: 2000 }).error
   test(
     `${shell}: AI and manual commands share cwd, shell variables, aliases/functions and interactive stdin`,
@@ -192,14 +192,16 @@ for (const shell of ['bash', 'zsh', 'fish'] as const) {
           ? ['--noprofile', '--norc', '-i']
           : shell === 'zsh'
             ? ['-d', '-f', '-i']
-            : ['--no-config', '-i']
+            : shell === 'fish'
+              ? ['--no-config', '-i']
+              : ['-i']
       const f = await terminal((channel) => {
         const child = spawn('/bin/sh', ['-c', 'exec "$@" 2>&1', 'eizhu-agent-test', shell, ...args], {
           env: { ...process.env, TERM: 'xterm-256color' },
         })
         channel.on('data', (data: Buffer) => child.stdin.write(data.toString().replaceAll('\r', '\n')))
         child.stdout.on('data', (data: Buffer) => channel.write(data))
-      channel.once('close', () => child.kill('SIGKILL'))
+        channel.once('close', () => child.kill('SIGKILL'))
         child.once('close', () => channel.end())
       })
       const visible: Buffer[] = []

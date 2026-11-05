@@ -62,18 +62,37 @@ export async function runSmoke(options: {
   root: string
   keyMode: string
   startedAt: number
-  assets:string
+  assets: string
   accountFixture?: AccountFixture
 }): Promise<void> {
   const { windows, root } = options,
     window = windows.main
   const step = (name: string) => console.log('EIZHU_SMOKE_STEP', name)
   step('waiting-renderer')
-  try{await shown(window)}catch(error){
-    const state=await window.webContents.executeJavaScript(`({ready:document.readyState,bridge:typeof window.eizhu,body:document.body.innerText.slice(0,200),root:document.querySelector('#root')?.childElementCount})`).catch(()=>({probe:'failed'}))
-    console.error('EIZHU_SMOKE_BOOTSTRAP_STATE',JSON.stringify(state));throw error
+  try {
+    await shown(window)
+  } catch (error) {
+    const state = await window.webContents
+      .executeJavaScript(
+        `({ready:document.readyState,bridge:typeof window.eizhu,body:document.body.innerText.slice(0,200),root:document.querySelector('#root')?.childElementCount})`,
+      )
+      .catch(() => ({ probe: 'failed' }))
+    console.error('EIZHU_SMOKE_BOOTSTRAP_STATE', JSON.stringify(state))
+    throw error
   }
   step('renderer-ready')
+  if (process.argv.includes('--ai-smoke-only')) {
+    const aiDesktop = await verifyAiDesktop(window, options.runtime(), root)
+    await writeFile(
+      join(root, 'ai-smoke.json'),
+      JSON.stringify(
+        { platform: process.platform, arch: process.arch, packaged: app.isPackaged, aiDesktop },
+        null,
+        2,
+      ),
+    )
+    return
+  }
   if (process.argv.includes('--sftp-smoke')) {
     const stage4 = await verifyStage4(window, options.runtime(), windows, root, options.assets)
     assert.equal(stage4.passed, true)
@@ -132,21 +151,29 @@ export async function runSmoke(options: {
   const accountFoundation = await verifyAccountFoundation(options.runtime(), options.assets)
   assert.equal(accountFoundation.passed, true)
   step('account-foundation-native-passed')
-  const syncEngine=await options.runtime().call<{passed:boolean}>('runtime.verifySyncEngine',{fixtures:process.env.EIZHU_SMOKE_FIXTURES})
-  assert.equal(syncEngine.passed,true)
+  const syncEngine = await options
+    .runtime()
+    .call<{ passed: boolean }>('runtime.verifySyncEngine', { fixtures: process.env.EIZHU_SMOKE_FIXTURES })
+  assert.equal(syncEngine.passed, true)
   step('sync-engine-native-passed')
-  const stage3=await verifyStage3(window,options.runtime(),root)
-  const stage3Storage=await options.runtime().call<{passed:boolean}>('runtime.verifyStage3Storage')
-  assert.equal(stage3Storage.passed,true)
+  const stage3 = await verifyStage3(window, options.runtime(), root)
+  const stage3Storage = await options.runtime().call<{ passed: boolean }>('runtime.verifyStage3Storage')
+  assert.equal(stage3Storage.passed, true)
   step('stage3-native-passed')
-  const stage4=await verifyStage4(window,options.runtime(),windows,root,options.assets)
+  const stage4 = await verifyStage4(window, options.runtime(), windows, root, options.assets)
   step('stage4-native-passed')
-  const stage5=await verifyStage5(window,options.runtime(),root)
+  const stage5 = await verifyStage5(window, options.runtime(), root)
   step('stage5-native-passed')
   assert.ok(options.accountFixture)
-  const accountClosure = await verifyAccountClosure(window, windows, options.accountFixture, root, options.assets)
+  const accountClosure = await verifyAccountClosure(
+    window,
+    windows,
+    options.accountFixture,
+    root,
+    options.assets,
+  )
   step('account-closure-passed')
-  const syncDesktop=await verifySyncDesktop(window,windows,options.accountFixture,root)
+  const syncDesktop = await verifySyncDesktop(window, windows, options.accountFixture, root)
   step('sync-desktop-passed')
   // An occluded smoke window can suspend animation frames. Keep only this test window drawing.
   // This setting is limited to this synthetic smoke window; normal application throttling is unchanged.
@@ -221,10 +248,12 @@ export async function runSmoke(options: {
   assert.equal(failed, 'RUNTIME_UNAVAILABLE')
   const restored = await window.webContents.executeJavaScript('window.eizhu.runtime.restart()')
   step('runtime-restarted')
-  const recoveredBackup = await window.webContents.executeJavaScript('window.eizhu.backup.status()') as { last_backup_path: string | null }
+  const recoveredBackup = (await window.webContents.executeJavaScript('window.eizhu.backup.status()')) as {
+    last_backup_path: string | null
+  }
   assert.equal(recoveredBackup.last_backup_path, stage5.persistedPath)
-  if(stage4.passed){
-    const fileRecovery=await window.webContents.executeJavaScript(`(async()=>{
+  if (stage4.passed) {
+    const fileRecovery = await window.webContents.executeJavaScript(`(async()=>{
       const api=window.eizhu,id=${JSON.stringify(stage4.restoredTaskId)};
       const task=(await api.sftp.listTransfers({})).find(t=>t.id===id);
       if(task?.status!=='recoverable')throw new Error('Checkpoint did not recover');
@@ -243,7 +272,8 @@ export async function runSmoke(options: {
       }
       throw new Error('Upload completion timeout');
     })()`)
-    assert.equal(fileRecovery,true);step('stage4-checkpoint-restarted')
+    assert.equal(fileRecovery, true)
+    step('stage4-checkpoint-restarted')
   }
   assert.notEqual(restored.runtimeId, before.runtimeId)
   assert.equal(restored.generation, before.generation + 1)
@@ -318,7 +348,17 @@ export async function runSmoke(options: {
     monaco,
     firstWindowMs,
     processMetrics: app.getAppMetrics().map(({ type, memory, cpu }) => ({ type, memory, cpu })),
-    screenshots: ['home-light.png', 'home-dark.png', 'editor-empty.png', ...aiDesktop.screenshots, ...workspaceTabs.screenshots, ...accountClosure.screenshots, ...syncDesktop.screenshots, ...stage3.completionUi.screenshots, ...stage3.portMapping.screenshots],
+    screenshots: [
+      'home-light.png',
+      'home-dark.png',
+      'editor-empty.png',
+      ...aiDesktop.screenshots,
+      ...workspaceTabs.screenshots,
+      ...accountClosure.screenshots,
+      ...syncDesktop.screenshots,
+      ...stage3.completionUi.screenshots,
+      ...stage3.portMapping.screenshots,
+    ],
     screenshotContrast,
   }
   await writeFile(join(root, 'smoke.json'), JSON.stringify(report, null, 2))

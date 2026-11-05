@@ -1,190 +1,212 @@
+import { streamText, tool, modelMessageSchema } from 'ai'
+import type { ModelMessage, ToolSet } from 'ai'
+import { createOpenAI } from '@ai-sdk/openai'
+import { createAnthropic } from '@ai-sdk/anthropic'
 import { z } from 'zod'
-import { aiCommandSchema, fail, redactLogText } from '@eizhu/contracts'
-import type { AiHttpRequest } from '@eizhu/contracts'
-import type { storedAiConfigSchema } from './repository.ts'
-
+import { aiTools, aiToolNameSchema, fail, redactLogText } from '@eizhu/contracts'
+import type { AiHttpRequest, AiToolName } from '@eizhu/contracts'
+import type { storedProviderSchema } from './repository.ts'
 export type AiTransport = (
   request: AiHttpRequest,
   signal: AbortSignal,
   consume: (bytes: Uint8Array) => Promise<void>,
 ) => Promise<void>
-export const wireMessageSchema = z.object({
-  role: z.enum(['system', 'user', 'assistant', 'tool']),
-  content: z.string(),
-  callId: z.string().optional(),
-  responseItems: z.array(z.json()).optional(),
-})
-export type WireMessage = z.infer<typeof wireMessageSchema>
-type Config = z.infer<typeof storedAiConfigSchema>
-const parameters = {
-  type: 'object',
-  properties: {
-    command: {
-      type: 'string',
-      description:
-        '在当前 SSH 窗口的交互式 shell 执行的一条完整命令，沿用当前终端环境；交互输入由用户在终端完成。',
-    },
-    cwd: { type: 'string', description: '远端绝对工作目录' },
-    purpose: { type: 'string', description: '中文说明命令目的' },
-    impact: { type: 'string', description: '中文说明修改、风险或只读影响' },
-  },
-  required: ['command', 'cwd', 'purpose', 'impact'],
-  additionalProperties: false,
-}
+export type WireMessage = ModelMessage
+export const wireMessageSchema = modelMessageSchema
 export function redactAiText(value: string, secrets: string[] = []): string {
   let result = value
   for (const secret of secrets) if (secret) result = result.split(secret).join('[已隐藏]')
   return redactLogText(result).replace(/\b(sk-[A-Za-z0-9_-]{12,}|gh[pousr]_[A-Za-z0-9_]+)\b/g, '[已隐藏]')
 }
-export function redactAiJson(
-  value: z.infer<ReturnType<typeof z.json>>,
-  secrets: string[],
-): z.infer<ReturnType<typeof z.json>> {
-  if (typeof value === 'string') return redactAiText(value, secrets)
-  if (Array.isArray(value)) return value.map((v) => redactAiJson(v, secrets))
-  if (value && typeof value === 'object')
-    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, redactAiJson(v, secrets)]))
-  return value
+export interface ModelStep {
+  text: string
+  calls: Array<{ id: string; name: AiToolName; args: Record<string, z.infer<ReturnType<typeof z.json>>> }>
+  messages: ModelMessage[]
 }
-
-/** Incremental UTF-8 SSE decoder. Incomplete events never become executable proposals. */
-export class AiSseDecoder {
+/** SDK tool-call events can precede a final provider event. They never grant execution. */
+class CompletionBoundary {
   private decoder = new TextDecoder()
   private buffer = ''
   private data: string[] = []
-  private consume: (data: string) => void
-  constructor(consume: (data: string) => void) {
-    this.consume = consume
+  completed = false
+  failed = false
+  protocol: 'responses' | 'chat' | 'anthropic'
+  constructor(protocol: 'responses' | 'chat' | 'anthropic') {
+    this.protocol = protocol
   }
-  push(bytes: Uint8Array): void {
+  push(bytes: Uint8Array) {
     this.buffer += this.decoder.decode(bytes, { stream: true })
-    if (this.buffer.length > 2 * 1024 * 1024) fail('AI_PROTOCOL', '模型事件超过上限')
+    if (this.buffer.length > 2097152) fail('AI_PROTOCOL', '模型事件超过上限')
     let end: number
     while ((end = this.buffer.indexOf('\n')) >= 0) {
       const line = this.buffer.slice(0, end).replace(/\r$/, '')
       this.buffer = this.buffer.slice(end + 1)
-      if (!line) {
-        if (this.data.length) this.consume(this.data.join('\n'))
+      if (line.startsWith('data:')) this.data.push(line.slice(5).trimStart())
+      if (!line && this.data.length) {
+        const data = this.data.join('\n')
         this.data = []
-      } else if (line.startsWith('data:')) {
-        this.data.push(line.slice(5).replace(/^ /, ''))
-        if (this.data.reduce((n, v) => n + v.length, 0) > 2 * 1024 * 1024)
-          fail('AI_PROTOCOL', '模型事件超过上限')
-      }
-    }
-  }
-}
-
-export function modelRequest(
-  config: Config,
-  token: string,
-  wire: WireMessage[],
-  requireTool = false,
-): AiHttpRequest {
-  const base = config.endpoint.replace(/\/$/, '')
-  const tool = {
-    name: 'run_command',
-    description: '请求用户确认后，在当前服务器执行一条命令。每次只提议一条，等待结果再继续。',
-    parameters,
-    strict: true,
-  }
-  const input = wire.flatMap<z.infer<ReturnType<typeof z.json>>>((m) => {
-    if (m.role === 'tool')
-      return [
-        {
-          type: 'function_call_output',
-          call_id: m.callId ?? fail('AI_PROTOCOL', '工具结果缺少标识'),
-          output: m.content,
-        },
-      ]
-    if (m.role === 'assistant' && m.responseItems) return m.responseItems
-    return [{ role: m.role, content: m.content }]
-  })
-  const body = {
-    model: config.model,
-    input,
-    stream: true,
-    store: false,
-    include: ['reasoning.encrypted_content'],
-    tools: [{ type: 'function', ...tool }],
-    parallel_tool_calls: false,
-    ...(requireTool && config.source === 'custom' ? { max_output_tokens: 256 } : {}),
-    ...(requireTool ? { tool_choice: { type: 'function', name: tool.name } } : {}),
-  }
-  return {
-    source: config.source,
-    url:
-      config.source === 'official' ? 'https://eizhu.yuweinfo.com/api/ai/v1/responses' : `${base}/responses`,
-    method: 'POST',
-    authorization: config.source === 'official' ? token : config.apiKey ? `Bearer ${config.apiKey}` : '',
-    body: JSON.stringify(body),
-  }
-}
-
-export async function generateModel(
-  transport: AiTransport,
-  request: AiHttpRequest,
-  signal: AbortSignal,
-  onText: (text: string) => void,
-) {
-  let text = '',
-    completed = false,
-    callId = '',
-    name = '',
-    args = ''
-  let responseItems: z.infer<ReturnType<typeof z.json>>[] | undefined
-  const append = (value: string) => {
-    text += value
-    if (text.length > 65536) fail('AI_PROTOCOL', '模型回复超过上限')
-    onText(text)
-  }
-  const parser = new AiSseDecoder((data) => {
-    if (completed) fail('AI_PROTOCOL', '模型完成事件重复或顺序无效')
-    const raw: unknown = JSON.parse(data)
-    const event = z
-      .object({
-        type: z.string(),
-        delta: z.string().optional(),
-        response: z.object({ status: z.string(), output: z.array(z.json()) }).optional(),
-      })
-      .parse(raw)
-    if (event.type === 'response.output_text.delta') append(event.delta ?? '')
-    if (['error', 'response.failed', 'response.incomplete'].includes(event.type))
-      fail('AI_PROTOCOL', '模型生成失败或内容不完整')
-    if (event.type === 'response.completed') {
-      if (event.response?.status !== 'completed') fail('AI_PROTOCOL', '模型生成未完成')
-      completed = true
-      responseItems = event.response.output
-      for (const item of event.response.output) {
-        const value = z
+        if (data === '[DONE]') {
+          if (this.protocol === 'chat') this.completed = true
+          continue
+        }
+        const event = z
           .object({
-            type: z.string(),
-            call_id: z.string().optional(),
-            name: z.string().optional(),
-            arguments: z.string().optional(),
+            type: z.string().optional(),
+            response: z.object({ status: z.string().optional() }).optional(),
           })
-          .parse(item)
-        if (value.type !== 'function_call') continue
-        if (callId) fail('AI_PROTOCOL', '模型一次只能提议一条命令')
-        callId = value.call_id ?? ''
-        name = value.name ?? ''
-        args = value.arguments ?? ''
+          .passthrough()
+          .parse(JSON.parse(data))
+        if (['error', 'response.failed', 'response.incomplete'].includes(event.type ?? '')) this.failed = true
+        if (this.protocol === 'responses' && event.type === 'response.completed')
+          this.completed = event.response?.status === 'completed'
+        if (this.protocol === 'anthropic' && event.type === 'message_stop') this.completed = true
       }
     }
-    if (args.length > 32768 || callId.length > 256) fail('AI_PROTOCOL', '模型命令超过上限')
+  }
+}
+/** Adapts the bounded Electron network relay to SDK fetch without bypassing its proxy/TLS or backpressure. */
+export function modelFetch(
+  transport: AiTransport,
+  source: 'official' | 'custom',
+  parentSignal: AbortSignal,
+  boundary?: CompletionBoundary,
+): typeof fetch {
+  return async (url, init) => {
+    if (typeof init?.body !== 'string' || Buffer.byteLength(init.body) > 524288)
+      fail('AI_CONTEXT_LIMIT', '模型请求超过512KiB')
+    const requestBody = init.body
+    const controller = new AbortController()
+    const signal = AbortSignal.any([parentSignal, controller.signal, ...(init.signal ? [init.signal] : [])])
+    const headers = new Headers(init.headers)
+    const authorization = headers.get('authorization') ?? ''
+    headers.delete('authorization')
+    let release: (() => void) | undefined
+    const body = new ReadableStream<Uint8Array>({
+      start(stream) {
+        void transport(
+          {
+            source,
+            url: String(url),
+            method: 'POST',
+            authorization,
+            headers: Object.fromEntries(headers),
+            body: requestBody,
+          },
+          signal,
+          async (bytes) => {
+            signal.throwIfAborted()
+            boundary?.push(bytes)
+            stream.enqueue(Uint8Array.from(bytes))
+            if ((stream.desiredSize ?? 0) <= 0)
+              await new Promise<void>((resolve) => {
+                const finish = () => {
+                  signal.removeEventListener('abort', finish)
+                  release = undefined
+                  resolve()
+                }
+                release = finish
+                signal.addEventListener('abort', finish, { once: true })
+                if (signal.aborted) finish()
+              })
+          },
+        ).then(
+          () => {
+            release?.()
+            stream.close()
+          },
+          (error) => {
+            release?.()
+            stream.error(error)
+          },
+        )
+      },
+      pull() {
+        release?.()
+      },
+      cancel() {
+        controller.abort()
+        release?.()
+      },
+    })
+    return new Response(body, { headers: { 'content-type': 'text/event-stream' } })
+  }
+}
+export async function generateModel(input: {
+  provider: z.infer<typeof storedProviderSchema>
+  source: 'official' | 'custom'
+  token?: string
+  transport: AiTransport
+  signal: AbortSignal
+  system: string
+  messages: ModelMessage[]
+  onText: (text: string) => void
+  summarize?: boolean
+  requireTool?: boolean
+}): Promise<ModelStep> {
+  const p = input.provider
+  const boundary = new CompletionBoundary(p.protocol)
+  const options = {
+    baseURL: p.endpoint,
+    apiKey: input.source === 'official' ? input.token : p.apiKey,
+    fetch: modelFetch(input.transport, input.source, input.signal, boundary),
+  }
+  const openai = createOpenAI(options)
+  const model =
+    p.protocol === 'anthropic'
+      ? createAnthropic(options)(p.model)
+      : p.protocol === 'chat'
+        ? openai.chat(p.model)
+        : openai.responses(p.model)
+  const tools: ToolSet = {}
+  if (!input.summarize)
+    for (const [name, definition] of Object.entries(aiTools)) {
+      const schema: z.ZodType<unknown> = definition.input
+      tools[name] = tool({ description: definition.description, inputSchema: schema, strict: false })
+    }
+  const result = streamText({
+    model,
+    system: input.system,
+    messages: input.messages,
+    tools,
+    abortSignal: input.signal,
+    maxRetries: 0,
+    ...(input.requireTool ? { toolChoice: { type: 'tool' as const, toolName: 'session_info' } } : {}),
+    maxOutputTokens:
+      input.source === 'official'
+        ? undefined
+        : Math.min(input.summarize ? 4096 : 8192, Math.floor(p.contextWindow / 4)),
+    providerOptions:
+      p.protocol === 'responses'
+        ? { openai: { store: false, include: ['reasoning.encrypted_content'], parallelToolCalls: false } }
+        : p.protocol === 'chat'
+          ? { openai: { parallelToolCalls: false } }
+          : { anthropic: { disableParallelToolUse: true } },
   })
-  await transport(request, signal, async (bytes) => parser.push(bytes))
-  if (signal.aborted || !completed) fail('AI_STREAM_INTERRUPTED', '模型回复已中断，未生成可执行命令')
-  let command: z.infer<typeof aiCommandSchema> | undefined
-  if (callId || name || args) {
-    if (!callId || name !== 'run_command') fail('AI_PROTOCOL', '模型工具调用无效')
-    command = aiCommandSchema.parse(JSON.parse(args))
+  let text = ''
+  for await (const part of result.fullStream) {
+    if (part.type === 'error') throw part.error
+    if (part.type === 'text-delta') {
+      text += part.text
+      if (text.length > 65536) fail('AI_PROTOCOL', '模型回复超过上限')
+      input.onText(text)
+    }
   }
-  const message: WireMessage = {
-    role: 'assistant',
-    content: text,
-    ...(command ? { callId } : {}),
-    ...(responseItems ? { responseItems } : {}),
-  }
-  return { text, command, callId, message }
+  input.signal.throwIfAborted()
+  if (!boundary.completed || boundary.failed)
+    fail('AI_STREAM_INTERRUPTED', '模型流未完整结束，未生成有效工具调用')
+  const finish = await result.finishReason
+  if (!['stop', 'tool-calls'].includes(finish))
+    fail('AI_STREAM_INTERRUPTED', '模型回复不完整，未生成有效工具调用')
+  const calls = (await result.toolCalls).map((call) => {
+    const name = aiToolNameSchema.parse(call.toolName)
+    return {
+      id: call.toolCallId,
+      name,
+      args: z.record(z.string(), z.json()).parse(aiTools[name].input.parse(call.input)),
+    }
+  })
+  if (calls.length > 32 || new Set(calls.map((c) => c.id)).size !== calls.length)
+    fail('AI_PROTOCOL', '工具调用数量或调用标识无效')
+  const response = await result.response
+  return { text, calls, messages: response.messages.map((message) => modelMessageSchema.parse(message)) }
 }

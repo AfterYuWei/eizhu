@@ -1,63 +1,92 @@
+/* eslint-disable no-control-regex -- Terminal/protocol boundaries handle control bytes explicitly. */
 import assert from 'node:assert/strict'
 import { once } from 'node:events'
-import { createHash } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { createServer } from 'node:http'
-import { readFile, writeFile } from 'node:fs/promises'
+import { readFile, writeFile, readdir, mkdir, realpath } from 'node:fs/promises'
 import { join } from 'node:path'
+import { existsSync } from 'node:fs'
+import { spawn } from 'node:child_process'
 import { Server, utils } from 'ssh2'
 import type { Connection } from 'ssh2'
 import type { AddressInfo } from 'node:net'
 import type { BrowserWindow } from 'electron'
 import type { RuntimeHost } from './runtime-host.ts'
-import { aiConversationSchema } from '@eizhu/contracts'
+import { aiConversationSchema, aiSettingsSchema } from '@eizhu/contracts'
+import { modelFixture } from '@eizhu/core/agent/model-fixture'
 
-/** Explicitly isolated smoke profile, actual main/network/utilityProcess/SQLite/SSH and local synthetic model. */
+/** Explicit loopback services; exercises the real Electron/Worker/SQLite/SSH chain. */
 export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHost, root: string) {
   const clients = new Set<Connection>(),
     commands: string[] = [],
     execCommands: string[] = [],
-    requests: string[] = []
-  let modelMode: 'normal' | 'quota' | 'unauthorized' | 'interrupted' | 'unsupported' = 'normal'
-  const key = utils.generateKeyPairSync('ed25519'),
-    parsed = utils.parseKey(key.private)
+    screenshots: string[] = [],
+    profiles: string[] = [],
+    conversations: string[] = []
+  const sftpServer = [
+    '/usr/libexec/sftp-server',
+    '/usr/lib/openssh/sftp-server',
+    '/usr/lib/ssh/sftp-server',
+  ].find(existsSync)
+  const remoteDirectory = join(await realpath(root), 'ai-remote-files'),
+    remoteFile = join(remoteDirectory, '配置.conf')
+  await mkdir(remoteDirectory, { recursive: true })
+  await writeFile(remoteFile, '# original\nport=22\n')
+  let mode: 'normal' | 'interrupted' | 'long' | 'quota' | 'unauthorized' | 'file' = 'normal'
+  let targetIds: string[] = []
+  const generated = utils.generateKeyPairSync('ed25519'),
+    parsed = utils.parseKey(generated.private)
   assert.ok(!(parsed instanceof Error) && !Array.isArray(parsed))
   const fingerprint =
     'SHA256:' + createHash('sha256').update(parsed.getPublicSSH()).digest('base64').replace(/=+$/, '')
-  const ssh = new Server({ hostKeys: [key.private] }, (client) => {
+  const ssh = new Server({ hostKeys: [generated.private] }, (client) => {
     clients.add(client)
     client.on('error', () => undefined)
     client.once('close', () => clients.delete(client))
-    client.on('authentication', (ctx) => {
-      if (ctx.method === 'password' && ctx.password === 'synthetic-ai-ssh-password') ctx.accept()
-      else ctx.reject()
-    })
+    client.on('authentication', (ctx) =>
+      ctx.method === 'password' && ctx.password === 'synthetic-ai-ssh-password' ? ctx.accept() : ctx.reject(),
+    )
     client.on('ready', () =>
       client.on('session', (accept) => {
-        const s = accept()
-        s.on('pty', (accept) => accept?.())
-        s.on('shell', (accept) => {
+        const session = accept()
+        session.on('pty', (accept) => accept?.())
+        session.on('shell', (accept) => {
           const channel = accept()
           channel.on('error', () => undefined)
-          channel.write('AI synthetic terminal\r\n$ ')
-          channel.on('data', (data: Buffer) => {
-            const script = data.toString()
+          channel.write('$ ')
+          channel.on('data', (bytes: Buffer) => {
+            const script = bytes.toString()
             channel.write(script + '\r\n')
-            if (!script.includes('\r') && !script.includes('\n') && !script.includes('\x03')) return
+            if (!/[\r\n\x03]/.test(script)) return
             const token = script.match(/eizhuAi;([\w-]+);start/)?.[1]
             if (token) {
               commands.push(script)
-              channel.write(`\x1b]1337;eizhuAi;${token};start\x07`)
-              const bytes = Buffer.from('你好 🧪\r\nsynthetic warning\r\n')
-              channel.write(bytes.subarray(0, 2))
-              channel.write(bytes.subarray(2))
-              channel.write(`\x1b]1337;eizhuAi;${token};end;3\x07`)
+              channel.write('\x1b]1337;eizhuAi;' + token + ';start\x07')
+              channel.write('你好 🧪\r\nsynthetic warning\r\n')
+              if (mode !== 'long') channel.write('\x1b]1337;eizhuAi;' + token + ';end;3\x07')
+              else return
             }
             channel.write('\x1b]7;file:///tmp\x07\x1b]1337;eizhuPrompt\x07')
             if (script.includes('__eizhu_osc7')) channel.write('\x1b]1337;eizhuOsc7Ready\x07')
             channel.write('$ ')
           })
         })
-        s.on('exec', (accept, _reject, info) => {
+        session.on('subsystem', (accept, reject, info) => {
+          if (info.name !== 'sftp' || !sftpServer) {
+            reject()
+            return
+          }
+          const channel = accept(),
+            child = spawn(sftpServer, ['-d', remoteDirectory], { stdio: 'pipe' })
+          child.stderr.on('data', () => undefined)
+          child.on('error', () => channel.destroy())
+          channel.on('error', () => undefined)
+          channel.once('close', () => child.kill())
+          child.once('close', () => channel.end())
+          channel.pipe(child.stdin)
+          child.stdout.pipe(channel)
+        })
+        session.on('exec', (accept, _reject, info) => {
           execCommands.push(info.command)
           const channel = accept()
           channel.on('error', () => undefined)
@@ -75,427 +104,397 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
       if (body.length > 524288) req.destroy()
     })
     req.on('end', () => {
-      requests.push(body)
-      assert.equal(req.headers.authorization, 'Bearer synthetic-ai-api-key')
-      if (modelMode === 'quota' || modelMode === 'unauthorized') {
-        res.writeHead(modelMode === 'quota' ? 429 : 401)
+      if (mode === 'quota' || mode === 'unauthorized') {
+        res.writeHead(mode === 'quota' ? 429 : 401)
         res.end()
         return
       }
-      if (req.url === '/v1/models') {
+      const protocol = req.url?.split('/')[1]
+      assert.ok(protocol === 'responses' || protocol === 'chat' || protocol === 'anthropic')
+      if (req.url?.endsWith('/models')) {
         res.writeHead(200, { 'content-type': 'application/json' })
-        res.end(JSON.stringify({ data: [{ id: 'synthetic-ai' }, { id: 'synthetic-second' }] }))
+        res.end(JSON.stringify({ data: [{ id: 'synthetic-ai', name: '合成模型' }] }))
         return
       }
-      assert.equal(req.url, '/v1/responses')
-      const data = JSON.parse(body) as { input: Array<{ type?: string }> }
-      const done = data.input.some((item) => item.type === 'function_call_output')
+      const data = JSON.parse(body)
+      const forced = typeof data.tool_choice === 'object'
+      const nativeCalls = Array.isArray(data.input)
+        ? data.input.filter((item: { type?: string }) => item.type === 'function_call')
+        : []
+      const executed = nativeCalls.filter((item: { name: string }) => item.name === 'terminal_execute')
+      const next = targetIds[executed.length]
+      const fileResult = Array.isArray(data.input)
+        ? data.input.find((item: { type?: string }) => item.type === 'function_call_output')
+        : undefined
+      const fileVersion = mode === 'file' && fileResult ? JSON.parse(fileResult.output).version : undefined
+      const calls =
+        mode === 'file'
+          ? !nativeCalls.length
+            ? [{ id: randomUUID(), name: 'file_read', args: { sessionId: targetIds[0], path: remoteFile } }]
+            : nativeCalls.length === 1
+              ? [
+                  {
+                    id: randomUUID(),
+                    name: 'file_edit',
+                    args: {
+                      sessionId: targetIds[0],
+                      path: remoteFile,
+                      version: fileVersion,
+                      oldText: 'port=22',
+                      newText: 'port=2222',
+                    },
+                  },
+                ]
+              : []
+          : forced
+            ? [{ id: randomUUID(), name: 'session_info', args: {} }]
+            : mode === 'long'
+              ? [
+                  {
+                    id: randomUUID(),
+                    name: 'terminal_start',
+                    args: {
+                      sessionId: targetIds[0],
+                      command: 'sleep 30',
+                      cwd: '/tmp',
+                      purpose: '长任务中断验收',
+                      impact: '合成服务',
+                      timeoutSeconds: 60,
+                    },
+                  },
+                ]
+              : !nativeCalls.length
+                ? [{ id: randomUUID(), name: 'session_info', args: {} }]
+                : next
+                  ? [
+                      {
+                        id: randomUUID(),
+                        name: 'terminal_execute',
+                        args: {
+                          sessionId: next,
+                          command: "printf '你好'",
+                          cwd: '/tmp',
+                          purpose: '检查终端输出',
+                          impact: '只读查询',
+                          timeoutSeconds: 60,
+                        },
+                      },
+                    ]
+                  : []
       res.writeHead(200, { 'content-type': 'text/event-stream' })
-      const command = {
-        command: "printf '你好'",
-        cwd: '/tmp',
-        purpose: '检查远端命令输出',
-        impact: '只读，不修改服务器文件',
-      }
-      const text =
-        modelMode === 'unsupported'
-          ? '此模型仅支持文本'
-          : done
-            ? "## 检查结论\n\n命令退出码为 **3**，需要在当前终端继续核查。\n\n| 检查项 | 结果 |\n| --- | --- |\n| 命令状态 | 非零退出码 |\n| 后续操作 | 仍需逐条确认 |\n\n```sh\nprintf '检查完成'\n```"
-            : '我会先检查命令输出。'
-      const output = [
-        { type: 'message', role: 'assistant', content: [{ type: 'output_text', text }] },
-        ...(!done && modelMode !== 'unsupported'
-          ? [
-              {
-                type: 'function_call',
-                call_id: 'synthetic-call',
-                name: 'run_command',
-                arguments: JSON.stringify(command),
-              },
-            ]
-          : []),
-      ]
       const payload = Buffer.from(
-        `data: ${JSON.stringify({ type: 'response.output_text.delta', delta: text })}\n\n${modelMode === 'interrupted' ? '' : `data: ${JSON.stringify({ type: 'response.completed', response: { status: 'completed', output } })}\n\n`}`,
+        modelFixture(
+          protocol,
+          calls.length
+            ? '准备检查当前连接。'
+            : '## 检查完成\n\n两个连接已完成检查，退出码为3，请核查服务状态。',
+          calls,
+          mode !== 'interrupted',
+        ),
       )
-      res.write(payload.subarray(0, 37))
-      res.end(payload.subarray(37))
+      res.write(payload.subarray(0, 17))
+      res.end(payload.subarray(17))
     })
   })
   const js = <T = unknown>(source: string, data?: unknown): Promise<T> =>
-    window.webContents.executeJavaScript(`(async d=>{${source}})(${JSON.stringify(data)})`)
-  const call = <T = unknown>(domain: string, method: string, input?: unknown) => {
-    console.log('EIZHU_AI_STEP', `${domain}.${method}`)
-    return js<T>('return window.eizhu[d.domain][d.method](d.input)', { domain, method, input })
-  }
+    window.webContents.executeJavaScript('(async d=>{' + source + '})(' + JSON.stringify(data) + ')')
+  const call = <T = unknown>(domain: string, method: string, input?: unknown) =>
+    js<T>('return window.eizhu[d.domain][d.method](d.input)', { domain, method, input })
   const wait = async (source: string) => {
-    for (let i = 0; i < 200; i++) {
+    for (let i = 0; i < 240; i++) {
       if (await js<boolean>(source)) return
       await new Promise((r) => setTimeout(r, 50))
     }
-    throw new Error('AI desktop smoke timeout: ' + source)
+    await writeFile(join(root, 'ai-v2-failure.png'), (await window.webContents.capturePage()).toPNG())
+    const state = await js(
+      "return {status:window.__aiV2?.status,error:window.__aiV2?.error,backend:window.__aiV2?.backend,tools:window.__aiV2?.messages.filter(m=>m.tool).map(m=>({name:m.tool.name,state:m.tool.state,error:m.tool.error})),buttons:[...document.querySelectorAll('.ai-composer button')].map(b=>({text:b.textContent,disabled:b.disabled}))}",
+    )
+    throw new Error('AI v2 smoke timeout: ' + source + ' ' + JSON.stringify(state))
   }
-  const size = window.getContentSize(),
-    screenshots: string[] = []
-  let profileId: string | undefined
+  const snapshot = () => js('return window.__aiV2')
+  const read = async () => aiConversationSchema.parse(await snapshot())
+  const size = window.getContentSize()
   try {
     ssh.listen(0, '127.0.0.1')
     http.listen(0, '127.0.0.1')
     await Promise.all([once(ssh, 'listening'), once(http, 'listening')])
-    const port = (ssh.address() as AddressInfo).port,
+    const sshPort = (ssh.address() as AddressInfo).port,
       httpPort = (http.address() as AddressInfo).port
-    const profile = await call<{ id: string }>('profile', 'create', {
-      request: {
-        name: 'AI 合成服务',
-        host: '127.0.0.1',
-        port,
-        username: 'synthetic',
-        auth_type: 'password',
-        password: 'synthetic-ai-ssh-password',
-      },
-    })
-    profileId = profile.id
-    const settings = await call('ai', 'configure', {
-      source: 'custom',
-      endpoint: `http://127.0.0.1:${httpPort}/v1`,
-      model: 'synthetic-ai',
-      apiKey: 'synthetic-ai-api-key',
-    })
-    assert.ok(!JSON.stringify(settings).includes('synthetic-ai-api-key'))
-    await call('ai', 'test')
-    assert.equal(commands.length, 0)
+    for (const protocol of ['responses', 'chat', 'anthropic']) {
+      const provider = {
+        id: protocol,
+        name: '合成 ' + protocol,
+        protocol,
+        endpoint: 'http://127.0.0.1:' + httpPort + '/' + protocol + '/v1',
+        model: 'synthetic-ai',
+        contextWindow: 64000,
+        apiKey: 'synthetic-ai-api-key',
+        clearKey: false,
+      }
+      const settings = aiSettingsSchema.parse(await call('ai', 'configure', provider))
+      assert.ok(!JSON.stringify(settings).includes('synthetic-ai-api-key'))
+      await call('ai', 'discover', provider)
+      await call('ai', 'test', provider)
+      assert.equal(commands.length, 0)
+    }
+    await call('ai', 'setDefault', { kind: 'custom', providerId: 'responses', model: 'synthetic-ai' })
+    await js(
+      "window.__aiV2=null;window.eizhu.events.on('eizhu-ai-message',e=>{if(e.conversation)window.__aiV2=e.conversation})",
+    )
+    const names = ['AI v2 主机A', 'AI v2 主机B']
+    for (const name of names) {
+      const p = await call<{ id: string }>('profile', 'create', {
+        request: {
+          name,
+          host: '127.0.0.1',
+          port: sshPort,
+          username: 'synthetic',
+          auth_type: 'password',
+          password: 'synthetic-ai-ssh-password',
+        },
+      })
+      profiles.push(p.id)
+    }
     const loaded = once(window.webContents, 'did-finish-load')
     window.webContents.reload()
     await loaded
-    window.webContents.backgroundThrottling = false
     await wait("return !!document.querySelector('.desktop-shell')")
     await js(
-      "document.dispatchEvent(new KeyboardEvent('keydown',{key:'y',ctrlKey:true,shiftKey:true,bubbles:true}))",
+      "window.__aiV2=null;window.eizhu.events.on('eizhu-ai-message',e=>{if(e.conversation)window.__aiV2=e.conversation})",
     )
-    await wait("return [...document.querySelectorAll('[role=\"tab\"]')].some(t=>t.textContent==='AI 助手')")
-    await js(
-      "const tab=[...document.querySelectorAll('[role=\"tab\"]')].find(t=>t.textContent==='AI 助手');tab.focus();tab.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}))",
-    )
-    await wait("return !!document.querySelector('#ai-model')")
-    assert.equal(
-      await js('return document.querySelectorAll(\'.ai-settings button[role="combobox"]\').length'),
-      2,
-    )
-    await js(
-      "[...document.querySelectorAll('.ai-settings button')].find(b=>b.textContent==='自动发现模型').click()",
-    )
-    await wait("return document.querySelector('.ai-notice')?.textContent.includes('已发现 2 个模型')")
-    await js(
-      "const trigger=document.querySelector('#ai-model');trigger.focus();trigger.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true}))",
-    )
-    await wait('return !!document.querySelector(\'[role="listbox"]\')')
-    await js('await document.fonts.ready;await new Promise(r=>setTimeout(r,150))')
-    const selectName = 'ai-settings-models.png'
-    await writeFile(
-      join(root, selectName),
-      (await window.webContents.capturePage(undefined, { stayAwake: true })).toPNG(),
-    )
-    screenshots.push(selectName)
-    await js(
-      "const option=[...document.querySelectorAll('[role=\"option\"]')].find(o=>o.textContent==='synthetic-second');option.focus();option.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}))",
-    )
-    await wait('return !document.querySelector(\'[role="listbox"]\')')
-    await js(
-      "[...document.querySelectorAll('.ai-settings button')].find(b=>b.textContent==='测试连接').click()",
-    )
-    await wait("return document.querySelector('.ai-notice')?.textContent.includes('连接成功')")
-    assert.equal(commands.length, 0, 'Settings test never executes its proposed command')
-    assert.equal(
-      (await call<{ model: string }>('ai', 'settings')).model,
-      'synthetic-ai',
-      'Discovering and testing a draft must not save it',
-    )
-    const settingsName = 'ai-settings-responses.png'
-    await writeFile(
-      join(root, settingsName),
-      (await window.webContents.capturePage(undefined, { stayAwake: true })).toPNG(),
-    )
-    screenshots.push(settingsName)
-    await js("document.querySelector('.settings-page-back').click()")
-    await wait("return [...document.querySelectorAll('.srv')].some(r=>r.title.startsWith('AI 合成服务 ·'))")
-    await js(
-      "window.__aiSmoke=null;window.eizhu.events.on('eizhu-ai-message',e=>{if(e.conversation)window.__aiSmoke=e.conversation});const row=[...document.querySelectorAll('.srv')].find(r=>r.title.startsWith('AI 合成服务 ·'));row.dispatchEvent(new MouseEvent('dblclick',{bubbles:true}))",
-    )
+    for (let i = 0; i < names.length; i++) {
+      const name = names[i],
+        profileId = profiles[i]
+      await wait(
+        "return [...document.querySelectorAll('.srv')].some(r=>r.title.startsWith(" +
+          JSON.stringify(name + ' ·') +
+          '))',
+      )
+      await js(
+        "const row=[...document.querySelectorAll('.srv')].find(r=>r.title.startsWith(d));row.dispatchEvent(new MouseEvent('dblclick',{bubbles:true}))",
+        name + ' ·',
+      )
+      await wait(
+        "const trust=[...document.querySelectorAll('[role=dialog] button')].find(b=>b.textContent==='信任并继续');if(trust){trust.click();return false}return window.eizhu.session.list().then(rows=>rows.some(r=>r.profile_id===" +
+          JSON.stringify(profileId) +
+          "&&r.status==='connected'))",
+      )
+    }
     await wait(
-      "return [...document.querySelectorAll('[role=\"dialog\"] button')].some(b=>b.textContent==='信任并继续')",
+      "for(const dialog of document.querySelectorAll('.connection-dialog'))[...dialog.querySelectorAll('button')].find(b=>b.textContent==='关闭')?.click();return !document.querySelector('.connection-dialog')",
     )
-    assert.ok(await js<boolean>('return document.body.innerText.includes(d)', fingerprint))
-    await js(
-      "[...document.querySelectorAll('[role=\"dialog\"] button')].find(b=>b.textContent==='信任并继续').click()",
-    )
-    await wait(
-      "return window.eizhu.session.list().then(rows=>rows.some(r=>r.profile_id===d&&r.status==='connected'))".replace(
-        '===d',
-        `===${JSON.stringify(profileId)}`,
-      ),
-    )
-    await wait(
-      'return !!document.querySelector(\'button[aria-label="右侧栏"]\')&&!document.querySelector(\'[role="dialog"]\')',
-    )
-    await js('document.querySelector(\'button[aria-label="右侧栏"]\').click()')
+    const sessions = await runtime.call<Array<{ id: string; profile_id: string }>>('session.list')
+    targetIds = profiles.map((p) => sessions.find((s) => s.profile_id === p)!.id)
+    await js("document.querySelector('button[aria-label=右侧栏]').click()")
     await wait("return !!document.querySelector('.shell-inspector-picker:not([hidden])')")
-    window.setContentSize(1280, 800)
-    await js('await document.fonts.ready;await new Promise(r=>setTimeout(r,150))')
-    const sidebarFrame = await js<{
-      gap: number
-      topAligned: boolean
-      heightAligned: boolean
-      radius: number
-      independent: boolean
-    }>(
-      "const main=document.querySelector('.shell-workspace'),pane=document.querySelector('.shell-inspector-picker');const a=main.getBoundingClientRect(),b=pane.getBoundingClientRect();return {gap:b.left-a.right,topAligned:Math.abs(a.top-b.top)<=1,heightAligned:Math.abs(a.height-b.height)<=1,radius:parseFloat(getComputedStyle(pane).borderRadius),independent:!main.contains(pane)}",
-    )
-    assert.ok(
-      sidebarFrame.gap >= 7 &&
-        sidebarFrame.topAligned &&
-        sidebarFrame.heightAligned &&
-        sidebarFrame.radius >= 12 &&
-        sidebarFrame.independent,
-    )
-    const pickerName = 'right-sidebar-picker.png'
-    await writeFile(
-      join(root, pickerName),
-      (await window.webContents.capturePage(undefined, { stayAwake: true })).toPNG(),
-    )
-    screenshots.push(pickerName)
     await js(
       "[...document.querySelectorAll('.shell-inspector-choices button')].find(b=>b.textContent==='AI').click()",
     )
-    await wait("return !!window.__aiSmoke&&!!document.querySelector('.ai-composer textarea:not([disabled])')")
+    await wait("return !!document.querySelector('.ai-composer textarea')")
     await js(
-      "const input=document.querySelector('.ai-composer textarea');Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(input,'检查命令输出');input.dispatchEvent(new Event('input',{bubbles:true}))",
+      "[...document.querySelectorAll('.ai-session-controls button')].find(b=>b.textContent.startsWith('连接范围')).click()",
     )
-    await js('document.querySelector(\'.ai-composer button[aria-label="发送"]\').click()')
-    await wait(
-      "return window.__aiSmoke?.status==='awaiting_confirmation'&&!!document.querySelector('.ai-composer .ai-approval')",
+    await js("document.querySelectorAll('.ai-scope input').forEach(b=>{if(!b.checked)b.click()})")
+    await js(
+      "[...document.querySelectorAll('.ai-scope button')].find(b=>b.textContent==='应用连接范围').click()",
     )
-    assert.equal(commands.length, 0, 'No AI terminal input before user confirmation')
-    const proposed = aiConversationSchema.parse(await js('return window.__aiSmoke'))
-    const proposalId = proposed.messages.at(-1)!.proposal!.id
-    assert.equal(await js("return document.querySelectorAll('.ai-messages .ai-approval').length"), 0)
-    assert.equal(await js("return document.querySelectorAll('.ai-composer textarea').length"), 0)
-    assert.equal(await js("return document.querySelectorAll('.ai-approval input').length"), 0)
-    await js('document.querySelector(\'.ai-approval button[aria-label="复制命令"]\').click()')
+    await js(
+      "const input=document.querySelector('.ai-composer textarea');Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(input,'合成验收：检查两个连接');input.dispatchEvent(new Event('input',{bubbles:true}))",
+    )
+    await js("[...document.querySelectorAll('.ai-composer button')].find(b=>b.textContent==='发送').click()")
     await wait(
-      `return window.eizhu.clipboard.read().then(text=>text===${JSON.stringify(proposed.messages.at(-1)!.proposal!.command)})`,
+      "return window.__aiV2?.status==='awaiting_confirmation'&&!!document.querySelector('.ai-approval')",
     )
     assert.equal(
-      await js("return document.querySelectorAll('.ai-command-heading button').length"),
-      0,
-      'Copy belongs to the code block rather than the whole card',
-    )
-    assert.equal(commands.length, 0, 'Copying a code block must not execute the command')
-    await wait('return !document.querySelector(\'.ai-code-block [role="status"]\')')
-    await js('document.activeElement?.blur();await new Promise(r=>setTimeout(r,100))')
-    const approvalName = 'ai-chat-approval.png'
-    await writeFile(
-      join(root, approvalName),
-      (await window.webContents.capturePage(undefined, { stayAwake: true })).toPNG(),
-    )
-    screenshots.push(approvalName)
-    await js(
-      "[...document.querySelectorAll('.ai-approval button')].find(b=>b.textContent==='允许执行').click()",
-    )
-    await call('ai', 'decide', { proposalId, accepted: true }).then(
-      () => assert.fail('Duplicate approval accepted'),
-      () => undefined,
-    )
-    await wait(
-      "return window.__aiSmoke?.status==='idle'&&window.__aiSmoke.messages.some(m=>m.proposal?.state==='completed')",
-    )
-    const result = aiConversationSchema
-      .parse(await js('return window.__aiSmoke'))
-      .messages.find((m) => m.proposal?.id === proposalId)!.proposal!.result!
-    assert.equal(commands.length, 1)
-    assert.equal(result.exitCode, 3)
-    assert.equal(result.stdout, '你好 🧪\r\nsynthetic warning\r\n')
-    assert.equal(result.stderr, '')
-    assert.ok(
-      execCommands.every((command) => !command.includes('eizhuAi') && !command.startsWith('cd -- ')),
-      'AI must reuse the current shell instead of opening an exec channel',
-    )
-    assert.equal(await js("return document.querySelector('.ai-command').open"), false)
-    assert.equal(await js("return document.querySelectorAll('.ai-approval,.ai-result').length"), 0)
-    assert.ok(await js("return !!document.querySelector('.ai-composer textarea')"))
-    assert.ok(
       await js(
-        "return !/你好 🧪|synthetic warning/.test(document.querySelector('.ai-messages').textContent)",
-      ),
-      'Raw terminal output must not be repeated in chat',
-    )
-    assert.equal(await js("return document.querySelectorAll('.ai-message-role').length"), 1)
-    assert.equal(await js("return document.querySelectorAll('.ai-reply-actions').length"), 0)
-    assert.equal(await js("return document.querySelectorAll('.ai-message.is-assistant').length"), 1)
-    assert.ok(
-      await js("return !document.querySelector('.ai-messages').textContent.includes('检查结论')"),
-      'Post-command interpretation must not appear in chat',
-    )
-    assert.ok(
-      await js<boolean>(
-        "return ['.ai-message.is-assistant','.ai-command'].every(selector=>{const s=getComputedStyle(document.querySelector(selector));return parseFloat(s.borderTopWidth)===0&&parseFloat(s.borderBottomWidth)===0})",
-      ),
-      'AI content uses spacing and surfaces rather than internal divider lines',
-    )
-    assert.ok(commands[0].includes("cd -- '/tmp' && eval "))
-    assert.ok(!commands[0].includes('exec sh -c'))
-    assert.ok(!requests.join('').includes('synthetic-ai-ssh-password'))
-    const rows = await call<Array<{ id: string }>>('ai', 'history', { profileId })
-    assert.equal(rows.length, 1)
-    const historical = aiConversationSchema.parse(
-      await call('ai', 'read', { profileId, conversationId: rows[0].id }),
-    )
-    assert.equal(
-      historical.messages.find((m) => m.proposal?.id === proposalId)?.proposal?.result?.exitCode,
-      3,
-    )
-    const stateFiles = [
-      join(root, 'workspaces/offline/workspace.sqlite'),
-      join(root, 'workspaces/offline/workspace.sqlite-wal'),
-    ]
-    for (const path of stateFiles) {
-      const bytes = await readFile(path).catch(() => Buffer.alloc(0))
-      assert.ok(!bytes.includes(Buffer.from('synthetic-ai-api-key')))
-      assert.ok(!bytes.includes(Buffer.from('检查远端命令输出')))
-    }
-    for (const theme of ['light', 'dark']) {
-      window.setContentSize(1280, 800)
-      await js(
-        "document.documentElement.classList.remove('light','dark');document.documentElement.classList.add(d);await document.fonts.ready;await new Promise(r=>setTimeout(r,150))",
-        theme,
-      )
-      const name = `ai-chat-${theme}.png`
-      await writeFile(
-        join(root, name),
-        (await window.webContents.capturePage(undefined, { stayAwake: true })).toPNG(),
-      )
-      screenshots.push(name)
-    }
-    await js(
-      "document.documentElement.classList.remove('dark');document.documentElement.classList.add('light');document.querySelector('.ai-messages').scrollTop=0;await new Promise(r=>setTimeout(r,100))",
-    )
-    const startName = 'ai-chat-start.png'
-    await writeFile(
-      join(root, startName),
-      (await window.webContents.capturePage(undefined, { stayAwake: true })).toPNG(),
-    )
-    screenshots.push(startName)
-    const transcriptOverflows = await js<boolean>(
-      "const node=document.querySelector('.ai-messages');return node.scrollHeight-node.clientHeight>=48",
-    )
-    if (transcriptOverflows) {
-      await wait('return !!document.querySelector(\'.ai-inspector button[aria-label="滚动到最新回复"]\')')
-      await js('document.querySelector(\'.ai-inspector button[aria-label="滚动到最新回复"]\').click()')
-    } else {
-      assert.equal(
-        await js('return !!document.querySelector(\'.ai-inspector button[aria-label="滚动到最新回复"]\')'),
-        false,
-      )
-    }
-    window.setContentSize(900, 720)
-    await wait("return document.querySelector('.ai-inspector')?.classList.contains('is-overlay')")
-    const name = 'ai-chat-narrow.png'
-    await writeFile(
-      join(root, name),
-      (await window.webContents.capturePage(undefined, { stayAwake: true })).toPNG(),
-    )
-    screenshots.push(name)
-    await js('document.querySelector(\'.ai-inspector button[aria-label="切换侧栏内容"]\').click()')
-    await js(
-      "[...document.querySelectorAll('.shell-inspector-choices button')].find(b=>b.textContent==='SFTP').click()",
-    )
-    await wait(
-      "return !!document.querySelector('.shell-inspector:not([hidden]) .sdetail-pane')&&document.querySelector('.ai-inspector').hidden",
-    )
-    await js(
-      'document.querySelector(\'.shell-inspector:not([hidden]) button[aria-label="切换侧栏内容"]\').click()',
-    )
-    await js(
-      "[...document.querySelectorAll('.shell-inspector-choices button')].find(b=>b.textContent==='AI').click()",
-    )
-    await wait(
-      "return !document.querySelector('.ai-inspector').hidden&&document.querySelector('.ai-command')?.textContent.includes('退出码 3')",
-    )
-    assert.equal(commands.length, 1, 'Switching sidebar content must retain the conversation without replay')
-    const sessionId = proposed.target.sessionId
-    const blocked = aiConversationSchema.parse(await call('ai', 'open', { sessionId }))
-    await call('ai', 'send', { conversationId: blocked.id, text: '验证终端输入占用', attachments: [] })
-    await wait(
-      `return window.__aiSmoke?.id===${JSON.stringify(blocked.id)}&&window.__aiSmoke.status==='awaiting_confirmation'`,
-    )
-    const blockedProposal = aiConversationSchema
-      .parse(await js('return window.__aiSmoke'))
-      .messages.at(-1)!.proposal!
-    await call('session', 'input', { id: sessionId, data: 'unfinished-input' })
-    await call('ai', 'decide', { proposalId: blockedProposal.id, accepted: true })
-    await wait(
-      `return window.__aiSmoke?.id===${JSON.stringify(blocked.id)}&&window.__aiSmoke.status==='error'`,
-    )
-    assert.ok(aiConversationSchema.parse(await js('return window.__aiSmoke')).error.includes('未提交输入'))
-    assert.equal(commands.length, 1, 'AI must not append commands to pending manual terminal input')
-    await call('session', 'input', { id: sessionId, data: '\x03' })
-    for (const mode of ['quota', 'unauthorized', 'interrupted'] as const) {
-      modelMode = mode
-      const c = aiConversationSchema.parse(await call('ai', 'open', { sessionId }))
-      await call('ai', 'send', { conversationId: c.id, text: '验证错误反馈', attachments: [] })
-      await wait(`return window.__aiSmoke?.id===${JSON.stringify(c.id)}&&window.__aiSmoke.status==='error'`)
-      const failed = aiConversationSchema.parse(await js('return window.__aiSmoke'))
-      assert.ok(failed.error)
-      assert.ok(!failed.messages.some((m) => m.proposal))
-      assert.equal(commands.length, 1)
-    }
-    modelMode = 'unsupported'
-    assert.equal(
-      await call('ai', 'test').then(
-        () => false,
-        (e) => e.code === 'AI_TOOL_UNSUPPORTED',
+        "const s=document.querySelector('.ai-command-summary'),p=s.querySelector('.ai-command-purpose').getBoundingClientRect(),t=s.querySelector('.ai-command-status').getBoundingClientRect();return p.width>40&&p.bottom<=t.top+1",
       ),
       true,
     )
-    modelMode = 'normal'
-    await call('ai', 'remove', { profileId })
-    assert.deepEqual(await call('ai', 'history', { profileId }), [])
+    const proposed = await read()
+    conversations.push(proposed.id)
+    assert.equal(proposed.targets.length, 2)
+    assert.equal(commands.length, 0)
+    assert.equal(await js("return document.querySelectorAll('.ai-messages .ai-approval').length"), 0)
+    window.setContentSize(1280, 800)
+    await js('await document.fonts.ready;await new Promise(r=>setTimeout(r,150))')
+    await writeFile(join(root, 'ai-v2-approval.png'), (await window.webContents.capturePage()).toPNG())
+    screenshots.push('ai-v2-approval.png')
+    const pending = proposed.messages.findLast((m) => m.tool?.state === 'pending')!.tool!
+    await js(
+      "[...document.querySelectorAll('.ai-approval button')].find(b=>b.textContent==='允许本次').click()",
+    )
+    await assert.rejects(
+      call('ai', 'decide', {
+        conversationId: proposed.id,
+        callId: pending.id,
+        decision: 'once',
+        revision: proposed.revision,
+      }),
+    )
+    await wait(
+      "return window.__aiV2?.messages.filter(m=>m.tool?.state==='completed'&&m.tool.name==='terminal_execute').length===1&&window.__aiV2?.status==='awaiting_confirmation'",
+    )
+    assert.equal(commands.length, 1)
+    await js(
+      "[...document.querySelectorAll('.ai-approval button')].find(b=>b.textContent==='允许本次').click()",
+    )
+    await wait("return window.__aiV2?.status==='idle'")
+    assert.equal(commands.length, 2)
+    const completed = await read()
+    assert.ok(completed.messages.at(-1)?.text.includes('检查完成'))
+    assert.ok(
+      completed.messages.some(
+        (m) => m.tool?.name === 'terminal_execute' && JSON.stringify(m.tool.result).includes('你好'),
+      ),
+    )
+    assert.ok(!execCommands.some((c) => c.includes('eizhuAi;')))
+    await wait("return !!document.querySelector('.ai-markdown h2')")
+    for (const dark of [false, true]) {
+      await js(
+        "document.documentElement.classList.toggle('dark',d);await new Promise(r=>setTimeout(r,120))",
+        dark,
+      )
+      const name = dark ? 'ai-v2-dark.png' : 'ai-v2-light.png'
+      await writeFile(join(root, name), (await window.webContents.capturePage()).toPNG())
+      screenshots.push(name)
+    }
+    window.setContentSize(900, 760)
+    await js('await new Promise(r=>setTimeout(r,150))')
+    await writeFile(join(root, 'ai-v2-narrow.png'), (await window.webContents.capturePage()).toPNG())
+    screenshots.push('ai-v2-narrow.png')
+    const beforeBusy = commands.length
+    await call('session', 'input', { id: targetIds[0], data: 'unfinished-input' })
+    const blocked = aiConversationSchema.parse(
+      await call('ai', 'open', {
+        sessionIds: [targetIds[0]],
+        backend: { kind: 'custom', providerId: 'responses', model: 'synthetic-ai' },
+      }),
+    )
+    conversations.push(blocked.id)
+    await call('ai', 'send', { conversationId: blocked.id, text: '检查忙终端', attachments: [] })
+    await wait(
+      'return window.__aiV2?.id===' +
+        JSON.stringify(blocked.id) +
+        "&&window.__aiV2.status==='awaiting_confirmation'",
+    )
+    const approval = (await read()).messages.findLast((m) => m.tool?.state === 'pending')!.tool!
+    await call('ai', 'decide', {
+      conversationId: blocked.id,
+      callId: approval.id,
+      decision: 'once',
+      revision: (await read()).revision,
+    })
+    await wait("return window.__aiV2?.status==='paused'")
+    assert.equal(commands.length, beforeBusy)
+    await call('session', 'input', { id: targetIds[0], data: '\x03' })
+    mode = 'interrupted'
+    const cut = aiConversationSchema.parse(
+      await call('ai', 'open', {
+        sessionIds: [targetIds[0]],
+        backend: { kind: 'custom', providerId: 'responses', model: 'synthetic-ai' },
+      }),
+    )
+    conversations.push(cut.id)
+    await call('ai', 'send', { conversationId: cut.id, text: '验证断流', attachments: [] })
+    await wait('return window.__aiV2?.id===' + JSON.stringify(cut.id) + "&&window.__aiV2.status==='error'")
+    assert.ok(!(await read()).messages.some((m) => m.tool?.state === 'pending'))
+    mode = 'long'
+    const long = aiConversationSchema.parse(
+      await call('ai', 'open', {
+        sessionIds: [targetIds[0]],
+        backend: { kind: 'custom', providerId: 'responses', model: 'synthetic-ai' },
+      }),
+    )
+    conversations.push(long.id)
+    await call('ai', 'permission', { conversationId: long.id, permission: 'auto' })
+    await call('ai', 'send', { conversationId: long.id, text: '运行长任务等待中断', attachments: [] })
+    await wait(
+      'return window.__aiV2?.id===' +
+        JSON.stringify(long.id) +
+        "&&window.__aiV2.jobs.some(j=>j.status==='running')",
+    )
+    await call('ai', 'cancel', { conversationId: long.id })
+    assert.ok((await read()).jobs.every((j) => j.status !== 'running'))
+    if (sftpServer) {
+      mode = 'file'
+      for (const conflict of [true, false]) {
+        const chat = aiConversationSchema.parse(
+          await call('ai', 'open', {
+            sessionIds: [targetIds[0]],
+            backend: { kind: 'custom', providerId: 'responses', model: 'synthetic-ai' },
+          }),
+        )
+        conversations.push(chat.id)
+        await call('ai', 'send', { conversationId: chat.id, text: '修改远端配置', attachments: [] })
+        await wait(
+          'return window.__aiV2?.id===' +
+            JSON.stringify(chat.id) +
+            "&&window.__aiV2.status==='awaiting_confirmation'",
+        )
+        const pending = (await read()).messages.findLast((m) => m.tool?.state === 'pending')!.tool!
+        assert.ok(pending.preview.includes('--- 修改前') && pending.preview.includes('port=2222'))
+        if (conflict) await writeFile(remoteFile, '# externally changed\nport=22\n')
+        await call('ai', 'decide', {
+          conversationId: chat.id,
+          callId: pending.id,
+          revision: (await read()).revision,
+          decision: 'once',
+        })
+        await wait(
+          'return window.__aiV2?.id===' + JSON.stringify(chat.id) + "&&window.__aiV2.status==='idle'",
+        )
+        const result = (await read()).messages.find((m) => m.tool?.id === pending.id)!.tool!
+        if (conflict) {
+          assert.equal(result.state, 'failed')
+          assert.equal(await readFile(remoteFile, 'utf8'), '# externally changed\nport=22\n')
+        } else {
+          assert.equal(result.state, 'completed')
+          assert.equal(await readFile(remoteFile, 'utf8'), '# externally changed\nport=2222\n')
+        }
+      }
+    }
+    for (const name of await readdir(root, { recursive: true })) {
+      if (!/\.(sqlite|db)(-wal)?$/.test(name)) continue
+      const bytes = await readFile(join(root, name))
+      assert.ok(!bytes.includes(Buffer.from('synthetic-ai-api-key')))
+      assert.ok(!bytes.includes(Buffer.from('合成验收：检查两个连接')))
+    }
+    const saved = aiConversationSchema.parse(await call('ai', 'read', { conversationId: proposed.id }))
+    assert.equal(saved.id, proposed.id)
+    assert.ok(fingerprint.startsWith('SHA256:'))
     return {
       passed: true,
-      model: 'loopback-synthetic',
-      ssh: 'loopback-synthetic',
+      toolsetVersion: 2,
+      protocols: ['responses', 'chat', 'anthropic'],
+      multiSession: true,
       approvalRequired: true,
       duplicateRejected: true,
-      outputAndExitCode: true,
       currentTerminalExecution: true,
       pendingTerminalInputBlocked: true,
-      encryptedStorage: true,
-      historyDeletion: true,
-      quotaAndAuthErrors: true,
-      responsesOnly: true,
-      settingsDiscoveryAndTest: true,
-      sharedSettingsSelect: true,
+      finalAnswerRetained: true,
+      stopCancelsLongTasks: true,
       incompleteStreamRejected: true,
-      unsupportedToolsRejected: true,
-      codeBlockCopyOnly: true,
-      borderlessAiContent: true,
-      sharedSidebar: sidebarFrame,
+      encryptedStorage: true,
+      remoteFileConflictAndEdit: Boolean(sftpServer),
+      sftp: sftpServer ? 'installed-openssh-subsystem' : 'unavailable',
+      model: 'loopback-synthetic',
+      ssh: 'loopback-synthetic',
       screenshots,
     }
   } finally {
+    mode = 'normal'
+    for (const conversationId of conversations) await call('ai', 'remove', { conversationId })
     for (const s of await runtime.call<Array<{ id: string; profile_id: string }>>('session.list'))
-      if (s.profile_id === profileId) await call('session', 'close', { id: s.id })
-    if (profileId) await call('profile', 'delete', { id: profileId })
-    await call('ai', 'configure', {
-      source: 'official',
-      endpoint: '',
-      model: '',
-      apiKey: '',
-    })
+      if (profiles.includes(s.profile_id)) await call('session', 'close', { id: s.id })
+    for (const id of profiles) await call('profile', 'delete', { id })
+    for (const providerId of ['responses', 'chat', 'anthropic'])
+      await call('ai', 'removeProvider', { providerId })
+    await call('ai', 'setDefault', { kind: 'official', model: '' })
     for (const client of clients) client.end()
     await Promise.all([
-      new Promise<void>((r) => ssh.close(() => r())),
-      new Promise<void>((r) => http.close(() => r())),
+      new Promise<void>((resolve) => ssh.close(() => resolve())),
+      new Promise<void>((resolve) => http.close(() => resolve())),
     ])
     window.setContentSize(size[0], size[1])
     const loaded = once(window.webContents, 'did-finish-load')

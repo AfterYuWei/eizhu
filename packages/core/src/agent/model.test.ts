@@ -1,99 +1,104 @@
-import { test } from 'node:test'
+import test from 'node:test'
 import assert from 'node:assert/strict'
-import { aiEndpointSchema, aiHttpRequestSchema } from '@eizhu/contracts'
-import { generateModel, modelRequest, redactAiText } from './model.ts'
+import { generateModel } from './model.ts'
 import type { AiTransport } from './model.ts'
-
-const config = {
-  source: 'custom' as const,
-  endpoint: 'http://127.0.0.1:1234/v1',
-  model: 'synthetic',
-  apiKey: '',
+import { modelFixture } from './model-fixture.ts'
+const args = {
+  sessionId: 'a',
+  command: 'printf hello',
+  cwd: '/tmp',
+  purpose: '测试',
+  impact: '只读',
+  timeoutSeconds: 60,
 }
-const command = { command: 'printf hello', cwd: "/tmp/中文's", purpose: '诊断', impact: '只读' }
-const event = (data: unknown) => `data: ${JSON.stringify(data)}\r\n\r\n`
-const request = modelRequest(config, '', [{ role: 'user', content: '检查' }])
-const stream =
-  (body: string): AiTransport =>
-  async (_r, _s, consume) => {
-    const bytes = Buffer.from(body)
-    for (let i = 0; i < bytes.length; i += 3) await consume(bytes.subarray(i, i + 3))
+for (const protocol of ['responses', 'chat', 'anthropic'] as const) {
+  test(protocol + ': complete native tools round trip and streamed text', async () => {
+    const bodies: unknown[] = []
+    const transport: AiTransport = async (r, _s, consume) => {
+      bodies.push(JSON.parse(r.body!))
+      const bytes = Buffer.from(
+        modelFixture(protocol, '中文 🧪', [{ id: 'call1', name: 'terminal_execute', args }]),
+      )
+      for (let i = 0; i < bytes.length; i += 7) await consume(bytes.subarray(i, i + 7))
+    }
+    let streamed = ''
+    const result = await generateModel({
+      provider: {
+        id: 'test',
+        name: '测试',
+        protocol,
+        endpoint: 'http://127.0.0.1/v1',
+        model: 'fixture',
+        contextWindow: 64000,
+        apiKey: 'test-key',
+      },
+      source: 'custom',
+      transport,
+      signal: AbortSignal.timeout(3000),
+      system: '测试',
+      messages: [{ role: 'user', content: '检查' }],
+      onText: (t) => {
+        streamed = t
+      },
+    })
+    assert.equal(result.text, '中文 🧪')
+    assert.equal(streamed, '中文 🧪')
+    assert.equal(result.calls[0].name, 'terminal_execute')
+    assert.deepEqual(result.calls[0].args, args)
+    assert.ok(result.messages.length)
+    assert.equal(bodies.length, 1)
+  })
+  test(protocol + ': complete tool arguments followed by interrupted stream cannot authorize', async () => {
+    const transport: AiTransport = async (_r, _s, consume) =>
+      consume(
+        Buffer.from(modelFixture(protocol, '', [{ id: 'call1', name: 'terminal_execute', args }], false)),
+      )
+    await assert.rejects(
+      generateModel({
+        provider: {
+          id: 'test',
+          name: '测试',
+          protocol,
+          endpoint: 'http://127.0.0.1/v1',
+          model: 'fixture',
+          contextWindow: 64000,
+          apiKey: 'test-key',
+        },
+        source: 'custom',
+        transport,
+        signal: AbortSignal.timeout(3000),
+        system: '测试',
+        messages: [{ role: 'user', content: '检查' }],
+        onText: () => {},
+      }),
+    )
+  })
+}
+test('unknown tool and invalid command schema are rejected after completion', async () => {
+  for (const c of [
+    { id: 'bad', name: 'local_shell', args: {} },
+    { id: 'bad', name: 'terminal_execute', args: { ...args, cwd: 'relative' } },
+  ]) {
+    const transport: AiTransport = async (_r, _s, consume) =>
+      consume(Buffer.from(modelFixture('responses', '', [c])))
+    await assert.rejects(
+      generateModel({
+        provider: {
+          id: 'test',
+          name: '测试',
+          protocol: 'responses',
+          endpoint: 'http://127.0.0.1/v1',
+          model: 'fixture',
+          contextWindow: 64000,
+          apiKey: '',
+        },
+        source: 'custom',
+        transport,
+        signal: AbortSignal.timeout(3000),
+        system: '测试',
+        messages: [{ role: 'user', content: '检查' }],
+        onText: () => {},
+      }),
+    )
   }
-
-test('AI endpoint boundary allows HTTPS and loopback HTTP; official origin and paths are pinned', () => {
-  for (const value of ['https://api.example.invalid/v1', 'http://127.0.0.1:1234/v1', 'http://[::1]:1234/v1'])
-    assert.ok(aiEndpointSchema.safeParse(value).success)
-  for (const value of [
-    'http://api.example.invalid/v1',
-    'https://user:secret@example.invalid',
-    'file:///tmp/a',
-    'https://example.invalid/?token=secret',
-  ])
-    assert.ok(!aiEndpointSchema.safeParse(value).success)
-  assert.ok(
-    !aiHttpRequestSchema.safeParse({
-      source: 'official',
-      url: config.endpoint,
-      authorization: '',
-      method: 'GET',
-    }).success,
-  )
-})
-test('Responses streaming handles split UTF-8, rejects incomplete streams and multiple commands', async () => {
-  const output = [
-    { type: 'function_call', call_id: 'call-1', name: 'run_command', arguments: JSON.stringify(command) },
-  ]
-  const body =
-    event({ type: 'response.output_text.delta', delta: '检查中文 🧪' }) +
-    event({ type: 'response.completed', response: { status: 'completed', output } })
-  const result = await generateModel(stream(body), request, new AbortController().signal, () => undefined)
-  assert.deepEqual(result.command, command)
-  assert.equal(result.text, '检查中文 🧪')
-  await assert.rejects(
-    generateModel(
-      stream(event({ type: 'response.output_text.delta', delta: '中断' })),
-      request,
-      new AbortController().signal,
-      () => undefined,
-    ),
-  )
-  await assert.rejects(
-    generateModel(
-      stream(
-        event({
-          type: 'response.completed',
-          response: { status: 'completed', output: [...output, { ...output[0], call_id: 'call-2' }] },
-        }),
-      ),
-      request,
-      new AbortController().signal,
-      () => undefined,
-    ),
-  )
-})
-test('Responses preserves reasoning/output items for subsequent stateless tool results', async () => {
-  const req = modelRequest(config, '', [{ role: 'user', content: '检查' }])
-  const output = [
-    { type: 'reasoning', encrypted_content: 'synthetic-encrypted' },
-    { type: 'function_call', call_id: 'call-2', name: 'run_command', arguments: JSON.stringify(command) },
-  ]
-  const result = await generateModel(
-    stream(event({ type: 'response.completed', response: { status: 'completed', output } })),
-    req,
-    new AbortController().signal,
-    () => undefined,
-  )
-  assert.deepEqual(result.command, command)
-  const next = JSON.parse(
-    modelRequest(config, '', [result.message, { role: 'tool', content: 'done', callId: 'call-2' }]).body!,
-  )
-  assert.equal(next.input[0].encrypted_content, 'synthetic-encrypted')
-  assert.equal(next.input[2].call_id, 'call-2')
-})
-test('sensitive keys, tokens and private key blocks are removed from model context', () => {
-  const value = redactAiText(
-    'owned-secret Bearer token-123 password=unsafe\n-----BEGIN OPENSSH PRIVATE KEY-----\nkey\n-----END OPENSSH PRIVATE KEY-----',
-    ['owned-secret'],
-  )
-  for (const secret of ['owned-secret', 'token-123', 'unsafe', '\nkey\n']) assert.ok(!value.includes(secret))
 })

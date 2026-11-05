@@ -35,6 +35,7 @@ export const aiNetwork: AiTransport = async (raw, signal, consume) => {
       body: request.body,
       signal: controller.signal,
       headers: {
+        ...request.headers,
         accept: request.method === 'GET' ? 'application/json' : 'text/event-stream',
         ...(request.body ? { 'content-type': 'application/json' } : {}),
         ...(request.authorization ? { authorization: request.authorization } : {}),

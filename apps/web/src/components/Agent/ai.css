@@ -616,3 +616,44 @@
   justify-content: flex-end;
   gap: 8px;
 }
+
+.ai-session-controls {
+  display: grid;
+  gap: 6px;
+  padding: 8px 16px;
+}
+.ai-session-controls > .ai-inline-actions {
+  justify-content: space-between;
+}
+.ai-session-controls .ai-inline-actions > button:last-child {
+  width: 110px;
+}
+.ai-scope {
+  display: grid;
+  gap: 8px;
+  padding: 8px 20px;
+  max-height: 220px;
+  overflow: auto;
+}
+.ai-scope label {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.ai-task-state {
+  padding: 6px 20px;
+  color: var(--fg-muted);
+  font-size: 12px;
+}
+.ai-cli-config {
+  display: grid;
+  gap: 6px;
+  padding: 12px 0;
+}
+.ai-approval-content {
+  max-height: 340px;
+  overflow: auto;
+}
+.ai-approval-footer .ai-inline-actions {
+  flex-wrap: wrap;
+}

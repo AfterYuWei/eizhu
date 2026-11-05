@@ -3,10 +3,11 @@ import { StringDecoder } from 'node:string_decoder'
 
 const READY = Buffer.from('\x1b]1337;eizhuOsc7Ready\x07')
 
-export function loginShell(output: string): 'bash' | 'zsh' | 'fish' | undefined {
+export function loginShell(output: string): 'bash' | 'zsh' | 'fish' | 'sh' | undefined {
   for (const line of output.trim().split(/\r?\n/).reverse()) {
     const name = line.trim().split('/').pop()?.replace(/^-/, '')
     if (name === 'bash' || name === 'zsh' || name === 'fish') return name
+    if (name && ['sh', 'ash', 'dash', 'ksh', 'busybox'].includes(name)) return 'sh'
   }
 }
 
@@ -35,6 +36,8 @@ export function shellSetupCommand(output: string): string | undefined {
       String.raw`if not functions -q __eizhu_original_fish_prompt;if functions -c fish_prompt __eizhu_original_fish_prompt;function fish_prompt;__eizhu_original_fish_prompt;printf '\033]133;B\007';end;end;end;`,
       String.raw`if functions -q __eizhu_original_fish_prompt;function __eizhu_prompt_start --on-event fish_prompt;printf '\033]133;A\007';end;function __eizhu_preexec --on-event fish_preexec;printf '\033]133;C\007';end;end;__eizhu_osc7`,
     ].join('')
+  } else if (name === 'sh') {
+    hook = String.raw` __eizhu_osc7(){ printf '\033]7;file://%s\007\033]1337;eizhuPrompt\007' "$(pwd -P 2>/dev/null)";};PS1='$(__eizhu_osc7)'"$PS1";__eizhu_osc7`
   } else return
   return hook + String.raw`;printf "\033]1337;eizhuOsc7Ready\007"`
 }

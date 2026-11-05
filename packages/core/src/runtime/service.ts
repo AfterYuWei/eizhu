@@ -1,5 +1,6 @@
 import { SyncService } from '../sync/service.ts'
 import { AgentService } from '../agent/service.ts'
+import type { AgentExternal } from '../agent/service.ts'
 import type { AiTransport } from '../agent/model.ts'
 import { z } from 'zod'
 import { ai, isAiOperation } from '@eizhu/contracts'
@@ -28,6 +29,7 @@ import { join } from 'node:path'
 
 export class RuntimeService {
   private agent!: AgentService
+  private agentExternal?: AgentExternal
   private agentTransport: AiTransport
   private emitAgent: (conversation: import('@eizhu/contracts').AiConversation, message?: import('@eizhu/contracts').AiConversation['messages'][number]) => void
   private scope = new ResourceScope()
@@ -59,7 +61,9 @@ export class RuntimeService {
     accountTransport: Transport = async () => fail('ACCOUNT_UNAVAILABLE', '账号网络不可用'),
     stream?: EventStream,
     agentTransport: AiTransport = async () => fail('AI_UNAVAILABLE', 'AI 网络不可用'),
+    agentExternal?: AgentExternal,
   ) {
+    this.agentExternal = agentExternal
     this.agentTransport = agentTransport
     this.emitAgent = (conversation, message) => emit('eizhu-ai-message', message
       ? { workspaceGeneration: this.context.generation, conversationId: conversation.id, message }
@@ -96,7 +100,7 @@ export class RuntimeService {
     this.sync = new SyncService(this.database,this.compute,this.account,this.workspace,this.context,this.emitSync,this.stream)
     this.scope.own(()=>this.sync.close())
     this.agent = new AgentService(input => this.database.call('ai.storage', input), this.ssh, this.agentTransport,
-      async () => `Bearer ${(await this.account.syncToken()).token}`, this.context, this.emitAgent)
+      async () => `Bearer ${(await this.account.syncToken()).token}`, this.context, this.emitAgent, this.sftp, this.agentExternal)
     this.scope.own(() => this.agent.close())
     this.initialized = true
     return this.workspace

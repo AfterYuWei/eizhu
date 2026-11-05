@@ -10,17 +10,21 @@ import { useServerDetailStore } from '@/store/serverDetail'
 import { useSyncStore } from '@/store/sync'
 import { useHistoryStore } from '@/store/history'
 import { useSidebarDetailStore } from '@/store/sidebarDetail'
-import { useDesktopShellStore,restoreSidebarGroups } from '@/store/desktopShell'
-import { workspaceGeneration,setWorkspaceGeneration } from './workspaceScope'
+import { useDesktopShellStore, restoreSidebarGroups } from '@/store/desktopShell'
+import { workspaceGeneration, setWorkspaceGeneration } from './workspaceScope'
 import { resetSnippetQuickAccess } from './snippetQuickAccess'
-export interface WorkspaceStatus { id: string; generation: number; userId: number }
+export interface WorkspaceStatus {
+  id: string
+  generation: number
+  userId: number
+}
 export { workspaceGeneration } from './workspaceScope'
 export function applyWorkspace(workspace: WorkspaceStatus) {
   if (workspaceGeneration() === workspace.generation) return
   void resetWorkspaceView().catch((error: unknown) => console.error('释放旧工作空间文件资源失败', error))
   resetTerminalLayout()
   setWorkspaceGeneration(workspace.generation)
-  useAiStore.setState({ tabs: {}, conversations: {} })
+  useAiStore.setState({ selectedId: null, conversations: {} })
   resetSnippetQuickAccess()
   useProfileStore.setState(useProfileStore.getInitialState(), true)
   useVaultStore.setState(useVaultStore.getInitialState(), true)
@@ -32,8 +36,13 @@ export function applyWorkspace(workspace: WorkspaceStatus) {
   useSidebarDetailStore.setState(useSidebarDetailStore.getInitialState(), true)
   useDesktopShellStore.setState({ collapsedGroups: {}, groupsReady: false })
   void restoreSidebarGroups()
-  void useProfileStore.getState().refreshAll().catch(() => {})
+  void useProfileStore
+    .getState()
+    .refreshAll()
+    .catch(() => {})
   void useVaultStore.getState().fetchList()
   void useSyncStore.getState().refresh()
 }
-export async function refreshWorkspace() { applyWorkspace(await bridge().workspace.status()) }
+export async function refreshWorkspace() {
+  applyWorkspace(await bridge().workspace.status())
+}

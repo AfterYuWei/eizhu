@@ -15,6 +15,8 @@ import type { FileHandle } from './endpoint.ts'
 import { fileHash, readText, writeText, hash } from './editor.ts'
 import { archive, collect } from './archive.ts'
 import { checkpointProgress } from './checkpoint.ts'
+import { aiTools } from '@eizhu/contracts'
+import type { AiToolName } from '@eizhu/contracts'
 import type { CopyFile, Checkpoint } from './checkpoint.ts'
 
 interface FileSession {
@@ -55,6 +57,108 @@ function transferFailure(cause: unknown) {
 
 /** Five active streams, durable encrypted checkpoints, and explicit session ownership. */
 export class SftpService {
+  private agentEndpoints = new Map<string, { binding: object; endpoint: FileEndpoint }>()
+  async releaseAgent(sessionId: string): Promise<void> {
+    const current = this.agentEndpoints.get(sessionId)
+    this.agentEndpoints.delete(sessionId)
+    await current?.endpoint.close()
+  }
+  async prepareAgent(name: AiToolName, raw: unknown, binding: object) {
+    const at = aiTools.file_stat.input.parse(
+      raw && typeof raw === 'object'
+        ? { sessionId: Reflect.get(raw, 'sessionId'), path: Reflect.get(raw, 'path') }
+        : raw,
+    )
+    if (!this.ssh.agentConnected(at.sessionId, binding)) fail('AI_SCOPE_CHANGED', '文件连接已变化')
+    let current = this.agentEndpoints.get(at.sessionId)
+    if (current && current.binding !== binding) {
+      await this.releaseAgent(at.sessionId)
+      current = undefined
+    }
+    if (!current) {
+      const { client } = this.ssh.fileClient(at.sessionId)
+      const channel = await new Promise<import('ssh2').SFTPWrapper>((resolve, reject) =>
+        client.sftp((error, value) => (error ? reject(error) : resolve(value))),
+      )
+      if (!this.ssh.agentConnected(at.sessionId, binding)) {
+        channel.end()
+        fail('AI_SCOPE_CHANGED', '文件连接已变化')
+      }
+      current = { binding, endpoint: new FileEndpoint(channel) }
+      this.agentEndpoints.set(at.sessionId, current)
+    }
+    const endpoint = current.endpoint
+    const text = async () => {
+      const value = await readText(endpoint, at.path)
+      if (Buffer.byteLength(value.content) > 131072) fail('FILE_TOO_LARGE', 'AI 文本工具最多读取128KiB')
+      return {
+        path: at.path,
+        content: value.content,
+        version: { modTime: value.mod_time, hash: value.content_hash },
+      }
+    }
+    let preview = JSON.stringify(raw, null, 2)
+    let run: () => Promise<unknown>
+    if (name === 'file_write' || name === 'file_edit') {
+      const d =
+        name === 'file_write' ? aiTools.file_write.input.parse(raw) : aiTools.file_edit.input.parse(raw)
+      const before = d.version ? await text() : undefined
+      if (
+        before &&
+        (before.version.hash !== d.version?.hash || before.version.modTime !== d.version?.modTime)
+      )
+        fail('FILE_MODIFIED', '远端文件已变化，请重新读取')
+      let content: string
+      if ('oldText' in d) {
+        if (!before || before.content.split(d.oldText).length !== 2)
+          fail('AI_EDIT_AMBIGUOUS', '待替换文本必须唯一匹配')
+        content = before.content.replace(d.oldText, () => d.newText)
+      } else content = d.content
+      if (Buffer.byteLength(content) > 131072) fail('FILE_TOO_LARGE', 'AI 文本工具最多写入128KiB')
+      preview = `文件：${at.path}\n--- 修改前\n${before?.content ?? '[新建文件]'}\n+++ 修改后\n${content}`
+      run = async () => {
+        await writeText(endpoint, at.path, {
+          content,
+          expected_mod_time: d.version?.modTime ?? '',
+          expected_content_hash: d.version?.hash,
+          create_new: d.version === null,
+        })
+        return text()
+      }
+    } else if (name === 'file_read') run = text
+    else if (name === 'file_list')
+      run = async () => ({ path: at.path, entries: await endpoint.list(at.path) })
+    else if (name === 'file_stat') run = async () => entry(at.path, await endpoint.stat(at.path))
+    else if (name === 'file_mkdir')
+      run = async () => {
+        await endpoint.mkdir(at.path)
+        return entry(at.path, await endpoint.stat(at.path))
+      }
+    else {
+      const before = await endpoint.stat(at.path)
+      const rename = name === 'file_rename' ? aiTools.file_rename.input.parse(raw) : undefined
+      run = async () => {
+        if ((await endpoint.stat(at.path)).identity !== before.identity)
+          fail('FILE_MODIFIED', '审批期间远端文件已变化')
+        if (rename) {
+          await endpoint.rename(at.path, rename.newPath)
+          return entry(rename.newPath, await endpoint.stat(rename.newPath))
+        }
+        if (name !== 'file_delete' || at.path === '/') fail('BAD_PATH', '无效删除目标')
+        for (const row of (await collect(endpoint, [at.path])).reverse())
+          await endpoint.remove(row.path, row.dir)
+        return { deleted: 1, failed: 0 }
+      }
+    }
+    return {
+      preview,
+      run: () =>
+        this.mutate(this.ssh.fileClient(at.sessionId).profileId, async () => {
+          if (!this.ssh.agentConnected(at.sessionId, binding)) fail('AI_SCOPE_CHANGED', '文件连接已变化')
+          return run()
+        }),
+    }
+  }
   private sessions = new Map<string, FileSession>()
   private jobs = new Map<string, Job>()
   private uploads = new Map<string, Job>()
@@ -1400,6 +1504,7 @@ export class SftpService {
           .map((j) => this.stop(j, 'paused')),
       )
       await Promise.all([...this.sessions.keys()].map((id) => this.closeSession(id)))
+      await Promise.all([...this.agentEndpoints.keys()].map(id => this.releaseAgent(id)))
       await this.spoolEndpoint.close()
     })()
     return this.closing

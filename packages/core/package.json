@@ -7,9 +7,13 @@
     "./*": "./src/*.ts"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "4.0.97",
+    "@ai-sdk/openai": "4.0.109",
     "@eizhu/contracts": "*",
-    "better-sqlite3": "13.0.3",
+    "@modelcontextprotocol/sdk": "1.32.2",
+    "ai": "7.0.163",
     "argon2": "0.45.1",
+    "better-sqlite3": "13.0.3",
     "ssh2": "1.17.0"
   }
 }

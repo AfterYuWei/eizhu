@@ -33,7 +33,8 @@
     "architecture:verify": "node scripts/verify-desktop-architecture.mjs",
     "desktop:delivery:verify": "node scripts/verify-desktop-delivery.mjs",
     "desktop:accept:sync": "node scripts/accept-sync.mjs",
-    "desktop:accept:ai": "node scripts/accept-ai-gateway.mjs"
+    "desktop:accept:ai": "node scripts/accept-ai-gateway.mjs",
+    "desktop:smoke:ai": "node scripts/smoke-ai.mjs"
   },
   "dependencies": {
     "argon2": "0.45.1",

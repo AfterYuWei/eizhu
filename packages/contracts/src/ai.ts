@@ -1,7 +1,7 @@
 import { z } from 'zod'
-
+import { aiJobSchema, aiToolNameSchema, AI_TOOLSET_VERSION } from './ai-tools.ts'
+export * from './ai-tools.ts'
 const id = z.string().min(1).max(160)
-const text = z.string().max(196608)
 export const aiEndpointSchema = z
   .url()
   .max(2048)
@@ -15,14 +15,36 @@ export const aiEndpointSchema = z
       (u.protocol === 'https:' ||
         (u.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(u.hostname)))
     )
-  }, '远程接口须使用 HTTPS，本机服务可使用 HTTP')
-export const aiPreferencesSchema = z.strictObject({
-  source: z.enum(['official', 'custom']),
-  endpoint: z.union([z.literal(''), aiEndpointSchema]),
+  }, '远程接口须使用HTTPS，本机服务可使用HTTP')
+export const aiProtocolSchema = z.enum(['responses', 'chat', 'anthropic'])
+export const aiProviderSchema = z.strictObject({
+  id,
+  name: z.string().min(1).max(80),
+  protocol: aiProtocolSchema,
+  endpoint: aiEndpointSchema,
+  model: z.string().min(1).max(160),
+  contextWindow: z.int().min(4096).max(2000000).default(64000),
+  hasApiKey: z.boolean(),
+})
+export const aiConnectionSchema = aiProviderSchema
+  .omit({ hasApiKey: true })
+  .extend({ apiKey: z.string().max(8192).optional(), clearKey: z.boolean().default(false) })
+export const aiCliKindSchema = z.enum(['codex', 'claude', 'deepseek'])
+export const aiCliSchema = z.strictObject({
+  kind: aiCliKindSchema,
+  path: z.string().max(4096),
   model: z.string().max(160),
 })
-export const aiSettingsSchema = aiPreferencesSchema.extend({ hasApiKey: z.boolean() })
-export const aiConnectionSchema = aiPreferencesSchema.extend({ apiKey: z.string().max(8192).optional() })
+export const aiBackendSchema = z.strictObject({
+  kind: z.enum(['official', 'custom', 'codex', 'claude', 'deepseek']),
+  providerId: id.optional(),
+  model: z.string().max(160).default(''),
+})
+export const aiSettingsSchema = z.strictObject({
+  providers: z.array(aiProviderSchema).max(32),
+  clis: z.array(aiCliSchema).max(3),
+  defaultBackend: aiBackendSchema,
+})
 export const aiModelCatalogSchema = z.strictObject({
   models: z.array(z.strictObject({ id, name: z.string().max(160) })).max(1000),
   defaultModel: z.string().max(160),
@@ -30,55 +52,11 @@ export const aiModelCatalogSchema = z.strictObject({
   remainingTokens: z.int().nonnegative().optional(),
   message: z.string().max(1024),
 })
-export const aiCapabilitiesSchema = z.strictObject({
+export const aiCapabilitiesSchema = aiModelCatalogSchema.extend({
   available: z.boolean(),
-  models: z.array(z.strictObject({ id, name: z.string().max(160) })).max(100),
-  defaultModel: z.string().max(160),
   dailyTokenLimit: z.int().nonnegative(),
   remainingTokens: z.int().nonnegative(),
-  message: z.string().max(1024),
-})
-export const aiCommandSchema = z.strictObject({
-  command: z
-    .string()
-    .min(1)
-    .max(16384)
-    .refine(
-      (v) =>
-        !Array.from(v).some(
-          (c) => (c.charCodeAt(0) < 32 && c !== '\t' && c !== '\n') || c.charCodeAt(0) === 127,
-        ),
-    ),
-  cwd: z
-    .string()
-    .min(1)
-    .max(32768)
-    .refine(
-      (v) => v.startsWith('/') && !Array.from(v).some((c) => c.charCodeAt(0) < 32 || c.charCodeAt(0) === 127),
-    ),
-  purpose: z.string().min(1).max(2048),
-  impact: z.string().min(1).max(2048),
-})
-export const aiResultSchema = z.strictObject({
-  status: z.enum(['completed', 'unknown', 'rejected', 'expired']),
-  stdout: z.string().max(262144),
-  stderr: z.string().max(262144),
-  exitCode: z.int().nullable(),
-  elapsedMs: z.number().nonnegative(),
-  truncated: z.boolean(),
-  message: z.string().max(2048),
-})
-export const aiProposalSchema = aiCommandSchema.extend({
-  id: z.uuid(),
-  timeoutSeconds: z.int().min(1).max(600),
-  state: z.enum(['pending', 'running', 'completed', 'unknown', 'rejected', 'expired']),
-  result: aiResultSchema.optional(),
-})
-export const aiMessageSchema = z.strictObject({
-  id: z.uuid(),
-  role: z.enum(['user', 'assistant']),
-  text,
-  proposal: aiProposalSchema.optional(),
+  toolsetVersion: z.literal(AI_TOOLSET_VERSION),
 })
 export const aiTargetSchema = z.strictObject({
   profileId: id,
@@ -89,69 +67,106 @@ export const aiTargetSchema = z.strictObject({
   cwd: z.string().max(32768),
   system: z.string().max(4096),
 })
+export const aiToolCallSchema = z.strictObject({
+  id,
+  name: aiToolNameSchema,
+  args: z.record(z.string(), z.json()),
+  sessionId: id.optional(),
+  state: z.enum(['pending', 'running', 'completed', 'unknown', 'rejected', 'expired', 'failed']),
+  preview: z.string().max(524288).default(''),
+  result: z.json().optional(),
+  error: z.string().max(2048).default(''),
+})
+export const aiMessageSchema = z.strictObject({
+  id: z.uuid(),
+  role: z.enum(['user', 'assistant', 'tool']),
+  text: z.string().max(196608),
+  tool: aiToolCallSchema.optional(),
+})
 export const aiConversationSchema = z.strictObject({
   id: z.uuid(),
-  profileId: id,
   title: z.string().max(120),
   updatedAt: z.number(),
-  source: z.enum(['official', 'custom']),
-  model: z.string().max(160),
-  messages: z.array(aiMessageSchema).max(200),
-  status: z.enum(['idle', 'thinking', 'awaiting_confirmation', 'executing', 'error']),
+  backend: aiBackendSchema,
+  permission: z.enum(['observer', 'confirm', 'auto']),
+  revision: z.int().nonnegative(),
+  targets: z.array(aiTargetSchema).max(32),
+  messages: z.array(aiMessageSchema).max(2000),
+  jobs: z.array(aiJobSchema).max(64),
+  summary: z.string().max(32768),
+  status: z.enum(['idle', 'thinking', 'awaiting_confirmation', 'executing', 'paused', 'error']),
   error: z.string().max(2048),
-  target: aiTargetSchema,
 })
 export const aiSummarySchema = aiConversationSchema.pick({
   id: true,
-  profileId: true,
   title: true,
   updatedAt: true,
-  source: true,
-  model: true,
+  backend: true,
 })
 export const aiAttachmentSchema = z.strictObject({
   name: z.string().min(1).max(255),
   content: z.string().max(131072),
 })
+const conversationId = z.strictObject({ conversationId: z.uuid() })
 export const ai = {
   'ai.settings': { input: z.undefined(), output: aiSettingsSchema },
-  'ai.configure': {
-    input: aiConnectionSchema,
-    output: aiSettingsSchema,
-  },
+  'ai.configure': { input: aiConnectionSchema, output: aiSettingsSchema },
+  'ai.removeProvider': { input: z.strictObject({ providerId: id }), output: aiSettingsSchema },
+  'ai.configureCli': { input: aiCliSchema, output: aiSettingsSchema },
+  'ai.setDefault': { input: aiBackendSchema, output: aiSettingsSchema },
   'ai.capabilities': { input: z.undefined(), output: aiCapabilitiesSchema },
   'ai.discover': { input: aiConnectionSchema, output: aiModelCatalogSchema },
-  'ai.test': {
-    input: aiConnectionSchema.optional(),
-    output: z.strictObject({ message: z.string().max(1024) }),
+  'ai.test': { input: aiConnectionSchema, output: z.strictObject({ message: z.string().max(1024) }) },
+  'ai.cliStatus': {
+    input: z.undefined(),
+    output: z
+      .array(
+        z.strictObject({
+          kind: aiCliKindSchema,
+          path: z.string(),
+          available: z.boolean(),
+          message: z.string(),
+        }),
+      )
+      .max(3),
   },
   'ai.open': {
-    input: z.strictObject({ sessionId: id, conversationId: z.uuid().optional() }),
+    input: z.strictObject({ sessionIds: z.array(id).min(1).max(32), backend: aiBackendSchema.optional() }),
     output: aiConversationSchema,
   },
-  'ai.history': { input: z.strictObject({ profileId: id }), output: z.array(aiSummarySchema).max(100) },
-  'ai.read': {
-    input: z.strictObject({ profileId: id, conversationId: z.uuid() }),
+  'ai.history': { input: z.undefined(), output: z.array(aiSummarySchema).max(100) },
+  'ai.read': { input: conversationId, output: aiConversationSchema },
+  'ai.remove': { input: conversationId, output: z.void() },
+  'ai.scope': {
+    input: conversationId.extend({ sessionIds: z.array(id).min(1).max(32) }),
     output: aiConversationSchema,
   },
-  'ai.remove': {
-    input: z.strictObject({ profileId: id, conversationId: z.uuid().optional() }),
-    output: z.void(),
+  'ai.backend': { input: conversationId.extend({ backend: aiBackendSchema }), output: aiConversationSchema },
+  'ai.permission': {
+    input: conversationId.extend({ permission: z.enum(['observer', 'confirm', 'auto']) }),
+    output: aiConversationSchema,
   },
   'ai.send': {
-    input: z.strictObject({
-      conversationId: z.uuid(),
+    input: conversationId.extend({
       text: z.string().min(1).max(16384),
       attachments: z.array(aiAttachmentSchema).max(8),
     }),
     output: z.void(),
   },
-  'ai.decide': { input: z.strictObject({ proposalId: z.uuid(), accepted: z.boolean() }), output: z.void() },
-  'ai.setTimeout': {
-    input: z.strictObject({ proposalId: z.uuid(), seconds: z.int().min(1).max(600) }),
+  'ai.decide': {
+    input: conversationId.extend({
+      callId: id,
+      decision: z.enum(['once', 'conversation', 'reject']),
+      revision: z.int(),
+    }),
     output: z.void(),
   },
-  'ai.cancel': { input: z.strictObject({ conversationId: z.uuid() }), output: z.void() },
+  'ai.cancel': { input: conversationId, output: z.void() },
+  'ai.stopJob': { input: conversationId.extend({ jobId: id }), output: aiConversationSchema },
+  'ai.output': {
+    input: conversationId.extend({ handle: id, offset: z.int().nonnegative().default(0) }),
+    output: z.string().max(32768),
+  },
 } as const
 export type AiOperation = keyof typeof ai
 export type AiClient = {
@@ -163,21 +178,21 @@ export type AiClient = {
 }
 export const isAiOperation = (value: string): value is AiOperation => Object.hasOwn(ai, value)
 export type AiSettings = z.infer<typeof aiSettingsSchema>
-export type AiPreferences = z.infer<typeof aiPreferencesSchema>
+export type AiProvider = z.infer<typeof aiProviderSchema>
+export type AiConnection = z.infer<typeof aiConnectionSchema>
+export type AiBackend = z.infer<typeof aiBackendSchema>
+export type AiCli = z.infer<typeof aiCliSchema>
 export type AiConversation = z.infer<typeof aiConversationSchema>
-export type AiProposal = z.infer<typeof aiProposalSchema>
-export type AiResult = z.infer<typeof aiResultSchema>
+export type AiToolCall = z.infer<typeof aiToolCallSchema>
 export type AiTarget = z.infer<typeof aiTargetSchema>
 export type AiCapabilities = z.infer<typeof aiCapabilitiesSchema>
-export type AiConnection = z.infer<typeof aiConnectionSchema>
 export type AiModelCatalog = z.infer<typeof aiModelCatalogSchema>
 export const aiEventSchema = z.union([
   z.strictObject({ workspaceGeneration: z.int(), conversation: aiConversationSchema }),
   z.strictObject({ workspaceGeneration: z.int(), conversationId: z.uuid(), message: aiMessageSchema }),
 ])
 export type AiEvent = z.infer<typeof aiEventSchema>
-
-/** Internal transport only. Renderer methods never accept URLs, headers or request bodies. */
+/** Internal transport only. Renderer methods cannot supply requests. */
 export const aiHttpRequestSchema = z
   .strictObject({
     source: z.enum(['official', 'custom']),
@@ -187,6 +202,15 @@ export const aiHttpRequestSchema = z
       .string()
       .max(8192)
       .refine((v) => !/[\r\n]/.test(v)),
+    headers: z
+      .record(
+        z.string().regex(/^[a-zA-Z0-9-]+$/),
+        z
+          .string()
+          .max(8192)
+          .refine((v) => !/[\r\n]/.test(v)),
+      )
+      .optional(),
     body: z.string().max(524288).optional(),
   })
   .superRefine((r, ctx) => {
@@ -194,8 +218,8 @@ export const aiHttpRequestSchema = z
     if (
       r.source === 'official' &&
       (u.origin !== 'https://eizhu.yuweinfo.com' ||
-        !['/api/ai/v1/capabilities', '/api/ai/v1/responses'].includes(u.pathname))
+        !['/api/ai/v2/capabilities', '/api/ai/v2/responses'].includes(u.pathname))
     )
-      ctx.addIssue({ code: 'custom', message: '官方 AI 请求地址无效' })
+      ctx.addIssue({ code: 'custom', message: '官方AI请求地址无效' })
   })
 export type AiHttpRequest = z.infer<typeof aiHttpRequestSchema>

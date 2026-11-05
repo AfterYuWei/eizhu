@@ -30,6 +30,7 @@ export default defineConfig({
           index: resolve(desktop, 'src/main/index.ts'),
           'sync-acceptance': resolve(desktop, 'src/main/sync-acceptance.ts'),
           runtime: resolve(desktop, 'src/runtime/index.ts'),
+          'ai-mcp': resolve(desktop, 'src/runtime/ai-mcp.ts'),
           database: resolve(root, 'packages/core/src/database/worker.ts'),
           compute: resolve(root, 'packages/core/src/workers/compute.ts'),
           stage2: resolve(root, 'packages/core/src/database/stage2-smoke.ts'),

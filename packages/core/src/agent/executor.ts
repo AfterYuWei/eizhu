@@ -8,7 +8,7 @@ export const shellQuote = (value: string): string => `'${value.replaceAll("'", "
 /** Run in the existing PTY. Observe output without consuming or closing the terminal. Never retries. */
 export function executeAgentCommand(
   channel: ClientChannel,
-  shell: 'bash' | 'zsh' | 'fish',
+  shell: 'bash' | 'zsh' | 'fish' | 'sh',
   command: string,
   cwd: string,
   seconds: number,
@@ -114,7 +114,13 @@ export function executeAgentCommand(
       shellQuote(value)
         .replaceAll('\n', () => (shell === 'fish' ? "'\\n'" : "'$'\\n''"))
         .replaceAll('\t', () => (shell === 'fish' ? "'\\t'" : "'$'\\t''"))
-    const script = ` printf '\\033]1337;eizhuAi;${token};start\\007'; cd -- ${quote(cwd)} && eval ${quote(command)}; printf '\\033]1337;eizhuAi;${token};end;%s\\007' ${shell === 'fish' ? '$status' : '"$?"'}`
+    const encoded =
+      shell === 'sh'
+        ? `"$(command printf '%b' '${Array.from(Buffer.from(command))
+            .map((b) => '\\0' + b.toString(8).padStart(3, '0'))
+            .join('')}')"`
+        : quote(command)
+    const script = ` printf '\\033]1337;eizhuAi;${token};start\\007'; cd -- ${quote(cwd)} && eval ${encoded}; printf '\\033]1337;eizhuAi;${token};end;%s\\007' ${shell === 'fish' ? '$status' : '"$?"'}`
     beforeWrite?.(begin)
     channel.write(script + '\r')
   })

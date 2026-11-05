@@ -1,21 +1,64 @@
-# 官方 AI 网关接口契约
+# AI Agent v2 接口与权限契约
 
-桌面客户端和独立 admin 后端均已实现以下接口；管理端支持模型配置、加密密钥、用户额度和用量查询。实施与本机隔离验收不代表官方生产服务已部署或通过真实供应商验收；未向生产发送账号或 AI 请求。
+桌面与独立官方网关同步升级至 v2。旧桌面 AI 配置与历史按空间一次性清理；旧客户端与 v2 网关不兼容。部署由用户安排，源码与本机证据不代表生产验收。
 
-## 地址与认证
+## 能力目录与桌面接口
 
-产品固定使用 `https://eizhu.yuweinfo.com/api/ai/v1`，复用现有用户访问令牌：`Authorization: Bearer <accessToken>`。用户自配模型使用独立配置和密钥，直接连接其配置的服务。
+`packages/contracts/src/ai-tools.ts` 是工具名称、输入、输出和策略的唯一来源。内置 AI SDK 与 stdio MCP 从同一目录生成工具；业务进程统一校验、审批、执行与持久化。目录版本为 `2`。
 
-后端负责验证用户身份、可用模型及每日额度；模型供应商密钥仅保存在后端。网关只负责模型推理，不建立 SSH 连接，不执行模型生成的命令，不接受 SSH 密码或私钥。
+| 类别 | 工具 |
+|---|---|
+| 连接 | `session_info` |
+| 终端 | `terminal_read_context`、`terminal_execute`、`terminal_start`、`terminal_poll`、`terminal_stop` |
+| 文件 | `file_list`、`file_stat`、`file_read`、`file_write`、`file_edit`、`file_mkdir`、`file_rename`、`file_delete` |
+| 输出 | `output_read` |
 
-## GET /capabilities
+领域接口见 `packages/contracts/src/ai.ts`，由受限 `window.eizhu.ai` 暴露：
 
-返回 `application/json`：
+- 配置：`settings/configure/removeProvider/configureCli/setDefault`，以及 `capabilities/discover/test/cliStatus`。
+- 对话：`open/history/read/remove`；`open` 明确指定已打开的 `sessionIds`，最多32个。
+- 运行：`send`；`scope/backend/permission` 先停止当前运行再调整；`decide` 绑定对话、调用 ID 和权限 revision；`cancel` 等待模型、CLI 与关联任务释放，`stopJob` 提供所属长任务的独立中断。
+- 输出：`output` 为 UI 提供作用域内的分页文本；模型使用 `output_read`。
+
+默认确认模式。观察模式仅允许结构化读取，任意 shell 命令与文件修改均禁止；确认模式审批 shell 和修改；自动模式在选择范围内执行。“对话内允许此工具”仅绑定当前对话、工具和实际连接实例。重新连接、调整范围、切换后端或权限后旧授权失效。重复审批不能重复执行；旧窗口、空间或进程响应失效。
+
+工具参数增量只供预览。完整供应商步骤成功且参数验证通过后才形成工具操作。执行前先保存运行检查点；断流不产生有效操作；执行结果未知时暂停，用户核查后通过新的发送显式继续，旧调用不重放。重启使待审批失效、执行中记录变为未知。
+
+## 终端、文件与数据
+
+命令注入现有 SSH PTY，沿用目录、变量、别名和函数，显示原始命令与输出，隐藏内部包装。支持 Bash、Zsh、Fish、常见 sh/ash/dash/BusyBox；不支持 Windows 远端 shell。终端忙、存在未提交输入或不能确认 shell 条件时拒绝派发，保留输入。长任务占用同一终端；停止 Agent 同时中断所有关联任务。中断只发给仍属于该任务的终端。
+
+上下文默认最近80行，最多300行，支持范围读取；来源为终端保留的输出文本，控制序列被清除，不等同于 xterm 渲染屏幕快照。文件工具复用已认证连接的 SFTP 子系统，路径必须为远端绝对路径，文本限128KiB。写入审批展示完整修改前后文本，写前检查 mtime 与内容 hash；冲突要求重新读取，不自动覆盖。删除目录递归处理，审批显示目标路径。
+
+超过12000字符的工具结果以摘要片段和随机输出句柄返回，单句柄最多保留262144字符，超限明确标记截断；对话总存储限8MiB。句柄只能在所属对话读取。模型上下文接近配置预算时生成独立摘要，保留目标、完成操作、未知结果、未决事项与近期记录；原始 UI 记录不被摘要替换。预算按 UTF-8 字节保守估算，并受512KiB请求上限约束。
+
+配置、消息、摘要、原生续接项与工具记录均由数据库 Worker 加密存储于 `agent:v2:*`，不进入同步或备份。首次打开新版空间，仅删除旧 `ai:*`，并在同一事务写入清理标记；后续启动不再清理新版数据。CLI 自身的登录与历史遵循原生存储方式。
+
+## 多供应商与 CLI
+
+内置模型使用 AI SDK Core，支持 OpenAI Responses、Chat Completions、Anthropic Messages。每个供应商独立配置协议、地址、密钥、模型、上下文预算。发现、连接测试与保存互相独立，测试仅要求 `session_info`，不执行远端操作。远端地址必须 HTTPS，HTTP 仅允许 loopback；禁止 URL 凭据、查询串与片段。网络沿用 Electron 系统代理和 TLS，不跟随重定向。同地址留空密钥保留原值，换地址不复用旧密钥。
+
+主进程监督外部 CLI，通过每轮独立私有 IPC 与受管 stdio MCP 连接业务进程；无本地业务 HTTP/WebSocket 服务。Unix socket 权限0600、临时目录0700，随机令牌只用于子进程环境。每轮工具顺序调度，上限32步，最多4个并行对话。
+
+| 驱动 | 运行入口 | 限制 |
+|---|---|---|
+| Codex | `app-server --listen stdio://` | 临时禁用现有 MCP、本机 shell/文件相关入口、浏览器、插件、apps、多 Agent 等；只读沙箱，拒绝原生命令/文件请求 |
+| Claude Code | 程序化 `stream-json` 接口，使用用户选择的 CLI | `--bare --setting-sources ""`、临时禁用 hooks/插件命令源，`--tools "" --strict-mcp-config --permission-mode dontAsk`，仅 eizhu MCP |
+| DeepSeek Harness | `sdk-minimal` stdio JSON-RPC | 临时独立配置目录与 YAML 禁用 fs/工作目录/bash/pwsh 插件，仅添加 eizhu MCP；会话记录仍写入原生 home 下的 sessions；需要原生模型名与 CLI 环境中的 `DEEPSEEK_API_KEY` |
+
+驱动表集中注册于 `apps/desktop/src/main/ai-cli.ts`。不兼容的启动参数、初始化协议或本机执行请求会使运行明确失败；版本检测可用不表示真实模型任务已验收。CLI 原生结构化提问暂被拒绝或取消，可在普通文字回复中提出问题。切换模型或 Agent 会停止旧运行，以摘要与近期记录新建后端会话；供应商专有推理项和调用 ID 不跨后端续接。
+
+## 官方 AI 网关
+
+产品固定地址 `https://eizhu.yuweinfo.com/api/ai/v2`，使用已有用户访问令牌 `Authorization: Bearer <accessToken>`。网关只推理，不建立 SSH 连接、不执行工具、不接收 SSH 凭据。
+
+`GET /capabilities` 返回：
 
 ```json
 {
+  "toolsetVersion": 2,
   "available": true,
-  "models": [{ "id": "configured-model", "name": "运维模型" }],
+  "models": [{"id": "configured-model", "name": "运维模型"}],
   "defaultModel": "configured-model",
   "dailyTokenLimit": 100000,
   "remainingTokens": 98000,
@@ -23,92 +66,27 @@
 }
 ```
 
-数值仅为协议示例，部署时必须配置实际模型和额度。未配置时返回 `available: false`、空模型列表、空默认模型、零额度和明确中文说明。模型 ID 最大 160 字符，列表最多 100 项；额度为非负安全整数。每日用量按北京时间自然日统计。客户端额度展示不作为授权依据。
+`POST /responses` 接受原生 Responses 输入和 SSE 输出。桌面发送 `model/input/stream/store/include/parallel_tool_calls/tools/tool_choice`；服务端从自身 v2 清单替换工具定义，校验选择集合、完整参数以及调用/结果配对，保留原生 reasoning 项。摘要请求可不带工具；完成事件不得包含未选工具。只接受已有模型，禁止客户端指定上游、密钥或输出预算。
 
-新旧用户每日额度默认均为 0，由管理员在用户详情中分配。服务已配置时，即使用户额度为 0，仍返回模型与零剩余额度；新建对话和服务端推理请求均受额度限制。剩余量扣除已用及预占额度，不包含供应商密钥或地址。
+网关转发完整原生增量事件。仅在上游正常完成、工具参数有效且可信 usage 已持久化结算后发送最终 `response.completed`。中断、失败、缺少用量、结算失败均不产生有效完成事件。工具调用可多条，单步骤最多32条，桌面仍顺序执行。最终输入/输出 Token 总量结算，缓存/推理明细不重复累加。
 
-未登录或令牌失效返回 401，无权访问返回 403。客户端不会因为官方请求失败而自动将对话发送至其他服务。
+准入预算为规范化请求 UTF-8 字节数 + 256 Token 余量 + 模型输出上限；余额含已用和预占，按北京时间自然日统计。新用户额度默认0。跨午夜计入准入日；超预算实际用量完整入账并停用模型。未知用量保留预占，租约过期只释放并发名额，不重放请求。总时限110秒，账号并发2、全局16、每账号每分钟20次，由数据库协调。模型管理测试最多256输出 Token，独立记录；普通调用仍检查验证、账号状态和令牌撤销。
 
-## POST /responses
+迁移 V14 保留模型密钥、用户额度、已用和未知预占，清除模型测试状态并关闭 AI。部署后管理员重新测试、启用模型并开启服务。桌面和 admin 必须协调部署，不保留 v1 路由兼容。
 
-客户端、网关和供应商上游均使用原生 Responses API；不再提供 Chat Completions 路由、配置或转换层。响应为 `text/event-stream`。
+| 错误 | 行为 |
+|---|---|
+| 401/403 | 显示认证或权限错误，保留对话 |
+| 429 | 额度不足或限流，不自动重试 |
+| 503或其他失败 | 显示服务错误，不自动切换后端 |
+| 流中断或无效事件 | 不产生工具操作，禁止自动重放 |
 
-桌面请求包含 `model`、`input`、`stream: true`、`store: false`、`include: ["reasoning.encrypted_content"]`、`parallel_tool_calls: false`，以及唯一的 `run_command` 函数工具。模型、工具定义、上游地址、密钥与 `max_output_tokens` 由服务端决定；用户不能覆盖输出预算。输入包含文本消息、原生 reasoning/message/function_call 返回项，以及匹配 `call_id` 的 `function_call_output`；不使用服务端存储的会话或 `previous_response_id`。
+桌面请求限512KiB、响应限2MiB、模型总时限120秒；反向代理应关闭 SSE 缓冲。普通日志不记录令牌、密钥或完整请求正文。
 
-```json
-{
-  "model": "configured-model",
-  "input": [{ "role": "user", "content": "检查服务器状态" }],
-  "stream": true,
-  "store": false,
-  "include": ["reasoning.encrypted_content"],
-  "parallel_tool_calls": false,
-  "tools": [{
-    "type": "function",
-    "name": "run_command",
-    "description": "请求用户确认一条命令",
-    "strict": true,
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "command": { "type": "string" },
-        "cwd": { "type": "string" },
-        "purpose": { "type": "string" },
-        "impact": { "type": "string" }
-      },
-      "required": ["command", "cwd", "purpose", "impact"],
-      "additionalProperties": false
-    }
-  }]
-}
-```
+## 清单同步与验收
 
-| 参数 | 类型 | 含义 |
-|---|---|---|
-| command | string | 在当前 SSH 窗口交互式 shell 执行的完整命令，最多 16384 字符；沿用终端环境，交互输入由用户在终端完成 |
-| cwd | string | 绝对工作目录，最多 32768 字符 |
-| purpose | string | 中文目的说明，最多 2048 字符 |
-| impact | string | 中文影响说明，最多 2048 字符 |
+在桌面仓库执行 `node scripts/export-ai-tools.mjs --out=<独立后台仓库>/src/main/resources/ai-tools-v2.json` 导出清单；`--check=<路径>` 只读校验两端一致。后台源码与提交独立管理。
 
-SSE 使用 `data: <JSON>\n\n`。网关转发 `response.output_text.delta` 的 `delta` 文本，保留完整输出项直到最终 `response.completed`。最终事件的 `response.status` 必须为 `completed`，`response.output` 中至多一个 `function_call`，工具名必须为 `run_command`，包含 `call_id` 和完整 JSON `arguments`。
+`npm run desktop:smoke:ai` 使用 Electron、真实数据库 Worker、loopback SSH/模型验证闭环。`npm run desktop:accept:ai -- --local --port=<端口>` 使用桌面实际 SDK 与本机独立网关，令牌只从 `EIZHU_AI_ACCEPT_TOKEN` 环境读取，验证工具协议与结算，不执行远端工具。不传 `--local` 即拒绝。真实模型、真实 CLI 登录任务、远端 PTY 与跨平台证据须另行记录。
 
-只有上游流完整、工具参数有效，且 `response.usage.input_tokens + output_tokens` 已持久化结算后，才发送最终完成事件。缓存输入和推理 Token 属于这两个值的明细，不重复计算。`response.incomplete`、`response.failed`、缺少可信 usage 或结算失败都不会产生完成事件；桌面不能生成可执行命令。网关错误流为 `type: "error"`，仅包含安全错误码和说明。
-
-确认发生在桌面端，网关和模型均不能确认命令。2026-11-04 起，AI 命令在绑定的当前 SSH 终端执行，不创建独立 exec 通道；终端忙或有未提交输入时拒绝派发，停止和超时向该终端发送 Ctrl+C，保留 SSH 会话。执行结果作为 `{ "type": "function_call_output", "call_id": "...", "output": "..." }` 回传，包含状态、stdout/stderr、退出码、耗时和截断标识；PTY 输出合并在 stdout，stderr 为空。结果未知时明确标记，不能自动重跑。旧版本对话仍可查看；协议升级前的上下文须新建对话才能继续。
-
-准入预占预算为规范化上游请求的 UTF-8 字节数 + 256 Token 余量 + 模型输出上限。余额接近耗尽时可能提前拒绝；正常结算释放差额。超过预算的实际用量完整入账并停用模型。
-
-总时限 110 秒；单账号并发 2、全局并发 16、单账号每分钟 20 次，均由数据库跨实例协调。跨午夜请求计入准入时的北京时间日期。缺少可信用量的中断及进程崩溃保留预占，租约过期仅释放并发名额，不自动重放请求。
-
-管理员模型测试发送固定 Responses 请求，输出最多 256 Token，独立标记用量，不占普通用户配额；已登录且可用的管理员可在首次邮箱验证前测试。普通 AI 调用仍检查邮箱验证、账号状态和令牌撤销。桌面官方连接测试作为当前用户请求计入其额度。
-
-## 错误与数据边界
-
-| 情况 | HTTP 状态 | 桌面行为 |
-|---|---|---|
-| 认证失效 | 401 | 提示检查登录或密钥，保留本地对话 |
-| 权限不足 | 403 | 显示无权访问 |
-| 额度耗尽或限流 | 429 | 显示额度或频率限制，不自动重试 |
-| 未配置、模型不可用或上游失败 | 503/其他非 2xx | 显示服务不可用，可手动选择自配模型 |
-| 流中断、内容不完整、多个工具调用 | 中断或无效 SSE | 不生成可执行命令，不自动续跑 |
-
-桌面端单请求最大 512 KiB，响应最大 2 MiB，总超时 120 秒；不跟随重定向。网关和反向代理需要关闭 SSE 缓冲，及时转发分块与断开。
-
-后端实现时只保留必要的用量、状态和耗时元数据，禁止在普通访问日志中记录令牌、完整请求正文或模型密钥。需要独立核实上游供应商的数据保留政策，不能将本地加密历史等同于云端零保留承诺。
-
-## 模型发现与连接测试
-
-设置页使用统一的共享下拉组件，包含“自动发现模型”“测试连接”“保存设置”三个独立操作；发现和测试使用当前草稿，不自动保存，也不执行命令。
-
-- 官方来源通过 `/capabilities` 发现公开模型，可选官方默认模型，同时展示今日额度。
-- 自配来源向 API 基础地址追加 `/models` 发起 GET，读取 `data[].id`（可选 `name`），最多 1000 项并按 ID 去重。列表无法读取时保留手动填写模型名的入口；发现成功不代表支持 Responses，仍须测试。
-- 自配推理只追加 `/responses`，连接测试要求返回 `run_command`，输出最多 256 Token。仅测试结果有效才提示成功，测试提议绝不进入 SSH 执行。
-- 留空 API Key 保留同一地址的已保存密钥；接口地址改变后不会向新地址发送旧密钥。“清除密钥”仅清除已保存密钥，保留当前未保存草稿。
-
-远程地址必须使用 HTTPS，HTTP 只允许 `localhost`、`127.0.0.1`、`[::1]`。禁止 URL 内嵌用户名、密码、查询串或片段。网络使用 Electron 系统代理和 TLS 校验，凭据不随重定向转发。
-
-协议参考：[Responses 流式事件](https://developers.openai.com/api/reference/resources/responses/streaming-events)、[模型列表](https://developers.openai.com/api/reference/resources/models/methods/list)、[函数调用](https://developers.openai.com/api/docs/guides/function-calling)。最终字段和边界以 `packages/contracts/src/ai.ts` 为准。
-
-## 本机协议验收
-
-`npm run desktop:accept:ai -- --local --port=<本机端口>` 使用桌面实际的官方请求构造和流式解码器，通过仅供验收的 transport 转发至 `127.0.0.1`。令牌只从 `EIZHU_AI_ACCEPT_TOKEN` 环境读取，不落盘；不传 `--local` 即拒绝运行。该工具验证待确认工具提议和额度结算，不执行 SSH 命令，不更改产品固定生产地址，也不代表完整 Electron 或真实供应商验收。
+协议依据：[AI SDK Core](https://ai-sdk.dev/docs/ai-sdk-core/overview)、[Codex app-server](https://learn.chatgpt.com/docs/app-server)、[Claude Code headless](https://code.claude.com/docs/en/headless)、[DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)。字段和限制以 contracts 运行时 schema 为准。

@@ -66,6 +66,18 @@ interface Tunnel {
 }
 type Emit = (name: 'eizhu-session-message', payload: unknown) => void
 export class SshService {
+  agentReady(sessionId: string, binding: object): void {
+    if (!this.agentConnected(sessionId, binding)) fail('AI_SCOPE_CHANGED', 'SSH连接已变化')
+    const s = this.connected(sessionId)
+    if (!s.shell || !s.shellKind || !s.output)
+      fail('SSH_SHELL_FAILED', '当前终端未启用shell集成，请在终端手动执行')
+    if (s.agentRunning || !s.output.atPrompt)
+      fail('AI_BUSY', '当前终端正在运行程序或有未提交输入，请返回空闲提示符后继续')
+  }
+  agentReadContext(sessionId: string, binding: object, startLine: number | undefined, maxLines: number) {
+    if (!this.agentConnected(sessionId, binding)) fail('AI_SCOPE_CHANGED', 'SSH连接已变化')
+    return this.connected(sessionId).stream.context(startLine, maxLines)
+  }
   async agentTarget(sessionId: string): Promise<{ target: AiTarget; binding: object }> {
     const s = this.connected(sessionId), binding = s.connection
     const p = s.endpoint ?? fail('SSH_NOT_CONNECTED', 'SSH 连接信息尚未就绪')
