@@ -279,11 +279,7 @@ export function AiPanel() {
           <div className="settings-card">
             <Field id="ai-platform" label="平台预设" description="选择平台创建新配置，填入密钥和模型后保存。">
               <Select
-                value={
-                  aiProviderPresets.find(
-                    (p) => p.endpoint === draft.endpoint && p.protocol === draft.protocol,
-                  )?.key ?? 'custom'
-                }
+                value={aiProviderPresets.find((p) => p.endpoint === draft.endpoint)?.key ?? 'custom'}
                 disabled={busy}
                 onValueChange={(key) => {
                   const preset = aiProviderPresets.find((p) => p.key === key)
@@ -321,27 +317,6 @@ export function AiPanel() {
                 disabled={busy}
                 onChange={(e) => setDraft({ ...draft, name: e.target.value })}
               />
-            </Field>
-            <Field id="ai-protocol" label="接口协议">
-              <Select
-                value={draft.protocol}
-                disabled={busy}
-                onValueChange={(protocol) => {
-                  if (protocol === 'responses' || protocol === 'chat' || protocol === 'anthropic') {
-                    setDraft({ ...draft, protocol })
-                    setCatalog(null)
-                  }
-                }}
-              >
-                <SelectTrigger id="ai-protocol" className="settings-select">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="responses">Responses</SelectItem>
-                  <SelectItem value="chat">Chat Completions</SelectItem>
-                  <SelectItem value="anthropic">Anthropic Messages</SelectItem>
-                </SelectContent>
-              </Select>
             </Field>
             <Field id="ai-endpoint" label="接口基础地址" description="可按地域、套餐或私有部署修改。">
               <Input
@@ -426,6 +401,34 @@ export function AiPanel() {
                 onChange={(e) => setDraft({ ...draft, contextWindow: Number(e.target.value) })}
               />
             </Field>
+            <details key={draft.id} className="ai-settings-advanced">
+              <summary>高级设置</summary>
+              <Field
+                id="ai-protocol"
+                label="接口协议"
+                description="平台预设已配置协议，自定义服务可按接口说明调整。"
+              >
+                <Select
+                  value={draft.protocol}
+                  disabled={busy}
+                  onValueChange={(protocol) => {
+                    if (protocol === 'responses' || protocol === 'chat' || protocol === 'anthropic') {
+                      setDraft({ ...draft, protocol })
+                      setCatalog(null)
+                    }
+                  }}
+                >
+                  <SelectTrigger id="ai-protocol" className="settings-select">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="responses">Responses</SelectItem>
+                    <SelectItem value="chat">Chat Completions</SelectItem>
+                    <SelectItem value="anthropic">Anthropic Messages</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Field>
+            </details>
             <div className="settings-card-footer">
               {settings.providers.some((p) => p.id === draft.id) && (
                 <Button

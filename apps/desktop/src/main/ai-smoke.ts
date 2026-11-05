@@ -472,7 +472,7 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
       await js('await document.fonts.ready;await new Promise(r=>setTimeout(r,150))')
       assert.equal(
         await js(
-          "const panel=document.querySelector('.ai-settings');return panel.scrollWidth<=panel.clientWidth+1&&[...panel.querySelectorAll('.settings-field')].every(row=>{const label=row.querySelector('.settings-field-info').getBoundingClientRect(),control=row.lastElementChild.getBoundingClientRect();return control.left>=label.right-1||control.top>=label.bottom-1})",
+          "const panel=document.querySelector('.ai-settings');return panel.scrollWidth<=panel.clientWidth+1&&[...panel.querySelectorAll('.settings-field')].filter(row=>row.checkVisibility()).every(row=>{const label=row.querySelector('.settings-field-info').getBoundingClientRect(),control=row.lastElementChild.getBoundingClientRect();return control.left>=label.right-1||control.top>=label.bottom-1})",
         ),
         true,
       )
@@ -485,11 +485,14 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
     assert.equal(await js("return document.querySelectorAll('#ai-cli-path').length"), 0)
     await captureSetting('ai-settings-provider.png')
     await chooseSetting('ai-source', '新增供应商')
+    assert.equal(await js("return document.getElementById('ai-protocol').textContent"), 'Responses')
     await chooseSetting('ai-platform', 'DeepSeek')
     assert.equal(await js("return document.getElementById('ai-endpoint').value"), 'https://api.deepseek.com')
     assert.equal(await js("return document.getElementById('ai-protocol').textContent"), 'Chat Completions')
     assert.equal(await js("return document.getElementById('ai-key').value"), '')
     assert.equal(await js("return document.getElementById('ai-model').value"), '')
+    assert.equal(await js("return document.querySelector('.ai-settings-advanced').open"), false)
+    assert.equal(await js("return document.getElementById('ai-protocol').checkVisibility()"), false)
     assert.equal((await call<{ providers: unknown[] }>('ai', 'settings')).providers.length, 3)
     await captureSetting('ai-settings-platform-deepseek.png')
     await js("document.getElementById('ai-platform').click()")
@@ -506,6 +509,10 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
     )
     window.setContentSize(900, 760)
     await captureSetting('ai-settings-platform-narrow.png')
+    await js("document.querySelector('.ai-settings-advanced summary').click()")
+    await wait("return document.querySelector('.ai-settings-advanced').open")
+    await js("document.getElementById('ai-protocol').scrollIntoView({block:'center'})")
+    await captureSetting('ai-settings-protocol-advanced.png')
     window.setContentSize(1280, 900)
     await chooseSetting('ai-source', '合成 responses')
     await chooseSetting('ai-engine', 'Codex')
@@ -554,6 +561,7 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
       encryptedStorage: true,
       settingsSelectedConfiguration: true,
       settingsProviderPresets: true,
+      settingsProtocolCollapsed: true,
       settingsEnableSwitch: true,
       settingsResponsiveLayout: true,
       remoteFileConflictAndEdit: Boolean(sftpServer),

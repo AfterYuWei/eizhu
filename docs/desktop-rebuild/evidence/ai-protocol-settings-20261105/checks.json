@@ -1,0 +1,38 @@
+{
+  "date": "2026-11-05",
+  "scope": "协议选项默认收起；自定义服务默认Responses，平台预设与已有协议保留",
+  "typecheck": true,
+  "lint": true,
+  "foundation": {
+    "passed": 224,
+    "skipped": 2,
+    "reason": "未安装Fish"
+  },
+  "web": {
+    "files": 87,
+    "passed": 971,
+    "providerSettings": 19
+  },
+  "baselineTests": 10,
+  "baselineVerify": true,
+  "architectureVerify": true,
+  "desktopBuild": true,
+  "electronAiSmoke": true,
+  "defaultProtocol": "responses",
+  "protocolControlVisibleWhenCollapsed": false,
+  "advancedControlExpandable": true,
+  "environment": {
+    "platform": "macOS x64",
+    "model": "loopback-synthetic",
+    "ssh": "loopback-synthetic",
+    "sftp": "installed-openssh-subsystem",
+    "packaged": false
+  },
+  "retainedScreenshots": [
+    "ai-settings-protocol-collapsed.png",
+    "ai-settings-protocol-advanced.png"
+  ],
+  "limitations": [
+    "未调用真实供应商，未重新生成安装包，未下载测试二进制，未修改admin。"
+  ]
+}
