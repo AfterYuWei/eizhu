@@ -120,7 +120,15 @@ const conversationId = z.strictObject({ conversationId: z.uuid() })
 export const ai = {
   'ai.settings': { input: z.undefined(), output: aiSettingsSchema },
   'ai.setEnabled': { input: z.strictObject({ enabled: z.boolean() }), output: aiSettingsSchema },
-  'ai.configure': { input: aiConnectionSchema, output: aiSettingsSchema },
+  'ai.configure': {
+    input: aiConnectionSchema.superRefine((value, ctx) => {
+      if (value.models && !value.models.some((m) => m.id === value.model))
+        ctx.addIssue({ code: 'custom', path: ['model'], message: '请从候选池中选择模型' })
+      if (value.models && new Set(value.models.map((m) => m.id)).size !== value.models.length)
+        ctx.addIssue({ code: 'custom', path: ['models'], message: '候选池包含重复模型' })
+    }),
+    output: aiSettingsSchema,
+  },
   'ai.removeProvider': { input: z.strictObject({ providerId: id }), output: aiSettingsSchema },
   'ai.configureCli': { input: aiCliSchema, output: aiSettingsSchema },
   'ai.setDefault': { input: aiBackendSchema, output: aiSettingsSchema },

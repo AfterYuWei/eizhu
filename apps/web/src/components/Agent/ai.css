@@ -662,6 +662,26 @@
 .ai-settings .ai-settings-advanced > summary { padding: 14px 16px; cursor: pointer; color: var(--fg-2); font-size: 13px; }
 .ai-settings .ai-settings-controls { display: flex; flex-direction: column; gap: 8px; }
 .ai-settings .ai-settings-controls > :is(input, button) { width: 100%; }
+.ai-context-field { position: relative; }
+.ai-context-field > svg { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); color: var(--fg-3); pointer-events: none; }
+.ai-context-field .ai-context-input { padding-right: 30px !important; appearance: textfield; }
+.ai-context-input::-webkit-inner-spin-button { appearance: none; margin: 0; }
+.ai-context-options { width: var(--radix-popper-anchor-width, 240px); padding: 4px; font: var(--sans-size) / 1.5 var(--sans); }
+.ai-context-options > button { display: block; width: 100%; padding: 6px 10px; border: 0; border-radius: var(--r-sm); background: transparent; text-align: left; color: var(--fg); cursor: pointer; }
+.ai-context-options > button:is(:hover, .is-active, [aria-selected='true']) { background: var(--bg-active); }
+.ai-model-manager { display: flex; flex-direction: column; gap: 10px; width: 380px; max-width: calc(100vw - 32px); max-height: min(620px, 85vh); overflow-y: auto; font: 13px / 1.5 var(--sans); }
+.ai-model-manager h3 { margin: 0; font-size: 14px; font-weight: 600; }
+.ai-model-manager :is(input, button) { font: inherit; box-shadow: none; }
+.ai-model-manager button:focus-visible { background: var(--bg-active); }
+.ai-model-pool { display: flex; flex-direction: column; gap: 4px; max-height: 170px; overflow-y: auto; margin: 0; padding: 0; list-style: none; }
+.ai-model-pool > li { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.ai-model-pool > li > span { min-width: 0; overflow-wrap: anywhere; }
+.ai-model-pool small { display: block; color: var(--fg-3); }
+.ai-model-pool button { flex-shrink: 0; }
+.ai-model-add-row { display: flex; align-items: center; gap: 8px; }
+.ai-model-add-row > :first-child { min-width: 0; flex: 1; }
+.ai-model-add-row > button:last-child { flex-shrink: 0; }
+.ai-model-hint { margin: 0; color: var(--fg-3); font-size: 12px; }
 .ai-settings .ai-settings-message { margin: 12px 0 0; color: var(--fg-3); font-size: 13px; line-height: 1.6; }
 .ai-backend-current { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; }
 .ai-backend-current > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

@@ -3,7 +3,7 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { beforeEach, afterEach, it, expect, vi } from 'vitest'
 import type { AiBackend, AiConnection, AiSettings } from '@eizhu/contracts'
-import { ai, aiConnectionSchema } from '@eizhu/contracts'
+import { ai } from '@eizhu/contracts'
 import { useAiStore } from '@/store/ai'
 import { AiPanel } from './AiPanel'
 import { aiProviderPresets } from './aiProviderPresets'
@@ -49,9 +49,13 @@ const settings: AiSettings = {
   defaultBackend: { kind: 'official', model: '' },
 }
 const button = (label: string) =>
-  [...host.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent === label)!
-async function choose(id: string, label: string) {
+  [...document.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent === label)!
+const status = () => host.querySelector('[role=status]')!.textContent
+async function click(id: string) {
   await act(async () => document.getElementById(id)!.click())
+}
+async function choose(id: string, label: string) {
+  await click(id)
   await act(async () =>
     [...document.querySelectorAll<HTMLElement>('[role=option]')]
       .find((e) => e.textContent === label)!
@@ -65,9 +69,41 @@ async function fill(id: string, value: string) {
     input.dispatchEvent(new Event('input', { bubbles: true }))
   })
 }
+async function manage(open = true) {
+  if (Boolean(document.querySelector('.ai-model-manager')) !== open) await click('ai-model-manage')
+}
+async function addManual(name: string) {
+  await manage()
+  await fill('ai-model-name', name)
+  await click('ai-add-model')
+  await manage(false)
+}
+async function discover() {
+  await manage()
+  await click('ai-discover-models')
+}
+async function addDiscovered(name: string) {
+  await choose('ai-discovered-model', name)
+  await click('ai-add-detected')
+}
+async function advanced() {
+  await act(async () => host.querySelector<HTMLElement>('.ai-settings-advanced summary')!.click())
+}
+async function reopen() {
+  await act(async () => root.render(null))
+  await act(async () => root.render(<AiPanel />))
+}
 beforeEach(async () => {
   ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
   vi.clearAllMocks()
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe = vi.fn()
+      unobserve = vi.fn()
+      disconnect = vi.fn()
+    },
+  )
   HTMLElement.prototype.scrollIntoView = vi.fn()
   useAiStore.setState(useAiStore.getInitialState(), true)
   api.ai.settings.mockResolvedValue(structuredClone(settings))
@@ -76,41 +112,28 @@ beforeEach(async () => {
     api.ai.settings.mockResolvedValue(next)
     return next
   })
-  api.ai.setEnabled.mockImplementation(async ({ enabled }: { enabled: boolean }) => ({
-    ...useAiStore.getState().settings!,
-    enabled,
-  }))
+  api.ai.setEnabled.mockImplementation(async ({ enabled }: { enabled: boolean }) => {
+    const next = { ...useAiStore.getState().settings!, enabled }
+    api.ai.settings.mockResolvedValue(next)
+    return next
+  })
   api.ai.discover.mockImplementation(async (input: AiConnection) => {
     ai['ai.discover'].input.parse(input)
-    const result = {
+    return {
       models: [
         { id: 'model-a', name: 'model-a' },
         { id: 'model-c', name: 'model-c' },
       ],
-      defaultModel: 'model-a',
+      defaultModel: '',
       message: '',
     }
-    const current = useAiStore.getState().settings!
-    api.ai.settings.mockResolvedValue({
-      ...current,
-      providers: current.providers.map((p) =>
-        p.id === input.id &&
-        p.endpoint === input.endpoint &&
-        p.protocol === input.protocol &&
-        !input.apiKey &&
-        !input.clearKey
-          ? { ...p, models: result.models }
-          : p,
-      ),
-    })
-    return result
   })
   api.ai.test.mockImplementation(async (input: AiConnection) => {
     ai['ai.test'].input.parse(input)
     return { message: '测试通过' }
   })
   api.ai.configure.mockImplementation(async (raw: AiConnection) => {
-    const input = aiConnectionSchema.parse(raw)
+    const input = ai['ai.configure'].input.parse(raw)
     const current = useAiStore.getState().settings!
     const old = current.providers.find((p) => p.id === input.id)
     const next = {
@@ -143,266 +166,222 @@ beforeEach(async () => {
 afterEach(async () => {
   await act(async () => root.unmount())
   host.remove()
+  vi.unstubAllGlobals()
 })
-it('shows only the selected configuration and saves the selected backend in settings', async () => {
+it('shows only the chosen engine and saves it centrally', async () => {
   expect(host.querySelector('[aria-label="官方AI配置"]')).not.toBeNull()
-  expect(host.querySelector('#ai-key')).toBeNull()
-  expect(host.querySelector('[aria-label="外部Agent配置"]')).toBeNull()
   await choose('ai-engine', 'Claude Code')
   expect(api.ai.setDefault).toHaveBeenLastCalledWith({ kind: 'claude', model: '' })
-  expect(host.querySelector('[aria-label="官方AI配置"]')).toBeNull()
   expect(host.querySelectorAll('#ai-cli-path')).toHaveLength(1)
-  expect(host.querySelectorAll('#ai-cli-model')).toHaveLength(1)
   expect(host.querySelector('#ai-key')).toBeNull()
   await act(async () => button('保存配置').click())
   expect(api.ai.configureCli).toHaveBeenCalledWith({ kind: 'claude', path: '', model: '' })
 })
-it('switches providers with a dropdown and keeps discovery/test separate from saving keys', async () => {
+it('restores old selected models as candidates and keeps saved keys private', async () => {
   await choose('ai-source', '服务A')
+  expect(host.querySelector('#ai-model')!.textContent).toBe('model-a')
   expect(host.querySelector<HTMLInputElement>('#ai-key')!.value).toBe('')
-  expect(host.querySelector<HTMLInputElement>('#ai-endpoint')!.value).toBe('https://provider.invalid/v1')
-  await act(async () => button('自动发现模型').click())
-  await act(async () => button('测试连接').click())
-  expect(api.ai.discover).toHaveBeenCalledOnce()
-  expect(api.ai.test).toHaveBeenCalledOnce()
-  expect(api.ai.configure).not.toHaveBeenCalled()
-  await act(async () => button('保存并使用').click())
-  expect(api.ai.configure).toHaveBeenCalledWith(expect.objectContaining({ id: 'p', protocol: 'responses' }))
-  await choose('ai-source', '服务B')
-  expect(host.querySelector<HTMLInputElement>('#ai-endpoint')!.value).toBe('https://other.invalid/v1')
-  expect(host.querySelectorAll('#ai-key')).toHaveLength(1)
-})
-it('persists disable and hides all engine and credential controls without deleting configuration', async () => {
-  await act(async () => host.querySelector<HTMLButtonElement>('#ai-enabled')!.click())
-  expect(api.ai.setEnabled).toHaveBeenCalledWith({ enabled: false })
-  expect(host.querySelector('#ai-engine')).toBeNull()
-  expect(host.querySelector('#ai-key')).toBeNull()
-  expect(useAiStore.getState().settings?.providers).toHaveLength(2)
-  expect(api.ai.removeProvider).not.toHaveBeenCalled()
-  await act(async () => host.querySelector<HTMLButtonElement>('#ai-enabled')!.click())
-  expect(host.querySelector('#ai-engine')).not.toBeNull()
-})
-it.each(aiProviderPresets)(
-  'prepares the $name preset without saving or contacting a provider',
-  async (preset) => {
-    await choose('ai-source', '新增供应商')
-    await choose('ai-platform', preset.name)
-    expect(host.querySelector<HTMLInputElement>('#ai-name')!.value).toBe(preset.name)
-    expect(host.querySelector<HTMLInputElement>('#ai-endpoint')!.value).toBe(preset.endpoint)
-    expect(host.querySelector<HTMLDetailsElement>('.ai-settings-advanced')!.open).toBe(false)
-    expect(host.querySelector('#ai-protocol')!.textContent).toBe(
-      { responses: 'Responses', chat: 'Chat Completions', anthropic: 'Anthropic Messages' }[preset.protocol],
-    )
-    expect(host.querySelector<HTMLInputElement>('#ai-model')!.value).toBe('')
-    expect(host.querySelector<HTMLInputElement>('#ai-key')!.value).toBe('')
-    expect(api.ai.configure).not.toHaveBeenCalled()
-    expect(api.ai.setDefault).not.toHaveBeenCalled()
-    expect(api.ai.discover).not.toHaveBeenCalled()
-    expect(api.ai.test).not.toHaveBeenCalled()
-  },
-)
-it('starts a new draft on platform changes and preserves saved providers and their credentials', async () => {
-  await choose('ai-source', '服务A')
-  await fill('ai-key', 'draft-key')
-  await act(async () => button('自动发现模型').click())
-  expect(host.querySelector('#ai-model')!.getAttribute('role')).toBe('combobox')
-  await choose('ai-platform', 'DeepSeek')
-  expect(host.querySelector('#ai-source')!.textContent).toBe('新增供应商')
-  expect(host.querySelector<HTMLInputElement>('#ai-key')!.value).toBe('')
-  expect(host.querySelector<HTMLInputElement>('#ai-model')!.value).toBe('')
-  expect(host.querySelector('#ai-clear-key')).toBeNull()
-  expect(button('删除供应商')).toBeUndefined()
-  expect(api.ai.setDefault).toHaveBeenCalledOnce()
-  expect(api.ai.discover).toHaveBeenCalledOnce()
-  expect(api.ai.test).not.toHaveBeenCalled()
-  expect(api.ai.configure).not.toHaveBeenCalled()
-  expect(useAiStore.getState().settings!.providers).toEqual(settings.providers)
-  await fill('ai-model', 'my-deepseek-model')
-  api.ai.configure.mockImplementation(async (draft: AiConnection) => ({
-    ...settings,
-    providers: [...settings.providers, { ...draft, hasApiKey: false }],
-  }))
-  await act(async () => button('保存并使用').click())
-  const saved = aiConnectionSchema.parse(api.ai.configure.mock.calls[0][0])
-  expect(saved).toMatchObject({ name: 'DeepSeek', protocol: 'chat', model: 'my-deepseek-model' })
-  expect(saved.id).not.toBe('p')
-  expect(saved.id).not.toBe('deepseek')
-  expect(saved.apiKey).toBeUndefined()
-  expect(useAiStore.getState().settings!.providers.slice(0, 2)).toEqual(settings.providers)
-  await choose('ai-source', '服务A')
-  expect(host.querySelector<HTMLInputElement>('#ai-model')!.value).toBe('model-a')
-  expect(host.querySelector('#ai-clear-key')).not.toBeNull()
-})
-it('keeps custom addresses editable and clears the previous platform draft', async () => {
-  await choose('ai-source', '新增供应商')
-  await choose('ai-platform', 'OpenAI')
-  await fill('ai-key', 'draft-key')
-  await fill('ai-model', 'old-model')
-  await choose('ai-platform', '自定义')
-  expect(host.querySelector<HTMLInputElement>('#ai-endpoint')!.value).toBe('')
-  expect(host.querySelector<HTMLInputElement>('#ai-key')!.value).toBe('')
-  expect(host.querySelector<HTMLInputElement>('#ai-model')!.value).toBe('')
-  await fill('ai-endpoint', 'https://private.invalid/v1')
-  await act(async () => host.querySelector<HTMLElement>('.ai-settings-advanced summary')!.click())
-  await choose('ai-protocol', 'Anthropic Messages')
-  expect(host.querySelector<HTMLInputElement>('#ai-endpoint')!.value).toBe('https://private.invalid/v1')
-  expect(host.querySelector('#ai-platform')!.textContent).toBe('自定义')
-})
-it('uses Responses for a new custom service without asking for a protocol', async () => {
-  await choose('ai-source', '新增供应商')
-  expect(host.querySelector('#ai-context')!.textContent).toBe('256K')
-  expect(host.querySelector('#ai-custom-context')).toBeNull()
-  await fill('ai-endpoint', 'https://private.invalid/v1')
-  await act(async () => button('自动发现模型').click())
-  expect(host.querySelector<HTMLDetailsElement>('.ai-settings-advanced')!.open).toBe(false)
-  expect(api.ai.discover).toHaveBeenCalledWith(expect.objectContaining({ protocol: 'responses', model: '' }))
-  expect(host.querySelector('#ai-model')!.getAttribute('role')).toBe('combobox')
-  expect(host.querySelector('[role=status]')!.textContent).toContain('请选择模型')
-  await choose('ai-model', 'model-a')
   await act(async () => button('测试连接').click())
   expect(api.ai.test).toHaveBeenCalledWith(expect.objectContaining({ model: 'model-a' }))
+  expect(api.ai.test.mock.calls[0][0]).not.toHaveProperty('models')
+  await choose('ai-source', '服务B')
+  expect(host.querySelector('#ai-model')!.textContent).toBe('model-b')
 })
-it('explains an empty or whitespace model and focuses it before testing or saving', async () => {
+it('disables AI without deleting configurations', async () => {
+  await click('ai-enabled')
+  expect(api.ai.setEnabled).toHaveBeenCalledWith({ enabled: false })
+  expect(host.querySelector('#ai-engine')).toBeNull()
+  expect(useAiStore.getState().settings?.providers).toHaveLength(2)
+  expect(api.ai.removeProvider).not.toHaveBeenCalled()
+})
+it.each(aiProviderPresets)('prepares $name without saving or requesting a model', async (preset) => {
   await choose('ai-source', '新增供应商')
-  await choose('ai-platform', 'DeepSeek')
-  await fill('ai-key', 'draft-key')
-  for (const model of ['', '   ']) {
-    await fill('ai-model', model)
-    for (const action of ['测试连接', '保存并使用']) {
-      await act(async () => button(action).click())
-      expect(host.querySelector('[role=status]')!.textContent).toContain('请先填写模型')
-      expect(document.activeElement?.id).toBe('ai-model')
-      expect(host.querySelector<HTMLInputElement>('#ai-key')!.value).toBe('draft-key')
-    }
-  }
-  expect(api.ai.test).not.toHaveBeenCalled()
+  await choose('ai-platform', preset.name)
+  expect(host.querySelector<HTMLInputElement>('#ai-endpoint')!.value).toBe(preset.endpoint)
+  expect(host.querySelector('#ai-protocol')!.textContent).toBe(
+    { responses: 'Responses', chat: 'Chat Completions', anthropic: 'Anthropic Messages' }[preset.protocol],
+  )
+  expect(host.querySelector<HTMLDetailsElement>('.ai-settings-advanced')!.open).toBe(false)
+  expect(host.querySelector<HTMLInputElement>('#ai-key')!.value).toBe('')
+  expect(host.querySelector<HTMLButtonElement>('#ai-model')!.disabled).toBe(true)
   expect(api.ai.configure).not.toHaveBeenCalled()
+  expect(api.ai.discover).not.toHaveBeenCalled()
   expect(api.ai.setDefault).not.toHaveBeenCalled()
 })
-it('validates the endpoint before discovery and explains an empty model directory', async () => {
+it('adds only selected discoveries to the candidate pool and retains it across model/provider switches', async () => {
   await choose('ai-source', '新增供应商')
-  await act(async () => button('自动发现模型').click())
-  expect(host.querySelector('[role=status]')!.textContent).toContain('有效的接口基础地址')
-  expect(document.activeElement?.id).toBe('ai-endpoint')
-  expect(api.ai.discover).not.toHaveBeenCalled()
   await fill('ai-endpoint', 'https://private.invalid/v1')
-  api.ai.discover.mockResolvedValue({ models: [], defaultModel: '', message: '' })
-  await act(async () => button('自动发现模型').click())
-  expect(host.querySelector('[role=status]')!.textContent).toContain('请手动填写模型名称')
-  expect(host.querySelector<HTMLInputElement>('#ai-model')!.value).toBe('')
-})
-it('allows an advanced override without changing the selected platform and collapses for a new provider', async () => {
-  await choose('ai-source', '新增供应商')
-  await choose('ai-platform', 'OpenAI')
-  await fill('ai-key', 'draft-key')
-  await fill('ai-model', 'custom-model')
-  await act(async () => host.querySelector<HTMLElement>('.ai-settings-advanced summary')!.click())
-  expect(host.querySelector<HTMLDetailsElement>('.ai-settings-advanced')!.open).toBe(true)
-  await choose('ai-protocol', 'Chat Completions')
-  expect(host.querySelector('#ai-platform')!.textContent).toBe('OpenAI')
-  expect(host.querySelector<HTMLInputElement>('#ai-key')!.value).toBe('draft-key')
-  expect(host.querySelector<HTMLInputElement>('#ai-model')!.value).toBe('custom-model')
-  await act(async () => button('测试连接').click())
-  expect(api.ai.test).toHaveBeenCalledWith(expect.objectContaining({ protocol: 'chat' }))
-  await choose('ai-platform', 'Anthropic（Claude）')
-  expect(host.querySelector<HTMLDetailsElement>('.ai-settings-advanced')!.open).toBe(false)
-  expect(host.querySelector('#ai-protocol')!.textContent).toBe('Anthropic Messages')
-})
-it('uses the official backend after deleting a provider instead of reselecting its stale id', async () => {
-  await choose('ai-source', '服务A')
-  api.ai.removeProvider.mockResolvedValue({ ...settings, providers: [settings.providers[1]] })
-  await act(async () => button('删除供应商').click())
-  expect(api.ai.removeProvider).toHaveBeenCalledWith({ providerId: 'p' })
-  expect(api.ai.setDefault).toHaveBeenLastCalledWith({ kind: 'official', model: '' })
-  expect(host.querySelector('[aria-label="官方AI配置"]')).not.toBeNull()
-  expect(useAiStore.getState().settings!.providers).toHaveLength(1)
-})
-it('remembers discovered models per provider after switching, saving a model, and reopening settings', async () => {
-  await choose('ai-source', '服务A')
-  await act(async () => button('自动发现模型').click())
-  expect(api.ai.configure).not.toHaveBeenCalled()
-  await choose('ai-source', '服务B')
-  expect(host.querySelector<HTMLInputElement>('#ai-model')!.value).toBe('model-b')
-  await choose('ai-source', '服务A')
+  await discover()
+  expect(api.ai.discover).toHaveBeenCalledWith(expect.objectContaining({ model: '', protocol: 'responses' }))
+  expect(host.querySelector<HTMLButtonElement>('#ai-model')!.disabled).toBe(true)
+  expect(document.querySelectorAll('.ai-model-pool li')).toHaveLength(0)
+  await addDiscovered('model-c')
+  expect(document.querySelectorAll('.ai-model-pool li')).toHaveLength(1)
+  expect(document.querySelector('.ai-model-pool')!.textContent).not.toContain('model-a')
+  await manage(false)
   await choose('ai-model', 'model-c')
   await act(async () => button('保存并使用').click())
-  expect(api.ai.setDefault).toHaveBeenLastCalledWith({ kind: 'custom', providerId: 'p', model: 'model-c' })
-  await act(async () => root.render(null))
-  await act(async () => root.render(<AiPanel />))
+  expect(api.ai.configure).toHaveBeenCalledWith(
+    expect.objectContaining({ model: 'model-c', models: [{ id: 'model-c', name: 'model-c' }] }),
+  )
+  await choose('ai-source', '服务A')
+  await choose('ai-source', '自定义模型')
   expect(host.querySelector('#ai-model')!.textContent).toBe('model-c')
-  await choose('ai-model', 'model-a')
+  await reopen()
+  expect(host.querySelector('#ai-model')!.textContent).toBe('model-c')
   expect(api.ai.discover).toHaveBeenCalledOnce()
 })
-it('saves a new provider catalog and keeps custom model input available alongside it', async () => {
-  await choose('ai-source', '新增供应商')
-  await fill('ai-endpoint', 'https://private.invalid/v1')
-  await act(async () => button('自动发现模型').click())
-  await choose('ai-model', '自定义模型')
-  await fill('ai-custom-model', 'private-model')
+it('adds manual names to the same array, deduplicates them, and persists deletions', async () => {
+  await choose('ai-source', '服务A')
+  await addManual(' private-model ')
+  await manage()
+  await fill('ai-model-name', 'private-model')
+  await click('ai-add-model')
+  expect(document.querySelectorAll('.ai-model-pool li')).toHaveLength(2)
+  expect(document.querySelector('.ai-model-manager [role=status]')!.textContent).toContain('已在候选池')
+  await manage(false)
+  await choose('ai-model', 'private-model')
+  await manage()
+  await act(async () => document.querySelector<HTMLButtonElement>('[aria-label="删除模型 model-a"]')!.click())
+  await manage(false)
   await act(async () => button('保存并使用').click())
-  expect(api.ai.configure).toHaveBeenLastCalledWith(
+  expect(api.ai.configure).toHaveBeenCalledWith(
     expect.objectContaining({
       model: 'private-model',
-      models: [
-        { id: 'model-a', name: 'model-a' },
-        { id: 'model-c', name: 'model-c' },
-      ],
+      models: [{ id: 'private-model', name: 'private-model' }],
     }),
   )
-  await act(async () => root.render(null))
-  await act(async () => root.render(<AiPanel />))
-  expect(host.querySelector('#ai-model')!.textContent).toBe('自定义模型')
-  expect(host.querySelector<HTMLInputElement>('#ai-custom-model')!.value).toBe('private-model')
-  await choose('ai-model', 'model-c')
-  expect(host.querySelector('#ai-custom-model')).toBeNull()
+  await reopen()
+  await manage()
+  expect(document.querySelectorAll('.ai-model-pool li')).toHaveLength(1)
+  expect(document.querySelector('[aria-label="删除模型 model-a"]')).toBeNull()
 })
-it('moves context into advanced settings and persists preset or custom values', async () => {
+it('requires a new selection when the selected candidate is deleted', async () => {
   await choose('ai-source', '服务A')
-  expect(host.querySelector<HTMLDetailsElement>('.ai-settings-advanced')!.open).toBe(false)
+  await addManual('replacement')
+  await manage()
+  await act(async () => document.querySelector<HTMLButtonElement>('[aria-label="删除模型 model-a"]')!.click())
+  await manage(false)
+  await act(async () => button('保存并使用').click())
+  expect(status()).toContain('从候选池中选择')
+  expect(api.ai.configure).not.toHaveBeenCalled()
+  await choose('ai-model', 'replacement')
+  await act(async () => button('保存并使用').click())
+  expect(api.ai.setDefault).toHaveBeenLastCalledWith({
+    kind: 'custom',
+    providerId: 'p',
+    model: 'replacement',
+  })
+})
+it('preserves the candidate array through discovery and credential editing', async () => {
+  await choose('ai-source', '服务A')
+  await addManual('manual')
+  await discover()
+  expect(document.querySelectorAll('.ai-model-pool li')).toHaveLength(2)
+  await manage(false)
+  await fill('ai-key', 'draft-key')
+  await fill('ai-endpoint', 'https://changed.invalid/v1')
+  await manage()
+  expect(document.querySelectorAll('.ai-model-pool li')).toHaveLength(2)
+  expect(document.querySelector('#ai-discovered-model')).toBeNull()
+  expect(api.ai.configure).not.toHaveBeenCalled()
+})
+it('validates empty models and addresses without dispatching invalid RPCs', async () => {
+  await choose('ai-source', '新增供应商')
+  await discover()
+  expect(status()).toContain('有效的接口基础地址')
+  expect(api.ai.discover).not.toHaveBeenCalled()
+  await manage(false)
+  await fill('ai-endpoint', 'https://private.invalid/v1')
+  await fill('ai-key', 'draft-key')
+  for (const action of ['测试连接', '保存并使用']) {
+    await act(async () => button(action).click())
+    expect(status()).toContain('候选模型')
+    expect(document.activeElement?.id).toBe('ai-model-manage')
+  }
+  expect(host.querySelector<HTMLInputElement>('#ai-key')!.value).toBe('draft-key')
+  expect(api.ai.test).not.toHaveBeenCalled()
+  expect(api.ai.configure).not.toHaveBeenCalled()
+})
+it('uses a single editable context combobox for preset selection and custom values', async () => {
+  await choose('ai-source', '服务A')
   expect(host.querySelector('#ai-context')!.closest('details')).not.toBeNull()
-  await act(async () => host.querySelector<HTMLElement>('.ai-settings-advanced summary')!.click())
-  expect(host.querySelector('#ai-context')!.textContent).toBe('自定义')
-  expect(host.querySelector<HTMLInputElement>('#ai-custom-context')!.value).toBe('64000')
-  await act(async () => document.getElementById('ai-context')!.click())
+  await advanced()
+  expect(host.querySelector<HTMLInputElement>('#ai-context')!.value).toBe('64000')
+  await click('ai-context')
   expect([...document.querySelectorAll('[role=option]')].map((e) => e.textContent)).toEqual([
     '256K',
     '512K',
     '1M',
     '2M',
-    '自定义',
   ])
-  await act(async () =>
-    [...document.querySelectorAll<HTMLElement>('[role=option]')]
-      .find((e) => e.textContent === '256K')!
-      .click(),
-  )
-  await choose('ai-context', '自定义')
-  expect(host.querySelector<HTMLInputElement>('#ai-custom-context')!.value).toBe('256000')
-  await fill('ai-custom-context', '96000')
+  await act(async () => document.getElementById('ai-context-option-0')!.click())
+  expect(host.querySelector<HTMLInputElement>('#ai-context')!.value).toBe('256000')
+  expect(host.querySelectorAll('input[id^="ai-context"]')).toHaveLength(1)
+  await fill('ai-context', '96000')
   await act(async () => button('保存并使用').click())
   expect(api.ai.configure).toHaveBeenLastCalledWith(expect.objectContaining({ contextWindow: 96000 }))
-  await act(async () => root.render(null))
-  await act(async () => root.render(<AiPanel />))
-  expect(host.querySelector('#ai-context')!.textContent).toBe('自定义')
-  expect(host.querySelector<HTMLInputElement>('#ai-custom-context')!.value).toBe('96000')
-  await act(async () => host.querySelector<HTMLElement>('.ai-settings-advanced summary')!.click())
-  await choose('ai-context', '512K')
-  expect(host.querySelector('#ai-custom-context')).toBeNull()
-  await act(async () => button('保存并使用').click())
-  expect(api.ai.configure).toHaveBeenLastCalledWith(expect.objectContaining({ contextWindow: 512000 }))
+  await reopen()
+  expect(host.querySelector<HTMLInputElement>('#ai-context')!.value).toBe('96000')
 })
-it('opens advanced context validation and clears a stale catalog when its connection changes', async () => {
+it('supports context keyboard selection and Escape while retaining editable custom text', async () => {
+  await choose('ai-source', '新增供应商')
+  await advanced()
+  const input = host.querySelector<HTMLInputElement>('#ai-context')!
+  expect(input.value).toBe('256000')
+  await act(async () => input.focus())
+  await act(async () =>
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true })),
+  )
+  await act(async () =>
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })),
+  )
+  expect(input.value).toBe('512000')
+  await fill('ai-context', '600000')
+  await act(async () =>
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })),
+  )
+  expect(input.value).toBe('600000')
+  expect(document.querySelector('#ai-context-options')).toBeNull()
+  expect(host.querySelector('.ai-settings')).not.toBeNull()
+  await act(async () =>
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true, cancelable: true })),
+  )
+  await act(async () =>
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })),
+  )
+  expect(input.value).toBe('2000000')
+})
+it('opens advanced settings and focuses the same context input on invalid capacity', async () => {
   await choose('ai-source', '服务A')
-  await act(async () => button('自动发现模型').click())
-  await act(async () => host.querySelector<HTMLElement>('.ai-settings-advanced summary')!.click())
-  await choose('ai-context', '自定义')
-  await fill('ai-custom-context', '2000001')
-  await act(async () => host.querySelector<HTMLElement>('.ai-settings-advanced summary')!.click())
+  await advanced()
+  await fill('ai-context', '2000001')
+  await advanced()
   await act(async () => button('保存并使用').click())
   expect(host.querySelector<HTMLDetailsElement>('.ai-settings-advanced')!.open).toBe(true)
-  expect(document.activeElement?.id).toBe('ai-custom-context')
-  expect(host.querySelector('[role=status]')!.textContent).toContain('上下文窗口')
+  expect(document.activeElement?.id).toBe('ai-context')
+  expect(status()).toContain('上下文窗口')
   expect(api.ai.configure).not.toHaveBeenCalled()
-  await fill('ai-endpoint', 'https://changed.invalid/v1')
-  expect(host.querySelector('#ai-model')!.tagName).toBe('INPUT')
+})
+it('keeps the advanced protocol override and creates a fresh provider when a preset changes', async () => {
+  await choose('ai-source', '服务A')
+  await fill('ai-key', 'draft-key')
+  await choose('ai-platform', 'OpenAI')
+  expect(host.querySelector<HTMLInputElement>('#ai-key')!.value).toBe('')
+  await addManual('chosen')
+  await choose('ai-model', 'chosen')
+  await advanced()
+  await choose('ai-protocol', 'Chat Completions')
+  expect(host.querySelector('#ai-platform')!.textContent).toBe('OpenAI')
+  expect(host.querySelector('#ai-model')!.textContent).toBe('chosen')
+  await act(async () => button('保存并使用').click())
+  expect(api.ai.configure.mock.calls[0][0].id).not.toBe('p')
+  expect(api.ai.configure.mock.calls[0][0].protocol).toBe('chat')
+})
+it('returns to official configuration after deleting the selected provider', async () => {
+  await choose('ai-source', '服务A')
+  api.ai.removeProvider.mockResolvedValue({ ...settings, providers: [settings.providers[1]] })
+  await act(async () => button('删除供应商').click())
+  expect(api.ai.setDefault).toHaveBeenLastCalledWith({ kind: 'official', model: '' })
+  expect(host.querySelector('[aria-label="官方AI配置"]')).not.toBeNull()
 })

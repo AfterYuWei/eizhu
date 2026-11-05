@@ -697,10 +697,7 @@ export class AgentService {
               ...provider,
               apiKey: clearKey ? '' : (apiKey ?? (old?.endpoint === d.endpoint ? old.apiKey : '')),
             }
-            next.models ??=
-              old?.endpoint === next.endpoint && old.protocol === next.protocol && old.apiKey === next.apiKey
-                ? (old.models ?? [])
-                : []
+            next.models ??= old?.models ?? []
             config.providers = [...config.providers.filter((v) => v.id !== d.id), next]
           } else if (operation === 'ai.removeProvider')
             config.providers = config.providers.filter(
@@ -786,29 +783,6 @@ export class AgentService {
           defaultModel: provider.model,
           message: '',
         })
-        // 只缓存已保存连接对应的目录，不把草稿密钥或配置写入数据库。
-        if (
-          saved?.endpoint === provider.endpoint &&
-          saved.protocol === provider.protocol &&
-          saved.apiKey === provider.apiKey
-        ) {
-          if (this.configuring) fail('AI_BUSY', '正在更新AI设置，请稍后重新发现模型')
-          this.configuring = true
-          try {
-            const latest = await this.config()
-            const current = latest.providers.find((p) => p.id === d.id)
-            if (
-              current?.endpoint === provider.endpoint &&
-              current.protocol === provider.protocol &&
-              current.apiKey === provider.apiKey
-            ) {
-              current.models = catalog.models
-              await this.storage({ kind: 'config.write', value: latest })
-            }
-          } finally {
-            this.configuring = false
-          }
-        }
         return catalog
       }
       case 'ai.cliStatus':

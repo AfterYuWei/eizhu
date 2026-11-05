@@ -488,6 +488,22 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
       await wait("return !!document.querySelector('[role=listbox]')")
       await js("[...document.querySelectorAll('[role=option]')].find(e=>e.textContent===d).click()", label)
     }
+    const manageModels = async (open = true) => {
+      if ((await js("return !!document.querySelector('.ai-model-manager')")) !== open)
+        await js("document.getElementById('ai-model-manage').click()")
+      await wait("return !!document.querySelector('.ai-model-manager')===" + String(open))
+    }
+    const probeModels = async () => {
+      await manageModels()
+      await js("document.getElementById('ai-discover-models').click()")
+      await wait(
+        "return !!document.getElementById('ai-discovered-model')&&!document.getElementById('ai-enabled').disabled",
+      )
+    }
+    const addDetected = async (name: string) => {
+      await chooseSetting('ai-discovered-model', name)
+      await js("document.getElementById('ai-add-detected').click()")
+    }
     const captureSetting = async (name: string) => {
       await wait("return !document.getElementById('ai-enabled').disabled")
       await js('await document.fonts.ready;await new Promise(r=>setTimeout(r,150))')
@@ -506,19 +522,34 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
     assert.equal(await js("return document.querySelectorAll('#ai-cli-path').length"), 0)
     assert.equal(await js("return document.getElementById('ai-context').checkVisibility()"), false)
     const catalogRequests = directoryRequests
+    await probeModels()
+    assert.equal(await js("return document.querySelectorAll('.ai-model-pool li').length"), 1)
+    await addDetected('合成备用模型')
+    await js(
+      "const input=document.getElementById('ai-model-name');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,'synthetic-manual');input.dispatchEvent(new Event('input',{bubbles:true}))",
+    )
+    await js("document.getElementById('ai-add-model').click()")
+    assert.equal(await js("return document.querySelectorAll('.ai-model-pool li').length"), 3)
+    assert.equal(
+      await js(
+        "const e=document.querySelector('.ai-model-manager'),r=e.getBoundingClientRect();return e.scrollWidth<=e.clientWidth+1&&r.left>=0&&r.right<=innerWidth+1&&r.top>=0&&r.bottom<=innerHeight+1",
+      ),
+      true,
+    )
+    await captureSetting('ai-settings-candidate-pool.png')
+    await manageModels(false)
     await chooseSetting('ai-model', '合成备用模型')
     await js("document.querySelector('.ai-settings-advanced summary').click()")
     await chooseSetting('ai-context', '256K')
-    await chooseSetting('ai-context', '自定义')
     await js(
-      "const input=document.getElementById('ai-custom-context');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,'96000');input.dispatchEvent(new Event('input',{bubbles:true}))",
+      "const input=document.getElementById('ai-context');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,'96000');input.dispatchEvent(new Event('input',{bubbles:true}))",
     )
     for (const dark of [false, true]) {
       await js("document.documentElement.classList.toggle('dark',d)", dark)
       await captureSetting(dark ? 'ai-settings-context-dark.png' : 'ai-settings-context-light.png')
     }
     window.setContentSize(900, 760)
-    await js("document.getElementById('ai-custom-context').scrollIntoView({block:'center'})")
+    await js("document.getElementById('ai-context').scrollIntoView({block:'center'})")
     await captureSetting('ai-settings-context-narrow.png')
     window.setContentSize(1280, 900)
     await js(
@@ -530,7 +561,7 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
     const switched = aiSettingsSchema.parse(await call('ai', 'settings'))
     assert.equal(switched.defaultBackend.model, 'synthetic-alt')
     assert.equal(switched.providers.find((p) => p.id === 'responses')?.contextWindow, 96000)
-    assert.equal(switched.providers.find((p) => p.id === 'responses')?.models?.length, 2)
+    assert.equal(switched.providers.find((p) => p.id === 'responses')?.models?.length, 3)
     assert.equal(
       aiConversationSchema.parse(await call('ai', 'read', { conversationId: proposed.id })).backend.model,
       'synthetic-alt',
@@ -539,14 +570,25 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
     await wait("return !!document.querySelector('button[aria-label=AI设置]')")
     await js("document.querySelector('button[aria-label=AI设置]').click()")
     await wait("return document.getElementById('ai-model')?.textContent==='合成备用模型'")
-    assert.equal(await js("return document.getElementById('ai-context').textContent"), '自定义')
-    assert.equal(await js("return document.getElementById('ai-custom-context').value"), '96000')
+    await manageModels()
+    await js('document.querySelector(\'[aria-label="删除模型 synthetic-manual"]\').click()')
+    await manageModels(false)
+    await js(
+      "[...document.querySelectorAll('.ai-settings button')].find(b=>b.textContent==='保存并使用').click()",
+    )
+    await wait("return !document.getElementById('ai-enabled').disabled")
+    assert.equal(
+      aiSettingsSchema.parse(await call('ai', 'settings')).providers.find((p) => p.id === 'responses')?.models
+        ?.length,
+      2,
+    )
+    assert.equal(await js("return document.getElementById('ai-context').value"), '96000')
     await chooseSetting('ai-source', '合成 chat')
-    await chooseSetting('ai-model', '合成备用模型')
+    assert.equal(await js("return document.getElementById('ai-model').textContent"), 'synthetic-ai')
     await chooseSetting('ai-source', '合成 responses')
     assert.equal(await js("return document.getElementById('ai-model').textContent"), '合成备用模型')
-    assert.equal(directoryRequests, catalogRequests)
-    await chooseSetting('ai-model', '合成模型')
+    assert.equal(directoryRequests, catalogRequests + 1)
+    await chooseSetting('ai-model', 'synthetic-ai')
     await js(
       "[...document.querySelectorAll('.ai-settings button')].find(b=>b.textContent==='保存并使用').click()",
     )
@@ -565,18 +607,16 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
         action,
       )
       await wait(
-        "return !!document.querySelector('.ai-settings [role=status]')?.textContent.includes('请先填写模型')&&!document.getElementById('ai-enabled').disabled",
+        "return !!document.querySelector('.ai-settings [role=status]')?.textContent.includes('请先添加候选模型')&&!document.getElementById('ai-enabled').disabled",
       )
-      assert.equal(await js('return document.activeElement.id'), 'ai-model')
+      assert.equal(await js('return document.activeElement.id'), 'ai-model-manage')
     }
     assert.deepEqual({ directoryRequests, inferenceRequests }, beforeValidation)
-    await js(
-      "[...document.querySelectorAll('.ai-settings button')].find(b=>b.textContent==='自动发现模型').click()",
-    )
-    await wait(
-      "return document.getElementById('ai-model').getAttribute('role')==='combobox'&&!document.getElementById('ai-enabled').disabled",
-    )
+    await probeModels()
     assert.equal(directoryRequests, beforeValidation.directoryRequests + 1)
+    assert.equal(await js("return document.querySelectorAll('.ai-model-pool li').length"), 0)
+    await addDetected('合成模型')
+    await manageModels(false)
     await chooseSetting('ai-model', '合成模型')
     await js(
       "[...document.querySelectorAll('.ai-settings button')].find(b=>b.textContent==='测试连接').click()",
@@ -601,7 +641,7 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
     assert.equal(await js("return document.getElementById('ai-endpoint').value"), 'https://api.deepseek.com')
     assert.equal(await js("return document.getElementById('ai-protocol').textContent"), 'Chat Completions')
     assert.equal(await js("return document.getElementById('ai-key').value"), '')
-    assert.equal(await js("return document.getElementById('ai-model').value"), '')
+    assert.equal(await js("return document.getElementById('ai-model').disabled"), true)
     assert.equal(await js("return document.querySelector('.ai-settings-advanced').open"), false)
     assert.equal(await js("return document.getElementById('ai-protocol').checkVisibility()"), false)
     assert.equal((await call<{ providers: unknown[] }>('ai', 'settings')).providers.length, 3)
@@ -680,6 +720,8 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
       settingsConnectionTextUnverified: true,
       settingsContextPresetsAndCustom: true,
       settingsCachedModelSwitch: true,
+      settingsCandidatePool: true,
+      settingsEditableContextInput: true,
       settingsEnableSwitch: true,
       settingsResponsiveLayout: true,
       remoteFileConflictAndEdit: Boolean(sftpServer),

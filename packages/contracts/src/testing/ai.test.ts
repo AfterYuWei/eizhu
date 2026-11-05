@@ -57,3 +57,13 @@ test('legacy providers need no model catalog while saved catalogs remain bounded
     false,
   )
 })
+test('candidate pool rejects duplicates and requires its selected model when explicitly supplied', () => {
+  const input = { ...connection, model: 'chosen', models: [{ id: 'chosen', name: '模型' }] }
+  assert.equal(ai['ai.configure'].input.safeParse(input).success, true)
+  assert.equal(ai['ai.configure'].input.safeParse({ ...input, model: 'outside-pool' }).success, false)
+  assert.equal(ai['ai.configure'].input.safeParse({ ...input, models: [] }).success, false)
+  assert.equal(
+    ai['ai.configure'].input.safeParse({ ...input, models: [...input.models, ...input.models] }).success,
+    false,
+  )
+})

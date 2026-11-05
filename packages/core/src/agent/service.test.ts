@@ -416,7 +416,7 @@ for (const protocol of ['responses', 'chat', 'anthropic'] as const)
       const catalog = aiModelCatalogSchema.parse(await f.service.execute('ai.discover', input, 1))
       assert.deepEqual(catalog.models, [{ id: 'discovered', name: '发现的模型' }])
       assert.equal(catalog.defaultModel, '')
-      assert.deepEqual(f.config.providers[0].models, catalog.models)
+      assert.deepEqual(f.config.providers[0].models, [])
       assert.deepEqual(await f.service.execute('ai.discover', { ...input, model: undefined }, 1), catalog)
       assert.equal(requests, 2)
       await assert.rejects(f.service.execute('ai.test', input, 1), { name: 'ZodError' })
@@ -429,7 +429,7 @@ for (const protocol of ['responses', 'chat', 'anthropic'] as const)
       await f.service.close()
     }
   })
-test('model refresh caches metadata without stopping an Agent or saving a draft key', async () => {
+test('model discovery leaves the candidate pool, running Agent and unsaved key unchanged', async () => {
   const f = fixture([], undefined, async (request, _signal, consume) => {
     await consume(
       Buffer.from(
@@ -447,6 +447,20 @@ test('model refresh caches metadata without stopping an Agent or saving a draft 
     )
   })
   try {
+    const models = [{ id: 'fixture', name: '用户选择的模型' }]
+    await f.service.execute(
+      'ai.configure',
+      {
+        id: 'p',
+        name: '测试',
+        protocol: 'responses',
+        endpoint: 'http://127.0.0.1/v1',
+        model: 'fixture',
+        clearKey: false,
+        models,
+      },
+      1,
+    )
     const c = await f.open()
     await f.send(c.id)
     const pending = await f.pending()
@@ -459,7 +473,6 @@ test('model refresh caches metadata without stopping an Agent or saving a draft 
       clearKey: false,
     }
     await f.service.execute('ai.discover', input, 1)
-    const models = [{ id: 'other-model', name: '其他模型' }]
     assert.deepEqual(f.config.providers[0].models, models)
     assert.equal(f.current.status, 'awaiting_confirmation')
     assert.equal(f.current.messages.find((m) => m.tool?.id === pending.id)?.tool?.state, 'pending')
@@ -473,7 +486,7 @@ test('model refresh caches metadata without stopping an Agent or saving a draft 
     await f.service.close()
   }
 })
-test('model refresh cannot overwrite a changed connection and preserves cached data on failure', async () => {
+test('model discovery cannot overwrite candidate choices during configuration changes or failure', async () => {
   let release: (() => void) | undefined
   let broken = false
   const f = fixture([], undefined, async (_request, _signal, consume) => {
@@ -520,7 +533,7 @@ for (const change of [
   { protocol: 'chat' },
   { apiKey: 'rotated-key' },
 ])
-  test(`model catalog is retained for a model switch and invalidated on ${Object.keys(change)[0]} changes`, async () => {
+  test(`candidate choices are retained for a model switch and ${Object.keys(change)[0]} changes`, async () => {
     const f = fixture([])
     try {
       const input = {
@@ -539,7 +552,7 @@ for (const change of [
       await f.service.execute('ai.configure', { ...input, model: 'next-model' }, 1)
       assert.deepEqual(f.config.providers[0].models, models)
       await f.service.execute('ai.configure', { ...input, ...change }, 1)
-      assert.deepEqual(f.config.providers[0].models, [])
+      assert.deepEqual(f.config.providers[0].models, models)
     } finally {
       await f.service.close()
     }
