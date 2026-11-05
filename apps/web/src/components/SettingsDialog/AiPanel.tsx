@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import type { AiConnection, AiModelCatalog, AiCli, AiBackend, AiSettings } from '@eizhu/contracts'
+import { ai } from '@eizhu/contracts'
 import { bridge } from '@/lib/bridge'
 import { useAiStore } from '@/store/ai'
 import { Button } from '@/components/ui/button'
@@ -19,6 +20,14 @@ const fresh = (): AiConnection => ({
   clearKey: false,
 })
 const cliNames = { codex: 'Codex', claude: 'Claude Code', deepseek: 'DeepSeek Harness' }
+const connectionFeedback: Record<string, { id: string; message: string }> = {
+  name: { id: 'ai-name', message: '请填写供应商名称（1–80个字符）。' },
+  endpoint: { id: 'ai-endpoint', message: '请输入有效的接口基础地址，远程使用HTTPS，本机服务可使用HTTP。' },
+  model: { id: 'ai-model', message: '请先填写模型（1–160个字符），或点击“自动发现模型”后选择。' },
+  contextWindow: { id: 'ai-context', message: '上下文窗口须为4096–2000000之间的整数。' },
+  apiKey: { id: 'ai-key', message: 'API Key不能超过8192个字符。' },
+  protocol: { id: 'ai-protocol', message: '请在高级设置中选择受支持的接口协议。' },
+}
 function Field({
   id,
   label,
@@ -104,6 +113,22 @@ export function AiPanel() {
     }
   }
   const applyBackend = async (backend: AiBackend) => setSettings(await bridge().ai.setDefault(backend))
+  const validateDraft = (operation: 'ai.discover' | 'ai.test' | 'ai.configure') => {
+    const result = ai[operation].input.safeParse({
+      ...draft,
+      name: draft.name.trim(),
+      endpoint: draft.endpoint.trim(),
+      model: draft.model.trim(),
+    })
+    if (result.success) return result.data
+    const field = result.error.issues[0]?.path[0]
+    const feedback = typeof field === 'string' ? connectionFeedback[field] : undefined
+    setMessage(feedback?.message ?? '请检查供应商配置。')
+    const control = feedback && document.getElementById(feedback.id)
+    const advanced = control?.closest<HTMLDetailsElement>('details')
+    if (advanced) advanced.open = true
+    control?.focus()
+  }
   const engine =
     settings?.defaultBackend.kind === 'official' || settings?.defaultBackend.kind === 'custom'
       ? 'builtin'
@@ -453,8 +478,15 @@ export function AiPanel() {
                 disabled={busy}
                 onClick={() =>
                   void run(async () => {
-                    setCatalog(await bridge().ai.discover(draft))
-                    setMessage('模型发现完成；尚未保存配置')
+                    const input = validateDraft('ai.discover')
+                    if (!input) return
+                    const result = await bridge().ai.discover(input)
+                    setCatalog(result)
+                    setMessage(
+                      result.models.length
+                        ? '模型发现完成，请选择模型后测试或保存；尚未保存配置'
+                        : '未发现可用模型，请手动填写模型名称',
+                    )
                   })
                 }
               >
@@ -463,7 +495,12 @@ export function AiPanel() {
               <Button
                 variant="ghost"
                 disabled={busy}
-                onClick={() => void run(async () => setMessage((await bridge().ai.test(draft)).message))}
+                onClick={() =>
+                  void run(async () => {
+                    const input = validateDraft('ai.test')
+                    if (input) setMessage((await bridge().ai.test(input)).message)
+                  })
+                }
               >
                 测试连接
               </Button>
@@ -471,10 +508,12 @@ export function AiPanel() {
                 disabled={busy}
                 onClick={() =>
                   void run(async () => {
-                    setSettings(await bridge().ai.configure(draft))
-                    await applyBackend({ kind: 'custom', providerId: draft.id, model: draft.model })
-                    setSource(draft.id)
-                    setDraft({ ...draft, apiKey: undefined, clearKey: false })
+                    const input = validateDraft('ai.configure')
+                    if (!input) return
+                    setSettings(await bridge().ai.configure(input))
+                    await applyBackend({ kind: 'custom', providerId: input.id, model: input.model })
+                    setSource(input.id)
+                    setDraft({ ...input, apiKey: undefined, clearKey: false })
                     setMessage('已保存并使用此供应商')
                   })
                 }

@@ -12,7 +12,7 @@ import type { Connection } from 'ssh2'
 import type { AddressInfo } from 'node:net'
 import type { BrowserWindow } from 'electron'
 import type { RuntimeHost } from './runtime-host.ts'
-import { aiConversationSchema, aiSettingsSchema } from '@eizhu/contracts'
+import { aiConversationSchema, aiModelCatalogSchema, aiSettingsSchema } from '@eizhu/contracts'
 import { modelFixture } from '@eizhu/core/agent/model-fixture'
 
 /** Explicit loopback services; exercises the real Electron/Worker/SQLite/SSH chain. */
@@ -34,6 +34,8 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
   await writeFile(remoteFile, '# original\nport=22\n')
   let mode: 'normal' | 'interrupted' | 'long' | 'quota' | 'unauthorized' | 'file' = 'normal'
   let targetIds: string[] = []
+  let directoryRequests = 0,
+    inferenceRequests = 0
   const generated = utils.generateKeyPairSync('ed25519'),
     parsed = utils.parseKey(generated.private)
   assert.ok(!(parsed instanceof Error) && !Array.isArray(parsed))
@@ -112,10 +114,12 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
       const protocol = req.url?.split('/')[1]
       assert.ok(protocol === 'responses' || protocol === 'chat' || protocol === 'anthropic')
       if (req.url?.endsWith('/models')) {
+        directoryRequests++
         res.writeHead(200, { 'content-type': 'application/json' })
         res.end(JSON.stringify({ data: [{ id: 'synthetic-ai', name: '合成模型' }] }))
         return
       }
+      inferenceRequests++
       const data = JSON.parse(body)
       const forced = typeof data.tool_choice === 'object'
       const nativeCalls = Array.isArray(data.input)
@@ -234,7 +238,10 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
       }
       const settings = aiSettingsSchema.parse(await call('ai', 'configure', provider))
       assert.ok(!JSON.stringify(settings).includes('synthetic-ai-api-key'))
-      await call('ai', 'discover', provider)
+      const catalog = aiModelCatalogSchema.parse(await call('ai', 'discover', { ...provider, model: '' }))
+      assert.equal(catalog.models[0].id, 'synthetic-ai')
+      await assert.rejects(call('ai', 'test', { ...provider, model: '' }))
+      await assert.rejects(call('ai', 'configure', { ...provider, model: '' }))
       await call('ai', 'test', provider)
       assert.equal(commands.length, 0)
     }
@@ -486,6 +493,39 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
     await captureSetting('ai-settings-provider.png')
     await chooseSetting('ai-source', '新增供应商')
     assert.equal(await js("return document.getElementById('ai-protocol').textContent"), 'Responses')
+    await js(
+      "for(const [id,value] of Object.entries(d)){const input=document.getElementById(id);Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,value);input.dispatchEvent(new Event('input',{bubbles:true}))}",
+      { 'ai-endpoint': 'http://127.0.0.1:' + httpPort + '/responses/v1', 'ai-key': 'synthetic-ai-api-key' },
+    )
+    const beforeValidation = { directoryRequests, inferenceRequests }
+    for (const action of ['测试连接', '保存并使用']) {
+      await js(
+        "[...document.querySelectorAll('.ai-settings button')].find(b=>b.textContent===d).click()",
+        action,
+      )
+      await wait(
+        "return !!document.querySelector('.ai-settings [role=status]')?.textContent.includes('请先填写模型')&&!document.getElementById('ai-enabled').disabled",
+      )
+      assert.equal(await js('return document.activeElement.id'), 'ai-model')
+    }
+    assert.deepEqual({ directoryRequests, inferenceRequests }, beforeValidation)
+    await js(
+      "[...document.querySelectorAll('.ai-settings button')].find(b=>b.textContent==='自动发现模型').click()",
+    )
+    await wait(
+      "return document.getElementById('ai-model').getAttribute('role')==='combobox'&&!document.getElementById('ai-enabled').disabled",
+    )
+    assert.equal(directoryRequests, beforeValidation.directoryRequests + 1)
+    await chooseSetting('ai-model', '合成模型')
+    await js(
+      "[...document.querySelectorAll('.ai-settings button')].find(b=>b.textContent==='测试连接').click()",
+    )
+    await wait(
+      "return !!document.querySelector('.ai-settings [role=status]')?.textContent.includes('连接与工具调用测试通过')&&!document.getElementById('ai-enabled').disabled",
+    )
+    assert.equal(inferenceRequests, beforeValidation.inferenceRequests + 1)
+    assert.equal((await call<{ providers: unknown[] }>('ai', 'settings')).providers.length, 3)
+    await captureSetting('ai-settings-discovery-before-model.png')
     await chooseSetting('ai-platform', 'DeepSeek')
     assert.equal(await js("return document.getElementById('ai-endpoint').value"), 'https://api.deepseek.com')
     assert.equal(await js("return document.getElementById('ai-protocol').textContent"), 'Chat Completions')
@@ -562,6 +602,8 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
       settingsSelectedConfiguration: true,
       settingsProviderPresets: true,
       settingsProtocolCollapsed: true,
+      settingsDiscoveryWithoutModel: true,
+      settingsRequiredFieldFeedback: true,
       settingsEnableSwitch: true,
       settingsResponsiveLayout: true,
       remoteFileConflictAndEdit: Boolean(sftpServer),

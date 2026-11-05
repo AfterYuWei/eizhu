@@ -5,17 +5,19 @@ const id = z.string().min(1).max(160)
 export const aiEndpointSchema = z
   .url()
   .max(2048)
-  .refine((value) => {
-    const u = new URL(value)
-    return (
-      !u.username &&
-      !u.password &&
-      !u.search &&
-      !u.hash &&
-      (u.protocol === 'https:' ||
-        (u.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(u.hostname)))
-    )
-  }, '远程接口须使用HTTPS，本机服务可使用HTTP')
+  .pipe(
+    z.string().refine((value) => {
+      const u = new URL(value)
+      return (
+        !u.username &&
+        !u.password &&
+        !u.search &&
+        !u.hash &&
+        (u.protocol === 'https:' ||
+          (u.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(u.hostname)))
+      )
+    }, '远程接口须使用HTTPS，本机服务可使用HTTP'),
+  )
 export const aiProtocolSchema = z.enum(['responses', 'chat', 'anthropic'])
 export const aiProviderSchema = z.strictObject({
   id,
@@ -29,6 +31,8 @@ export const aiProviderSchema = z.strictObject({
 export const aiConnectionSchema = aiProviderSchema
   .omit({ hasApiKey: true })
   .extend({ apiKey: z.string().max(8192).optional(), clearKey: z.boolean().default(false) })
+// 模型目录发现发生在选择模型之前，不能要求已知模型名。
+export const aiDiscoverySchema = aiConnectionSchema.extend({ model: z.string().max(160).default('') })
 export const aiCliKindSchema = z.enum(['codex', 'claude', 'deepseek'])
 export const aiCliSchema = z.strictObject({
   kind: aiCliKindSchema,
@@ -117,7 +121,7 @@ export const ai = {
   'ai.configureCli': { input: aiCliSchema, output: aiSettingsSchema },
   'ai.setDefault': { input: aiBackendSchema, output: aiSettingsSchema },
   'ai.capabilities': { input: z.undefined(), output: aiCapabilitiesSchema },
-  'ai.discover': { input: aiConnectionSchema, output: aiModelCatalogSchema },
+  'ai.discover': { input: aiDiscoverySchema, output: aiModelCatalogSchema },
   'ai.test': { input: aiConnectionSchema, output: z.strictObject({ message: z.string().max(1024) }) },
   'ai.cliStatus': {
     input: z.undefined(),

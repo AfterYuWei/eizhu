@@ -5,7 +5,7 @@ import { setTimeout as delay } from 'node:timers/promises'
 import { AgentService } from './service.ts'
 import type { AgentExternal, AgentSsh } from './service.ts'
 import type { AiConversation } from '@eizhu/contracts'
-import { aiConversationSchema, fail } from '@eizhu/contracts'
+import { aiConversationSchema, aiModelCatalogSchema, fail } from '@eizhu/contracts'
 import { storedAiConfigSchema, storedAiConversationSchema } from './repository.ts'
 import { modelFixture } from './model-fixture.ts'
 import type { AiTransport } from './model.ts'
@@ -24,7 +24,11 @@ async function until(condition: () => boolean) {
     await delay(5)
   }
 }
-function fixture(steps: Array<{ name: string; args: unknown } | null>, external?: AgentExternal) {
+function fixture(
+  steps: Array<{ name: string; args: unknown } | null>,
+  external?: AgentExternal,
+  transportOverride?: AiTransport,
+) {
   let config = storedAiConfigSchema.parse({
     providers: [
       {
@@ -145,7 +149,7 @@ function fixture(steps: Array<{ name: string; args: unknown } | null>, external?
   const service = new AgentService(
     storage,
     ssh,
-    transport,
+    transportOverride ?? transport,
     async () => '',
     { runtimeId: randomUUID(), workspaceId: 'offline', generation: 1 },
     (c) => {
@@ -388,6 +392,41 @@ test('provider keys stay private and are not reused for a new endpoint', async (
     await f.service.close()
   }
 })
+for (const protocol of ['responses', 'chat', 'anthropic'] as const)
+  test(`${protocol}: model discovery accepts an unknown model while execution and saving still require it`, async () => {
+    let requests = 0
+    const f = fixture([], undefined, async (request, _signal, consume) => {
+      requests++
+      assert.equal(request.method, 'GET')
+      assert.equal(request.url, 'http://127.0.0.1/v1/models')
+      assert.equal(request.authorization, protocol === 'anthropic' ? '' : 'Bearer test-key')
+      if (protocol === 'anthropic') assert.equal(request.headers?.['x-api-key'], 'test-key')
+      await consume(Buffer.from(JSON.stringify({ data: [{ id: 'discovered', display_name: '发现的模型' }] })))
+    })
+    try {
+      const input = {
+        id: 'p',
+        name: '测试',
+        protocol,
+        endpoint: 'http://127.0.0.1/v1',
+        model: '',
+        clearKey: false,
+      }
+      const catalog = aiModelCatalogSchema.parse(await f.service.execute('ai.discover', input, 1))
+      assert.deepEqual(catalog.models, [{ id: 'discovered', name: '发现的模型' }])
+      assert.equal(catalog.defaultModel, '')
+      assert.deepEqual(await f.service.execute('ai.discover', { ...input, model: undefined }, 1), catalog)
+      assert.equal(requests, 2)
+      await assert.rejects(f.service.execute('ai.test', input, 1), { name: 'ZodError' })
+      await assert.rejects(f.service.execute('ai.configure', input, 1), { name: 'ZodError' })
+      assert.equal(requests, 2)
+      assert.equal(f.config.providers[0].model, 'fixture')
+      assert.equal(f.config.providers[0].apiKey, 'test-key')
+      assert.equal(f.execs.length, 0)
+    } finally {
+      await f.service.close()
+    }
+  })
 test('backend switch preserves a handoff and expires pending operations', async () => {
   const f = fixture([{ name: 'terminal_execute', args: command() }, null])
   try {

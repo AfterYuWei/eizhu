@@ -3,7 +3,7 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { beforeEach, afterEach, it, expect, vi } from 'vitest'
 import type { AiBackend, AiConnection, AiSettings } from '@eizhu/contracts'
-import { aiConnectionSchema } from '@eizhu/contracts'
+import { ai, aiConnectionSchema } from '@eizhu/contracts'
 import { useAiStore } from '@/store/ai'
 import { AiPanel } from './AiPanel'
 import { aiProviderPresets } from './aiProviderPresets'
@@ -79,12 +79,18 @@ beforeEach(async () => {
     ...useAiStore.getState().settings!,
     enabled,
   }))
-  api.ai.discover.mockResolvedValue({
-    models: [{ id: 'model-a', name: 'model-a' }],
-    defaultModel: 'model-a',
-    message: '',
+  api.ai.discover.mockImplementation(async (input: AiConnection) => {
+    ai['ai.discover'].input.parse(input)
+    return {
+      models: [{ id: 'model-a', name: 'model-a' }],
+      defaultModel: 'model-a',
+      message: '',
+    }
   })
-  api.ai.test.mockResolvedValue({ message: '测试通过' })
+  api.ai.test.mockImplementation(async (input: AiConnection) => {
+    ai['ai.test'].input.parse(input)
+    return { message: '测试通过' }
+  })
   api.ai.configure.mockResolvedValue(settings)
   api.ai.configureCli.mockResolvedValue(settings)
   host = document.createElement('div')
@@ -203,10 +209,43 @@ it('keeps custom addresses editable and clears the previous platform draft', asy
 it('uses Responses for a new custom service without asking for a protocol', async () => {
   await choose('ai-source', '新增供应商')
   await fill('ai-endpoint', 'https://private.invalid/v1')
-  await fill('ai-model', 'custom-model')
   await act(async () => button('自动发现模型').click())
   expect(host.querySelector<HTMLDetailsElement>('.ai-settings-advanced')!.open).toBe(false)
-  expect(api.ai.discover).toHaveBeenCalledWith(expect.objectContaining({ protocol: 'responses' }))
+  expect(api.ai.discover).toHaveBeenCalledWith(expect.objectContaining({ protocol: 'responses', model: '' }))
+  expect(host.querySelector('#ai-model')!.getAttribute('role')).toBe('combobox')
+  expect(host.querySelector('[role=status]')!.textContent).toContain('请选择模型')
+  await choose('ai-model', 'model-a')
+  await act(async () => button('测试连接').click())
+  expect(api.ai.test).toHaveBeenCalledWith(expect.objectContaining({ model: 'model-a' }))
+})
+it('explains an empty or whitespace model and focuses it before testing or saving', async () => {
+  await choose('ai-source', '新增供应商')
+  await choose('ai-platform', 'DeepSeek')
+  await fill('ai-key', 'draft-key')
+  for (const model of ['', '   ']) {
+    await fill('ai-model', model)
+    for (const action of ['测试连接', '保存并使用']) {
+      await act(async () => button(action).click())
+      expect(host.querySelector('[role=status]')!.textContent).toContain('请先填写模型')
+      expect(document.activeElement?.id).toBe('ai-model')
+      expect(host.querySelector<HTMLInputElement>('#ai-key')!.value).toBe('draft-key')
+    }
+  }
+  expect(api.ai.test).not.toHaveBeenCalled()
+  expect(api.ai.configure).not.toHaveBeenCalled()
+  expect(api.ai.setDefault).not.toHaveBeenCalled()
+})
+it('validates the endpoint before discovery and explains an empty model directory', async () => {
+  await choose('ai-source', '新增供应商')
+  await act(async () => button('自动发现模型').click())
+  expect(host.querySelector('[role=status]')!.textContent).toContain('有效的接口基础地址')
+  expect(document.activeElement?.id).toBe('ai-endpoint')
+  expect(api.ai.discover).not.toHaveBeenCalled()
+  await fill('ai-endpoint', 'https://private.invalid/v1')
+  api.ai.discover.mockResolvedValue({ models: [], defaultModel: '', message: '' })
+  await act(async () => button('自动发现模型').click())
+  expect(host.querySelector('[role=status]')!.textContent).toContain('请手动填写模型名称')
+  expect(host.querySelector<HTMLInputElement>('#ai-model')!.value).toBe('')
 })
 it('allows an advanced override without changing the selected platform and collapses for a new provider', async () => {
   await choose('ai-source', '新增供应商')
