@@ -1,7 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
 import { Check, Circle, Copy, X } from 'lucide-react'
 import { normalizeCommandError, SYNC_MERGE_FIELDS } from '@eizhu/contracts'
-import type { SyncConflict, SyncMergeField, SyncResolution } from '@eizhu/contracts'
+import type {
+  SyncConflict,
+  SyncMergeField,
+  SyncResolution,
+  SyncResolveBatch,
+  SyncRevealCredentials,
+  SyncConflictCredentials,
+} from '@eizhu/contracts'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -11,8 +18,15 @@ import { useSyncStore } from '@/store/sync'
 import { useProfileStore } from '@/store/profile'
 import { useAccountStore } from '@/store/account'
 import { conflictDependencies } from '@/lib/syncExperience'
-import { SYNC_FIELD_LABELS, syncChangedFields, syncResolutionLabel } from '@/lib/syncMerge'
+import {
+  SYNC_FIELD_LABELS,
+  SYNC_CREDENTIAL_FIELD_LABELS,
+  syncChangedFields,
+  syncResolutionLabel,
+  syncCredentialDescription,
+} from '@/lib/syncMerge'
 import { SYNC_ITEM_LABELS } from '@/types/sync'
+import { SyncCredentialComparison } from './SyncCredentialComparison'
 
 type Draft = { choice: SyncResolution['choice']; fields: NonNullable<SyncResolution['fields']> }
 type Staged = { conflict: SyncConflict; resolution: SyncResolution }
@@ -31,6 +45,79 @@ export function SyncConflictDialog({
     profiles = useProfileStore((s) => s.profiles)
   const enabled = useAccountStore((s) => s.status?.syncEnabled ?? false)
   const [vaultNames, setVaultNames] = useState<Record<string, string>>({})
+  const [loadError, setLoadError] = useState<string | null>(null)
+  useEffect(() => {
+    if (!open) return
+    let active = true
+    void vaultApi
+      .list()
+      .then((items) => {
+        if (active) {
+          setVaultNames(Object.fromEntries(items.map((item) => [item.id, item.name])))
+          setLoadError(null)
+        }
+      })
+      .catch(() => {
+        if (active) setLoadError('凭据名称读取失败，关联条目暂时显示标识。')
+      })
+    return () => {
+      active = false
+    }
+  }, [open])
+  return (
+    <SyncConflictWorkbench
+      open={open}
+      onOpenChange={(value) => {
+        if (!value) useSyncStore.setState({ focusItem: null })
+        onOpenChange(value)
+      }}
+      conflicts={conflicts}
+      focusItem={focusItem}
+      groups={groups}
+      profiles={profiles}
+      enabled={enabled}
+      vaultNames={vaultNames}
+      loadError={loadError}
+      revealCredentials={syncApi.revealConflictCredentials}
+      resolveConflicts={async (input) => {
+        try {
+          await syncApi.resolveConflicts(input)
+        } finally {
+          await useSyncStore.getState().refresh()
+        }
+      }}
+    />
+  )
+}
+
+/** Both live and mock dialogs provide their own data and effects; this view owns only local choices. */
+export function SyncConflictWorkbench({
+  open,
+  onOpenChange,
+  conflicts,
+  focusItem,
+  groups,
+  profiles,
+  enabled,
+  vaultNames,
+  loadError,
+  revealCredentials,
+  resolveConflicts,
+  mock = false,
+}: {
+  open: boolean
+  onOpenChange: (value: boolean) => void
+  conflicts: SyncConflict[]
+  focusItem: { type: string; id: string } | null
+  groups: readonly { id: string; name: string }[]
+  profiles: readonly { id: string; name: string }[]
+  enabled: boolean
+  vaultNames: Record<string, string>
+  loadError?: string | null
+  revealCredentials: (input: SyncRevealCredentials) => Promise<SyncConflictCredentials>
+  resolveConflicts: (input: SyncResolveBatch) => Promise<void>
+  mock?: boolean
+}) {
   const [selected, setSelected] = useState<{ key: string; focus: typeof focusItem } | null>(null)
   const [drafts, setDrafts] = useState<Record<string, Draft>>({})
   const [staged, setStaged] = useState<Record<string, Staged>>({})
@@ -39,21 +126,6 @@ export function SyncConflictDialog({
   const [error, setError] = useState<string | null>(null),
     [message, setMessage] = useState('')
   const lock = useRef(false)
-  useEffect(() => {
-    if (!open) return
-    let active = true
-    void vaultApi
-      .list()
-      .then((items) => {
-        if (active) setVaultNames(Object.fromEntries(items.map((item) => [item.id, item.name])))
-      })
-      .catch(() => {
-        if (active) setError('凭据名称读取失败，关联条目暂时显示标识。')
-      })
-    return () => {
-      active = false
-    }
-  }, [open])
   const focused = focusItem ? `${focusItem.type}:${focusItem.id}` : null
   const selectedKey = selected?.focus === focusItem ? selected.key : null
   const current =
@@ -83,10 +155,7 @@ export function SyncConflictDialog({
   }
   function display(c: SyncConflict, field: SyncMergeField, side: 'local' | 'cloud'): string {
     const value = side === 'local' ? c.local : c.remote
-    if (field === 'credential_changed')
-      return value?.vault_id
-        ? `关联凭据：${vaultNames[value.vault_id] ?? value.vault_id}`
-        : `${side === 'local' ? '本机' : sourceName(c)}认证与凭据`
+    if (field === 'credential_changed') return syncCredentialDescription(value, vaultNames)
     if (field === 'options_changed')
       return value?.jump_profile_id
         ? `跳板：${profiles.find((p) => p.id === value.jump_profile_id)?.name ?? value.jump_profile_id}`
@@ -128,15 +197,19 @@ export function SyncConflictDialog({
     const side =
       resolution.choice === 'keep_local' ? 'local' : resolution.choice === 'use_cloud' ? 'cloud' : null
     if (side && (side === 'local' ? c.localDeleted : c.remoteDeleted))
-      return <p className="sync-conflict-result-note">{syncResolutionLabel(c, resolution.choice)}</p>
+      return (
+        <p className="sync-conflict-result-note sync-conflict-danger">
+          {syncResolutionLabel(c, resolution.choice)}
+        </p>
+      )
     return syncChangedFields(c).map((field) => (
       <div className="sync-conflict-result-field" key={field}>
         <span>{SYNC_FIELD_LABELS[field]}</span>
         <span>
           {side
-            ? display(c, field, side)
+            ? `${field === 'credential_changed' ? `采用${side === 'local' ? '本机' : sourceName(c)}凭据\n` : ''}${display(c, field, side)}`
             : resolution.fields[field]
-              ? display(c, field, resolution.fields[field])
+              ? `${field === 'credential_changed' ? `采用${resolution.fields[field] === 'local' ? '本机' : sourceName(c)}凭据\n` : ''}${display(c, field, resolution.fields[field])}`
               : '待选择'}
         </span>
       </div>
@@ -164,13 +237,14 @@ export function SyncConflictDialog({
     setBusy(true)
     setError(null)
     try {
-      await syncApi.resolveConflicts({
+      await resolveConflicts({
         localRevision: stagedEntries[0].conflict.localRevision,
         resolutions: stagedEntries.map((entry) => entry.resolution),
       })
-      await useSyncStore.getState().refresh()
       setMessage(
-        `已应用 ${stagedEntries.length} 项选择。${enabled ? '待提交变更将继续同步。' : '自动同步仍已暂停，需上传的修改保留在本机队列。'}`,
+        mock
+          ? `已模拟应用 ${stagedEntries.length} 项选择，仅更新当前弹窗内的示例。`
+          : `已应用 ${stagedEntries.length} 项选择。${enabled ? '待提交变更将继续同步。' : '自动同步仍已暂停，需上传的修改保留在本机队列。'}`,
       )
       setStaged({})
       setDrafts({})
@@ -178,7 +252,6 @@ export function SyncConflictDialog({
     } catch (cause) {
       const failure = normalizeCommandError(cause)
       setError(failure.error.message)
-      await useSyncStore.getState().refresh()
     } finally {
       lock.current = false
       setBusy(false)
@@ -188,7 +261,6 @@ export function SyncConflictDialog({
     if (lock.current) return
     if (!value) {
       setPreview(false)
-      useSyncStore.setState({ focusItem: null })
     }
     onOpenChange(value)
   }
@@ -213,15 +285,25 @@ export function SyncConflictDialog({
           <X size={16} />
         </Button>
         <div className="sync-conflict-heading">
-          <DialogTitle>{preview ? '确认合并结果' : '合并工作台'}</DialogTitle>
+          <DialogTitle>
+            {preview ? '确认合并结果' : '合并工作台'}
+            {mock ? ' · Mock' : ''}
+          </DialogTitle>
           <DialogDescription>
-            {preview ? '确认后统一应用至本机。' : '逐字段选择，暂存后统一应用。'}
-            {enabled ? '自动同步已开启。' : '自动同步已暂停。'}
+            {mock ? (
+              '仅演示冲突选择，所有示例只存在于此弹窗，不写入或同步。'
+            ) : (
+              <>
+                {preview ? '确认后统一应用至本机。' : '逐字段选择，暂存后统一应用。'}
+                {enabled ? '自动同步已开启。' : '自动同步已暂停。'}
+              </>
+            )}
           </DialogDescription>
         </div>
-        {(error || message || stale) && (
+        {(error || loadError || message || stale) && (
           <div className="sync-conflict-feedback" role={error || stale ? 'alert' : 'status'}>
             {error && <p className="sync-conflict-error">{error}</p>}
+            {loadError && <p className="sync-conflict-error">{loadError}</p>}
             {stale && <p className="sync-conflict-error">数据已变化，请重新查看并暂存选择。</p>}
             {message && <p>{message}</p>}
           </div>
@@ -233,7 +315,14 @@ export function SyncConflictDialog({
                 <section key={keyOf(c)}>
                   <h3>
                     {c.name}
-                    <span>
+                    <span
+                      className={
+                        (resolution.choice === 'keep_local' && c.localDeleted) ||
+                        (resolution.choice === 'use_cloud' && c.remoteDeleted)
+                          ? 'sync-conflict-danger'
+                          : undefined
+                      }
+                    >
                       {SYNC_ITEM_LABELS[c.itemType]} · {syncResolutionLabel(c, resolution.choice)}
                     </span>
                   </h3>
@@ -327,6 +416,15 @@ export function SyncConflictDialog({
                   changed.map((field) => (
                     <div className="sync-conflict-field" key={field}>
                       <span className="sync-conflict-field-label">{SYNC_FIELD_LABELS[field]}</span>
+                      {field === 'credential_changed' && (
+                        <p className="sync-conflict-help">
+                          差异：
+                          {current.local?.credential_differences
+                            ?.map((key) => SYNC_CREDENTIAL_FIELD_LABELS[key])
+                            .join('、') || '凭据内容'}
+                          。 密码等内容默认隐藏；修改时间仅供参考，不代表凭据一定有效。
+                        </p>
+                      )}
                       <div className="sync-conflict-options">
                         {(['local', 'cloud'] as const).map((side) => {
                           const selected =
@@ -361,81 +459,108 @@ export function SyncConflictDialog({
                           )
                         })}
                       </div>
+                      {field === 'credential_changed' && open && (
+                        <SyncCredentialComparison
+                          key={`${currentKey}:${current.localRevision}:${current.remoteRevision}:${current.remoteSource}`}
+                          conflict={current}
+                          busy={busy}
+                          revealCredentials={revealCredentials}
+                        />
+                      )}
                     </div>
                   ))
                 ) : (
-                  <div className="sync-conflict-deletion">
-                    {(['local', 'cloud'] as const).map((side) => {
-                      const deleted = side === 'local' ? current.localDeleted : current.remoteDeleted
-                      const summary = side === 'local' ? current.local : current.remote
-                      const choice = side === 'local' ? 'keep_local' : 'use_cloud'
-                      const label = deleted
-                        ? side === 'local'
-                          ? '保留本机删除'
-                          : `采用${sourceName(current)}删除`
-                        : side === 'local'
-                          ? '保留本机条目'
-                          : `恢复${sourceName(current)}条目`
-                      const fields: readonly SyncMergeField[] =
-                        current.itemType === 'snippet'
-                          ? ['content', 'description']
-                          : current.itemType === 'profile'
-                            ? ['host', 'port', 'username', 'note']
-                            : current.itemType === 'group'
-                              ? ['name', 'parent_id']
-                              : ['name', 'username', 'remark']
-                      return (
-                        <Button
-                          key={side}
-                          variant="ghost"
-                          className="sync-conflict-deletion-option"
-                          disabled={busy}
-                          aria-label={label}
-                          aria-pressed={draft.choice === choice}
-                          onClick={() => change({ choice, fields: {} })}
-                        >
-                          <span className="sync-conflict-source">
-                            {draft.choice === choice ? (
-                              <Check className="sync-conflict-radio" />
-                            ) : (
-                              <Circle className="sync-conflict-radio" />
-                            )}
-                            {side === 'local' ? '本机' : sourceName(current)}
-                            <span className="sync-conflict-version-state">
-                              {deleted ? '已删除' : '保留修改'}
+                  <>
+                    <div className="sync-conflict-deletion">
+                      {(['local', 'cloud'] as const).map((side) => {
+                        const deleted = side === 'local' ? current.localDeleted : current.remoteDeleted
+                        const summary = side === 'local' ? current.local : current.remote
+                        const choice = side === 'local' ? 'keep_local' : 'use_cloud'
+                        const label = deleted
+                          ? side === 'local'
+                            ? '保留本机删除'
+                            : `采用${sourceName(current)}删除`
+                          : side === 'local'
+                            ? '保留本机条目'
+                            : `恢复${sourceName(current)}条目`
+                        const fields: readonly SyncMergeField[] =
+                          current.itemType === 'snippet'
+                            ? ['content', 'description']
+                            : current.itemType === 'profile'
+                              ? ['host', 'port', 'username', 'note']
+                              : current.itemType === 'group'
+                                ? ['name', 'parent_id']
+                                : ['name', 'username', 'remark']
+                        return (
+                          <Button
+                            key={side}
+                            variant="ghost"
+                            className="sync-conflict-deletion-option"
+                            data-deleted={deleted}
+                            disabled={busy}
+                            aria-label={label}
+                            aria-pressed={draft.choice === choice}
+                            onClick={() => change({ choice, fields: {} })}
+                          >
+                            <span className="sync-conflict-source">
+                              {draft.choice === choice ? (
+                                <Check className="sync-conflict-radio" />
+                              ) : (
+                                <Circle className="sync-conflict-radio" />
+                              )}
+                              {side === 'local' ? '本机' : sourceName(current)}
+                              <span className="sync-conflict-version-state">
+                                {deleted ? '已删除' : '保留修改'}
+                              </span>
                             </span>
-                          </span>
-                          <span className="sync-conflict-deletion-title">{label}</span>
-                          {deleted ? (
-                            <span className="sync-conflict-deletion-empty">不恢复此条目，保留删除结果。</span>
-                          ) : (
-                            <span className="sync-conflict-version-fields">
-                              {fields
-                                .filter((field) => summary?.[field] !== undefined && summary[field] !== '')
-                                .map((field) => (
-                                  <span className="sync-conflict-version-field" key={field}>
-                                    <span>{SYNC_FIELD_LABELS[field]}</span>
-                                    <span>{display(current, field, side)}</span>
+                            <span className="sync-conflict-deletion-title">{label}</span>
+                            {deleted ? (
+                              <span className="sync-conflict-deletion-empty">
+                                不恢复此条目，保留删除结果。
+                              </span>
+                            ) : (
+                              <span className="sync-conflict-version-fields">
+                                {fields
+                                  .filter((field) => summary?.[field] !== undefined && summary[field] !== '')
+                                  .map((field) => (
+                                    <span className="sync-conflict-version-field" key={field}>
+                                      <span>{SYNC_FIELD_LABELS[field]}</span>
+                                      <span>{display(current, field, side)}</span>
+                                    </span>
+                                  ))}
+                                {(current.itemType === 'vault' || current.itemType === 'profile') && (
+                                  <span className="sync-conflict-version-field">
+                                    <span>认证与凭据</span>
+                                    <span>{display(current, 'credential_changed', side)}</span>
                                   </span>
-                                ))}
-                            </span>
-                          )}
-                          <span className="sync-conflict-choice-state">
-                            {draft.choice === choice ? (
-                              <>
-                                <Check size={13} />
-                                已选择
-                              </>
-                            ) : deleted ? (
-                              '选择删除结果'
-                            ) : (
-                              '选择恢复版本'
+                                )}
+                              </span>
                             )}
-                          </span>
-                        </Button>
-                      )
-                    })}
-                  </div>
+                            <span className="sync-conflict-choice-state">
+                              {draft.choice === choice ? (
+                                <>
+                                  <Check size={13} />
+                                  已选择
+                                </>
+                              ) : deleted ? (
+                                '选择删除结果'
+                              ) : (
+                                '选择恢复版本'
+                              )}
+                            </span>
+                          </Button>
+                        )
+                      })}
+                    </div>
+                    {open && (current.itemType === 'vault' || current.itemType === 'profile') && (
+                      <SyncCredentialComparison
+                        key={`${currentKey}:${current.localRevision}:${current.remoteRevision}:${current.remoteSource}`}
+                        conflict={current}
+                        busy={busy}
+                        revealCredentials={revealCredentials}
+                      />
+                    )}
+                  </>
                 )}
                 {canMerge && (
                   <details>
@@ -457,7 +582,7 @@ export function SyncConflictDialog({
                 )}
                 {(current.itemType === 'vault' || current.itemType === 'profile') && (
                   <p className="sync-conflict-help">
-                    认证与凭据按整组选择，密码、私钥和代理密码不在摘要中展示。
+                    认证与凭据按整组选择。查看仅用于核对，暂存并应用后才会采用所选内容。
                   </p>
                 )}
                 {!!conflictDependencies(current).length && (
@@ -519,7 +644,7 @@ export function SyncConflictDialog({
             <div className="sync-conflict-empty">
               <Check size={20} />
               <h3>本次冲突已处理</h3>
-              <p>关闭窗口后可在云同步页查看待同步状态。</p>
+              <p>{mock ? '关闭后丢弃示例，下次打开重新开始。' : '关闭窗口后可在云同步页查看待同步状态。'}</p>
             </div>
           )}
         </div>
@@ -540,7 +665,7 @@ export function SyncConflictDialog({
                   返回修改
                 </Button>
                 <Button disabled={busy || stale || !stagedEntries.length} onClick={() => void apply()}>
-                  {busy ? '正在应用…' : '应用至本机'}
+                  {busy ? '正在应用…' : mock ? '模拟应用' : '应用至本机'}
                 </Button>
               </>
             ) : (

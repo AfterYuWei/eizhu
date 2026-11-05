@@ -441,6 +441,14 @@ async function verify() {
     workbench.store.sync.bootstrap(mergePreview.token, workbench.runtimeId, 'merge')
     const mergeConflicts = workbench.store.sync.conflicts()
     assert.equal(mergeConflicts.length, 4)
+    const credentialConflict = mergeConflicts.find(c => c.itemType === 'vault')!
+    const revealRequest = { itemType: 'vault' as const, itemId: credentialConflict.itemId, localRevision: credentialConflict.localRevision, remoteRevision: credentialConflict.remoteRevision, remoteSource: 'cloud' as const }
+    assert.deepEqual(credentialConflict.local?.credential_differences, ['password'])
+    assert.equal(JSON.stringify(mergeConflicts).includes('synthetic-local'), false)
+    const revealed = await workbench.sync.execute('sync.revealConflictCredentials', revealRequest)
+    assert.deepEqual(revealed, { local: { password: 'synthetic-local' }, remote: { password: 'synthetic-cloud' } })
+    for (const invalid of [{ localRevision: revealRequest.localRevision - 1 }, { remoteRevision: 999 }, { remoteSource: 'offline' }, { itemId: 'missing' }])
+      await assert.rejects(workbench.sync.execute('sync.revealConflictCredentials', { ...revealRequest, ...invalid }), code('CONFLICT_CHANGED'))
     const mergeRequest: SyncResolveBatch = {
       localRevision: mergeConflicts[0].localRevision,
       resolutions: mergeConflicts.map(c => ({
@@ -468,6 +476,7 @@ async function verify() {
     assert.equal(mergedPayload.vault[0].credential?.password, 'synthetic-cloud')
     assert.equal(mergedPayload.snippets[0].content, 'echo cloud')
     assert.equal(workbench.store.sync.conflicts().length, 0)
+    await assert.rejects(workbench.sync.execute('sync.revealConflictCredentials', revealRequest), code('CONFLICT_CHANGED'))
     assert.deepEqual(workbench.store.local.syncPending().map(item => item.itemId), ['merge-profile'])
     assert.equal(workbench.store.local.sshExecute('ssh.known', { endpoint: '192.0.2.12:22' }), 'public-synthetic-host-trust')
     assert.equal(workbench.store.accounts.status(workspace).syncEnabled, false)

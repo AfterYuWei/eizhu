@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { credentialSchema } from './local.ts'
 
 const integer = z.int().nonnegative()
 const itemId = z.string().min(1).max(200)
@@ -16,7 +17,18 @@ export const syncStateSchema = z.enum([
 ])
 const label = z.string().max(512)
 const text = z.string().max(64 * 1024)
-/** Deliberate allowlist: options and credential fields must not reach conflict UI. */
+export const syncCredentialFieldSchema = z.enum([
+  'type',
+  'auth_type',
+  'vault_id',
+  'password',
+  'private_key',
+  'public_key',
+  'passphrase',
+  'proxy_password',
+])
+export type SyncCredentialField = z.infer<typeof syncCredentialFieldSchema>
+/** Only non-secret metadata reaches the ordinary conflict summary. */
 export const syncSummarySchema = z.strictObject({
   name: label.optional(),
   host: label.optional(),
@@ -39,6 +51,9 @@ export const syncSummarySchema = z.strictObject({
   is_global: z.boolean().optional(),
   credential_changed: z.boolean().optional(),
   options_changed: z.boolean().optional(),
+  updated_at: z.string().max(64).optional(),
+  credential_fields: z.array(syncCredentialFieldSchema).max(8).optional(),
+  credential_differences: z.array(syncCredentialFieldSchema).max(8).optional(),
 })
 export const syncConflictSchema = z.strictObject({
   itemType: syncItemTypeSchema,
@@ -157,10 +172,35 @@ export const syncResolveBatchSchema = z
     '不能重复处理同一条目',
   )
 export type SyncResolveBatch = z.infer<typeof syncResolveBatchSchema>
+export const syncRevealCredentialsSchema = z.strictObject({
+  itemType: z.enum(['vault', 'profile']),
+  itemId,
+  localRevision: integer,
+  remoteRevision: integer,
+  remoteSource: z.enum(['cloud', 'offline']),
+})
+const conflictCredential = credentialSchema
+  .extend({
+    proxy_password: z
+      .string()
+      .max(1024 * 1024)
+      .optional(),
+  })
+  .nullable()
+export const syncConflictCredentialsSchema = z.strictObject({
+  local: conflictCredential,
+  remote: conflictCredential,
+})
+export type SyncRevealCredentials = z.infer<typeof syncRevealCredentialsSchema>
+export type SyncConflictCredentials = z.infer<typeof syncConflictCredentialsSchema>
 export const sync = {
   'sync.status': { input: z.undefined(), output: syncStatusSchema },
   'sync.now': { input: z.undefined(), output: z.void() },
   'sync.conflicts': { input: z.undefined(), output: z.array(syncConflictSchema).max(10000) },
+  'sync.revealConflictCredentials': {
+    input: syncRevealCredentialsSchema,
+    output: syncConflictCredentialsSchema,
+  },
   'sync.resolveConflict': {
     input: z.strictObject({
       itemType: syncItemTypeSchema,

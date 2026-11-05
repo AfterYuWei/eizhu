@@ -1,0 +1,52 @@
+{
+  "date": "2026-11-05",
+  "build": {
+    "base": "0.5.0",
+    "version": "0.5.0-test.375.4e5ae372",
+    "channel": "test",
+    "revision": "4e5ae3722e7fea4947acab655dc9c3f53c04caa5",
+    "platform": "darwin",
+    "arch": "x64",
+    "feeds": {},
+    "updateRepository": {
+      "owner": "AfterYuWei",
+      "repo": "eizhu"
+    },
+    "sourceDigest": "f7f9221511d643ed011d4d8f7e7b7ed8ec6ffd3c2b951b74392513af1033806a"
+  },
+  "check": true,
+  "lint": true,
+  "foundation": {
+    "passed": 214,
+    "skipped": 2
+  },
+  "web": {
+    "files": 87,
+    "passed": 960
+  },
+  "baselineTests": 10,
+  "baselineVerify": true,
+  "mockIsolation": {
+    "noDesktopBridge": true,
+    "noNetwork": true,
+    "noPersistence": true,
+    "sharedStoresUnchanged": true,
+    "resetOnReopen": true,
+    "separateDevelopmentEntry": true,
+    "liveWorkbenchRegression": true
+  },
+  "productionBuildWithMockFlag": {
+    "passed": true,
+    "mockCodeAbsent": true
+  },
+  "packageSmokeWithMockFlag": {
+    "passed": true,
+    "platform": "darwin",
+    "arch": "x64",
+    "realBackend": false
+  },
+  "oldGlobalMockWindowClosed": true,
+  "projectTestAppRemoved": true,
+  "otherPlatforms": "未执行",
+  "signingAndNotarization": "未执行"
+}

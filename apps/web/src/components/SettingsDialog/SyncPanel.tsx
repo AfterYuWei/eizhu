@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { CloudSync, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 import { normalizeCommandError } from '@eizhu/contracts'
@@ -25,6 +25,11 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 
+const MergeMock =
+  import.meta.env.DEV && import.meta.env.VITE_EIZHU_MERGE_MOCK === '1'
+    ? lazy(() => import('./SyncConflictMock'))
+    : null
+
 export function SyncPanel() {
   const { status, conflicts, focusItem } = useSyncStore()
   const account = useAccountStore((s) => s.status)
@@ -32,6 +37,7 @@ export function SyncPanel() {
     [error, setError] = useState<{ code: string; message: string } | null>(null)
   const [includeOffline, setIncludeOffline] = useState(true)
   const [conflictOpen, setConflictOpen] = useState(false)
+  const [mockOpen, setMockOpen] = useState(false)
   const [preview, setPreview] = useState<SyncPreview | null>(null),
     [mode, setMode] = useState<'merge' | 'use_local' | 'use_cloud' | null>(null)
   const lock = useRef(false)
@@ -125,7 +131,11 @@ export function SyncPanel() {
           {(error || status?.lastError || account.sessionState === 'reauth_required') && (
             <div className="backup-card">
               <ErrorRecovery
-                message={error?.message || status?.lastError || (account.sessionState === 'reauth_required' ? '登录已失效，账号本地数据仍保留' : '')}
+                message={
+                  error?.message ||
+                  status?.lastError ||
+                  (account.sessionState === 'reauth_required' ? '登录已失效，账号本地数据仍保留' : '')
+                }
                 code={
                   account.sessionState === 'reauth_required'
                     ? 'ACCOUNT_NOT_LOGGED_IN'
@@ -199,7 +209,9 @@ export function SyncPanel() {
                   <span className="settings-field-label">{conflicts.length} 项冲突待处理</span>
                   <p className="settings-field-desc">打开合并工作台，比较本机与云端修改，预览后统一应用。</p>
                 </div>
-                <Button size="sm" disabled={busy || !status?.unlocked} onClick={() => setConflictOpen(true)}>处理冲突</Button>
+                <Button size="sm" disabled={busy || !status?.unlocked} onClick={() => setConflictOpen(true)}>
+                  处理冲突
+                </Button>
               </div>
             </div>
           )}
@@ -228,7 +240,23 @@ export function SyncPanel() {
           </Button>
         </>
       )}
-      <SyncConflictDialog key={account?.loggedIn ? account.user.id : 'offline'} open={conflictOpen && account?.loggedIn === true} onOpenChange={setConflictOpen} />
+      <SyncConflictDialog
+        key={account?.loggedIn ? account.user.id : 'offline'}
+        open={conflictOpen && account?.loggedIn === true}
+        onOpenChange={setConflictOpen}
+      />
+      {MergeMock && (
+        <>
+          <Button size="sm" variant="outline" onClick={() => setMockOpen(true)}>
+            预览合并工作台（Mock）
+          </Button>
+          {mockOpen && (
+            <Suspense fallback={null}>
+              <MergeMock onOpenChange={setMockOpen} />
+            </Suspense>
+          )}
+        </>
+      )}
       <AlertDialog
         open={mode !== null}
         onOpenChange={(open) => {

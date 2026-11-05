@@ -8,11 +8,12 @@ import { vaultApi } from '@/api/vault'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useAccountStore } from '@/store/account'
 import { useSyncStore } from '@/store/sync'
-import type { SyncStatus } from '@/types/sync'
+import type { SyncStatus, SyncConflict } from '@/types/sync'
 vi.mock('@/api/sync', () => ({
   syncApi: {
     status: vi.fn(),
     conflicts: vi.fn(),
+    revealConflictCredentials: vi.fn(),
     syncNow: vi.fn(),
     unlock: vi.fn(),
     changePassword: vi.fn(),
@@ -204,6 +205,7 @@ it('opens a focused conflict in the dialog and does not replay stale staged sele
   await act(async () => useSyncStore.getState().refresh())
   await act(async () => useSyncStore.getState().focusConflict('snippet', 'deleted'))
   expect(document.querySelector('[role="dialog"]')?.textContent).toContain('删除与修改冲突')
+  expect(document.querySelector('[aria-label="保留本机删除"]')?.getAttribute('data-deleted')).toBe('true')
   expect(document.querySelector('[role="dialog"]')?.textContent).toContain('echo mock')
   await act(async () => document.querySelector<HTMLButtonElement>('[aria-label="恢复云端条目"]')!.click())
   expect(document.querySelector('[aria-label="恢复云端条目"]')?.getAttribute('aria-pressed')).toBe('true')
@@ -217,6 +219,116 @@ it('opens a focused conflict in the dialog and does not replay stale staged sele
   )!
   expect(preview.disabled).toBe(true)
   expect(syncApi.resolveConflicts).not.toHaveBeenCalled()
+})
+
+it('explains credential differences, reveals both versions only on demand and clears them on close', async () => {
+  const conflict: SyncConflict = {
+    itemType: 'vault' as const,
+    itemId: 'credential',
+    name: '部署凭据',
+    reason: 'concurrent_edit' as const,
+    remoteRevision: 2,
+    localRevision: 4,
+    remoteSource: 'offline' as const,
+    localDeleted: false,
+    remoteDeleted: false,
+    local: {
+      name: '部署凭据',
+      type: 'password',
+      credential_changed: true,
+      credential_fields: ['type', 'password'],
+      credential_differences: ['type', 'password', 'private_key'],
+      updated_at: '2026-11-05T01:00:00Z',
+    },
+    remote: {
+      name: '部署凭据',
+      type: 'private_key',
+      fingerprint: 'SHA256:fixture',
+      credential_changed: true,
+      credential_fields: ['type', 'private_key'],
+      credential_differences: ['type', 'password', 'private_key'],
+      updated_at: '2026-11-04T01:00:00Z',
+    },
+  }
+  vi.mocked(syncApi.conflicts).mockResolvedValue([conflict])
+  vi.mocked(syncApi.revealConflictCredentials).mockResolvedValue({
+    local: { password: 'fixture-local-secret' },
+    remote: { private_key: 'fixture-remote-key' },
+  })
+  await act(async () => useSyncStore.getState().refresh())
+  await act(async () => useSyncStore.getState().focusConflict('vault', 'credential'))
+  const dialog = () => document.querySelector('[role="dialog"]')!
+  expect(dialog().textContent).toContain('差异：凭据类型、密码、私钥')
+  expect(dialog().textContent).toContain('密码：已设置')
+  expect(dialog().textContent).toContain('SHA256:fixture')
+  expect(dialog().textContent).toContain('条目修改时间')
+  expect(syncApi.revealConflictCredentials).not.toHaveBeenCalled()
+  await click('查看双方凭据')
+  expect(syncApi.revealConflictCredentials).toHaveBeenCalledWith({
+    itemType: 'vault',
+    itemId: 'credential',
+    localRevision: 4,
+    remoteRevision: 2,
+    remoteSource: 'offline',
+  })
+  expect(dialog().querySelector('[aria-label="本机凭据内容"]')?.textContent).toContain('fixture-local-secret')
+  expect(dialog().querySelector('[aria-label="离线副本凭据内容"]')?.textContent).toContain(
+    'fixture-remote-key',
+  )
+  await click('隐藏双方凭据')
+  expect(dialog().textContent).not.toContain('fixture-local-secret')
+  await click('查看双方凭据')
+  await click('稍后处理')
+  await act(async () => useSyncStore.getState().focusConflict('vault', 'credential'))
+  expect(dialog().textContent).not.toContain('fixture-local-secret')
+  expect(syncApi.resolveConflicts).not.toHaveBeenCalled()
+})
+
+it('ignores a credential reveal response after switching away from the conflict', async () => {
+  const conflict = {
+    itemType: 'vault' as const,
+    itemId: 'credential',
+    name: '凭据',
+    reason: 'concurrent_edit' as const,
+    remoteRevision: 2,
+    localRevision: 4,
+    remoteSource: 'cloud' as const,
+    localDeleted: false,
+    remoteDeleted: false,
+    local: {
+      credential_changed: true,
+      credential_fields: ['password' as const],
+      credential_differences: ['password' as const],
+    },
+    remote: {
+      credential_changed: true,
+      credential_fields: ['password' as const],
+      credential_differences: ['password' as const],
+    },
+  }
+  vi.mocked(syncApi.conflicts).mockResolvedValue([
+    conflict,
+    { ...conflict, itemId: 'other', name: '另一凭据' },
+  ])
+  let complete!: (value: { local: { password: string }; remote: { password: string } }) => void
+  vi.mocked(syncApi.revealConflictCredentials).mockReturnValue(
+    new Promise((resolve) => {
+      complete = resolve
+    }),
+  )
+  await act(async () => useSyncStore.getState().refresh())
+  await act(async () => useSyncStore.getState().focusConflict('vault', 'credential'))
+  await click('查看双方凭据')
+  await act(async () =>
+    [...document.querySelectorAll<HTMLButtonElement>('.sync-conflict-list button')]
+      .find((button) => button.textContent?.includes('另一凭据'))!
+      .click(),
+  )
+  await act(async () => complete({ local: { password: 'late-secret' }, remote: { password: 'late-secret' } }))
+  expect(document.querySelector('[role="dialog"]')?.textContent).not.toContain('late-secret')
+  expect(
+    [...document.querySelectorAll('button')].some((button) => button.textContent === '查看双方凭据'),
+  ).toBe(true)
 })
 
 it('discards staged choices when account ownership changes, even if conflict IDs and revisions match', async () => {

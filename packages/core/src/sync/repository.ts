@@ -8,12 +8,20 @@ import {
   syncStatusSchema,
   syncWireItemSchema,
   syncResolveBatchSchema,
+  syncRevealCredentialsSchema,
+  syncConflictCredentialsSchema,
 } from '@eizhu/contracts'
-import type { SyncConflict, SyncStatus, SyncResolveBatch } from '@eizhu/contracts'
+import type {
+  SyncConflict,
+  SyncStatus,
+  SyncResolveBatch,
+  SyncRevealCredentials,
+  SyncConflictCredentials,
+} from '@eizhu/contracts'
 import type { LocalStore } from '../database/local-store.ts'
 import { LocalCipher } from '../local/crypto.ts'
 import { emptyPayload } from '../local/model.ts'
-import type { Payload, Kind } from '../local/model.ts'
+import type { Payload, Kind, StoredVault, StoredProfile } from '../local/model.ts'
 import {
   dependencies,
   entries,
@@ -191,6 +199,26 @@ export class SyncRepository {
         local: summary(r.itemType, local, r.value),
         remote: summary(r.itemType, r.value, local),
       })
+    })
+  }
+  revealConflictCredentials(input: SyncRevealCredentials): SyncConflictCredentials {
+    const conflict = this.rows<Conflict>('sync_conflicts').get(identity(input.itemType, input.itemId))
+    if (
+      !conflict ||
+      this.local.dataRevision() !== input.localRevision ||
+      conflict.remote.revision !== input.remoteRevision ||
+      (conflict.source ?? 'cloud') !== input.remoteSource
+    )
+      fail('CONFLICT_CHANGED', '冲突内容已变化，请刷新后重新查看')
+    const read = (value: Entity | null) => {
+      if (!value) return null
+      if (input.itemType === 'vault') return (value as StoredVault).credential
+      const profile = value as StoredProfile
+      return { ...profile.inline_credential, proxy_password: profile.proxy_password }
+    }
+    return syncConflictCredentialsSchema.parse({
+      local: read(get(this.local.snapshot(), input.itemType, input.itemId)),
+      remote: read(conflict.remote.value),
     })
   }
   status(unlocked: boolean, enabled: boolean): SyncStatus {
@@ -800,6 +828,8 @@ export class SyncRepository {
     if (operation === 'sync.storage.frozen') return this.frozen()
     if (operation === 'sync.storage.draft') return this.draft()
     if (operation === 'sync.storage.conflicts') return this.conflicts()
+    if (operation === 'sync.storage.revealConflictCredentials')
+      return this.revealConflictCredentials(syncRevealCredentialsSchema.parse(raw))
     const d = raw as Record<string, unknown>
     if (operation === 'sync.storage.status') {
       const p = z.object({ unlocked: z.boolean(), enabled: z.boolean() }).parse(d)

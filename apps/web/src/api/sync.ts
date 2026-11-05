@@ -3,7 +3,10 @@ export const syncApi = {
   status: () => bridge().sync.status(),
   syncNow: () => bridge().sync.now(),
   conflicts: () => bridge().sync.conflicts(),
-  resolveConflicts: (input: import('@eizhu/contracts').SyncResolveBatch) => bridge().sync.resolveConflicts(input),
+  revealConflictCredentials: (input: import('@eizhu/contracts').SyncRevealCredentials) =>
+    bridge().sync.revealConflictCredentials(input),
+  resolveConflicts: (input: import('@eizhu/contracts').SyncResolveBatch) =>
+    bridge().sync.resolveConflicts(input),
   resolveConflict: (
     itemType: import('@/types/sync').SyncConflict['itemType'],
     itemId: string,

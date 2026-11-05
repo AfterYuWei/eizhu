@@ -60,6 +60,7 @@ export default defineConfig({
     define: {
       'import.meta.env.VITE_EIZHU_VERSION': JSON.stringify(version),
       'import.meta.env.VITE_EIZHU_CHANNEL': JSON.stringify(channel),
+      'import.meta.env.VITE_EIZHU_MERGE_MOCK': JSON.stringify(process.env.EIZHU_DEV_MOCK === '1' ? '1' : '0'),
     },
     build: {
       outDir: resolve(desktop, 'out/renderer'),

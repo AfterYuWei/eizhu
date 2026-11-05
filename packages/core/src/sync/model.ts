@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { fail, syncSummarySchema, syncWireItemSchema } from '@eizhu/contracts'
-import type { SyncConflict } from '@eizhu/contracts'
+import type { SyncConflict, SyncCredentialField } from '@eizhu/contracts'
 import { emptyPayload, orderedPayload, payloadSchema, proxyOf, validateGraph } from '../local/model.ts'
 import type { Payload, Kind, StoredProfile, StoredVault } from '../local/model.ts'
 
@@ -190,16 +190,37 @@ export function summary(type: ItemType, value: Entity | null, other?: Entity | n
     }
   }
   if (type === 'profile' || type === 'vault') {
-    const secrets = (item: Entity | null | undefined) => {
-      const v = item as unknown as Record<string, unknown> | null
-      return JSON.stringify([
-        v?.credential,
-        v?.inline_credential,
-        v?.proxy_password,
-        ...(type === 'profile' ? [v?.auth_type, v?.vault_id] : [v?.type]),
-      ])
+    const fields = (item: Entity | null | undefined): Partial<Record<SyncCredentialField, string>> => {
+      if (!item) return {}
+      if (type === 'vault') {
+        const vault = item as StoredVault
+        return { ...vault.credential, type: vault.type }
+      }
+      const profile = item as StoredProfile
+      return {
+        ...profile.inline_credential,
+        auth_type: profile.auth_type,
+        vault_id: profile.vault_id,
+        proxy_password: profile.proxy_password,
+      }
     }
-    result.credential_changed = secrets(value) !== secrets(other)
+    const local = fields(value),
+      remote = fields(other)
+    const keys: SyncCredentialField[] = [
+      'type',
+      'auth_type',
+      'vault_id',
+      'password',
+      'private_key',
+      'public_key',
+      'passphrase',
+      'proxy_password',
+    ]
+    result.updated_at = v.updated_at
+    result.credential_fields = keys.filter((key) => Boolean(local[key]))
+    const differences = keys.filter((key) => (local[key] ?? '') !== (remote[key] ?? ''))
+    result.credential_differences = differences
+    result.credential_changed = differences.length > 0
   }
   return syncSummarySchema.parse(result)
 }

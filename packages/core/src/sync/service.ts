@@ -473,6 +473,8 @@ export class SyncService {
       if (this.workspace.id === 'offline') fail('ACCOUNT_NOT_LOGGED_IN', '请先登录账号')
       try {
         if (!this.key) fail('SYNC_LOCKED', '请先解锁同步数据')
+        if (operation === 'sync.revealConflictCredentials')
+          return await this.db('revealConflictCredentials', sync[operation].input.parse(input))
         if (operation === 'sync.preview') {
           await this.enroll()
           const snapshot = await this.snapshot()
@@ -516,7 +518,10 @@ export class SyncService {
           const frozen = await this.db<Frozen | null>('frozen')
           if (frozen) await this.sendFrozen(frozen, true)
           await this.pull()
-          await this.db(operation === 'sync.resolveConflicts' ? 'resolveBatch' : 'resolve', sync[operation].input.parse(input))
+          await this.db(
+            operation === 'sync.resolveConflicts' ? 'resolveBatch' : 'resolve',
+            sync[operation].input.parse(input),
+          )
           this.blocked = false
           this.wake()
           await this.publish(true)

@@ -1,0 +1,38 @@
+{
+  "date": "2026-11-05",
+  "build": {
+    "base": "0.5.0",
+    "version": "0.5.0-test.375.4e5ae372",
+    "channel": "test",
+    "revision": "4e5ae3722e7fea4947acab655dc9c3f53c04caa5",
+    "platform": "darwin",
+    "arch": "x64",
+    "feeds": {},
+    "updateRepository": {
+      "owner": "AfterYuWei",
+      "repo": "eizhu"
+    },
+    "sourceDigest": "16f42d4e874a2ac676cb8425fa260ad5b415d5d5b195814206b53bc66b6e4d76"
+  },
+  "check": true,
+  "lint": true,
+  "foundationTests": {
+    "passed": 216,
+    "skipped": 2
+  },
+  "webTests": {
+    "files": 85,
+    "passed": 958
+  },
+  "baselineTests": 10,
+  "baselineVerify": true,
+  "packagedSmoke": {
+    "passed": true,
+    "platform": "darwin",
+    "arch": "x64",
+    "synthetic": true,
+    "realBackend": false,
+    "credentialReadAndStaleChecks": true
+  },
+  "projectAppRemoved": true
+}

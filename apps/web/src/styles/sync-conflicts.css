@@ -386,6 +386,45 @@ body:has(.desktop-shell) .sync-conflict-dialog {
   color: var(--sync-muted);
   font-weight: 400;
 }
+.sync-conflict-dialog .sync-conflict-danger,
+.sync-conflict-deletion-option[data-deleted='true']
+  :is(.sync-conflict-deletion-title, .sync-conflict-version-state, .sync-conflict-choice-state) {
+  color: var(--red);
+}
+.sync-credential-comparison {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  min-width: 0;
+}
+.sync-credential-values {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  width: 100%;
+}
+.sync-credential-values > section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  padding: 11px;
+  border-radius: var(--r-sm);
+  background: var(--sync-surface);
+}
+.sync-credential-values pre {
+  margin: 0;
+  max-height: 180px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: inherit;
+  user-select: text;
+}
+.sync-credential-comparison .sync-conflict-error {
+  color: var(--red);
+}
 .sync-conflict-preview-fields {
   display: flex;
   align-items: flex-start;
@@ -449,7 +488,8 @@ body:has(.desktop-shell) .sync-conflict-dialog {
   }
 }
 @media (max-width: 420px) {
-  .sync-conflict-deletion {
+  .sync-conflict-deletion,
+  .sync-credential-values {
     grid-template-columns: minmax(0, 1fr);
   }
   .sync-conflict-dialog .sync-conflict-list button {

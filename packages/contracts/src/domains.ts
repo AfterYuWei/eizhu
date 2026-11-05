@@ -153,7 +153,10 @@ export interface DomainOperations {
   }
   'serverDetail.getInfo': { input: { sessionId: string }; output: ServerInfo }
   'serverDetail.getSummary': { input: { sessionId: string }; output: ServerMetricsSummary }
-  'serverDetail.getMetricDetail': { input: { sessionId: string; kind: ServerMetricKind }; output: ServerMetricDetail }
+  'serverDetail.getMetricDetail': {
+    input: { sessionId: string; kind: ServerMetricKind }
+    output: ServerMetricDetail
+  }
   'session.attach': { input: { id: string }; output: SessionMessage[] }
   'session.authRespond': { input: { requestId: string; responses: string[] }; output: void }
   'session.close': { input: { id: string }; output: void }
@@ -192,6 +195,10 @@ export interface DomainOperations {
   'snippet.update': { input: { id: string; request: SnippetUpdateRequest }; output: Snippet }
   'sync.bootstrap': { input: { token: string; mode: 'use_cloud' | 'merge' | 'use_local' }; output: void }
   'sync.conflicts': { input: void; output: SyncConflict[] }
+  'sync.revealConflictCredentials': {
+    input: import('./sync.ts').SyncRevealCredentials
+    output: import('./sync.ts').SyncConflictCredentials
+  }
   'sync.now': { input: void; output: void }
   'sync.preview': { input: { includeOffline: boolean }; output: SyncPreview }
   'sync.resolveConflict': {
@@ -413,6 +420,7 @@ export const reservedOperations = [
   'snippet.update',
   'sync.bootstrap',
   'sync.conflicts',
+  'sync.revealConflictCredentials',
   'sync.now',
   'sync.preview',
   'sync.resolveConflict',

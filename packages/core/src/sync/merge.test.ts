@@ -47,6 +47,32 @@ test('field merging chooses independently while credentials never cross the summ
   assert.throws(() => mergeConflictValue('profile', null, cloud, {}), failure('SYNC_MERGE_INVALID'))
 })
 
+test('credential summaries identify changed fields without secret values or object-order conflicts', () => {
+  const local = {
+    ...profile,
+    inline_credential: { password: 'synthetic-local', passphrase: 'synthetic-phrase' },
+    proxy_password: 'synthetic-proxy',
+    updated_at: '2026-11-05T03:00:00Z',
+  }
+  const remote = {
+    ...cloud,
+    inline_credential: { passphrase: 'synthetic-phrase', password: 'synthetic-cloud' },
+    proxy_password: '',
+  }
+  const details = summary('profile', local, remote)
+  assert.deepEqual(details?.credential_differences, ['password', 'proxy_password'])
+  assert.deepEqual(details?.credential_fields, ['auth_type', 'password', 'passphrase', 'proxy_password'])
+  assert.equal(details?.updated_at, local.updated_at)
+  assert.equal(JSON.stringify(details).includes('synthetic-'), false)
+  assert.equal(
+    summary('profile', local, {
+      ...local,
+      inline_credential: { passphrase: 'synthetic-phrase', password: 'synthetic-local' },
+    })?.credential_changed,
+    false,
+  )
+})
+
 test('connection options can be selected without exposing raw settings or syncing host fingerprints', () => {
   const local = {
     ...profile,
