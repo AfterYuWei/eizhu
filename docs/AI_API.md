@@ -40,6 +40,24 @@
 
 内置模型使用 AI SDK Core，支持 OpenAI Responses、Chat Completions、Anthropic Messages。每个供应商独立配置协议、地址、密钥、模型、上下文预算。发现、连接测试与保存互相独立，测试仅要求 `session_info`，不执行远端操作。远端地址必须 HTTPS，HTTP 仅允许 loopback；禁止 URL 凭据、查询串与片段。网络沿用 Electron 系统代理和 TLS，不跟随重定向。同地址留空密钥保留原值，换地址不复用旧密钥。
 
+“新增供应商”的平台预设仅创建可编辑草稿，填入名称、协议和基础地址，不发送请求、不保存、不切换正在使用的后端。选择另一个平台或“自定义”会创建新草稿，清空草稿中的密钥、模型和模型发现结果，保留既有供应商配置。模型需手动填写或发现；上下文预算需按实际模型调整。
+
+预设地址于2026-11-05依据以下官方文档核对；不代表各平台真实模型已验收。地域、套餐与私有部署地址可修改。
+
+| 平台 | 默认协议 | 基础地址及官方依据 |
+|---|---|---|
+| OpenAI | Responses | [`https://api.openai.com/v1`](https://platform.openai.com/docs/api-reference/introduction) |
+| Anthropic（Claude） | Anthropic Messages | [`https://api.anthropic.com/v1`](https://platform.claude.com/docs/en/api/overview) |
+| DeepSeek | Chat Completions | [`https://api.deepseek.com`](https://api-docs.deepseek.com/) |
+| 阿里云百炼（通义千问） | Chat Completions | [`https://dashscope.aliyuncs.com/compatible-mode/v1`](https://help.aliyun.com/zh/model-studio/base-url) |
+| 硅基流动 | Chat Completions | [`https://api.siliconflow.cn/v1`](https://docs.siliconflow.cn/docs/userguide/quickstart) |
+| Moonshot（Kimi） | Chat Completions | [`https://api.moonshot.cn/v1`](https://platform.kimi.com/docs/get-api-key) |
+| 智谱AI（GLM） | Chat Completions | [`https://open.bigmodel.cn/api/paas/v4`](https://docs.bigmodel.cn/cn/guide/develop/openai/introduction) |
+| 火山方舟（豆包） | Chat Completions | [`https://ark.cn-beijing.volces.com/api/v3`](https://console.volcengine.com/ark/region%3Acn-beijing/docs/base-url-and-authentication) |
+| Google Gemini | Chat Completions | [`https://generativelanguage.googleapis.com/v1beta/openai`](https://ai.google.dev/gemini-api/docs/openai) |
+| OpenRouter | Chat Completions | [`https://openrouter.ai/api/v1`](https://openrouter.ai/developers) |
+| Ollama（本地） | Chat Completions | [`http://localhost:11434/v1`](https://docs.ollama.com/api/openai-compatibility) |
+
 主进程监督外部 CLI，通过每轮独立私有 IPC 与受管 stdio MCP 连接业务进程；无本地业务 HTTP/WebSocket 服务。Unix socket 权限0600、临时目录0700，随机令牌绑定每轮受管CLI/MCP桥接。每轮工具顺序调度，上限32步，最多4个并行对话。
 
 | 驱动 | 运行入口 | 限制 |

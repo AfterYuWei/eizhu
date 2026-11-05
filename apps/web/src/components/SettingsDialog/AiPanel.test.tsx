@@ -2,9 +2,11 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { beforeEach, afterEach, it, expect, vi } from 'vitest'
-import type { AiBackend, AiSettings } from '@eizhu/contracts'
+import type { AiBackend, AiConnection, AiSettings } from '@eizhu/contracts'
+import { aiConnectionSchema } from '@eizhu/contracts'
 import { useAiStore } from '@/store/ai'
 import { AiPanel } from './AiPanel'
+import { aiProviderPresets } from './aiProviderPresets'
 const api = vi.hoisted(() => ({
   ai: {
     settings: vi.fn(),
@@ -55,6 +57,13 @@ async function choose(id: string, label: string) {
       .find((e) => e.textContent === label)!
       .click(),
   )
+}
+async function fill(id: string, value: string) {
+  await act(async () => {
+    const input = document.getElementById(id)!
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, value)
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+  })
 }
 beforeEach(async () => {
   ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
@@ -124,4 +133,77 @@ it('persists disable and hides all engine and credential controls without deleti
   expect(api.ai.removeProvider).not.toHaveBeenCalled()
   await act(async () => host.querySelector<HTMLButtonElement>('#ai-enabled')!.click())
   expect(host.querySelector('#ai-engine')).not.toBeNull()
+})
+it.each(aiProviderPresets)(
+  'prepares the $name preset without saving or contacting a provider',
+  async (preset) => {
+    await choose('ai-source', '新增供应商')
+    await choose('ai-platform', preset.name)
+    expect(host.querySelector<HTMLInputElement>('#ai-name')!.value).toBe(preset.name)
+    expect(host.querySelector<HTMLInputElement>('#ai-endpoint')!.value).toBe(preset.endpoint)
+    expect(host.querySelector('#ai-protocol')!.textContent).toBe(
+      { responses: 'Responses', chat: 'Chat Completions', anthropic: 'Anthropic Messages' }[preset.protocol],
+    )
+    expect(host.querySelector<HTMLInputElement>('#ai-model')!.value).toBe('')
+    expect(host.querySelector<HTMLInputElement>('#ai-key')!.value).toBe('')
+    expect(api.ai.configure).not.toHaveBeenCalled()
+    expect(api.ai.setDefault).not.toHaveBeenCalled()
+    expect(api.ai.discover).not.toHaveBeenCalled()
+    expect(api.ai.test).not.toHaveBeenCalled()
+  },
+)
+it('starts a new draft on platform changes and preserves saved providers and their credentials', async () => {
+  await choose('ai-source', '服务A')
+  await fill('ai-key', 'draft-key')
+  await act(async () => button('自动发现模型').click())
+  expect(host.querySelector('#ai-model')!.getAttribute('role')).toBe('combobox')
+  await choose('ai-platform', 'DeepSeek')
+  expect(host.querySelector('#ai-source')!.textContent).toBe('新增供应商')
+  expect(host.querySelector<HTMLInputElement>('#ai-key')!.value).toBe('')
+  expect(host.querySelector<HTMLInputElement>('#ai-model')!.value).toBe('')
+  expect(host.querySelector('#ai-clear-key')).toBeNull()
+  expect(button('删除供应商')).toBeUndefined()
+  expect(api.ai.setDefault).toHaveBeenCalledOnce()
+  expect(api.ai.discover).toHaveBeenCalledOnce()
+  expect(api.ai.test).not.toHaveBeenCalled()
+  expect(api.ai.configure).not.toHaveBeenCalled()
+  expect(useAiStore.getState().settings!.providers).toEqual(settings.providers)
+  await fill('ai-model', 'my-deepseek-model')
+  api.ai.configure.mockImplementation(async (draft: AiConnection) => ({
+    ...settings,
+    providers: [...settings.providers, { ...draft, hasApiKey: false }],
+  }))
+  await act(async () => button('保存并使用').click())
+  const saved = aiConnectionSchema.parse(api.ai.configure.mock.calls[0][0])
+  expect(saved).toMatchObject({ name: 'DeepSeek', protocol: 'chat', model: 'my-deepseek-model' })
+  expect(saved.id).not.toBe('p')
+  expect(saved.id).not.toBe('deepseek')
+  expect(saved.apiKey).toBeUndefined()
+  expect(useAiStore.getState().settings!.providers.slice(0, 2)).toEqual(settings.providers)
+  await choose('ai-source', '服务A')
+  expect(host.querySelector<HTMLInputElement>('#ai-model')!.value).toBe('model-a')
+  expect(host.querySelector('#ai-clear-key')).not.toBeNull()
+})
+it('keeps custom addresses editable and clears the previous platform draft', async () => {
+  await choose('ai-source', '新增供应商')
+  await choose('ai-platform', 'OpenAI')
+  await fill('ai-key', 'draft-key')
+  await fill('ai-model', 'old-model')
+  await choose('ai-platform', '自定义')
+  expect(host.querySelector<HTMLInputElement>('#ai-endpoint')!.value).toBe('')
+  expect(host.querySelector<HTMLInputElement>('#ai-key')!.value).toBe('')
+  expect(host.querySelector<HTMLInputElement>('#ai-model')!.value).toBe('')
+  await fill('ai-endpoint', 'https://private.invalid/v1')
+  await choose('ai-protocol', 'Anthropic Messages')
+  expect(host.querySelector<HTMLInputElement>('#ai-endpoint')!.value).toBe('https://private.invalid/v1')
+  expect(host.querySelector('#ai-platform')!.textContent).toBe('自定义')
+})
+it('uses the official backend after deleting a provider instead of reselecting its stale id', async () => {
+  await choose('ai-source', '服务A')
+  api.ai.removeProvider.mockResolvedValue({ ...settings, providers: [settings.providers[1]] })
+  await act(async () => button('删除供应商').click())
+  expect(api.ai.removeProvider).toHaveBeenCalledWith({ providerId: 'p' })
+  expect(api.ai.setDefault).toHaveBeenLastCalledWith({ kind: 'official', model: '' })
+  expect(host.querySelector('[aria-label="官方AI配置"]')).not.toBeNull()
+  expect(useAiStore.getState().settings!.providers).toHaveLength(1)
 })

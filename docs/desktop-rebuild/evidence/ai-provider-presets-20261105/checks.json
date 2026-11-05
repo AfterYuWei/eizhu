@@ -1,0 +1,42 @@
+{
+  "date": "2026-11-05",
+  "scope": "AI供应商平台预设（仅界面、配置模板与测试）",
+  "checks": {
+    "typecheck": true,
+    "lint": true,
+    "foundation": {
+      "passed": 224,
+      "skipped": 2,
+      "reason": "未安装Fish"
+    },
+    "web": {
+      "files": 87,
+      "passed": 969,
+      "providerSettings": 17
+    },
+    "baselineTests": 10,
+    "baselineVerify": true,
+    "architectureVerify": true,
+    "desktopBuild": true,
+    "electronAiSmoke": true,
+    "platformOptions": 12,
+    "retainedScreenshots": [
+      "ai-settings-platform-deepseek.png",
+      "ai-settings-platform-options.png",
+      "ai-settings-platform-narrow.png"
+    ]
+  },
+  "environment": {
+    "platform": "macOS x64",
+    "model": "loopback-synthetic",
+    "ssh": "loopback-synthetic",
+    "sftp": "installed-openssh-subsystem",
+    "packaged": false
+  },
+  "limitations": [
+    "首次沙箱运行不允许本机回环监听；授权该测试权限后全量回归与Electron烟测通过。",
+    "Electron烟测收尾重载仍出现既有业务进程不可用的异步错误；全部业务断言与进程退出状态通过，本次未改动进程生命周期。",
+    "平台地址按官方文档核对；没有使用真实平台密钥进行模型调用。",
+    "本次未下载测试二进制、未修改admin、未重新生成安装包；不改变上轮安装包的验收范围。"
+  ]
+}

@@ -1,0 +1,45 @@
+{
+  "platform": "darwin",
+  "arch": "x64",
+  "packaged": false,
+  "aiDesktop": {
+    "passed": true,
+    "toolsetVersion": 2,
+    "protocols": [
+      "responses",
+      "chat",
+      "anthropic"
+    ],
+    "multiSession": true,
+    "approvalRequired": true,
+    "duplicateRejected": true,
+    "currentTerminalExecution": true,
+    "pendingTerminalInputBlocked": true,
+    "finalAnswerRetained": true,
+    "stopCancelsLongTasks": true,
+    "incompleteStreamRejected": true,
+    "encryptedStorage": true,
+    "settingsSelectedConfiguration": true,
+    "settingsProviderPresets": true,
+    "settingsEnableSwitch": true,
+    "settingsResponsiveLayout": true,
+    "remoteFileConflictAndEdit": true,
+    "sftp": "installed-openssh-subsystem",
+    "model": "loopback-synthetic",
+    "ssh": "loopback-synthetic",
+    "screenshots": [
+      "ai-v2-approval.png",
+      "ai-v2-light.png",
+      "ai-v2-dark.png",
+      "ai-v2-narrow.png",
+      "ai-settings-provider.png",
+      "ai-settings-platform-deepseek.png",
+      "ai-settings-platform-options.png",
+      "ai-settings-platform-narrow.png",
+      "ai-settings-agent-light.png",
+      "ai-settings-agent-dark.png",
+      "ai-settings-agent-narrow.png",
+      "ai-settings-disabled.png"
+    ]
+  }
+}

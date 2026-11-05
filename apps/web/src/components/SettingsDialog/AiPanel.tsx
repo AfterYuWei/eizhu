@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { aiProviderPresets } from './aiProviderPresets'
 import '../Agent/ai.css'
 const fresh = (): AiConnection => ({
   id: crypto.randomUUID(),
@@ -212,7 +213,7 @@ export function AiPanel() {
                         {p.name}
                       </SelectItem>
                     ))}
-                    <SelectItem value="new">新增自定义供应商</SelectItem>
+                    <SelectItem value="new">新增供应商</SelectItem>
                   </SelectContent>
                 </Select>
               </Field>
@@ -276,6 +277,42 @@ export function AiPanel() {
         <section className="ai-config-section" aria-label="自定义供应商配置">
           <h2 className="settings-section-title">供应商配置</h2>
           <div className="settings-card">
+            <Field id="ai-platform" label="平台预设" description="选择平台创建新配置，填入密钥和模型后保存。">
+              <Select
+                value={
+                  aiProviderPresets.find(
+                    (p) => p.endpoint === draft.endpoint && p.protocol === draft.protocol,
+                  )?.key ?? 'custom'
+                }
+                disabled={busy}
+                onValueChange={(key) => {
+                  const preset = aiProviderPresets.find((p) => p.key === key)
+                  setDraft({
+                    ...fresh(),
+                    ...(preset && {
+                      name: preset.name,
+                      protocol: preset.protocol,
+                      endpoint: preset.endpoint,
+                    }),
+                  })
+                  setSource('new')
+                  setCatalog(null)
+                  setMessage('')
+                }}
+              >
+                <SelectTrigger id="ai-platform" className="settings-select">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {aiProviderPresets.map((p) => (
+                    <SelectItem key={p.key} value={p.key}>
+                      {p.name}
+                    </SelectItem>
+                  ))}
+                  <SelectItem value="custom">自定义</SelectItem>
+                </SelectContent>
+              </Select>
+            </Field>
             <Field id="ai-name" label="名称">
               <Input
                 id="ai-name"
@@ -306,7 +343,7 @@ export function AiPanel() {
                 </SelectContent>
               </Select>
             </Field>
-            <Field id="ai-endpoint" label="接口基础地址">
+            <Field id="ai-endpoint" label="接口基础地址" description="可按地域、套餐或私有部署修改。">
               <Input
                 id="ai-endpoint"
                 className="settings-select"
@@ -398,13 +435,8 @@ export function AiPanel() {
                     void run(async () => {
                       const next = await bridge().ai.removeProvider({ providerId: draft.id })
                       setSettings(next)
-                      const provider = settings.providers.find((p) => p.id === source)
-                      setSource(provider?.id ?? 'official')
-                      await applyBackend(
-                        provider
-                          ? { kind: 'custom', providerId: provider.id, model: provider.model }
-                          : { kind: 'official', model: '' },
-                      )
+                      setSource('official')
+                      await applyBackend({ kind: 'official', model: '' })
                       setDraft(fresh())
                       setCatalog(null)
                     })

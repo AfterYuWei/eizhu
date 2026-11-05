@@ -484,6 +484,30 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
     assert.equal(await js("return document.querySelectorAll('#ai-key').length"), 1)
     assert.equal(await js("return document.querySelectorAll('#ai-cli-path').length"), 0)
     await captureSetting('ai-settings-provider.png')
+    await chooseSetting('ai-source', '新增供应商')
+    await chooseSetting('ai-platform', 'DeepSeek')
+    assert.equal(await js("return document.getElementById('ai-endpoint').value"), 'https://api.deepseek.com')
+    assert.equal(await js("return document.getElementById('ai-protocol').textContent"), 'Chat Completions')
+    assert.equal(await js("return document.getElementById('ai-key').value"), '')
+    assert.equal(await js("return document.getElementById('ai-model').value"), '')
+    assert.equal((await call<{ providers: unknown[] }>('ai', 'settings')).providers.length, 3)
+    await captureSetting('ai-settings-platform-deepseek.png')
+    await js("document.getElementById('ai-platform').click()")
+    await wait("return !!document.querySelector('[role=listbox]')")
+    assert.equal(await js("return document.querySelectorAll('[role=option]').length"), 12)
+    await captureSetting('ai-settings-platform-options.png')
+    await js(
+      "[...document.querySelectorAll('[role=option]')].find(e=>e.textContent==='Anthropic（Claude）').click()",
+    )
+    await wait("return document.getElementById('ai-protocol').textContent==='Anthropic Messages'")
+    assert.equal(
+      await js("return document.getElementById('ai-endpoint').value"),
+      'https://api.anthropic.com/v1',
+    )
+    window.setContentSize(900, 760)
+    await captureSetting('ai-settings-platform-narrow.png')
+    window.setContentSize(1280, 900)
+    await chooseSetting('ai-source', '合成 responses')
     await chooseSetting('ai-engine', 'Codex')
     await wait("return !!document.querySelector('#ai-cli-path')&&!document.querySelector('#ai-key')")
     for (const dark of [false, true]) {
@@ -529,6 +553,7 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
       incompleteStreamRejected: true,
       encryptedStorage: true,
       settingsSelectedConfiguration: true,
+      settingsProviderPresets: true,
       settingsEnableSwitch: true,
       settingsResponsiveLayout: true,
       remoteFileConflictAndEdit: Boolean(sftpServer),
