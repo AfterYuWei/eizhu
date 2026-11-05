@@ -1,6 +1,8 @@
 import { create } from 'zustand'
-import type { AiConversation } from '@eizhu/contracts'
+import type { AiConversation, AiSettings } from '@eizhu/contracts'
 interface AiState {
+  settings: AiSettings | null
+  setSettings: (settings: AiSettings) => void
   selectedId: string | null
   conversations: Record<string, AiConversation>
   select: (id: string | null) => void
@@ -9,6 +11,8 @@ interface AiState {
   forget: (id: string) => void
 }
 export const useAiStore = create<AiState>((set) => ({
+  settings: null,
+  setSettings: (settings) => set({ settings }),
   selectedId: null,
   conversations: {},
   select: (selectedId) => set({ selectedId }),

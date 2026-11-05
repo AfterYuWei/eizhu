@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Plus, Square, History, ChevronDown, Settings2 } from 'lucide-react'
-import type { AiBackend, AiConversation, AiSettings } from '@eizhu/contracts'
+import type { AiConversation } from '@eizhu/contracts'
 import { useAiStore } from '@/store/ai'
 import { useSessionStore } from '@/store/session'
 import { useDesktopShellStore } from '@/store/desktopShell'
@@ -29,9 +29,8 @@ export function AiInspector({
 }) {
   const { tabs, activeTabId } = useSessionStore()
   const { inspectorWidth, setInspectorWidth, setSettingsPage } = useDesktopShellStore()
-  const { selectedId, conversations, select, put, progress, forget } = useAiStore()
+  const { selectedId, conversations, select, put, progress, forget, settings, setSettings } = useAiStore()
   const conversation = selectedId ? conversations[selectedId] : undefined
-  const [settings, setSettings] = useState<AiSettings | null>(null)
   const [selectedSessions, setSelectedSessions] = useState<string[]>(() => {
     const tab = tabs.find((t) => t.id === activeTabId)
     return tab?.sessionId && tab.status === 'connected' ? [tab.sessionId] : []
@@ -78,27 +77,23 @@ export function AiInspector({
       void bridge()
         .ai.settings()
         .then(setSettings, (e) => setError(e.message))
-  }, [open])
+  }, [open, setSettings])
   useEffect(() => {
     if (follow.current && messages.current) messages.current.scrollTop = messages.current.scrollHeight
   }, [conversation?.messages, conversation?.status])
-  const choices: Array<{ value: string; label: string; backend: AiBackend }> = [
-    { value: 'official', label: '官方AI', backend: { kind: 'official', model: '' } },
-    ...(settings?.providers.map((p) => ({
-      value: p.id,
-      label: p.name + ' · ' + p.model,
-      backend: { kind: 'custom' as const, providerId: p.id, model: p.model },
-    })) ?? []),
-    ...(['codex', 'claude', 'deepseek'] as const).map((kind) => ({
-      value: kind,
-      label: { codex: 'Codex', claude: 'Claude Code', deepseek: 'DeepSeek Harness' }[kind],
-      backend: { kind, model: settings?.clis.find((c) => c.kind === kind)?.model ?? '' },
-    })),
-  ]
-  const selectedBackend = conversation?.backend ??
-    settings?.defaultBackend ?? { kind: 'official' as const, model: '' }
+  const selectedBackend = settings?.defaultBackend
+  const backendLabel = !settings?.enabled
+    ? 'AI助手未启用'
+    : selectedBackend?.kind === 'custom'
+      ? '内置助手 · ' +
+        (settings.providers.find((p) => p.id === selectedBackend.providerId)?.name ?? '自定义模型')
+      : selectedBackend?.kind === 'official'
+        ? '内置助手 · 官方AI'
+        : selectedBackend
+          ? { codex: 'Codex', claude: 'Claude Code', deepseek: 'DeepSeek Harness' }[selectedBackend.kind]
+          : '正在读取设置…'
   const newConversation = async () => {
-    const created = await bridge().ai.open({ sessionIds: selectedSessions, backend: selectedBackend })
+    const created = await bridge().ai.open({ sessionIds: selectedSessions })
     put(created)
     select(created.id)
     setHistory(null)
@@ -106,7 +101,7 @@ export function AiInspector({
   }
   const send = () =>
     act(async () => {
-      if (!settings || !draft.text.trim()) return
+      if (!settings?.enabled || !draft.text.trim()) return
       const c = conversation ?? (await newConversation())
       await bridge().ai.send({
         conversationId: c.id,
@@ -119,7 +114,6 @@ export function AiInspector({
         [c.id]: { text: '', attachments: [] },
       }))
     })
-  const backendValue = selectedBackend.kind === 'custom' ? selectedBackend.providerId : selectedBackend.kind
   return (
     <aside
       className={'shell-inspector ai-inspector' + (overlay ? ' is-overlay' : '')}
@@ -154,7 +148,7 @@ export function AiInspector({
         <div className="ai-inline-actions">
           <ShellIconButton
             label="新建AI对话"
-            disabled={loading || busy}
+            disabled={loading || busy || !settings?.enabled}
             onClick={() => {
               select(null)
               setHistory(null)
@@ -174,30 +168,12 @@ export function AiInspector({
         </div>
       </div>
       <div className="ai-session-controls">
-        <Select
-          value={backendValue}
-          disabled={loading}
-          onValueChange={(value) => {
-            const choice = choices.find((c) => c.value === value)
-            if (choice)
-              void act(async () => {
-                if (conversation)
-                  put(await bridge().ai.backend({ conversationId: conversation.id, backend: choice.backend }))
-                else setSettings(await bridge().ai.setDefault(choice.backend))
-              })
-          }}
-        >
-          <SelectTrigger aria-label="选择Agent与模型">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {choices.map((c) => (
-              <SelectItem key={c.value} value={c.value}>
-                {c.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="ai-backend-current">
+          <span>{backendLabel}</span>
+          <Button size="sm" variant="ghost" onClick={() => setSettingsPage('ai')}>
+            设置
+          </Button>
+        </div>
         <div className="ai-inline-actions">
           <Button size="sm" variant="ghost" onClick={() => setScopeOpen((v) => !v)}>
             连接范围 · {conversation?.targets.length ?? selectedSessions.length}
@@ -358,6 +334,7 @@ export function AiInspector({
       {conversation?.status === 'paused' && (
         <p className="ai-command-notice">任务已暂停。请先核查结果，再发送后续指令。</p>
       )}
+      {!settings?.enabled && <p className="ai-command-notice">请在设置中启用AI助手并选择使用方式。</p>}
       <div className="ai-composer">
         {pending && conversation ? (
           <AiApproval
@@ -365,6 +342,7 @@ export function AiInspector({
             target={conversation.targets.find((t) => t.sessionId === pending.sessionId)}
             disabled={
               loading ||
+              !settings?.enabled ||
               !conversation.targets.some(
                 (t) =>
                   t.sessionId === pending.sessionId &&
@@ -463,7 +441,10 @@ export function AiInspector({
                 <Button
                   size="sm"
                   disabled={
-                    loading || !settings || !draft.text.trim() || (!conversation && !selectedSessions.length)
+                    loading ||
+                    !settings?.enabled ||
+                    !draft.text.trim() ||
+                    (!conversation && !selectedSessions.length)
                   }
                   onClick={() => void send()}
                 >

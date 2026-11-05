@@ -102,6 +102,7 @@ parentPort!.on('message', async (message) =>
             .prepare('INSERT INTO local_state VALUES (?,?)')
             .run('other-setting', Buffer.from('keep-other-setting'))
           agent = new AgentRepository(aiDb, key, 'offline')
+          assert.equal(storedAiConfigSchema.parse(agent.execute({ kind: 'config.read' })).enabled, false)
           assert.equal(
             z
               .object({ n: z.number() })
@@ -109,6 +110,7 @@ parentPort!.on('message', async (message) =>
             0,
           )
           const config = {
+            enabled: false,
             providers: [
               {
                 id: 'p',
@@ -154,6 +156,7 @@ parentPort!.on('message', async (message) =>
           agent = new AgentRepository(aiDb, key, 'offline')
           const restored = storedAiConfigSchema.parse(agent.execute({ kind: 'config.read' }))
           assert.equal(restored.providers[0].apiKey, 'ai-v2-storage-secret')
+          assert.equal(restored.enabled, false)
           assert.equal((agent.execute({ kind: 'list' }) as unknown[]).length, 1)
           assert.ok(aiDb.prepare("SELECT data FROM local_state WHERE key='other-setting'").get())
           assert.ok(

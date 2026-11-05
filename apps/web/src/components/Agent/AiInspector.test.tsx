@@ -30,6 +30,7 @@ beforeEach(async () => {
   vi.clearAllMocks()
   vi.stubGlobal('eizhu', api)
   api.ai.settings.mockResolvedValue({
+    enabled: true,
     providers: [],
     clis: [],
     defaultBackend: { kind: 'official', model: '' },
@@ -178,4 +179,15 @@ it('idle Agent retains independent and all-task stop controls for running jobs',
   api.ai.stopJob.mockResolvedValue({ ...c, jobs: [] })
   await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="停止任务 job1"]')!.click())
   expect(api.ai.stopJob).toHaveBeenCalledWith({ conversationId: 'chat', jobId: 'job1' })
+})
+
+it('shows the configured Agent without an engine picker and blocks sending when disabled', async () => {
+  await act(async () =>
+    useAiStore
+      .getState()
+      .setSettings({ enabled: false, providers: [], clis: [], defaultBackend: { kind: 'codex', model: '' } }),
+  )
+  expect(host.querySelector('[aria-label="选择Agent与模型"]')).toBeNull()
+  expect(host.textContent).toContain('AI助手未启用')
+  expect(button('发送').disabled).toBe(true)
 })

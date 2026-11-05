@@ -15,7 +15,7 @@
 
 领域接口见 `packages/contracts/src/ai.ts`，由受限 `window.eizhu.ai` 暴露：
 
-- 配置：`settings/configure/removeProvider/configureCli/setDefault`，以及 `capabilities/discover/test/cliStatus`。
+- 配置：`settings/setEnabled/configure/removeProvider/configureCli/setDefault`，以及 `capabilities/discover/test/cliStatus`。
 - 对话：`open/history/read/remove`；`open` 明确指定已打开的 `sessionIds`，最多32个。
 - 运行：`send`；`scope/backend/permission` 先停止当前运行再调整；`decide` 绑定对话、调用 ID 和权限 revision；`cancel` 等待模型、CLI 与关联任务释放，`stopJob` 提供所属长任务的独立中断。
 - 输出：`output` 为 UI 提供作用域内的分页文本；模型使用 `output_read`。
@@ -35,6 +35,8 @@
 配置、消息、摘要、原生续接项与工具记录均由数据库 Worker 加密存储于 `agent:v2:*`，不进入同步或备份。首次打开新版空间，仅删除旧 `ai:*`，并在同一事务写入清理标记；后续启动不再清理新版数据。CLI 自身的登录与历史遵循原生存储方式。
 
 ## 多供应商与 CLI
+
+设置页是使用方式与供应商的界面选择入口：先启用AI助手，再从下拉框选择内置助手或具体外部Agent，只展示当前选项的配置。对话侧栏显示当前选择并提供设置入口。关闭会停止运行、作废审批并禁止新推理与执行，保留配置与历史；新空间默认关闭，既有新版配置沿用原启用行为。设置切换后端会停止已打开对话的运行并完成摘要交接。
 
 内置模型使用 AI SDK Core，支持 OpenAI Responses、Chat Completions、Anthropic Messages。每个供应商独立配置协议、地址、密钥、模型、上下文预算。发现、连接测试与保存互相独立，测试仅要求 `session_info`，不执行远端操作。远端地址必须 HTTPS，HTTP 仅允许 loopback；禁止 URL 凭据、查询串与片段。网络沿用 Electron 系统代理和 TLS，不跟随重定向。同地址留空密钥保留原值，换地址不复用旧密钥。
 

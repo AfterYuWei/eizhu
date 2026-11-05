@@ -597,3 +597,46 @@ test('an idle Agent exposes per-job stop without interrupting other terminals', 
     await f.service.close()
   }
 })
+
+test('disable stops the Agent, expires approvals and prevents subsequent runs while preserving secrets', async () => {
+  const f = fixture([{ name: 'terminal_execute', args: command() }])
+  try {
+    const c = await f.open()
+    await f.send(c.id)
+    const call = await f.pending()
+    await f.service.execute('ai.setEnabled', { enabled: false }, 1)
+    assert.equal(f.config.enabled, false)
+    assert.equal(f.config.providers[0].apiKey, 'test-key')
+    assert.equal(f.execs.length, 0)
+    assert.ok(!f.current.messages.some((m) => m.tool?.state === 'pending'))
+    await assert.rejects(f.send(c.id), /启用/)
+    await assert.rejects(f.open(), /启用/)
+    await assert.rejects(
+      f.service.execute(
+        'ai.decide',
+        { conversationId: c.id, callId: call.id, revision: f.current.revision, decision: 'once' },
+        1,
+      ),
+    )
+    await f.service.execute('ai.setEnabled', { enabled: true }, 1)
+    assert.equal(f.config.providers[0].apiKey, 'test-key')
+  } finally {
+    await f.service.close()
+  }
+})
+test('settings backend selection stops current work and hands the conversation to the selected Agent', async () => {
+  const f = fixture([{ name: 'terminal_execute', args: command() }])
+  try {
+    const c = await f.open()
+    await f.send(c.id)
+    await f.pending()
+    await f.service.execute('ai.setDefault', { kind: 'claude', model: 'configured' }, 1)
+    assert.equal(f.current.backend.kind, 'claude')
+    assert.equal(f.current.backend.model, 'configured')
+    assert.ok(f.current.summary.includes('检查'))
+    assert.equal(f.execs.length, 0)
+    assert.equal(f.config.defaultBackend.kind, 'claude')
+  } finally {
+    await f.service.close()
+  }
+})

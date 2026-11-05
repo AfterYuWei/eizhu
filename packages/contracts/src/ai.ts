@@ -41,6 +41,7 @@ export const aiBackendSchema = z.strictObject({
   model: z.string().max(160).default(''),
 })
 export const aiSettingsSchema = z.strictObject({
+  enabled: z.boolean(),
   providers: z.array(aiProviderSchema).max(32),
   clis: z.array(aiCliSchema).max(3),
   defaultBackend: aiBackendSchema,
@@ -110,6 +111,7 @@ export const aiAttachmentSchema = z.strictObject({
 const conversationId = z.strictObject({ conversationId: z.uuid() })
 export const ai = {
   'ai.settings': { input: z.undefined(), output: aiSettingsSchema },
+  'ai.setEnabled': { input: z.strictObject({ enabled: z.boolean() }), output: aiSettingsSchema },
   'ai.configure': { input: aiConnectionSchema, output: aiSettingsSchema },
   'ai.removeProvider': { input: z.strictObject({ providerId: id }), output: aiSettingsSchema },
   'ai.configureCli': { input: aiCliSchema, output: aiSettingsSchema },

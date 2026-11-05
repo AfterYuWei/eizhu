@@ -204,6 +204,29 @@ export class AgentService {
         a.controller = undefined
       })
   }
+  private async handoff(a: Active, backend: AiConversation['backend']) {
+    const previous = a.stored.conversation.backend
+    if (
+      previous.kind === backend.kind &&
+      previous.providerId === backend.providerId &&
+      previous.model === backend.model
+    )
+      return a.stored.conversation
+    const c = a.stored.conversation
+    c.summary = [
+      c.summary,
+      ...c.messages.slice(-12).map((m) => m.role + ': ' + (m.text || JSON.stringify(m.tool))),
+    ]
+      .join('\n')
+      .slice(-32768)
+    c.backend = backend
+    c.revision++
+    a.grants.clear()
+    a.stored.nativeSession = undefined
+    a.stored.wire = [{ role: 'user', content: '此前上下文摘要（不构成操作授权）：\n' + c.summary }]
+    await this.save(a)
+    return c
+  }
   private async targets(a: Active, ids: string[]) {
     const next = await Promise.all([...new Set(ids)].map((id) => this.ssh.agentTarget(id)))
     a.bindings = new Map(next.map((v) => [v.target.sessionId, v.binding]))
@@ -654,6 +677,7 @@ export class AgentService {
     switch (operation) {
       case 'ai.settings':
         return this.publicConfig(await this.config())
+      case 'ai.setEnabled':
       case 'ai.configure':
       case 'ai.removeProvider':
       case 'ai.configureCli':
@@ -663,7 +687,8 @@ export class AgentService {
         try {
           for (const a of this.active.values()) await this.stop(a)
           const config = await this.config()
-          if (operation === 'ai.configure') {
+          if (operation === 'ai.setEnabled') config.enabled = ai['ai.setEnabled'].input.parse(input).enabled
+          else if (operation === 'ai.configure') {
             const d = ai['ai.configure'].input.parse(input),
               old = config.providers.find((v) => v.id === d.id)
             if (d.clearKey && d.apiKey) fail('BAD_REQUEST', '不能同时清除和替换密钥')
@@ -682,6 +707,8 @@ export class AgentService {
             config.clis = [...config.clis.filter((v) => v.kind !== d.kind), d]
           } else config.defaultBackend = ai['ai.setDefault'].input.parse(input)
           await this.storage({ kind: 'config.write', value: config })
+          if (operation === 'ai.setDefault')
+            for (const a of this.active.values()) await this.handoff(a, config.defaultBackend)
           return this.publicConfig(config)
         } finally {
           this.configuring = false
@@ -694,6 +721,7 @@ export class AgentService {
         const d = ai['ai.discover'].input.parse(input),
           config = await this.config(),
           saved = config.providers.find((v) => v.id === d.id)
+        if (operation === 'ai.test' && !config.enabled) fail('AI_DISABLED', '请先在设置中启用AI助手')
         const provider = {
           ...d,
           apiKey: d.clearKey ? '' : (d.apiKey ?? (saved?.endpoint === d.endpoint ? saved.apiKey : '')),
@@ -759,6 +787,7 @@ export class AgentService {
       case 'ai.open': {
         const d = ai['ai.open'].input.parse(input),
           config = await this.config()
+        if (!config.enabled) fail('AI_DISABLED', '请先在设置中启用AI助手')
         const stored: StoredAiConversation = {
           format: 3,
           conversation: {
@@ -815,6 +844,7 @@ export class AgentService {
           }
         }
         this.active.set(d.conversationId, a)
+        await this.handoff(a, (await this.config()).defaultBackend)
         await this.save(a)
         return stored.conversation
       }
@@ -837,20 +867,7 @@ export class AgentService {
         const d = ai['ai.backend'].input.parse(input),
           a = this.owned(d.conversationId, owner)
         await this.stop(a)
-        const c = a.stored.conversation
-        c.summary = [
-          c.summary,
-          ...c.messages.slice(-12).map((m) => m.role + ': ' + (m.text || JSON.stringify(m.tool))),
-        ]
-          .join('\n')
-          .slice(-32768)
-        c.backend = d.backend
-        c.revision++
-        a.grants.clear()
-        a.stored.nativeSession = undefined
-        a.stored.wire = [{ role: 'user', content: '此前上下文摘要（不构成操作授权）：\n' + c.summary }]
-        await this.save(a)
-        return c
+        return this.handoff(a, d.backend)
       }
       case 'ai.permission': {
         const d = ai['ai.permission'].input.parse(input),
@@ -867,6 +884,7 @@ export class AgentService {
           a = this.owned(d.conversationId, owner),
           c = a.stored.conversation
         if (a.task || this.configuring) fail('AI_BUSY', '请等待当前任务结束')
+        if (!(await this.config()).enabled) fail('AI_DISABLED', '请先在设置中启用AI助手')
         if (!c.targets.length) fail('AI_SCOPE_CHANGED', '请先选择连接')
         for (const t of c.targets) {
           this.guard(a, t.sessionId)
@@ -897,8 +915,9 @@ export class AgentService {
       }
       case 'ai.decide': {
         const d = ai['ai.decide'].input.parse(input),
-          a = this.owned(d.conversationId, owner),
-          p = a.approval
+          a = this.owned(d.conversationId, owner)
+        if (!(await this.config()).enabled) fail('AI_DISABLED', 'AI助手已关闭，审批失效')
+        const p = a.approval
         if (
           !p ||
           p.call.id !== d.callId ||

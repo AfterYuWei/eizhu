@@ -220,6 +220,7 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
     await Promise.all([once(ssh, 'listening'), once(http, 'listening')])
     const sshPort = (ssh.address() as AddressInfo).port,
       httpPort = (http.address() as AddressInfo).port
+    await call('ai', 'setEnabled', { enabled: true })
     for (const protocol of ['responses', 'chat', 'anthropic']) {
       const provider = {
         id: protocol,
@@ -454,6 +455,57 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
         }
       }
     }
+    await js("document.querySelector('button[aria-label=AI设置]').click()")
+    await wait("return !!document.querySelector('.ai-settings #ai-engine')")
+    const chooseSetting = async (id: string, label: string) => {
+      await wait(
+        'const control=document.getElementById(' +
+          JSON.stringify(id) +
+          ');return !!control&&!control.disabled',
+      )
+      await js('document.getElementById(d).click()', id)
+      await wait("return !!document.querySelector('[role=listbox]')")
+      await js("[...document.querySelectorAll('[role=option]')].find(e=>e.textContent===d).click()", label)
+    }
+    const captureSetting = async (name: string) => {
+      await wait("return !document.getElementById('ai-enabled').disabled")
+      await js('await document.fonts.ready;await new Promise(r=>setTimeout(r,150))')
+      assert.equal(
+        await js(
+          "const panel=document.querySelector('.ai-settings');return panel.scrollWidth<=panel.clientWidth+1&&[...panel.querySelectorAll('.settings-field')].every(row=>{const label=row.querySelector('.settings-field-info').getBoundingClientRect(),control=row.lastElementChild.getBoundingClientRect();return control.left>=label.right-1||control.top>=label.bottom-1})",
+        ),
+        true,
+      )
+      await writeFile(join(root, name), (await window.webContents.capturePage()).toPNG())
+      screenshots.push(name)
+    }
+    window.setContentSize(1280, 900)
+    await wait("return !!document.querySelector('#ai-key')")
+    assert.equal(await js("return document.querySelectorAll('#ai-key').length"), 1)
+    assert.equal(await js("return document.querySelectorAll('#ai-cli-path').length"), 0)
+    await captureSetting('ai-settings-provider.png')
+    await chooseSetting('ai-engine', 'Codex')
+    await wait("return !!document.querySelector('#ai-cli-path')&&!document.querySelector('#ai-key')")
+    for (const dark of [false, true]) {
+      await js("document.documentElement.classList.toggle('dark',d)", dark)
+      await captureSetting(dark ? 'ai-settings-agent-dark.png' : 'ai-settings-agent-light.png')
+    }
+    window.setContentSize(900, 760)
+    await captureSetting('ai-settings-agent-narrow.png')
+    await js("document.getElementById('ai-enabled').click()")
+    await wait("return !document.querySelector('#ai-engine')")
+    assert.equal((await call<{ enabled: boolean }>('ai', 'settings')).enabled, false)
+    await assert.rejects(
+      call('ai', 'send', { conversationId: proposed.id, text: '关闭时不得运行', attachments: [] }),
+    )
+    assert.equal((await call<{ providers: unknown[] }>('ai', 'settings')).providers.length, 3)
+    await captureSetting('ai-settings-disabled.png')
+    await js("document.getElementById('ai-enabled').click()")
+    await wait("return !!document.querySelector('#ai-engine')")
+    await chooseSetting('ai-engine', '内置助手')
+    await chooseSetting('ai-source', '合成 responses')
+    await wait("return !!document.querySelector('#ai-key')")
+    await js("document.querySelector('.settings-page-back').click()")
     for (const name of await readdir(root, { recursive: true })) {
       if (!/\.(sqlite|db)(-wal)?$/.test(name)) continue
       const bytes = await readFile(join(root, name))
@@ -476,6 +528,9 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
       stopCancelsLongTasks: true,
       incompleteStreamRejected: true,
       encryptedStorage: true,
+      settingsSelectedConfiguration: true,
+      settingsEnableSwitch: true,
+      settingsResponsiveLayout: true,
       remoteFileConflictAndEdit: Boolean(sftpServer),
       sftp: sftpServer ? 'installed-openssh-subsystem' : 'unavailable',
       model: 'loopback-synthetic',

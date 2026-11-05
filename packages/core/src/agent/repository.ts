@@ -15,6 +15,7 @@ export const storedProviderSchema = aiProviderSchema
   .omit({ hasApiKey: true })
   .extend({ apiKey: z.string().max(8192) })
 export const storedAiConfigSchema = z.strictObject({
+  enabled: z.boolean().default(true),
   providers: z.array(storedProviderSchema).max(32),
   clis: z.array(aiCliSchema).max(3),
   defaultBackend: aiBackendSchema,
@@ -66,6 +67,7 @@ export class AgentRepository {
     if (d.kind === 'config.read')
       return storedAiConfigSchema.parse(
         this.read('agent:v2:config') ?? {
+          enabled: false,
           providers: [],
           clis: [],
           defaultBackend: { kind: 'official', model: '' },

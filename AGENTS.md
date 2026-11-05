@@ -13,7 +13,7 @@ UI 与文档使用中文。当前执行阶段 6 最终工程交付与发布验�
 
 桌面打包测试结束后，确认项目副本无运行进程，注销并删除 `artifacts/desktop/mac/eizhu.app`，避免重复应用入口；保留 `/Applications/eizhu.app` 和用户数据。
 
-2026-11-05 AI Agent v2 替换旧单命令架构：内置 AI SDK 三协议、多供应商，外部 Codex/Claude Code/DeepSeek Harness 驱动，多连接显式范围与共享远端工具目录，观察/确认/自动权限和统一审批。命令仍在现有 SSH PTY 执行；不支持 Windows 远端 shell。配置与历史由数据库 Worker 加密保存，不进入同步/备份；各空间一次性清除旧 `ai:*`。官方网关改为 `/api/ai/v2`，需协调独立后台部署。真实模型、完整 CLI 和远端 PTY 验收边界见 `docs/desktop-rebuild/AI_AGENT_V2_2026-11-05.md`、`docs/AI_API.md`。
+2026-11-05 AI 设置统一管理启用开关、内置/外部 Agent 与供应商下拉选择，侧栏只显示当前选择。关闭停止任务、作废审批并保留配置和历史。AI Agent v2 替换旧单命令架构：内置 AI SDK 三协议、多供应商，外部 Codex/Claude Code/DeepSeek Harness 驱动，多连接显式范围与共享远端工具目录，观察/确认/自动权限和统一审批。命令仍在现有 SSH PTY 执行；不支持 Windows 远端 shell。配置与历史由数据库 Worker 加密保存，不进入同步/备份；各空间一次性清除旧 `ai:*`。官方网关改为 `/api/ai/v2`，需协调独立后台部署。真实模型、完整 CLI 和远端 PTY 验收边界见 `docs/desktop-rebuild/AI_AGENT_V2_2026-11-05.md`、`docs/AI_API.md`。
 
 Node 24 LTS（至少 24.7）、npm workspaces、一个根锁文件。用户安装应用无需另装 Node。
 
