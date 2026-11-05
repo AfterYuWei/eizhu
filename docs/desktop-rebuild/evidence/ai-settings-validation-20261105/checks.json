@@ -49,10 +49,17 @@
   "retainedScreenshots": [
     "ai-settings-model-discovery.png"
   ],
+  "userVerification": {
+    "date": "2026-11-05",
+    "provider": "DeepSeek",
+    "source": "用户反馈，未采集真实模型回包",
+    "previousError": "操作失败，请查看诊断日志",
+    "restartedByUser": true,
+    "connectionTestPassed": true
+  },
   "limitations": [
-    "未用用户密钥调用真实供应商；真实DeepSeek错误文字及复验仍待用户提供。",
+    "自动化验证未用用户密钥调用真实供应商；真实连接测试通过由用户反馈确认，不代表真实远端工具验收。",
     "未签名/公证，其他平台未执行。",
-    "现有开发窗口仍为旧业务进程，是否立即重启已询问用户，未主动中断活跃SSH。",
     "未下载二进制、未修改admin、未推送或发布。"
   ]
 }
