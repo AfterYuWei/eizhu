@@ -101,7 +101,7 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
         modelMode === 'unsupported'
           ? '此模型仅支持文本'
           : done
-            ? "## 检查结论\n\n命令退出码为 **3**，需要结合错误输出继续核查。\n\n- 已读取标准输出和错误输出。\n- 后续操作仍需逐条确认。\n\n```sh\nprintf '检查完成'\n```"
+            ? "## 检查结论\n\n命令退出码为 **3**，需要在当前终端继续核查。\n\n| 检查项 | 结果 |\n| --- | --- |\n| 命令状态 | 非零退出码 |\n| 后续操作 | 仍需逐条确认 |\n\n```sh\nprintf '检查完成'\n```"
             : '我会先检查命令输出。'
       const output = [
         { type: 'message', role: 'assistant', content: [{ type: 'output_text', text }] },
@@ -273,12 +273,15 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
     )
     await js('document.querySelector(\'.ai-composer button[aria-label="发送"]\').click()')
     await wait(
-      "return window.__aiSmoke?.status==='awaiting_confirmation'&&!!document.querySelector('.ai-command')",
+      "return window.__aiSmoke?.status==='awaiting_confirmation'&&!!document.querySelector('.ai-composer .ai-approval')",
     )
     assert.equal(commands.length, 0, 'No AI terminal input before user confirmation')
     const proposed = aiConversationSchema.parse(await js('return window.__aiSmoke'))
     const proposalId = proposed.messages.at(-1)!.proposal!.id
-    await js('document.querySelector(\'.ai-command button[aria-label="复制命令"]\').click()')
+    assert.equal(await js("return document.querySelectorAll('.ai-messages .ai-approval').length"), 0)
+    assert.equal(await js("return document.querySelectorAll('.ai-composer textarea').length"), 0)
+    assert.equal(await js("return document.querySelectorAll('.ai-approval input').length"), 0)
+    await js('document.querySelector(\'.ai-approval button[aria-label="复制命令"]\').click()')
     await wait(
       `return window.eizhu.clipboard.read().then(text=>text===${JSON.stringify(proposed.messages.at(-1)!.proposal!.command)})`,
     )
@@ -297,7 +300,7 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
     )
     screenshots.push(approvalName)
     await js(
-      "[...document.querySelectorAll('.ai-command button')].find(b=>b.textContent==='执行此命令').click()",
+      "[...document.querySelectorAll('.ai-approval button')].find(b=>b.textContent==='允许执行').click()",
     )
     await call('ai', 'decide', { proposalId, accepted: true }).then(
       () => assert.fail('Duplicate approval accepted'),
@@ -317,23 +320,28 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
       execCommands.every((command) => !command.includes('eizhuAi') && !command.startsWith('cd -- ')),
       'AI must reuse the current shell instead of opening an exec channel',
     )
-    for (const [label, expected] of [['标准输出', result.stdout]]) {
-      await js('document.querySelector(d).click()', `.ai-command button[aria-label="复制${label}"]`)
-      await wait(`return window.eizhu.clipboard.read().then(text=>text===${JSON.stringify(expected)})`)
-    }
+    assert.equal(await js("return document.querySelector('.ai-command').open"), false)
+    assert.equal(await js("return document.querySelectorAll('.ai-approval,.ai-result').length"), 0)
+    assert.ok(await js("return !!document.querySelector('.ai-composer textarea')"))
+    assert.ok(
+      await js(
+        "return !/你好 🧪|synthetic warning/.test(document.querySelector('.ai-messages').textContent)",
+      ),
+      'Raw terminal output must not be repeated in chat',
+    )
+    assert.equal(await js("return document.querySelectorAll('.ai-message-role').length"), 1)
+    assert.equal(await js("return document.querySelectorAll('.ai-reply-actions').length"), 0)
+    assert.equal(await js("return document.querySelectorAll('.ai-message.is-assistant').length"), 1)
+    assert.ok(
+      await js("return !document.querySelector('.ai-messages').textContent.includes('检查结论')"),
+      'Post-command interpretation must not appear in chat',
+    )
     assert.ok(
       await js<boolean>(
-        "return ['.ai-message.is-assistant','.ai-command','.ai-result'].every(selector=>{const s=getComputedStyle(document.querySelector(selector));return parseFloat(s.borderTopWidth)===0&&parseFloat(s.borderBottomWidth)===0})",
+        "return ['.ai-message.is-assistant','.ai-command'].every(selector=>{const s=getComputedStyle(document.querySelector(selector));return parseFloat(s.borderTopWidth)===0&&parseFloat(s.borderBottomWidth)===0})",
       ),
       'AI content uses spacing and surfaces rather than internal divider lines',
     )
-    await wait('return !document.querySelector(\'.ai-code-block [role="status"]\')')
-    assert.equal(await js("return document.querySelector('.ai-markdown h2')?.textContent"), '检查结论')
-    await js('document.querySelector(\'.ai-markdown button[aria-label="复制代码"]\').click()')
-    await wait(
-      `return window.eizhu.clipboard.read().then(text=>text===${JSON.stringify("printf '检查完成'\n")})`,
-    )
-    await wait('return !document.querySelector(\'.ai-code-block [role="status"]\')')
     assert.ok(commands[0].includes("cd -- '/tmp' && eval "))
     assert.ok(!commands[0].includes('exec sh -c'))
     assert.ok(!requests.join('').includes('synthetic-ai-ssh-password'))
@@ -377,7 +385,18 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
       (await window.webContents.capturePage(undefined, { stayAwake: true })).toPNG(),
     )
     screenshots.push(startName)
-    await js('document.querySelector(\'.ai-inspector button[aria-label="滚动到最新回复"]\').click()')
+    const transcriptOverflows = await js<boolean>(
+      "const node=document.querySelector('.ai-messages');return node.scrollHeight-node.clientHeight>=48",
+    )
+    if (transcriptOverflows) {
+      await wait('return !!document.querySelector(\'.ai-inspector button[aria-label="滚动到最新回复"]\')')
+      await js('document.querySelector(\'.ai-inspector button[aria-label="滚动到最新回复"]\').click()')
+    } else {
+      assert.equal(
+        await js('return !!document.querySelector(\'.ai-inspector button[aria-label="滚动到最新回复"]\')'),
+        false,
+      )
+    }
     window.setContentSize(900, 720)
     await wait("return document.querySelector('.ai-inspector')?.classList.contains('is-overlay')")
     const name = 'ai-chat-narrow.png'

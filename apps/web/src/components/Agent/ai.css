@@ -111,30 +111,6 @@
   height: 18px;
   color: var(--fg-3);
 }
-.ai-task-details {
-  margin: -2px 0 16px;
-  font-size: 12px;
-  line-height: 20px;
-  color: var(--fg-3);
-}
-.ai-task-details > summary {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  width: fit-content;
-  cursor: pointer;
-  list-style: none;
-}
-.ai-task-details > summary::-webkit-details-marker {
-  display: none;
-}
-.ai-task-details[open] > summary svg {
-  transform: rotate(90deg);
-}
-.ai-task-details > p {
-  margin-top: 6px;
-  overflow-wrap: anywhere;
-}
 .ai-markdown {
   font-size: 14px;
   line-height: 1.65;
@@ -294,40 +270,6 @@
   line-height: 21px;
   color: var(--fg-2);
 }
-.ai-approval {
-  margin: 12px 0 16px;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-.ai-timeout {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 11px;
-  color: var(--fg-3);
-}
-.ai-timeout input {
-  width: 52px;
-  padding: 4px;
-  border: 0;
-  border-radius: 6px;
-  background: var(--surface-panel);
-  color: var(--fg);
-}
-.ai-result {
-  margin-top: 14px;
-  border: 0;
-}
-.ai-result > p {
-  margin: 8px 0;
-  overflow-wrap: anywhere;
-  font-size: 12px;
-  line-height: 20px;
-  color: var(--fg-3);
-}
 .ai-reply-actions {
   display: flex;
   align-items: center;
@@ -350,14 +292,14 @@
   overflow-wrap: anywhere;
   font-size: 12px;
 }
-.ai-composer {
+.desktop-shell .ai-composer {
   flex-shrink: 0;
   margin: 0 16px 16px;
   padding: 12px 12px 10px;
   border: 0;
   border-radius: 16px;
   background: var(--surface-panel);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.025);
+  box-shadow: 0 0 12px light-dark(rgba(0, 0, 0, 0.12), rgba(0, 0, 0, 0.48));
 }
 .ai-inspector .ai-composer textarea {
   min-height: 74px;
@@ -529,4 +471,148 @@
 .desktop-shell .settings-page .ai-setting-help:focus-visible {
   background: var(--bg-hover);
   color: var(--fg);
+}
+
+.desktop-shell .ai-inspector .ai-message {
+  min-width: 0;
+}
+.desktop-shell .ai-inspector .ai-message.is-assistant:has(+ .is-continuation) {
+  margin-bottom: 16px;
+}
+.desktop-shell .ai-inspector .ai-command-summary {
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr);
+  align-items: start;
+  gap: 2px 7px;
+  padding: 8px;
+  border-radius: 8px;
+  cursor: pointer;
+  list-style: none;
+}
+.desktop-shell .ai-inspector .ai-command-summary::-webkit-details-marker {
+  display: none;
+}
+.desktop-shell .ai-inspector .ai-command-summary:hover,
+.desktop-shell .ai-inspector .ai-command-summary:focus-visible {
+  background: var(--bg-elevated);
+}
+.desktop-shell .ai-inspector .ai-command-summary > svg {
+  margin-top: 3px;
+  color: var(--fg-3);
+}
+.desktop-shell .ai-inspector .ai-command[open] > summary > svg {
+  transform: rotate(90deg);
+}
+.desktop-shell .ai-inspector .ai-command-summary .ai-command-purpose {
+  margin: 0;
+  font-size: 13px;
+  line-height: 20px;
+}
+.desktop-shell .ai-inspector .ai-command-status {
+  grid-column: 2;
+  color: var(--fg-3);
+  font-size: 12px;
+  line-height: 18px;
+}
+.desktop-shell .ai-inspector .ai-command-status[data-attention='true'],
+.desktop-shell .ai-inspector .ai-command-notice {
+  color: var(--red);
+}
+.desktop-shell .ai-inspector .ai-command-notice {
+  margin: 6px 8px 0;
+  font-size: 12px;
+  line-height: 20px;
+  overflow-wrap: anywhere;
+}
+.desktop-shell .ai-inspector .ai-command > .ai-command-target {
+  margin-top: 10px;
+}
+.desktop-shell .ai-inspector .ai-code-block.is-wrapped pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.desktop-shell .ai-inspector .ai-code-block.is-wrapped code {
+  width: auto;
+}
+.desktop-shell .ai-inspector .ai-code-block.is-wrapped .ai-code-line > span:last-child {
+  min-width: 0;
+}
+.desktop-shell .ai-inspector .ai-table-scroll {
+  max-width: 100%;
+  margin: 12px 0;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  border-radius: 8px;
+}
+.desktop-shell .ai-inspector .ai-table-scroll table {
+  width: max-content;
+  min-width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.desktop-shell .ai-inspector .ai-table-scroll th,
+.desktop-shell .ai-inspector .ai-table-scroll td {
+  min-width: 96px;
+  max-width: 260px;
+  padding: 9px 12px;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+.desktop-shell .ai-inspector .ai-table-scroll th {
+  text-align: left;
+  font-weight: 500;
+  background: var(--bg-elevated);
+}
+.desktop-shell .ai-inspector .ai-table-scroll tbody tr:nth-child(even) {
+  background: var(--bg-elevated);
+}
+.desktop-shell .ai-inspector .ai-composer:has(.ai-approval) {
+  display: flex;
+  flex-direction: column;
+  max-height: 60%;
+  min-height: 0;
+}
+.desktop-shell .ai-inspector .ai-approval {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  gap: 10px;
+}
+.desktop-shell .ai-inspector .ai-approval-heading {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 22px;
+}
+.desktop-shell .ai-inspector .ai-approval-content {
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.desktop-shell .ai-inspector .ai-approval-purpose {
+  margin: 0 0 6px;
+  font-size: 13px;
+  line-height: 21px;
+  overflow-wrap: anywhere;
+}
+.desktop-shell .ai-inspector .ai-approval .ai-code-block {
+  margin: 8px 0;
+}
+.desktop-shell .ai-inspector .ai-approval .ai-impact {
+  margin: 6px 0 0;
+  font-size: 12px;
+  line-height: 20px;
+}
+.desktop-shell .ai-inspector .ai-approval-footer {
+  display: flex;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
 }

@@ -24,7 +24,9 @@ async function fixture() {
     interrupted = false,
     tokenExpired = false,
     remainingTokens = 90,
+    continueWithCommand = true,
     stdout = 'hello'
+  const notifications: AiConversation[] = []
   const target = {
     profileId: 'profile',
     sessionId: 'session',
@@ -93,21 +95,34 @@ async function fixture() {
       return
     }
     const command = { command: 'printf hello', cwd: '/tmp', purpose: '检查', impact: '只读' }
-    const text = `data: ${JSON.stringify({ type: 'response.output_text.delta', delta: '先检查' })}\n\n`
+    const afterCommand = JSON.parse(request.body!).input.some(
+      (item: { type?: string }) => item.type === 'function_call_output',
+    )
+    const responseText = afterCommand ? '未请求的执行解读' : '先检查'
+    const text = `data: ${JSON.stringify({ type: 'response.output_text.delta', delta: responseText })}\n\n`
     const completed = interrupted
       ? ''
       : `data: ${JSON.stringify({
           type: 'response.completed',
           response: {
             status: 'completed',
-            output: [
-              {
-                type: 'function_call',
-                call_id: randomUUID(),
-                name: 'run_command',
-                arguments: JSON.stringify(command),
-              },
-            ],
+            output:
+              afterCommand && !continueWithCommand
+                ? [
+                    {
+                      type: 'message',
+                      role: 'assistant',
+                      content: [{ type: 'output_text', text: responseText }],
+                    },
+                  ]
+                : [
+                    {
+                      type: 'function_call',
+                      call_id: randomUUID(),
+                      name: 'run_command',
+                      arguments: JSON.stringify(command),
+                    },
+                  ],
           },
         })}\n\n`
     await consume(Buffer.from(text + completed))
@@ -123,6 +138,7 @@ async function fixture() {
     { runtimeId: randomUUID(), workspaceId: 'offline', generation: 1 },
     (c) => {
       current = structuredClone(c)
+      notifications.push(current)
     },
   )
   const c = aiConversationSchema.parse(await service.execute('ai.open', { sessionId: 'session' }, 1))
@@ -171,6 +187,10 @@ async function fixture() {
       stdout = value
     },
     requests: () => requests,
+    notifications: () => notifications,
+    finishAfterCommand: () => {
+      continueWithCommand = false
+    },
     setCwd: (cwd: string) => {
       target.cwd = cwd
     },
@@ -207,6 +227,32 @@ test('no command before approval; duplicate confirmation executes once and next 
     assert.equal(result?.exitCode, 7)
     assert.equal(result?.stderr, 'warning')
     assert.equal(f.current().messages.at(-1)?.proposal?.state, 'pending')
+    assert.equal(f.current().messages.at(-1)?.text, '')
+    assert.ok(f.notifications().every((c) => !c.messages.some((m) => m.text.includes('未请求的执行解读'))))
+  } finally {
+    await f.service.close()
+  }
+})
+test('finishing a command does not append or stream an interpretation message', async () => {
+  const f = await fixture()
+  try {
+    f.finishAfterCommand()
+    const p = await f.send()
+    const before = f.current().messages.map((m) => m.id)
+    await f.service.execute('ai.decide', { proposalId: p.id, accepted: true }, 1)
+    await f.wait(() => f.requests().length === 2 && f.current().status === 'idle')
+    assert.equal(f.calls(), 1)
+    assert.deepEqual(
+      f.current().messages.map((m) => m.id),
+      before,
+    )
+    assert.equal(f.current().messages.at(-1)?.proposal?.state, 'completed')
+    assert.ok(f.notifications().every((c) => !c.messages.some((m) => m.text.includes('未请求的执行解读'))))
+    const request = JSON.parse(f.requests()[1])
+    const result = JSON.parse(
+      request.input.find((item: { type?: string }) => item.type === 'function_call_output').output,
+    )
+    assert.equal(result.stdout, 'hello')
   } finally {
     await f.service.close()
   }

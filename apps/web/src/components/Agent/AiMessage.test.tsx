@@ -12,8 +12,7 @@ const api = vi.hoisted(() => ({
 }))
 vi.mock('@/lib/bridge', () => ({ bridge: () => api }))
 let host: HTMLDivElement, root: Root
-const onDecide = vi.fn(),
-  onError = vi.fn()
+const onError = vi.fn()
 const target = {
   profileId: 'p',
   sessionId: 's',
@@ -47,8 +46,6 @@ const render = (message: AiConversation['messages'][number]) =>
           onError={onError}
           onAsk={() => {}}
           onContinue={() => {}}
-          onDecide={onDecide}
-          onTimeout={() => {}}
         />
       </TooltipProvider>,
     ),
@@ -67,7 +64,6 @@ it('Markdown code is copied without surrounding reply, language label or display
   await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="复制代码"]')!.click())
   expect(api.clipboard.write).toHaveBeenCalledWith({ text: 'SELECT name\nFROM users;\n' })
   expect(host.querySelector('[role="status"]')?.textContent).toBe('已复制')
-  expect(onDecide).not.toHaveBeenCalled()
 })
 it('untrusted Markdown cannot create scripts, remote images or javascript links; HTTP links use the desktop boundary', async () => {
   await render({
@@ -80,7 +76,7 @@ it('untrusted Markdown cannot create scripts, remote images or javascript links;
   await act(async () => host.querySelector<HTMLAnchorElement>('a')!.click())
   expect(api.system.openExternal).toHaveBeenCalledWith({ url: 'https://example.invalid/docs' })
 })
-it('command and each output block copy only their original bytes represented as text', async () => {
+it('execution history shows a collapsed command and status without raw output or approval actions', async () => {
   await render({
     id: 'm',
     role: 'assistant',
@@ -104,13 +100,53 @@ it('command and each output block copy only their original bytes represented as 
       },
     },
   })
-  for (const [label, content] of [
-    ['命令', "printf '你好'"],
-    ['标准输出', '第一行\n  第二行\n'],
-    ['错误输出', 'warning\n'],
-  ]) {
-    await act(async () => host.querySelector<HTMLButtonElement>(`[aria-label="复制${label}"]`)!.click())
-    expect(api.clipboard.write).toHaveBeenLastCalledWith({ text: content })
-  }
-  expect(onDecide).not.toHaveBeenCalled()
+  expect(host.querySelector<HTMLDetailsElement>('.ai-command')?.open).toBe(false)
+  expect(host.querySelector('summary')?.textContent).toContain('退出码 1')
+  expect(host.querySelector('.ai-command-status')?.getAttribute('data-attention')).toBe('true')
+  expect(host.textContent).not.toContain('第一行')
+  expect(host.textContent).not.toContain('warning')
+  expect(host.querySelector('.ai-approval,.ai-reply-actions,.ai-result')).toBeNull()
+  await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="复制命令"]')!.click())
+  expect(api.clipboard.write).toHaveBeenLastCalledWith({ text: "printf '你好'" })
+})
+
+it('Markdown tables keep cell formatting and unsafe links cannot escape the desktop boundary', async () => {
+  await render({
+    id: 'm',
+    role: 'assistant',
+    text: '| 容器 | 状态 | 端口 |\n| --- | --- | --- |\n| **redis** | 运行中 | `6379` |\n| [postgres](javascript:alert) | 运行中 | 5432 |',
+  })
+  expect(host.querySelectorAll('th')).toHaveLength(3)
+  expect(host.querySelectorAll('tbody tr')).toHaveLength(2)
+  expect(host.querySelector('td strong')?.textContent).toBe('redis')
+  expect(host.querySelector('td code')?.textContent).toBe('6379')
+  expect(host.querySelector('.ai-table-scroll')?.getAttribute('tabindex')).toBe('0')
+  expect(host.querySelector('a')).toBeNull()
+})
+
+it.each([
+  ['pending', '等待确认'],
+  ['running', '执行中'],
+  ['completed', '已完成'],
+  ['unknown', '结果未知'],
+  ['rejected', '已拒绝'],
+  ['expired', '已失效'],
+] as const)('command state %s remains visible without exposing approval buttons', async (state, label) => {
+  await render({
+    id: 'm',
+    role: 'assistant',
+    text: '',
+    proposal: {
+      id: 'p',
+      command: 'pwd',
+      cwd: '/tmp',
+      purpose: '查看目录',
+      impact: '只读',
+      timeoutSeconds: 60,
+      state,
+    },
+  })
+  expect(host.querySelector('summary')?.textContent).toContain(label)
+  expect(host.querySelector('.ai-command')?.querySelector('button:not([aria-label="复制命令"])')).toBeNull()
+  if (state === 'unknown') expect(host.querySelector('.ai-command-notice')?.textContent).toContain('终端核查')
 })

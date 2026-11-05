@@ -31,6 +31,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { AiMessage } from './AiMessage'
+import { AiApproval } from './AiApproval'
 import './ai.css'
 
 type Attachment = { name: string; content: string }
@@ -73,6 +74,10 @@ export function AiInspector({
   const actionRevision = useRef(0)
   const connected = tab?.status === 'connected' && Boolean(tab.sessionId)
   const busy = conversation?.status === 'thinking' || conversation?.status === 'executing'
+  const pending =
+    conversation?.status === 'awaiting_confirmation'
+      ? conversation.messages.findLast((message) => message.proposal?.state === 'pending')?.proposal
+      : undefined
   const updateDraft = (value: Partial<typeof draft>) => {
     if (tab) setDrafts((s) => ({ ...s, [tab.id]: { ...draft, ...value } }))
   }
@@ -314,19 +319,9 @@ export function AiInspector({
                   key={m.id}
                   message={m}
                   target={conversation.target}
+                  continuation={conversation.messages[index - 1]?.role === 'assistant'}
                   busy={Boolean(loading || busy || !connected)}
                   onError={setError}
-                  onDecide={(proposalId, accepted) => {
-                    void act(async () => {
-                      if (!tab?.sessionId || conversation.target.sessionId !== tab.sessionId)
-                        throw new Error('当前 SSH 窗口已变化，请重新打开对话')
-                      await bridge().ai.decide({ proposalId, accepted })
-                      if (accepted) terminalActions(tab.id)?.focus()
-                    })
-                  }}
-                  onTimeout={(proposalId, seconds) => {
-                    void act(() => bridge().ai.setTimeout({ proposalId, seconds }))
-                  }}
                   onAsk={() => {
                     const request = conversation.messages
                       .slice(0, index)
@@ -350,7 +345,7 @@ export function AiInspector({
               ))}
               {conversation?.status === 'thinking' && (
                 <p className="ai-notice" role="status">
-                  AI 正在分析…
+                  正在处理指令…
                 </p>
               )}
             </div>
@@ -369,140 +364,168 @@ export function AiInspector({
             )}
           </div>
           <div className="ai-composer">
-            {showContext && (
-              <details className="ai-context" open>
-                <summary>查看将发送的上下文</summary>
-                <pre>
-                  {JSON.stringify(
-                    conversation?.target ?? { host: tab?.host, username: tab?.username, cwd: tab?.cwd },
-                    null,
-                    2,
-                  )}
-                </pre>
-                <p>
-                  聊天内容、手动附件和 AI 命令结果会发送至
-                  {settings?.source === 'custom' ? settings.endpoint : '官方 AI 服务'}；切换服务前可在此核对。
-                </p>
-              </details>
-            )}
-            {draft.attachments.map((a, i) => (
-              <details className="ai-attachment" key={`${a.name}-${i}`}>
-                <summary>
-                  {a.name}
-                  <button
-                    type="button"
-                    aria-label={`移除附件：${a.name}`}
-                    onClick={(e) => {
-                      e.preventDefault()
-                      updateDraft({ attachments: draft.attachments.filter((_, j) => i !== j) })
-                    }}
-                  >
-                    <X size={12} />
-                  </button>
-                </summary>
-                <pre>{a.content}</pre>
-              </details>
-            ))}
-            <Textarea
-              ref={composer}
-              aria-label="描述运维需求"
-              placeholder={connected ? '告诉我你想从哪里开始……' : '请先连接服务器'}
-              value={draft.text}
-              disabled={!connected || loading}
-              maxLength={16384}
-              onChange={(e) => updateDraft({ text: e.target.value })}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
-                  e.preventDefault()
-                  if (!busy && !loading && draft.text.trim()) void send()
-                }
-              }}
-            />
-            <div className="ai-composer-actions">
-              <div className="ai-inline-actions">
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <ShellIconButton
-                      label="添加上下文"
-                      disabled={!connected || loading || draft.attachments.length >= 8}
-                    >
-                      <Plus size={18} />
-                    </ShellIconButton>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="start">
-                    <DropdownMenuItem
-                      onSelect={() => {
-                        void attachFile()
-                      }}
-                    >
-                      <FileText size={15} />
-                      附加文本文件
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onSelect={() => {
-                        const content = tab && terminalActions(tab.id)?.selection?.()
-                        if (content)
-                          updateDraft({
-                            attachments: [
-                              ...draft.attachments,
-                              { name: '终端选区', content: content.slice(0, 65536) },
-                            ],
-                          })
-                        else setError('请先在当前终端选择要附加的内容')
-                      }}
-                    >
-                      附加终端选区
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onSelect={() => setShowContext((value) => !value)}>
-                      {showContext ? '收起上下文预览' : '查看将发送的上下文'}
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-                <span className="ai-approval-mode" title="每条命令执行前均需确认" aria-label="逐条确认模式">
-                  <Hand size={16} />
-                </span>
-              </div>
-              <div className="ai-inline-actions ai-composer-end">
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" className="ai-model-picker" aria-label="选择 AI 模型">
-                      <span>{conversation?.model || settings?.model || '选择模型'}</span>
-                      <ChevronDown size={12} />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem disabled>
-                      {settings?.source === 'custom' ? '自定义' : '官方 AI'} ·{' '}
-                      {conversation?.model || settings?.model || '默认模型'}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onSelect={() => setSettingsPage('ai')}>配置模型</DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-                {busy ? (
-                  <Button
-                    size="icon-sm"
-                    className="ai-submit"
-                    variant="ghost"
-                    aria-label="停止"
-                    disabled={loading}
-                    onClick={() => void act(() => bridge().ai.cancel({ conversationId: conversation.id }))}
-                  >
-                    <Square size={15} />
-                  </Button>
-                ) : (
-                  <Button
-                    size="icon-sm"
-                    className="ai-submit"
-                    variant="ghost"
-                    aria-label="发送"
-                    disabled={!connected || loading || !conversation || !draft.text.trim()}
-                    onClick={() => void send()}
-                  >
-                    <ArrowUp size={18} />
-                  </Button>
+            {pending && conversation ? (
+              <AiApproval
+                key={pending.id}
+                proposal={pending}
+                target={conversation.target}
+                disabled={loading || !connected || conversation.target.sessionId !== tab?.sessionId}
+                onError={setError}
+                onDecide={(accepted) => {
+                  void act(async () => {
+                    if (!tab?.sessionId || conversation.target.sessionId !== tab.sessionId)
+                      throw new Error('当前 SSH 窗口已变化，请重新打开对话')
+                    await bridge().ai.decide({ proposalId: pending.id, accepted })
+                    if (accepted) terminalActions(tab.id)?.focus()
+                    else composer.current?.focus()
+                  })
+                }}
+              />
+            ) : (
+              <>
+                {showContext && (
+                  <details className="ai-context" open>
+                    <summary>查看将发送的上下文</summary>
+                    <pre>
+                      {JSON.stringify(
+                        conversation?.target ?? { host: tab?.host, username: tab?.username, cwd: tab?.cwd },
+                        null,
+                        2,
+                      )}
+                    </pre>
+                    <p>
+                      聊天内容、手动附件和 AI 命令结果会发送至
+                      {settings?.source === 'custom' ? settings.endpoint : '官方 AI 服务'}
+                      ；切换服务前可在此核对。
+                    </p>
+                  </details>
                 )}
-              </div>
-            </div>
+                {draft.attachments.map((a, i) => (
+                  <details className="ai-attachment" key={`${a.name}-${i}`}>
+                    <summary>
+                      {a.name}
+                      <button
+                        type="button"
+                        aria-label={`移除附件：${a.name}`}
+                        onClick={(e) => {
+                          e.preventDefault()
+                          updateDraft({ attachments: draft.attachments.filter((_, j) => i !== j) })
+                        }}
+                      >
+                        <X size={12} />
+                      </button>
+                    </summary>
+                    <pre>{a.content}</pre>
+                  </details>
+                ))}
+                <Textarea
+                  ref={composer}
+                  aria-label="描述运维需求"
+                  placeholder={connected ? '告诉我你想从哪里开始……' : '请先连接服务器'}
+                  value={draft.text}
+                  disabled={!connected || loading}
+                  maxLength={16384}
+                  onChange={(e) => updateDraft({ text: e.target.value })}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+                      e.preventDefault()
+                      if (!busy && !loading && draft.text.trim()) void send()
+                    }
+                  }}
+                />
+                <div className="ai-composer-actions">
+                  <div className="ai-inline-actions">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <ShellIconButton
+                          label="添加上下文"
+                          disabled={!connected || loading || draft.attachments.length >= 8}
+                        >
+                          <Plus size={18} />
+                        </ShellIconButton>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="start">
+                        <DropdownMenuItem
+                          onSelect={() => {
+                            void attachFile()
+                          }}
+                        >
+                          <FileText size={15} />
+                          附加文本文件
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onSelect={() => {
+                            const content = tab && terminalActions(tab.id)?.selection?.()
+                            if (content)
+                              updateDraft({
+                                attachments: [
+                                  ...draft.attachments,
+                                  { name: '终端选区', content: content.slice(0, 65536) },
+                                ],
+                              })
+                            else setError('请先在当前终端选择要附加的内容')
+                          }}
+                        >
+                          附加终端选区
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onSelect={() => setShowContext((value) => !value)}>
+                          {showContext ? '收起上下文预览' : '查看将发送的上下文'}
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                    <span
+                      className="ai-approval-mode"
+                      title="每条命令执行前均需确认"
+                      aria-label="逐条确认模式"
+                    >
+                      <Hand size={16} />
+                    </span>
+                  </div>
+                  <div className="ai-inline-actions ai-composer-end">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" className="ai-model-picker" aria-label="选择 AI 模型">
+                          <span>{conversation?.model || settings?.model || '选择模型'}</span>
+                          <ChevronDown size={12} />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem disabled>
+                          {settings?.source === 'custom' ? '自定义' : '官方 AI'} ·{' '}
+                          {conversation?.model || settings?.model || '默认模型'}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onSelect={() => setSettingsPage('ai')}>配置模型</DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                    {busy ? (
+                      <Button
+                        size="icon-sm"
+                        className="ai-submit"
+                        variant="ghost"
+                        aria-label="停止"
+                        disabled={loading}
+                        onClick={() =>
+                          void act(() => bridge().ai.cancel({ conversationId: conversation.id }))
+                        }
+                      >
+                        <Square size={15} />
+                      </Button>
+                    ) : (
+                      <Button
+                        size="icon-sm"
+                        className="ai-submit"
+                        variant="ghost"
+                        aria-label="发送"
+                        disabled={!connected || loading || !conversation || !draft.text.trim()}
+                        onClick={() => void send()}
+                      >
+                        <ArrowUp size={18} />
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         </>
       )}
