@@ -1,0 +1,58 @@
+{
+  "date": "2026-11-05",
+  "sourceCommits": [
+    "460ecbd",
+    "729825d"
+  ],
+  "scope": [
+    "空模型发现与字段校验",
+    "自动工具选择的连接测试与诚实的工具验证提示"
+  ],
+  "check": true,
+  "lint": true,
+  "focused": {
+    "webSettings": 21,
+    "coreModelAndContract": 47
+  },
+  "foundation": {
+    "passed": 248,
+    "skipped": 2,
+    "reason": "未安装Fish"
+  },
+  "web": {
+    "files": 87,
+    "passed": 973
+  },
+  "baselineTests": 10,
+  "baselineVerify": true,
+  "architectureVerify": true,
+  "desktopBuild": true,
+  "electronAiSmoke": true,
+  "finalDmgSmoke": true,
+  "packageFilesVerified": 286,
+  "packageVersion": "0.5.0-test.385.729825d7",
+  "environment": {
+    "platform": "macOS x64",
+    "model": "loopback-synthetic",
+    "ssh": "loopback-synthetic",
+    "sftp": "installed-openssh-subsystem"
+  },
+  "cases": {
+    "discoveryBeforeModelSelection": true,
+    "requiredFieldFeedbackWithoutRpc": true,
+    "forcedToolChoiceRejectedBySyntheticService": true,
+    "automaticToolChoicePasses": true,
+    "textReplyMarksToolsUnverified": true,
+    "failureAndIncompleteResponsesRejected": true,
+    "testsExecuteNoRemoteCommands": true
+  },
+  "retainedScreenshots": [
+    "ai-settings-model-discovery.png"
+  ],
+  "limitations": [
+    "未用用户密钥调用真实供应商；真实DeepSeek错误文字及复验仍待用户提供。",
+    "未签名/公证，其他平台未执行。",
+    "现有开发窗口仍为旧业务进程，是否立即重启已询问用户，未主动中断活跃SSH。",
+    "未下载二进制、未修改admin、未推送或发布。"
+  ]
+}
