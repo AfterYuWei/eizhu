@@ -16,12 +16,12 @@ const fresh = (): AiConnection => ({
   protocol: 'responses',
   endpoint: '',
   model: '',
-  contextWindow: 64000,
+  contextWindow: 256000,
   models: [],
   clearKey: false,
 })
 const cliNames = { codex: 'Codex', claude: 'Claude Code', deepseek: 'DeepSeek Harness' }
-const contextWindows = [8000, 16000, 32000, 64000, 128000, 200000, 256000, 512000, 1000000, 2000000]
+const contextWindows = [256000, 512000, 1000000, 2000000]
 const connectionFeedback: Record<string, { id: string; message: string }> = {
   name: { id: 'ai-name', message: '请填写供应商名称（1–80个字符）。' },
   endpoint: { id: 'ai-endpoint', message: '请输入有效的接口基础地址，远程使用HTTPS，本机服务可使用HTTP。' },

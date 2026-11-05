@@ -508,7 +508,7 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
     const catalogRequests = directoryRequests
     await chooseSetting('ai-model', '合成备用模型')
     await js("document.querySelector('.ai-settings-advanced summary').click()")
-    await chooseSetting('ai-context', '128K')
+    await chooseSetting('ai-context', '256K')
     await chooseSetting('ai-context', '自定义')
     await js(
       "const input=document.getElementById('ai-custom-context');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,'96000');input.dispatchEvent(new Event('input',{bubbles:true}))",

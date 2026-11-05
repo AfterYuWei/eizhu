@@ -250,6 +250,8 @@ it('keeps custom addresses editable and clears the previous platform draft', asy
 })
 it('uses Responses for a new custom service without asking for a protocol', async () => {
   await choose('ai-source', '新增供应商')
+  expect(host.querySelector('#ai-context')!.textContent).toBe('256K')
+  expect(host.querySelector('#ai-custom-context')).toBeNull()
   await fill('ai-endpoint', 'https://private.invalid/v1')
   await act(async () => button('自动发现模型').click())
   expect(host.querySelector<HTMLDetailsElement>('.ai-settings-advanced')!.open).toBe(false)
@@ -359,10 +361,23 @@ it('moves context into advanced settings and persists preset or custom values', 
   expect(host.querySelector<HTMLDetailsElement>('.ai-settings-advanced')!.open).toBe(false)
   expect(host.querySelector('#ai-context')!.closest('details')).not.toBeNull()
   await act(async () => host.querySelector<HTMLElement>('.ai-settings-advanced summary')!.click())
-  expect(host.querySelector('#ai-context')!.textContent).toBe('64K')
-  await choose('ai-context', '128K')
+  expect(host.querySelector('#ai-context')!.textContent).toBe('自定义')
+  expect(host.querySelector<HTMLInputElement>('#ai-custom-context')!.value).toBe('64000')
+  await act(async () => document.getElementById('ai-context')!.click())
+  expect([...document.querySelectorAll('[role=option]')].map((e) => e.textContent)).toEqual([
+    '256K',
+    '512K',
+    '1M',
+    '2M',
+    '自定义',
+  ])
+  await act(async () =>
+    [...document.querySelectorAll<HTMLElement>('[role=option]')]
+      .find((e) => e.textContent === '256K')!
+      .click(),
+  )
   await choose('ai-context', '自定义')
-  expect(host.querySelector<HTMLInputElement>('#ai-custom-context')!.value).toBe('128000')
+  expect(host.querySelector<HTMLInputElement>('#ai-custom-context')!.value).toBe('256000')
   await fill('ai-custom-context', '96000')
   await act(async () => button('保存并使用').click())
   expect(api.ai.configure).toHaveBeenLastCalledWith(expect.objectContaining({ contextWindow: 96000 }))
@@ -371,10 +386,10 @@ it('moves context into advanced settings and persists preset or custom values', 
   expect(host.querySelector('#ai-context')!.textContent).toBe('自定义')
   expect(host.querySelector<HTMLInputElement>('#ai-custom-context')!.value).toBe('96000')
   await act(async () => host.querySelector<HTMLElement>('.ai-settings-advanced summary')!.click())
-  await choose('ai-context', '200K')
+  await choose('ai-context', '512K')
   expect(host.querySelector('#ai-custom-context')).toBeNull()
   await act(async () => button('保存并使用').click())
-  expect(api.ai.configure).toHaveBeenLastCalledWith(expect.objectContaining({ contextWindow: 200000 }))
+  expect(api.ai.configure).toHaveBeenLastCalledWith(expect.objectContaining({ contextWindow: 512000 }))
 })
 it('opens advanced context validation and clears a stale catalog when its connection changes', async () => {
   await choose('ai-source', '服务A')
