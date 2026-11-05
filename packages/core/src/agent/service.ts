@@ -733,14 +733,17 @@ export class AgentService {
             source: 'custom',
             transport: this.transport,
             signal,
-            system: '测试工具调用。只调用session_info，不执行任何远端操作。',
+            system:
+              '测试连接和工具调用。若支持工具，请调用session_info；否则用一句话确认连接。不执行任何远端操作。',
             messages: [{ role: 'user', content: '调用session_info验证工具协议' }],
             onText: () => {},
-            requireTool: true,
+            connectionTest: true,
           })
-          if (result.calls.length !== 1 || result.calls[0].name !== 'session_info')
-            fail('AI_PROTOCOL', '模型未返回有效工具调用')
-          return { message: '连接与工具调用测试通过；未执行远端操作' }
+          if (result.calls.length && result.calls.every((call) => call.name === 'session_info'))
+            return { message: '连接与工具调用测试通过；未执行远端操作' }
+          if (!result.calls.length && result.text.trim())
+            return { message: '连接与模型回复正常；本次未返回工具调用，工具兼容性尚未验证' }
+          fail('AI_PROTOCOL', '模型未返回有效的测试回复或工具调用')
         }
         const data = z
           .object({

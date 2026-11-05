@@ -38,7 +38,7 @@
 
 设置页是使用方式与供应商的界面选择入口：先启用AI助手，再从下拉框选择内置助手或具体外部Agent，只展示当前选项的配置。对话侧栏显示当前选择并提供设置入口。关闭会停止运行、作废审批并禁止新推理与执行，保留配置与历史；新空间默认关闭，既有新版配置沿用原启用行为。设置切换后端会停止已打开对话的运行并完成摘要交接。
 
-内置模型使用 AI SDK Core，支持 OpenAI Responses、Chat Completions、Anthropic Messages。每个供应商独立配置协议、地址、密钥、模型、上下文预算。发现、连接测试与保存互相独立，测试仅要求 `session_info`，不执行远端操作。远端地址必须 HTTPS，HTTP 仅允许 loopback；禁止 URL 凭据、查询串与片段。网络沿用 Electron 系统代理和 TLS，不跟随重定向。同地址留空密钥保留原值，换地址不复用旧密钥。
+内置模型使用 AI SDK Core，支持 OpenAI Responses、Chat Completions、Anthropic Messages。每个供应商独立配置协议、地址、密钥、模型、上下文预算。发现、连接测试与保存互相独立。连接测试仅暴露 `session_info`，沿用正常对话的自动工具选择，不执行远端操作；返回有效调用表示工具协议通过，仅返回有效文本则提示连接正常、工具兼容性尚未验证。鉴权、网络、断流、空回复和无效调用仍报错。避免强制工具参数导致兼容服务误报连接失败，例如 [DeepSeek思考模式不支持required和指定工具](https://api-docs.deepseek.com/api/create-chat-completion/)。远端地址必须 HTTPS，HTTP 仅允许 loopback；禁止 URL 凭据、查询串与片段。网络沿用 Electron 系统代理和 TLS，不跟随重定向。同地址留空密钥保留原值，换地址不复用旧密钥。
 
 `ai.discover` 使用独立的发现输入契约，允许模型为空或省略，先获取目录再选择模型；`ai.test` 与 `ai.configure` 继续要求非空模型。设置页按操作使用同一份输入schema预校验，缺少模型、地址或其他无效字段时给出中文提示并定位字段；校验失败不发RPC。空模型不再阻断目录发现，空目录仍可手动填写模型。
 

@@ -427,6 +427,53 @@ for (const protocol of ['responses', 'chat', 'anthropic'] as const)
       await f.service.close()
     }
   })
+for (const protocol of ['responses', 'chat', 'anthropic'] as const)
+  for (const outcome of ['tool', 'text', 'empty', 'interrupted', 'invalid-tool', 'transport-error'] as const)
+    test(`${protocol}: connection test uses automatic tool selection and handles ${outcome} honestly`, async () => {
+      let requests = 0
+      const f = fixture([], undefined, async (request, _signal, consume) => {
+        requests++
+        const body = JSON.parse(request.body!)
+        assert.equal(body.tools.length, 1)
+        assert.equal(body.tools[0].function?.name ?? body.tools[0].name, 'session_info')
+        assert.ok(body.tool_choice == null || body.tool_choice === 'auto' || body.tool_choice.type === 'auto')
+        if (outcome === 'transport-error') throw new Error('401 Unauthorized')
+        const calls =
+          outcome === 'tool' || outcome === 'interrupted'
+            ? [{ id: 'test-call', name: 'session_info', args: {} }]
+            : outcome === 'invalid-tool'
+              ? [{ id: 'test-call', name: 'terminal_execute', args: command() }]
+              : []
+        await consume(
+          Buffer.from(
+            modelFixture(protocol, outcome === 'text' ? '连接正常' : '', calls, outcome !== 'interrupted'),
+          ),
+        )
+      })
+      try {
+        const input = {
+          id: 'p',
+          name: '测试',
+          protocol,
+          endpoint: 'http://127.0.0.1/v1',
+          model: 'fixture',
+          clearKey: false,
+        }
+        const pending = f.service.execute('ai.test', input, 1)
+        if (outcome === 'tool') {
+          assert.deepEqual(await pending, { message: '连接与工具调用测试通过；未执行远端操作' })
+        } else if (outcome === 'text') {
+          assert.deepEqual(await pending, {
+            message: '连接与模型回复正常；本次未返回工具调用，工具兼容性尚未验证',
+          })
+        } else await assert.rejects(pending)
+        assert.equal(requests, 1)
+        assert.equal(f.execs.length, 0)
+        assert.equal(f.config.providers[0].model, 'fixture')
+      } finally {
+        await f.service.close()
+      }
+    })
 test('backend switch preserves a handoff and expires pending operations', async () => {
   const f = fixture([{ name: 'terminal_execute', args: command() }, null])
   try {

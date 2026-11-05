@@ -141,7 +141,7 @@ export async function generateModel(input: {
   messages: ModelMessage[]
   onText: (text: string) => void
   summarize?: boolean
-  requireTool?: boolean
+  connectionTest?: boolean
 }): Promise<ModelStep> {
   const p = input.provider
   const boundary = new CompletionBoundary(p.protocol)
@@ -160,6 +160,7 @@ export async function generateModel(input: {
   const tools: ToolSet = {}
   if (!input.summarize)
     for (const [name, definition] of Object.entries(aiTools)) {
+      if (input.connectionTest && name !== 'session_info') continue
       const schema: z.ZodType<unknown> = definition.input
       tools[name] = tool({ description: definition.description, inputSchema: schema, strict: false })
     }
@@ -170,7 +171,6 @@ export async function generateModel(input: {
     tools,
     abortSignal: input.signal,
     maxRetries: 0,
-    ...(input.requireTool ? { toolChoice: { type: 'tool' as const, toolName: 'session_info' } } : {}),
     maxOutputTokens:
       input.source === 'official'
         ? undefined

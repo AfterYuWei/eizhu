@@ -32,7 +32,7 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
     remoteFile = join(remoteDirectory, '配置.conf')
   await mkdir(remoteDirectory, { recursive: true })
   await writeFile(remoteFile, '# original\nport=22\n')
-  let mode: 'normal' | 'interrupted' | 'long' | 'quota' | 'unauthorized' | 'file' = 'normal'
+  let mode: 'normal' | 'interrupted' | 'long' | 'quota' | 'unauthorized' | 'file' | 'test-text' = 'normal'
   let targetIds: string[] = []
   let directoryRequests = 0,
     inferenceRequests = 0
@@ -121,7 +121,13 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
       }
       inferenceRequests++
       const data = JSON.parse(body)
-      const forced = typeof data.tool_choice === 'object'
+      const forced =
+        data.tool_choice === 'required' || ['function', 'tool', 'any'].includes(data.tool_choice?.type)
+      if (forced) {
+        res.writeHead(400, { 'content-type': 'application/json' })
+        res.end(JSON.stringify({ error: { message: 'Thinking models do not support forced tool choice' } }))
+        return
+      }
       const nativeCalls = Array.isArray(data.input)
         ? data.input.filter((item: { type?: string }) => item.type === 'function_call')
         : []
@@ -132,26 +138,26 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
         : undefined
       const fileVersion = mode === 'file' && fileResult ? JSON.parse(fileResult.output).version : undefined
       const calls =
-        mode === 'file'
-          ? !nativeCalls.length
-            ? [{ id: randomUUID(), name: 'file_read', args: { sessionId: targetIds[0], path: remoteFile } }]
-            : nativeCalls.length === 1
-              ? [
-                  {
-                    id: randomUUID(),
-                    name: 'file_edit',
-                    args: {
-                      sessionId: targetIds[0],
-                      path: remoteFile,
-                      version: fileVersion,
-                      oldText: 'port=22',
-                      newText: 'port=2222',
+        mode === 'test-text'
+          ? []
+          : mode === 'file'
+            ? !nativeCalls.length
+              ? [{ id: randomUUID(), name: 'file_read', args: { sessionId: targetIds[0], path: remoteFile } }]
+              : nativeCalls.length === 1
+                ? [
+                    {
+                      id: randomUUID(),
+                      name: 'file_edit',
+                      args: {
+                        sessionId: targetIds[0],
+                        path: remoteFile,
+                        version: fileVersion,
+                        oldText: 'port=22',
+                        newText: 'port=2222',
+                      },
                     },
-                  },
-                ]
-              : []
-          : forced
-            ? [{ id: randomUUID(), name: 'session_info', args: {} }]
+                  ]
+                : []
             : mode === 'long'
               ? [
                   {
@@ -462,6 +468,7 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
         }
       }
     }
+    mode = 'normal'
     await js("document.querySelector('button[aria-label=AI设置]').click()")
     await wait("return !!document.querySelector('.ai-settings #ai-engine')")
     const chooseSetting = async (id: string, label: string) => {
@@ -525,7 +532,17 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
     )
     assert.equal(inferenceRequests, beforeValidation.inferenceRequests + 1)
     assert.equal((await call<{ providers: unknown[] }>('ai', 'settings')).providers.length, 3)
-    await captureSetting('ai-settings-discovery-before-model.png')
+    await captureSetting('ai-settings-model-discovery.png')
+    mode = 'test-text'
+    await js(
+      "[...document.querySelectorAll('.ai-settings button')].find(b=>b.textContent==='测试连接').click()",
+    )
+    await wait(
+      "return !!document.querySelector('.ai-settings [role=status]')?.textContent.includes('工具兼容性尚未验证')&&!document.getElementById('ai-enabled').disabled",
+    )
+    assert.equal(inferenceRequests, beforeValidation.inferenceRequests + 2)
+    await captureSetting('ai-settings-connection-tools-unverified.png')
+    mode = 'normal'
     await chooseSetting('ai-platform', 'DeepSeek')
     assert.equal(await js("return document.getElementById('ai-endpoint').value"), 'https://api.deepseek.com')
     assert.equal(await js("return document.getElementById('ai-protocol').textContent"), 'Chat Completions')
@@ -604,6 +621,8 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
       settingsProtocolCollapsed: true,
       settingsDiscoveryWithoutModel: true,
       settingsRequiredFieldFeedback: true,
+      settingsConnectionTestAutomaticTools: true,
+      settingsConnectionTextUnverified: true,
       settingsEnableSwitch: true,
       settingsResponsiveLayout: true,
       remoteFileConflictAndEdit: Boolean(sftpServer),
