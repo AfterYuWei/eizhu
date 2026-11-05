@@ -1,0 +1,16 @@
+{
+  "passed": true,
+  "nativeCli": true,
+  "syntheticModel": true,
+  "productionContacted": false,
+  "requests": 2,
+  "calls": 1,
+  "localExecutionToolsAbsent": true,
+  "toolNames": [
+    "list_mcp_resources",
+    "list_mcp_resource_templates",
+    "read_mcp_resource",
+    "request_user_input",
+    "mcp__eizhu"
+  ]
+}

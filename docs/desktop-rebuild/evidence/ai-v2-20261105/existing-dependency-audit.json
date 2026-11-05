@@ -1,0 +1,218 @@
+{
+  "counts": {
+    "info": 0,
+    "low": 1,
+    "moderate": 15,
+    "high": 3,
+    "critical": 1,
+    "total": 20
+  },
+  "packages": [
+    {
+      "name": "@electron/universal",
+      "severity": "moderate",
+      "versionBefore": "2.0.3",
+      "versionNow": "2.0.3"
+    },
+    {
+      "name": "@eslint/config-array",
+      "severity": "moderate",
+      "versionBefore": "0.23.5",
+      "versionNow": "0.23.5"
+    },
+    {
+      "name": "@eslint/js",
+      "severity": "moderate",
+      "versionBefore": "10.0.1",
+      "versionNow": "10.0.1"
+    },
+    {
+      "name": "@typescript-eslint/eslint-plugin",
+      "severity": "moderate",
+      "versionBefore": "8.62.0",
+      "versionNow": "8.62.0"
+    },
+    {
+      "name": "@typescript-eslint/parser",
+      "severity": "moderate",
+      "versionBefore": "8.62.0",
+      "versionNow": "8.62.0"
+    },
+    {
+      "name": "@typescript-eslint/type-utils",
+      "severity": "moderate",
+      "versionBefore": "8.62.0",
+      "versionNow": "8.62.0"
+    },
+    {
+      "name": "@typescript-eslint/typescript-estree",
+      "severity": "moderate",
+      "versionBefore": "8.62.0",
+      "versionNow": "8.62.0"
+    },
+    {
+      "name": "@typescript-eslint/utils",
+      "severity": "moderate",
+      "versionBefore": "8.62.0",
+      "versionNow": "8.62.0"
+    },
+    {
+      "name": "app-builder-lib",
+      "severity": "moderate",
+      "versionBefore": "26.15.3",
+      "versionNow": "26.15.3"
+    },
+    {
+      "name": "dmg-builder",
+      "severity": "moderate",
+      "versionBefore": "26.15.3",
+      "versionNow": "26.15.3"
+    },
+    {
+      "name": "dompurify",
+      "severity": "critical",
+      "versionBefore": "3.4.15",
+      "versionNow": "3.4.15"
+    },
+    {
+      "name": "electron",
+      "severity": "high",
+      "versionBefore": "44.9.0",
+      "versionNow": "44.9.0"
+    },
+    {
+      "name": "electron-builder",
+      "severity": "moderate",
+      "versionBefore": "26.15.3",
+      "versionNow": "26.15.3"
+    },
+    {
+      "name": "electron-builder-squirrel-windows",
+      "severity": "moderate",
+      "versionBefore": "26.15.3",
+      "versionNow": "26.15.3"
+    },
+    {
+      "name": "eslint",
+      "severity": "moderate",
+      "versionBefore": "10.5.0",
+      "versionNow": "10.5.0"
+    },
+    {
+      "name": "minimatch",
+      "severity": "moderate",
+      "versionBefore": "9.0.9",
+      "versionNow": "9.0.9"
+    },
+    {
+      "name": "minimatch",
+      "severity": "moderate",
+      "versionBefore": "10.2.6",
+      "versionNow": "10.2.6"
+    },
+    {
+      "name": "monaco-editor",
+      "severity": "low",
+      "versionBefore": "0.57.0",
+      "versionNow": "0.57.0"
+    },
+    {
+      "name": "typescript-eslint",
+      "severity": "moderate",
+      "versionBefore": "8.62.0",
+      "versionNow": "8.62.0"
+    },
+    {
+      "name": "vite",
+      "severity": "high",
+      "versionBefore": "8.0.16",
+      "versionNow": "8.0.16"
+    },
+    {
+      "name": "zod",
+      "severity": "high",
+      "versionBefore": "4.3.6",
+      "versionNow": "4.3.6"
+    }
+  ],
+  "advisories": [
+    {
+      "package": "dompurify",
+      "severity": "low",
+      "title": "DOMPurify: IN_PLACE: node-removing afterSanitize hook leaves detached subtree event handlers armed, causing DOM XSS",
+      "url": "https://github.com/advisories/GHSA-p98j-92pf-mc4p"
+    },
+    {
+      "package": "dompurify",
+      "severity": "low",
+      "title": "DOMPurify: IN_PLACE returns a force-removed rawtext root whose text carries attacker markup — pure HTML reparse executes",
+      "url": "https://github.com/advisories/GHSA-6688-9rhm-gjv2"
+    },
+    {
+      "package": "dompurify",
+      "severity": "critical",
+      "title": "DOMPurify SAFE_FOR_TEMPLATES bypass: split template expressions survive in attached shadow root content on DOM output modes",
+      "url": "https://github.com/advisories/GHSA-cg2g-xh64-v4q7"
+    },
+    {
+      "package": "dompurify",
+      "severity": "high",
+      "title": "DOMPurify IN_PLACE: hook that removes a parent or sibling leaves the detached subtree's event handlers armed (incomplete fix for GHSA-p98j-92pf-mc4p)",
+      "url": "https://github.com/advisories/GHSA-mrv2-3pqr-j5jr"
+    },
+    {
+      "package": "dompurify",
+      "severity": "low",
+      "title": "DOMPurify: SMIL attributeName=href guard is skipped when PARSER_MEDIA_TYPE is application/xhtml+xml",
+      "url": "https://github.com/advisories/GHSA-c6gr-qvv4-5v3f"
+    },
+    {
+      "package": "electron",
+      "severity": "high",
+      "title": "Electron: Mitigation for compromised eMudhra intermediate certificates",
+      "url": "https://github.com/advisories/GHSA-jr5w-w6x2-84p9"
+    },
+    {
+      "package": "minimatch",
+      "severity": "moderate",
+      "title": "minimatch has potential denial of service via globparts amplification",
+      "url": "https://github.com/advisories/GHSA-g3hv-75wg-m249"
+    },
+    {
+      "package": "vite",
+      "severity": "moderate",
+      "title": "launch-editor: escapeCmdArgs() omits % escaping on Windows",
+      "url": "https://github.com/advisories/GHSA-698v-4r3x-3vcv"
+    },
+    {
+      "package": "vite",
+      "severity": "moderate",
+      "title": "launch-editor: Editor CLI flag misinterpretation causing arbitrary command execution for some editors",
+      "url": "https://github.com/advisories/GHSA-r825-w8mm-5pxw"
+    },
+    {
+      "package": "vite",
+      "severity": "high",
+      "title": "launch-editor: `fs.existsSync()` existence check can be bypassed on Windows",
+      "url": "https://github.com/advisories/GHSA-587h-7wmj-h5pm"
+    },
+    {
+      "package": "vite",
+      "severity": "low",
+      "title": "Vite: Cross origin script execution through Vite custom middleware",
+      "url": "https://github.com/advisories/GHSA-9jrq-w75r-8gcw"
+    },
+    {
+      "package": "vite",
+      "severity": "moderate",
+      "title": "Vite: Files outside `server.fs.allow` could be served when project paths match system paths on non-Windows machine",
+      "url": "https://github.com/advisories/GHSA-rq7h-c2jc-7f22"
+    },
+    {
+      "package": "zod",
+      "severity": "high",
+      "title": "Zod can exhaust memory while validating oversized constrained collections",
+      "url": "https://github.com/advisories/GHSA-mrhx-c7xc-m3w5"
+    }
+  ]
+}

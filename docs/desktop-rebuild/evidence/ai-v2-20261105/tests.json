@@ -1,0 +1,42 @@
+{
+  "desktop": {
+    "foundation": {
+      "passed": 222,
+      "skipped": 2,
+      "failed": 0,
+      "skipReason": "Fish未安装"
+    },
+    "ui": {
+      "files": 87,
+      "passed": 953,
+      "failed": 0
+    },
+    "fixedBaselineTests": 10,
+    "check": true,
+    "lint": true,
+    "architecture": true,
+    "fixedCompatibility": true
+  },
+  "admin": {
+    "passed": 63,
+    "failed": 0,
+    "errors": 0,
+    "toolsetVersion": 2,
+    "postgresql": "17.11",
+    "jdk": "Corretto 25.0.5",
+    "offlineMaven": true,
+    "isolatedSchemas": true,
+    "cleanupByTestAfterAll": true,
+    "extraPostRunReadback": "PG连接超时，未独立复核",
+    "excludedDockerClasses": [
+      "AdminApplicationTests",
+      "EmailAccountTests",
+      "MasterAuthTests",
+      "MigrationUpgradeTests",
+      "S3IntegrationTests",
+      "SyncIntegrationTests"
+    ]
+  },
+  "productionContacted": false,
+  "downloadedTestBinaries": false
+}

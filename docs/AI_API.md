@@ -38,7 +38,7 @@
 
 内置模型使用 AI SDK Core，支持 OpenAI Responses、Chat Completions、Anthropic Messages。每个供应商独立配置协议、地址、密钥、模型、上下文预算。发现、连接测试与保存互相独立，测试仅要求 `session_info`，不执行远端操作。远端地址必须 HTTPS，HTTP 仅允许 loopback；禁止 URL 凭据、查询串与片段。网络沿用 Electron 系统代理和 TLS，不跟随重定向。同地址留空密钥保留原值，换地址不复用旧密钥。
 
-主进程监督外部 CLI，通过每轮独立私有 IPC 与受管 stdio MCP 连接业务进程；无本地业务 HTTP/WebSocket 服务。Unix socket 权限0600、临时目录0700，随机令牌只用于子进程环境。每轮工具顺序调度，上限32步，最多4个并行对话。
+主进程监督外部 CLI，通过每轮独立私有 IPC 与受管 stdio MCP 连接业务进程；无本地业务 HTTP/WebSocket 服务。Unix socket 权限0600、临时目录0700，随机令牌绑定每轮受管CLI/MCP桥接。每轮工具顺序调度，上限32步，最多4个并行对话。
 
 | 驱动 | 运行入口 | 限制 |
 |---|---|---|

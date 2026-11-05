@@ -1,0 +1,113 @@
+{
+  "platform": "darwin",
+  "arch": "x64",
+  "packaged": true,
+  "aiDesktop": {
+    "passed": true,
+    "toolsetVersion": 2,
+    "protocols": [
+      "responses",
+      "chat",
+      "anthropic"
+    ],
+    "multiSession": true,
+    "approvalRequired": true,
+    "duplicateRejected": true,
+    "currentTerminalExecution": true,
+    "pendingTerminalInputBlocked": true,
+    "finalAnswerRetained": true,
+    "stopCancelsLongTasks": true,
+    "incompleteStreamRejected": true,
+    "encryptedStorage": true,
+    "remoteFileConflictAndEdit": true,
+    "sftp": "installed-openssh-subsystem",
+    "model": "loopback-synthetic",
+    "ssh": "loopback-synthetic",
+    "screenshots": [
+      "ai-v2-approval.png",
+      "ai-v2-light.png",
+      "ai-v2-dark.png",
+      "ai-v2-narrow.png"
+    ]
+  },
+  "stage3Storage": {
+    "passed": true,
+    "retention": "500/30d",
+    "aiStorageMigrationAndEncryption": true,
+    "disabled": true,
+    "encrypted": true,
+    "persisted": true,
+    "excludedFromBackup": true,
+    "tunnelReferenceProtected": true
+  },
+  "stage2": {
+    "passed": true,
+    "checks": [
+      "v3→v4 清除本地版本正文/目录/历史/快照，保留云凭据及身份；迁移失败回滚且一致性副本可读",
+      "本地 CRUD、查询、默认名称、引用保护、用户名联动、循环拒绝与脱敏列表",
+      "真实 SQLite 中途失败：业务、审计、outbox 与导入预览消费整体回滚",
+      "七个固定旧备份：两种格式、三种凭据模式、历史 Go 密文及精确 payload 字节",
+      "十个固定反例：生产预览/导入错误码及完整数据保留",
+      "生产导出往返、加密前 hash、中文/emoji/首尾空白密码及 50 MiB 上限",
+      "skip/overwrite/regenerate、分组/凭据/跳板 ID 重映射、过期/编辑失效；导入不再建立历史快照",
+      "ED25519/RSA2048/RSA4096 OpenSSH 加密私钥、注释与错误口令拒绝",
+      "SQLite 无明文凭据、正确密钥重启持久化、错误密钥拒绝并保留原数据"
+    ],
+    "fixedBackups": 7,
+    "invalidCases": 10,
+    "nativeDatabase": true,
+    "keyAlgorithms": 3
+  },
+  "accountFoundation": {
+    "passed": true,
+    "checks": [
+      "旧库密钥错误：拒绝初始化，原全局 schema 与密文保留",
+      "全局 v1→v2、业务 v2→v4：设置、实体、原 outbox 密文保留；一致性副本可读取",
+      "会话与解锁缓存加密；公开状态不包含令牌/密钥；过期保留账号身份",
+      "重启恢复活动账号；A/B/离线分别存储并派生密钥，未自动导入离线数据",
+      "跨账号搬移密文不能解密；退出清除本账号会话和缓存，保留业务库及其他账号",
+      "刷新令牌 CAS 拒绝旧结果；活动空间切换与退出清理在同一 SQLite 事务，中途失败整体回滚",
+      "业务迁移中途失败整体回滚；修复阻断后可重试"
+    ],
+    "runtime": {
+      "restoredAccountIdentity": true,
+      "explicitAccountIsolation": true,
+      "failedTargetRollback": true,
+      "nativeProcessTree": true
+    }
+  },
+  "stage6": {
+    "passed": true,
+    "ipcValidation": true,
+    "uiUnconfiguredFeedback": true,
+    "realUpdaterMetadata": true,
+    "sha512MismatchRejected": true,
+    "noRecheckDuringDownload": true,
+    "cacheIsolated": true,
+    "realSignedUpgrade": false,
+    "transport": "electron-updater shared HTTP downloader through NsisUpdater"
+  },
+  "recovery": {
+    "failed": "RUNTIME_UNAVAILABLE",
+    "generation": 16,
+    "retainedEditorMemory": true,
+    "persistedSettings": true
+  },
+  "monaco": {
+    "typescript": true,
+    "json": true,
+    "model": true
+  },
+  "otherSmokeGates": {
+    "accountClosure": true,
+    "syncEngine": true,
+    "syncDesktop": true,
+    "stage3": true,
+    "stage4": true,
+    "stage5": true,
+    "workspaceTabs": true
+  },
+  "electron": "44.9.0",
+  "node": "24.22.0",
+  "signedOrNotarized": false
+}
