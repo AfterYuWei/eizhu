@@ -110,6 +110,30 @@ export class AgentService {
       providers: config.providers.map(({ apiKey, ...p }) => ({ ...p, hasApiKey: Boolean(apiKey) })),
     })
   }
+  private async availableBackend(
+    backend: AiConversation['backend'],
+    config: z.infer<typeof storedAiConfigSchema>,
+  ) {
+    if (backend.kind === 'custom') {
+      const provider = config.providers.find((p) => p.id === backend.providerId)
+      if (!provider) fail('AI_CONFIG', '请选择已配置的供应商')
+      const model = backend.model || provider.model
+      if (model !== provider.model && !provider.models?.some((m) => m.id === model))
+        fail('AI_CONFIG', '所选模型已不在供应商候选池中，请重新选择')
+      return { kind: 'custom' as const, providerId: provider.id, model }
+    }
+    if (backend.kind === 'official') {
+      if (!(await this.token()).trim()) fail('AI_CONFIG', '请先登录账号或选择自配供应商')
+      return backend
+    }
+    const statuses = await this.external?.status(config.clis)
+    if (!statuses?.some((s) => s.kind === backend.kind && s.available))
+      fail('AI_CLI_UNAVAILABLE', '当前Agent CLI未安装、版本不兼容或配置不完整，请重新选择')
+    return {
+      ...backend,
+      model: backend.model || config.clis.find((c) => c.kind === backend.kind)?.model || '',
+    }
+  }
   private notify(a: Active, message?: AiConversation['messages'][number]) {
     this.emit(a.stored.conversation, message)
   }
@@ -159,6 +183,7 @@ export class AgentService {
       })
   }
   private async stop(a: Active) {
+    a.stored.conversation.revision++
     a.approval?.resolve(false)
     a.approval = undefined
     a.controller?.abort()
@@ -220,6 +245,8 @@ export class AgentService {
       .join('\n')
       .slice(-32768)
     c.backend = backend
+    if (!c.messages.some((m) => m.tool?.state === 'unknown') && !c.jobs.some((j) => j.status === 'unknown'))
+      c.error = ''
     c.revision++
     a.grants.clear()
     a.stored.nativeSession = undefined
@@ -530,7 +557,8 @@ export class AgentService {
       if (!this.external) fail('AI_UNAVAILABLE', '外部Agent宿主不可用')
       const config = await this.config(),
         kind = c.backend.kind,
-        cli = config.clis.find((v) => v.kind === kind) ?? { kind, path: '', model: c.backend.model }
+        configured = config.clis.find((v) => v.kind === kind),
+        cli = { kind, path: configured?.path ?? '', model: c.backend.model || configured?.model || '' }
       const message = { id: randomUUID(), role: 'assistant' as const, text: '' }
       c.messages.push(message)
       await this.save(a)
@@ -685,7 +713,7 @@ export class AgentService {
         if (this.configuring) fail('AI_BUSY', '正在更新AI设置')
         this.configuring = true
         try {
-          for (const a of this.active.values()) await this.stop(a)
+          if (operation !== 'ai.setDefault') for (const a of this.active.values()) await this.stop(a)
           const config = await this.config()
           if (operation === 'ai.setEnabled') config.enabled = ai['ai.setEnabled'].input.parse(input).enabled
           else if (operation === 'ai.configure') {
@@ -708,8 +736,6 @@ export class AgentService {
             config.clis = [...config.clis.filter((v) => v.kind !== d.kind), d]
           } else config.defaultBackend = ai['ai.setDefault'].input.parse(input)
           await this.storage({ kind: 'config.write', value: config })
-          if (operation === 'ai.setDefault')
-            for (const a of this.active.values()) await this.handoff(a, config.defaultBackend)
           return this.publicConfig(config)
         } finally {
           this.configuring = false
@@ -793,13 +819,14 @@ export class AgentService {
         const d = ai['ai.open'].input.parse(input),
           config = await this.config()
         if (!config.enabled) fail('AI_DISABLED', '请先在设置中启用AI助手')
+        const backend = await this.availableBackend(d.backend ?? config.defaultBackend, config)
         const stored: StoredAiConversation = {
           format: 3,
           conversation: {
             id: randomUUID(),
             title: '新对话',
             updatedAt: Date.now(),
-            backend: d.backend ?? config.defaultBackend,
+            backend,
             permission: 'confirm',
             revision: 0,
             targets: [],
@@ -849,7 +876,6 @@ export class AgentService {
           }
         }
         this.active.set(d.conversationId, a)
-        await this.handoff(a, (await this.config()).defaultBackend)
         await this.save(a)
         return stored.conversation
       }
@@ -872,7 +898,12 @@ export class AgentService {
         const d = ai['ai.backend'].input.parse(input),
           a = this.owned(d.conversationId, owner)
         await this.stop(a)
-        return this.handoff(a, d.backend)
+        const revision = a.stored.conversation.revision
+        const backend = await this.availableBackend(d.backend, await this.config())
+        this.owned(d.conversationId, owner)
+        if (a.task || revision !== a.stored.conversation.revision)
+          fail('AI_SCOPE_CHANGED', '对话状态已变化，请重新选择Agent或模型')
+        return this.handoff(a, backend)
       }
       case 'ai.permission': {
         const d = ai['ai.permission'].input.parse(input),
@@ -887,14 +918,20 @@ export class AgentService {
       case 'ai.send': {
         const d = ai['ai.send'].input.parse(input),
           a = this.owned(d.conversationId, owner),
-          c = a.stored.conversation
+          c = a.stored.conversation,
+          revision = c.revision
         if (a.task || this.configuring) fail('AI_BUSY', '请等待当前任务结束')
-        if (!(await this.config()).enabled) fail('AI_DISABLED', '请先在设置中启用AI助手')
+        const config = await this.config()
+        if (!config.enabled) fail('AI_DISABLED', '请先在设置中启用AI助手')
+        await this.availableBackend(c.backend, config)
         if (!c.targets.length) fail('AI_SCOPE_CHANGED', '请先选择连接')
         for (const t of c.targets) {
           this.guard(a, t.sessionId)
           t.cwd = (await this.ssh.agentTarget(t.sessionId)).target.cwd
         }
+        this.owned(d.conversationId, owner)
+        if (a.task || this.configuring || revision !== c.revision)
+          fail('AI_SCOPE_CHANGED', '对话状态已变化，请重新发送')
         if (d.attachments.reduce((n, v) => n + Buffer.byteLength(v.content), 0) > 131072)
           fail('AI_ATTACHMENT_LIMIT', '附件总大小不能超过128KiB')
         const text = redactAiText(
@@ -904,7 +941,7 @@ export class AgentService {
               (v) => '\n<附加内容 ' + JSON.stringify(v.name) + '>\n' + v.content + '\n</附加内容>',
             ),
           ].join('\n'),
-          (await this.config()).providers.map((p) => p.apiKey),
+          config.providers.map((p) => p.apiKey),
         )
         if (c.messages.length > 1950) fail('AI_HISTORY_LIMIT', '对话已满，请新建对话')
         c.messages.push({ id: randomUUID(), role: 'user', text })

@@ -177,6 +177,28 @@ export class CliAgentHost implements AgentExternal {
             maxBuffer: 65536,
             windowsHide: true,
           })
+          const help = await exec(path, kind === 'codex' ? ['app-server', '--help'] : ['--help'], {
+            timeout: 10000,
+            maxBuffer: 131072,
+            windowsHide: true,
+          })
+          const required =
+            kind === 'codex'
+              ? ['--listen']
+              : kind === 'claude'
+                ? [
+                    '--bare',
+                    '--tools',
+                    '--strict-mcp-config',
+                    '--permission-mode',
+                    '--setting-sources',
+                    '--disable-slash-commands',
+                  ]
+                : ['--profile', '--patch']
+          if (!required.every((flag) => (help.stdout + help.stderr).includes(flag)))
+            fail('AI_CLI_INCOMPATIBLE', '已安装CLI不支持eizhu驱动必需的运行及工具限制参数')
+          if (kind === 'deepseek' && (!cli.model || !process.env.DEEPSEEK_API_KEY?.trim()))
+            fail('AI_CONFIG', 'DeepSeek Harness需要原生模型名和DEEPSEEK_API_KEY环境配置')
           return { kind, path, available: true, message: stdout.trim().slice(0, 512) }
         } catch (error) {
           return {

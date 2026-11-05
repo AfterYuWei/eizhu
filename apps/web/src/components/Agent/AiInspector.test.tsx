@@ -5,6 +5,7 @@ import { beforeEach, afterEach, expect, it, vi } from 'vitest'
 import type { AiConversation } from '@eizhu/contracts'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useAiStore } from '@/store/ai'
+import { useAccountStore } from '@/store/account'
 import { useSessionStore } from '@/store/session'
 import { AiInspector } from './AiInspector'
 const api = vi.hoisted(() => ({
@@ -17,7 +18,11 @@ const api = vi.hoisted(() => ({
     cancel: vi.fn(),
     stopJob: vi.fn(),
     history: vi.fn(),
+    cliStatus: vi.fn(),
+    capabilities: vi.fn(),
+    backend: vi.fn(),
   },
+  document: { pick: vi.fn(), readText: vi.fn(), release: vi.fn() },
   events: { on: vi.fn(() => () => {}) },
   clipboard: { write: vi.fn() },
 }))
@@ -29,11 +34,66 @@ beforeEach(async () => {
   ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
   vi.clearAllMocks()
   vi.stubGlobal('eizhu', api)
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    },
+  )
+  HTMLElement.prototype.scrollIntoView = vi.fn()
+  useAccountStore.setState({
+    status: {
+      loggedIn: true,
+      sessionState: 'authenticated',
+      syncEnabled: false,
+      user: {
+        id: 1,
+        email: 'fixture@example.invalid',
+        emailVerified: true,
+        verificationRequired: false,
+        storageUsed: 0,
+        storageQuota: 0,
+      },
+    },
+  })
+  api.ai.cliStatus.mockResolvedValue([
+    { kind: 'codex', path: '/fixture/codex', available: true, message: 'fixture' },
+    { kind: 'claude', path: '', available: false, message: '未安装' },
+  ])
+  api.ai.capabilities.mockResolvedValue({
+    available: true,
+    models: [{ id: 'official-model', name: '官方模型' }],
+    defaultModel: 'official-model',
+  })
+  api.document.release.mockResolvedValue(undefined)
+  api.ai.backend.mockImplementation(async ({ backend }) => ({
+    ...useAiStore.getState().conversations.chat,
+    backend,
+    status: 'idle',
+    messages: c.messages.filter((m) => !m.tool),
+  }))
+  api.ai.send.mockResolvedValue(undefined)
   api.ai.settings.mockResolvedValue({
     enabled: true,
-    providers: [],
+    providers: [
+      {
+        id: 'p',
+        name: '测试供应商',
+        protocol: 'responses',
+        endpoint: 'https://fixture.invalid',
+        model: 'model-a',
+        models: [
+          { id: 'model-a', name: '模型A' },
+          { id: 'model-b', name: '模型B' },
+        ],
+        contextWindow: 256000,
+        hasApiKey: true,
+      },
+    ],
     clis: [],
-    defaultBackend: { kind: 'official', model: '' },
+    defaultBackend: { kind: 'official', model: 'official-model' },
   })
   api.ai.decide.mockResolvedValue(undefined)
   api.clipboard.write.mockResolvedValue(undefined)
@@ -41,7 +101,7 @@ beforeEach(async () => {
     id: 'chat',
     title: '检查',
     updatedAt: 0,
-    backend: { kind: 'official', model: '' },
+    backend: { kind: 'official', model: 'official-model' },
     permission: 'confirm',
     revision: 4,
     targets: [
@@ -181,13 +241,124 @@ it('idle Agent retains independent and all-task stop controls for running jobs',
   expect(api.ai.stopJob).toHaveBeenCalledWith({ conversationId: 'chat', jobId: 'job1' })
 })
 
-it('shows the configured Agent without an engine picker and blocks sending when disabled', async () => {
+it('blocks sending and Agent selection when AI is disabled', async () => {
   await act(async () =>
     useAiStore
       .getState()
       .setSettings({ enabled: false, providers: [], clis: [], defaultBackend: { kind: 'codex', model: '' } }),
   )
-  expect(host.querySelector('[aria-label="选择Agent与模型"]')).toBeNull()
-  expect(host.textContent).toContain('AI助手未启用')
+  expect(host.querySelector<HTMLButtonElement>('[aria-label="选择Agent"]')!.disabled).toBe(true)
+  expect(host.textContent).toContain('启用AI助手')
   expect(button('发送').disabled).toBe(true)
+})
+
+async function choose(id: string, label: string) {
+  await act(async () => document.getElementById(id)!.click())
+  await act(async () =>
+    [...document.querySelectorAll<HTMLElement>('[role=option]')]
+      .find((e) => e.textContent === label)!
+      .click(),
+  )
+}
+async function fill(text: string) {
+  await act(async () => {
+    const input = host.querySelector('textarea')!
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(input, text)
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+  })
+}
+async function attach() {
+  await act(async () =>
+    host
+      .querySelector('[aria-label="添加附件"]')!
+      .dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })),
+  )
+  await act(async () =>
+    [...document.querySelectorAll<HTMLElement>('[role=menuitem]')]
+      .find((e) => e.textContent === '上传附件')!
+      .click(),
+  )
+}
+it('composer offers saved suppliers and installed compatible CLIs without the old backend band', async () => {
+  expect(host.querySelector('.ai-backend-current')).toBeNull()
+  expect(host.textContent).not.toContain('附加选区')
+  expect(host.textContent).not.toContain('附加文件')
+  await act(async () => document.getElementById('ai-agent-picker')!.click())
+  const labels = [...document.querySelectorAll('[role=option]')].map((e) => e.textContent)
+  expect(labels).toEqual(['官方AI', '测试供应商', 'Codex'])
+  expect(labels).not.toContain('Claude Code')
+})
+it('Agent and candidate model switches apply to this chat and preserve its draft and scope', async () => {
+  await fill('保留草稿')
+  await pending()
+  await choose('ai-agent-picker', '测试供应商')
+  expect(api.ai.backend).toHaveBeenLastCalledWith({
+    conversationId: 'chat',
+    backend: { kind: 'custom', providerId: 'p', model: 'model-a' },
+  })
+  expect(host.querySelector('textarea')!.value).toBe('保留草稿')
+  await choose('ai-chat-model', '模型B')
+  expect(api.ai.backend).toHaveBeenLastCalledWith({
+    conversationId: 'chat',
+    backend: { kind: 'custom', providerId: 'p', model: 'model-b' },
+  })
+  expect(useAiStore.getState().conversations.chat.targets[0].sessionId).toBe('a')
+  expect(useAiStore.getState().settings!.defaultBackend.kind).toBe('official')
+  expect(host.querySelector('textarea')!.value).toBe('保留草稿')
+})
+it('new chat sends with its chosen supplier and model', async () => {
+  await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="新建AI对话"]')!.click())
+  await choose('ai-agent-picker', '测试供应商')
+  await choose('ai-chat-model', '模型B')
+  api.ai.open.mockResolvedValue({
+    ...c,
+    id: 'new-chat',
+    backend: { kind: 'custom', providerId: 'p', model: 'model-b' },
+  })
+  await fill('新任务')
+  await act(async () => button('发送').click())
+  expect(api.ai.open).toHaveBeenCalledWith({
+    sessionIds: ['a'],
+    backend: { kind: 'custom', providerId: 'p', model: 'model-b' },
+  })
+  expect(api.ai.send).toHaveBeenCalledWith({ conversationId: 'new-chat', text: '新任务', attachments: [] })
+})
+it('unavailable restored CLI remains unselected and cannot send', async () => {
+  await act(async () => useAiStore.getState().put({ ...c, backend: { kind: 'claude', model: '' } }))
+  await fill('不得调用')
+  expect(document.getElementById('ai-agent-picker')!.textContent).toContain('Agent')
+  expect(button('发送').disabled).toBe(true)
+  await act(async () => button('发送').click())
+  expect(api.ai.send).not.toHaveBeenCalled()
+})
+it('plus menu uploads text attachments, releases references and allows removal', async () => {
+  api.document.pick.mockResolvedValue([{ name: '日志.txt', reference: 'doc1' }])
+  api.document.readText.mockResolvedValue('hello')
+  await attach()
+  expect(api.document.readText).toHaveBeenCalledWith({ reference: 'doc1', maxBytes: 65536 })
+  expect(api.document.release).toHaveBeenCalledWith({ reference: 'doc1' })
+  expect(host.querySelector('[aria-label="移除附件 日志.txt"]')).not.toBeNull()
+  await fill('分析日志')
+  await choose('ai-agent-picker', '测试供应商')
+  await act(async () => button('发送').click())
+  expect(api.ai.send).toHaveBeenCalledWith({
+    conversationId: 'chat',
+    text: '分析日志',
+    attachments: [{ name: '日志.txt', content: 'hello' }],
+  })
+  api.document.pick.mockResolvedValue([{ name: '另一个.txt', reference: 'doc2' }])
+  await attach()
+  await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="移除附件 另一个.txt"]')!.click())
+  expect(host.querySelector('.ai-attachment-chip')).toBeNull()
+})
+it('failed attachment reads release all selected references without partially attaching', async () => {
+  api.document.pick.mockResolvedValue([
+    { name: 'one', reference: 'doc1' },
+    { name: 'two', reference: 'doc2' },
+  ])
+  api.document.readText.mockRejectedValue(new Error('无法读取文件'))
+  await attach()
+  expect(api.document.release).toHaveBeenCalledTimes(2)
+  expect(host.querySelector('.ai-attachment-chip')).toBeNull()
+  expect(host.querySelector('[role=alert]')!.textContent).toBe('无法读取文件')
 })

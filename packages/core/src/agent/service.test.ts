@@ -342,7 +342,7 @@ test('unknown result and busy terminal pause instead of dispatching more command
 test('Stop cancels every long task created by an external Agent', async () => {
   let started = false
   const external: AgentExternal = {
-    status: async () => [],
+    status: async () => [{ kind: 'codex', path: '/synthetic/codex', available: true, message: 'fixture' }],
     run: async (_input, signal, _text, tool) => {
       await tool('terminal_start', command('a'))
       await tool('terminal_start', command('b'))
@@ -605,7 +605,10 @@ for (const protocol of ['responses', 'chat', 'anthropic'] as const)
       }
     })
 test('backend switch preserves a handoff and expires pending operations', async () => {
-  const f = fixture([{ name: 'terminal_execute', args: command() }, null])
+  const f = fixture([{ name: 'terminal_execute', args: command() }, null], {
+    status: async () => [{ kind: 'claude', path: '/synthetic/claude', available: true, message: 'fixture' }],
+    run: async () => ({ nativeSession: 'fixture' }),
+  })
   try {
     const c = await f.open()
     await f.send(c.id)
@@ -613,6 +616,7 @@ test('backend switch preserves a handoff and expires pending operations', async 
     await f.service.execute('ai.backend', { conversationId: c.id, backend: { kind: 'claude', model: '' } }, 1)
     assert.ok(f.current.summary.includes('检查'))
     assert.equal(f.current.backend.kind, 'claude')
+    assert.equal(f.current.error, '')
     assert.equal(f.execs.length, 0)
   } finally {
     await f.service.close()
@@ -623,7 +627,7 @@ test('native revocation immediately invalidates an outstanding approval before p
   let revoke: (() => void) | undefined,
     cleanup: () => void = () => {}
   const external: AgentExternal = {
-    status: async () => [],
+    status: async () => [{ kind: 'codex', path: '/synthetic/codex', available: true, message: 'fixture' }],
     run: async (_input, _signal, _text, tool, onRevoke) => {
       revoke = onRevoke
       const call = tool('terminal_execute', command())
@@ -659,7 +663,7 @@ test('native revocation immediately invalidates an outstanding approval before p
 test('large output handles page inside their conversation and persist separately from excerpts', async () => {
   let first: unknown, page: unknown, foreign: unknown
   const external: AgentExternal = {
-    status: async () => [],
+    status: async () => [{ kind: 'codex', path: '/synthetic/codex', available: true, message: 'fixture' }],
     run: async (_i, _s, _t, tool) => {
       first = await tool('terminal_read_context', { sessionId: 'a' })
       const handle = (first as { handle: string }).handle
@@ -788,7 +792,7 @@ test('context compaction preserves original records and saves a separate semanti
 })
 test('an idle Agent exposes per-job stop without interrupting other terminals', async () => {
   const external: AgentExternal = {
-    status: async () => [],
+    status: async () => [{ kind: 'codex', path: '/synthetic/codex', available: true, message: 'fixture' }],
     run: async (_i, _s, _t, tool) => {
       await tool('terminal_start', command('a'))
       await tool('terminal_start', command('b'))
@@ -840,19 +844,128 @@ test('disable stops the Agent, expires approvals and prevents subsequent runs wh
     await f.service.close()
   }
 })
-test('settings backend selection stops current work and hands the conversation to the selected Agent', async () => {
+test('settings default selection preserves the current conversation and its pending work', async () => {
   const f = fixture([{ name: 'terminal_execute', args: command() }])
   try {
     const c = await f.open()
     await f.send(c.id)
     await f.pending()
     await f.service.execute('ai.setDefault', { kind: 'claude', model: 'configured' }, 1)
-    assert.equal(f.current.backend.kind, 'claude')
-    assert.equal(f.current.backend.model, 'configured')
-    assert.ok(f.current.summary.includes('检查'))
+    assert.equal(f.current.backend.kind, 'custom')
+    assert.equal(f.current.backend.model, 'fixture')
+    assert.ok(f.current.messages.some((m) => m.tool?.state === 'pending'))
     assert.equal(f.execs.length, 0)
     assert.equal(f.config.defaultBackend.kind, 'claude')
   } finally {
+    await f.service.close()
+  }
+})
+
+test('unavailable CLI cannot open, switch or send, including a restored conversation', async () => {
+  let available = true,
+    calls = 0
+  const f = fixture([], {
+    status: async () => [{ kind: 'codex', path: '', available, message: '' }],
+    run: async () => {
+      calls++
+      return { nativeSession: 'fixture' }
+    },
+  })
+  try {
+    const c = await f.open()
+    available = false
+    await assert.rejects(
+      f.service.execute('ai.open', { sessionIds: ['a'], backend: { kind: 'codex', model: '' } }, 1),
+      /CLI/,
+    )
+    await assert.rejects(
+      f.service.execute('ai.backend', { conversationId: c.id, backend: { kind: 'codex', model: '' } }, 1),
+      /CLI/,
+    )
+    assert.equal(f.current.backend.kind, 'custom')
+    available = true
+    await f.service.execute('ai.backend', { conversationId: c.id, backend: { kind: 'codex', model: '' } }, 1)
+    available = false
+    await assert.rejects(f.send(c.id), /CLI/)
+    assert.equal(calls, 0)
+    assert.equal(f.current.messages.length, 0)
+    await f.service.execute('ai.setDefault', { kind: 'custom', providerId: 'p', model: 'fixture' }, 1)
+    const restored = (await f.service.execute('ai.read', { conversationId: c.id }, 1)) as AiConversation
+    assert.equal(restored.backend.kind, 'codex')
+  } finally {
+    await f.service.close()
+  }
+})
+
+test('conversation model selection accepts only its provider candidate pool', async () => {
+  const f = fixture([])
+  try {
+    await f.service.execute(
+      'ai.configure',
+      {
+        ...f.config.providers[0],
+        models: [
+          { id: 'fixture', name: 'fixture' },
+          { id: 'other', name: 'other' },
+        ],
+      },
+      1,
+    )
+    const a = await f.open(),
+      b = await f.open()
+    await f.service.execute(
+      'ai.backend',
+      { conversationId: a.id, backend: { kind: 'custom', providerId: 'p', model: 'other' } },
+      1,
+    )
+    const selected = (await f.service.execute('ai.read', { conversationId: a.id }, 1)) as AiConversation
+    const untouched = (await f.service.execute('ai.read', { conversationId: b.id }, 1)) as AiConversation
+    assert.equal(selected.backend.model, 'other')
+    assert.equal(untouched.backend.model, 'fixture')
+    assert.equal(f.config.defaultBackend.model, 'fixture')
+    await assert.rejects(
+      f.service.execute(
+        'ai.backend',
+        { conversationId: a.id, backend: { kind: 'custom', providerId: 'p', model: 'unlisted' } },
+        1,
+      ),
+      /候选/,
+    )
+  } finally {
+    await f.service.close()
+  }
+})
+
+test('cancellation during CLI availability checking prevents a late send', async () => {
+  let checking = false,
+    finish: () => void = () => {},
+    calls = 0
+  const f = fixture([], {
+    status: async () => {
+      if (checking)
+        await new Promise<void>((resolve) => {
+          finish = resolve
+        })
+      return [{ kind: 'codex', path: '', available: true, message: '' }]
+    },
+    run: async () => {
+      calls++
+      return { nativeSession: 'fixture' }
+    },
+  })
+  try {
+    const c = await f.open()
+    await f.service.execute('ai.backend', { conversationId: c.id, backend: { kind: 'codex', model: '' } }, 1)
+    checking = true
+    const pending = f.send(c.id)
+    await delay(5)
+    await f.service.execute('ai.cancel', { conversationId: c.id }, 1)
+    finish()
+    await assert.rejects(pending, /状态已变化/)
+    assert.equal(calls, 0)
+    assert.equal(f.current.messages.length, 0)
+  } finally {
+    finish()
     await f.service.close()
   }
 })

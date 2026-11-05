@@ -173,7 +173,7 @@ export function AiPanel() {
             <Field
               id="ai-engine"
               label="使用方式"
-              description="在这里选择内置助手或外部Agent，对话中沿用此设置。"
+              description="设置新对话默认使用的助手，也可在对话输入框中切换。"
             >
               <Select
                 value={engine}

@@ -1,17 +1,23 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { Plus, Square, History, ChevronDown, Settings2 } from 'lucide-react'
-import type { AiConversation } from '@eizhu/contracts'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Plus, Square, History, ChevronDown, Settings2, ArrowUp, Bot, FileText, X } from 'lucide-react'
+import type { AiConversation, AiBackend, AiCapabilities, AiCliStatus, AiModelCatalog } from '@eizhu/contracts'
 import { useAiStore } from '@/store/ai'
 import { useSessionStore } from '@/store/session'
 import { useDesktopShellStore } from '@/store/desktopShell'
 import { bridge } from '@/lib/bridge'
 import { AiIcon } from '@/lib/serverIcons'
-import { terminalActions } from '@/lib/terminalActions'
+import { useAccountStore } from '@/store/account'
 import { workspaceGeneration } from '@/lib/workspaceScope'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { ShellIconButton, ShellResizeHandle } from '@/components/Layout/ShellControls'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from '@/components/ui/dropdown-menu'
 import { AiMessage } from './AiMessage'
 import { AiApproval } from './AiApproval'
 import './ai.css'
@@ -31,6 +37,10 @@ export function AiInspector({
   const { inspectorWidth, setInspectorWidth, setSettingsPage } = useDesktopShellStore()
   const { selectedId, conversations, select, put, progress, forget, settings, setSettings } = useAiStore()
   const conversation = selectedId ? conversations[selectedId] : undefined
+  const loggedIn = useAccountStore((s) => s.status?.loggedIn)
+  const [cliStatuses, setCliStatuses] = useState<AiCliStatus[]>([])
+  const [official, setOfficial] = useState<AiCapabilities | null>(null)
+  const [newBackend, setNewBackend] = useState<AiBackend | null>(null)
   const [selectedSessions, setSelectedSessions] = useState<string[]>(() => {
     const tab = tabs.find((t) => t.id === activeTabId)
     return tab?.sessionId && tab.status === 'connected' ? [tab.sessionId] : []
@@ -81,19 +91,108 @@ export function AiInspector({
   useEffect(() => {
     if (follow.current && messages.current) messages.current.scrollTop = messages.current.scrollHeight
   }, [conversation?.messages, conversation?.status])
-  const selectedBackend = settings?.defaultBackend
-  const backendLabel = !settings?.enabled
-    ? 'AI助手未启用'
-    : selectedBackend?.kind === 'custom'
-      ? '内置助手 · ' +
-        (settings.providers.find((p) => p.id === selectedBackend.providerId)?.name ?? '自定义模型')
-      : selectedBackend?.kind === 'official'
-        ? '内置助手 · 官方AI'
-        : selectedBackend
-          ? { codex: 'Codex', claude: 'Claude Code', deepseek: 'DeepSeek Harness' }[selectedBackend.kind]
-          : '正在读取设置…'
+  const refreshAgents = useCallback(async () => {
+    if (!window.eizhu || !settings?.enabled) return
+    const generation = workspaceGeneration()
+    const [clis, catalog] = await Promise.allSettled([
+      bridge().ai.cliStatus(),
+      loggedIn ? bridge().ai.capabilities() : Promise.resolve(null),
+    ])
+    if (generation !== workspaceGeneration()) return
+    setCliStatuses(clis.status === 'fulfilled' ? clis.value : [])
+    setOfficial(catalog.status === 'fulfilled' ? catalog.value : null)
+  }, [loggedIn, settings?.enabled])
+  useEffect(() => {
+    if (open) void refreshAgents()
+  }, [open, refreshAgents])
+  const agents = useMemo(() => {
+    const choices: Array<{
+      value: string
+      label: string
+      backend: AiBackend
+      models: AiModelCatalog['models']
+    }> = []
+    if (!settings?.enabled) return choices
+    if (official?.available && official.models.length)
+      choices.push({
+        value: 'official',
+        label: '官方AI',
+        models: official.models,
+        backend: { kind: 'official', model: official.defaultModel || official.models[0].id },
+      })
+    for (const provider of settings.providers) {
+      const models = new Map((provider.models ?? []).map((m) => [m.id, m]))
+      if (!models.has(provider.model))
+        models.set(provider.model, { id: provider.model, name: provider.model })
+      choices.push({
+        value: 'provider:' + provider.id,
+        label: provider.name,
+        models: [...models.values()],
+        backend: { kind: 'custom', providerId: provider.id, model: provider.model },
+      })
+    }
+    for (const cli of cliStatuses.filter((c) => c.available)) {
+      const configured = settings.clis.find((c) => c.kind === cli.kind)
+      const model = configured?.model ?? ''
+      choices.push({
+        value: 'cli:' + cli.kind,
+        label: { codex: 'Codex', claude: 'Claude Code', deepseek: 'DeepSeek Harness' }[cli.kind],
+        backend: { kind: cli.kind, model },
+        models: [{ id: model, name: model || 'CLI默认' }],
+      })
+    }
+    return choices
+  }, [settings, official, cliStatuses])
+  const backend = conversation?.backend ?? newBackend ?? settings?.defaultBackend
+  const agentKey =
+    backend?.kind === 'custom'
+      ? 'provider:' + backend.providerId
+      : backend?.kind === 'official'
+        ? 'official'
+        : backend
+          ? 'cli:' + backend.kind
+          : ''
+  const agent = agents.find((a) => a.value === agentKey)
+  const model = backend?.model || agent?.backend.model || ''
+  const ready = Boolean(agent && agent.models.some((m) => m.id === model))
+  const changeBackend = (next: AiBackend) =>
+    act(async () => {
+      if (conversation) put(await bridge().ai.backend({ conversationId: conversation.id, backend: next }))
+      else setNewBackend(next)
+    })
+  const upload = () =>
+    act(async () => {
+      const generation = workspaceGeneration()
+      const selected = await bridge().document.pick({
+        multiple: true,
+        mimeTypes: ['text/*', 'application/json'],
+      })
+      const additions: Draft['attachments'] = []
+      try {
+        if (selected.length + draft.attachments.length > 8) throw new Error('最多添加8个附件')
+        for (const file of selected)
+          additions.push({
+            name: file.name,
+            content: await bridge().document.readText({ reference: file.reference, maxBytes: 65536 }),
+          })
+        if (
+          [...draft.attachments, ...additions].reduce(
+            (n, a) => n + new TextEncoder().encode(a.content).length,
+            0,
+          ) > 131072
+        )
+          throw new Error('附件总大小不能超过128KiB')
+      } finally {
+        await Promise.all(selected.map((file) => bridge().document.release({ reference: file.reference })))
+      }
+      if (generation === workspaceGeneration()) update({ attachments: [...draft.attachments, ...additions] })
+    })
   const newConversation = async () => {
-    const created = await bridge().ai.open({ sessionIds: selectedSessions })
+    if (!agent || !ready) throw new Error('请选择可用的Agent和模型')
+    const created = await bridge().ai.open({
+      sessionIds: selectedSessions,
+      backend: { ...agent.backend, model },
+    })
     put(created)
     select(created.id)
     setHistory(null)
@@ -102,6 +201,8 @@ export function AiInspector({
   const send = () =>
     act(async () => {
       if (!settings?.enabled || !draft.text.trim()) return
+      if (!ready) throw new Error('请选择可用的Agent和模型')
+      if (!conversation && !selectedSessions.length) throw new Error('请先选择连接范围')
       const c = conversation ?? (await newConversation())
       await bridge().ai.send({
         conversationId: c.id,
@@ -122,7 +223,11 @@ export function AiInspector({
       inert={!open}
       aria-label="AI助手"
       onKeyDown={(e) => {
-        if (e.key === 'Escape' && !e.defaultPrevented) {
+        if (
+          e.key === 'Escape' &&
+          !e.defaultPrevented &&
+          !(e.target instanceof Element && e.target.closest('[role=menu],[role=listbox]'))
+        ) {
           e.preventDefault()
           onClose()
         }
@@ -151,6 +256,7 @@ export function AiInspector({
             disabled={loading || busy || !settings?.enabled}
             onClick={() => {
               select(null)
+              setNewBackend(null)
               setHistory(null)
             }}
           >
@@ -168,12 +274,6 @@ export function AiInspector({
         </div>
       </div>
       <div className="ai-session-controls">
-        <div className="ai-backend-current">
-          <span>{backendLabel}</span>
-          <Button size="sm" variant="ghost" onClick={() => setSettingsPage('ai')}>
-            设置
-          </Button>
-        </div>
         <div className="ai-inline-actions">
           <Button size="sm" variant="ghost" onClick={() => setScopeOpen((v) => !v)}>
             连接范围 · {conversation?.targets.length ?? selectedSessions.length}
@@ -334,7 +434,10 @@ export function AiInspector({
       {conversation?.status === 'paused' && (
         <p className="ai-command-notice">任务已暂停。请先核查结果，再发送后续指令。</p>
       )}
-      {!settings?.enabled && <p className="ai-command-notice">请在设置中启用AI助手并选择使用方式。</p>}
+      {!settings?.enabled && <p className="ai-command-notice">请在设置中启用AI助手。</p>}
+      {settings?.enabled && !ready && (
+        <p className="ai-command-notice">请选择可用的Agent和模型；可在设置中配置供应商或检查CLI安装。</p>
+      )}
       <div className="ai-composer">
         {pending && conversation ? (
           <AiApproval
@@ -376,93 +479,135 @@ export function AiInspector({
                 }
               }}
             />
-            {draft.attachments.map((a, i) => (
-              <Button
-                key={i}
-                size="sm"
-                variant="ghost"
-                onClick={() => update({ attachments: draft.attachments.filter((_, j) => i !== j) })}
-              >
-                {a.name} ×
-              </Button>
-            ))}
-            <div className="ai-composer-toolbar">
-              <div className="ai-inline-actions">
+            <div className="ai-attachment-chips">
+              {draft.attachments.map((a, i) => (
                 <Button
+                  key={i}
                   size="sm"
                   variant="ghost"
-                  disabled={busy}
-                  onClick={() => {
-                    const text = terminalActions(activeTabId)?.selection?.()
-                    if (text)
-                      update({ attachments: [...draft.attachments, { name: '终端选区', content: text }] })
-                  }}
+                  className="ai-attachment-chip"
+                  disabled={busy || loading}
+                  aria-label={'移除附件 ' + a.name}
+                  title={a.name}
+                  onClick={() => update({ attachments: draft.attachments.filter((_, j) => i !== j) })}
                 >
-                  附加选区
+                  <FileText size={12} />
+                  <span>{a.name}</span>
+                  <X size={12} />
                 </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  disabled={busy}
-                  onClick={() =>
-                    void act(async () => {
-                      const selected = await bridge().document.pick({
-                        multiple: false,
-                        mimeTypes: ['text/*', 'application/json'],
-                      })
-                      for (const file of selected) {
-                        try {
-                          const content = await bridge().document.readText({
-                            reference: file.reference,
-                            maxBytes: 65536,
-                          })
-                          update({ attachments: [...draft.attachments, { name: file.name, content }] })
-                        } finally {
-                          await bridge().document.release({ reference: file.reference })
-                        }
-                      }
-                    })
-                  }
-                >
-                  附加文件
-                </Button>
-              </div>
-              {busy ? (
-                <Button
-                  size="sm"
-                  aria-label="停止Agent"
-                  onClick={() =>
-                    conversation && void act(() => bridge().ai.cancel({ conversationId: conversation.id }))
-                  }
-                >
-                  <Square size={14} />
-                </Button>
-              ) : (
-                <Button
-                  size="sm"
-                  disabled={
-                    loading ||
-                    !settings?.enabled ||
-                    !draft.text.trim() ||
-                    (!conversation && !selectedSessions.length)
-                  }
-                  onClick={() => void send()}
-                >
-                  发送
-                </Button>
-              )}
+              ))}
             </div>
           </>
         )}
-        {pending && conversation && (
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => void act(() => bridge().ai.cancel({ conversationId: conversation.id }))}
-          >
-            停止Agent
-          </Button>
-        )}
+        <div className="ai-composer-actions">
+          <div className="ai-inline-actions ai-composer-start">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <ShellIconButton
+                  label="添加附件"
+                  showTooltip={false}
+                  disabled={loading || busy || !settings?.enabled}
+                >
+                  <Plus size={16} />
+                </ShellIconButton>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent side="top" align="start">
+                <DropdownMenuItem onSelect={() => void upload()}>
+                  <FileText size={14} />
+                  上传附件
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <Select
+              value={agent?.value ?? ''}
+              disabled={loading || !settings?.enabled}
+              onOpenChange={(open) => {
+                if (open) void refreshAgents()
+              }}
+              onValueChange={(value) => {
+                const next = agents.find((a) => a.value === value)
+                if (next) void changeBackend(next.backend)
+              }}
+            >
+              <SelectTrigger
+                id="ai-agent-picker"
+                className="ai-agent-picker"
+                aria-label="选择Agent"
+                title={agent?.label}
+              >
+                <Bot size={13} />
+                <SelectValue placeholder="Agent" />
+              </SelectTrigger>
+              <SelectContent>
+                {agents.map((a) => (
+                  <SelectItem key={a.value} value={a.value}>
+                    {a.label}
+                  </SelectItem>
+                ))}
+                {!agents.length && (
+                  <SelectItem value="unavailable" disabled>
+                    暂无可用Agent
+                  </SelectItem>
+                )}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="ai-inline-actions ai-composer-end">
+            <Select
+              value={ready ? 'model:' + model : ''}
+              disabled={loading || !agent || !settings?.enabled}
+              onValueChange={(value) => {
+                if (agent) void changeBackend({ ...agent.backend, model: value.slice(6) })
+              }}
+            >
+              <SelectTrigger
+                id="ai-chat-model"
+                className="ai-model-picker"
+                aria-label="选择模型"
+                title={model}
+              >
+                <SelectValue placeholder="模型" />
+              </SelectTrigger>
+              <SelectContent>
+                {agent?.models.map((m) => (
+                  <SelectItem key={m.id} value={'model:' + m.id}>
+                    {m.name || m.id}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {busy ? (
+              <Button
+                className="ai-submit"
+                size="icon"
+                aria-label="停止Agent"
+                disabled={loading}
+                onClick={() =>
+                  conversation && void act(() => bridge().ai.cancel({ conversationId: conversation.id }))
+                }
+              >
+                <Square size={13} />
+              </Button>
+            ) : (
+              <Button
+                className="ai-submit"
+                size="icon"
+                aria-label="发送"
+                disabled={
+                  loading ||
+                  !settings?.enabled ||
+                  !ready ||
+                  !draft.text.trim() ||
+                  (!conversation && !selectedSessions.length)
+                }
+                onClick={() => void send()}
+              >
+                <ArrowUp size={16} />
+                <span className="sr-only">发送</span>
+              </Button>
+            )}
+          </div>
+        </div>
       </div>
       {conversation && (
         <Button

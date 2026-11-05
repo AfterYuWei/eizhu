@@ -294,12 +294,12 @@
 }
 .desktop-shell .ai-composer {
   flex-shrink: 0;
-  margin: 0 16px 16px;
-  padding: 12px 12px 10px;
+  margin: 0 12px 12px;
+  padding: 10px;
   border: 0;
-  border-radius: 16px;
-  background: var(--surface-panel);
-  box-shadow: 0 0 12px light-dark(rgba(0, 0, 0, 0.12), rgba(0, 0, 0, 0.48));
+  border-radius: 12px;
+  background: var(--surface-app);
+  box-shadow: none;
 }
 .ai-inspector .ai-composer textarea {
   min-height: 74px;
@@ -339,12 +339,15 @@
   color: var(--fg-2);
 }
 .ai-composer-end {
-  gap: 8px;
+  gap: 4px;
   min-width: 0;
+  max-width: 52%;
+  flex-shrink: 0;
 }
 .ai-model-picker {
   height: 28px;
-  max-width: 132px;
+  max-width: 200px;
+  flex-shrink: 1;
   min-width: 0;
   gap: 6px;
   padding: 2px 4px;
@@ -362,18 +365,14 @@
   height: 32px;
   flex-shrink: 0;
   border-radius: 8px;
-  background: #d8f5e8;
-  color: #174d36;
+  background: var(--fg);
+  color: var(--bg);
 }
 .ai-inspector .ai-submit:hover {
-  background: #c2efd9;
+  background: var(--fg-2);
 }
 .ai-inspector .ai-submit:disabled {
   opacity: 0.5;
-}
-.dark .ai-inspector .ai-submit {
-  background: #204d38;
-  color: #c2efd9;
 }
 .ai-jump-latest {
   position: absolute;
@@ -683,5 +682,11 @@
 .ai-model-add-row > button:last-child { flex-shrink: 0; }
 .ai-model-hint { margin: 0; color: var(--fg-3); font-size: 12px; }
 .ai-settings .ai-settings-message { margin: 12px 0 0; color: var(--fg-3); font-size: 13px; line-height: 1.6; }
-.ai-backend-current { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; }
-.ai-backend-current > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ai-composer-start { flex: 1; min-width: 0; gap: 2px; }
+.ai-composer-actions { flex-shrink: 0; }
+.ai-agent-picker { min-width: 0; max-width: 200px; flex-shrink: 1; height: 28px; background: transparent; gap: 4px; padding: 2px 4px; border: 0; box-shadow: none; font-size: 12px; font-weight: 400; color: var(--fg-2); }
+.ai-agent-picker > :not(svg) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ai-inspector .ai-model-picker { border: 0; box-shadow: none; background: transparent; }
+.ai-attachment-chips { display: flex; flex-wrap: wrap; gap: 4px; max-height: 90px; overflow: auto; }
+.ai-attachment-chip { min-width: 0; max-width: 100%; gap: 5px; font-size: 12px; }
+.ai-attachment-chip > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

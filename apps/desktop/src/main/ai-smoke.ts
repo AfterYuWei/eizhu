@@ -222,15 +222,28 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
       if (await js<boolean>(source)) return
       await new Promise((r) => setTimeout(r, 50))
     }
-    await writeFile(join(root, 'ai-v2-failure.png'), (await window.webContents.capturePage()).toPNG())
+    await writeFile(
+      join(root, 'ai-v2-failure.png'),
+      (await window.webContents.capturePage(undefined, { stayAwake: true })).toPNG(),
+    )
     const state = await js(
-      "return {status:window.__aiV2?.status,error:window.__aiV2?.error,backend:window.__aiV2?.backend,tools:window.__aiV2?.messages.filter(m=>m.tool).map(m=>({name:m.tool.name,state:m.tool.state,error:m.tool.error})),buttons:[...document.querySelectorAll('.ai-composer button')].map(b=>({text:b.textContent,disabled:b.disabled}))}",
+      "return {modelManager:(()=>{const e=document.querySelector('.ai-model-manager');return e?{client:e.clientWidth,scroll:e.scrollWidth,rect:e.getBoundingClientRect().toJSON()}:null})(),status:window.__aiV2?.status,error:window.__aiV2?.error,backend:window.__aiV2?.backend,tools:window.__aiV2?.messages.filter(m=>m.tool).map(m=>({name:m.tool.name,state:m.tool.state,error:m.tool.error})),buttons:[...document.querySelectorAll('.ai-composer button')].map(b=>({text:b.textContent,disabled:b.disabled}))}",
     )
     throw new Error('AI v2 smoke timeout: ' + source + ' ' + JSON.stringify(state))
+  }
+  const chooseSetting = async (id: string, label: string) => {
+    await wait(
+      'const control=document.getElementById(' + JSON.stringify(id) + ');return !!control&&!control.disabled',
+    )
+    await js('document.getElementById(d).click()', id)
+    await wait("return !!document.querySelector('[role=listbox]')")
+    await js("[...document.querySelectorAll('[role=option]')].find(e=>e.textContent===d).click()", label)
   }
   const snapshot = () => js('return window.__aiV2')
   const read = async () => aiConversationSchema.parse(await snapshot())
   const size = window.getContentSize()
+  const throttling = window.webContents.backgroundThrottling
+  window.webContents.backgroundThrottling = false
   try {
     ssh.listen(0, '127.0.0.1')
     http.listen(0, '127.0.0.1')
@@ -312,6 +325,38 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
       "[...document.querySelectorAll('.shell-inspector-choices button')].find(b=>b.textContent==='AI').click()",
     )
     await wait("return !!document.querySelector('.ai-composer textarea')")
+    assert.equal(await js("return !!document.querySelector('.ai-backend-current')"), false)
+    await js("document.getElementById('ai-agent-picker').click()")
+    await wait("return !!document.querySelector('[role=listbox]')")
+    const cliStatuses = await call<Array<{ kind: string; available: boolean }>>('ai', 'cliStatus')
+    const cliNames: Record<string, string> = {
+      codex: 'Codex',
+      claude: 'Claude Code',
+      deepseek: 'DeepSeek Harness',
+    }
+    const availableNames = await js<string[]>(
+      "return [...document.querySelectorAll('[role=option]')].map(e=>e.textContent)",
+    )
+    for (const status of cliStatuses)
+      assert.equal(availableNames.includes(cliNames[status.kind]), status.available)
+    await js(
+      "[...document.querySelectorAll('[role=option]')].find(e=>e.textContent==='合成 responses').click()",
+    )
+    await chooseSetting('ai-agent-picker', '合成 chat')
+    await chooseSetting('ai-agent-picker', '合成 responses')
+    await js(
+      "document.querySelector('[aria-label=添加附件]').dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}))",
+    )
+    await wait("return !!document.querySelector('[role=menuitem]')")
+    assert.deepEqual(
+      await js("return [...document.querySelectorAll('[role=menuitem]')].map(e=>e.textContent)"),
+      ['上传附件'],
+    )
+    await js(
+      "document.querySelector('[role=menu]').dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))",
+    )
+    await wait("return !document.querySelector('[role=menu]')")
+    assert.equal(await js("return document.querySelector('.ai-inspector').checkVisibility()"), true)
     await js(
       "[...document.querySelectorAll('.ai-session-controls button')].find(b=>b.textContent.startsWith('连接范围')).click()",
     )
@@ -339,7 +384,10 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
     assert.equal(await js("return document.querySelectorAll('.ai-messages .ai-approval').length"), 0)
     window.setContentSize(1280, 800)
     await js('await document.fonts.ready;await new Promise(r=>setTimeout(r,150))')
-    await writeFile(join(root, 'ai-v2-approval.png'), (await window.webContents.capturePage()).toPNG())
+    await writeFile(
+      join(root, 'ai-v2-approval.png'),
+      (await window.webContents.capturePage(undefined, { stayAwake: true })).toPNG(),
+    )
     screenshots.push('ai-v2-approval.png')
     const pending = proposed.messages.findLast((m) => m.tool?.state === 'pending')!.tool!
     await js(
@@ -377,12 +425,18 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
         dark,
       )
       const name = dark ? 'ai-v2-dark.png' : 'ai-v2-light.png'
-      await writeFile(join(root, name), (await window.webContents.capturePage()).toPNG())
+      await writeFile(
+        join(root, name),
+        (await window.webContents.capturePage(undefined, { stayAwake: true })).toPNG(),
+      )
       screenshots.push(name)
     }
     window.setContentSize(900, 760)
     await js('await new Promise(r=>setTimeout(r,150))')
-    await writeFile(join(root, 'ai-v2-narrow.png'), (await window.webContents.capturePage()).toPNG())
+    await writeFile(
+      join(root, 'ai-v2-narrow.png'),
+      (await window.webContents.capturePage(undefined, { stayAwake: true })).toPNG(),
+    )
     screenshots.push('ai-v2-narrow.png')
     const beforeBusy = commands.length
     await call('session', 'input', { id: targetIds[0], data: 'unfinished-input' })
@@ -478,16 +532,6 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
     mode = 'normal'
     await js("document.querySelector('button[aria-label=AI设置]').click()")
     await wait("return !!document.querySelector('.ai-settings #ai-engine')")
-    const chooseSetting = async (id: string, label: string) => {
-      await wait(
-        'const control=document.getElementById(' +
-          JSON.stringify(id) +
-          ');return !!control&&!control.disabled',
-      )
-      await js('document.getElementById(d).click()', id)
-      await wait("return !!document.querySelector('[role=listbox]')")
-      await js("[...document.querySelectorAll('[role=option]')].find(e=>e.textContent===d).click()", label)
-    }
     const manageModels = async (open = true) => {
       if ((await js("return !!document.querySelector('.ai-model-manager')")) !== open)
         await js("document.getElementById('ai-model-manage').click()")
@@ -513,7 +557,10 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
         ),
         true,
       )
-      await writeFile(join(root, name), (await window.webContents.capturePage()).toPNG())
+      await writeFile(
+        join(root, name),
+        (await window.webContents.capturePage(undefined, { stayAwake: true })).toPNG(),
+      )
       screenshots.push(name)
     }
     window.setContentSize(1280, 900)
@@ -530,11 +577,8 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
     )
     await js("document.getElementById('ai-add-model').click()")
     assert.equal(await js("return document.querySelectorAll('.ai-model-pool li').length"), 3)
-    assert.equal(
-      await js(
-        "const e=document.querySelector('.ai-model-manager'),r=e.getBoundingClientRect();return e.scrollWidth<=e.clientWidth+1&&r.left>=0&&r.right<=innerWidth+1&&r.top>=0&&r.bottom<=innerHeight+1",
-      ),
-      true,
+    await wait(
+      "const e=document.querySelector('.ai-model-manager'),r=e.getBoundingClientRect();return e.scrollWidth<=e.clientWidth+1&&r.left>=0&&r.right<=innerWidth+1&&r.top>=0&&r.bottom<=innerHeight+1",
     )
     await captureSetting('ai-settings-candidate-pool.png')
     await manageModels(false)
@@ -564,10 +608,59 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
     assert.equal(switched.providers.find((p) => p.id === 'responses')?.models?.length, 3)
     assert.equal(
       aiConversationSchema.parse(await call('ai', 'read', { conversationId: proposed.id })).backend.model,
-      'synthetic-alt',
+      'synthetic-ai',
     )
     await js("document.querySelector('.settings-page-back').click()")
     await wait("return !!document.querySelector('button[aria-label=AI设置]')")
+    await chooseSetting('ai-chat-model', '合成备用模型')
+    assert.equal(
+      aiConversationSchema.parse(await call('ai', 'read', { conversationId: proposed.id })).backend.model,
+      'synthetic-alt',
+    )
+    const commandsBeforeSwitch = commands.length
+    await js(
+      "const input=document.querySelector('.ai-composer textarea');Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(input,'切换模型前保留草稿');input.dispatchEvent(new Event('input',{bubbles:true}))",
+    )
+    await call('ai', 'send', { conversationId: proposed.id, text: '等待审批时切换模型', attachments: [] })
+    await wait("return !!document.querySelector('.ai-approval')")
+    await chooseSetting('ai-chat-model', 'synthetic-ai')
+    await wait("return !!document.querySelector('.ai-composer textarea')")
+    assert.equal(
+      await js("return document.querySelector('.ai-composer textarea').value"),
+      '切换模型前保留草稿',
+    )
+    const handed = aiConversationSchema.parse(await call('ai', 'read', { conversationId: proposed.id }))
+    assert.equal(handed.targets.length, 2)
+    assert.ok(handed.summary.includes('等待审批时切换模型'))
+    assert.ok(!handed.messages.some((m) => m.tool?.state === 'pending'))
+    assert.equal(commands.length, commandsBeforeSwitch)
+    assert.equal(aiSettingsSchema.parse(await call('ai', 'settings')).defaultBackend.model, 'synthetic-alt')
+    for (const width of [320, 560])
+      for (const dark of [false, true]) {
+        await js(
+          "document.documentElement.classList.toggle('dark',d.dark);document.querySelector('.ai-inspector').style.width=d.width+'px';await document.fonts.ready;await new Promise(r=>setTimeout(r,150))",
+          { width, dark },
+        )
+        assert.equal(
+          await js(
+            "const c=document.querySelector('.ai-composer'),r=c.getBoundingClientRect();return Math.abs(document.querySelector('.ai-inspector').getBoundingClientRect().width-d)<1&&c.scrollWidth<=c.clientWidth+1&&[...c.querySelectorAll('.ai-composer-actions button')].every(b=>{const x=b.getBoundingClientRect();return x.left>=r.left&&x.right<=r.right+1})",
+            width,
+          ),
+          true,
+        )
+        const name = 'ai-composer-' + width + (dark ? '-dark' : '-light') + '.png'
+        const capture = await window.webContents.capturePage(undefined, { stayAwake: true })
+        const dimensions = capture.getSize(),
+          pixels = capture.toBitmap()
+        const offset = (50 * dimensions.width + dimensions.width - 20) * 4
+        const brightness = (pixels[offset] + pixels[offset + 1] + pixels[offset + 2]) / 3
+        assert.ok(dark ? brightness < 130 : brightness > 160, 'Composer theme must be painted before capture')
+        await writeFile(join(root, name), capture.toPNG())
+        screenshots.push(name)
+      }
+    await js(
+      "document.querySelector('.ai-inspector').style.width='';document.documentElement.classList.remove('dark')",
+    )
     await js("document.querySelector('button[aria-label=AI设置]').click()")
     await wait("return document.getElementById('ai-model')?.textContent==='合成备用模型'")
     await manageModels()
@@ -712,6 +805,13 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
       incompleteStreamRejected: true,
       encryptedStorage: true,
       settingsSelectedConfiguration: true,
+      composerAgentSelection: true,
+      composerCliAvailabilityFiltered: true,
+      composerCandidateModelSelection: true,
+      composerSwitchExpiresApprovalAndPreservesDraft: true,
+      composerAttachmentMenu: true,
+      composer320And560Themes: true,
+      settingsDefaultOnlyNewConversations: true,
       settingsProviderPresets: true,
       settingsProtocolCollapsed: true,
       settingsDiscoveryWithoutModel: true,
@@ -749,5 +849,6 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
     window.webContents.reload()
     await loaded
     await wait("return !!document.querySelector('.desktop-shell')")
+    window.webContents.backgroundThrottling = throttling
   }
 }

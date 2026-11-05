@@ -203,6 +203,7 @@ export type AiProvider = z.infer<typeof aiProviderSchema>
 export type AiConnection = z.infer<typeof aiConnectionSchema>
 export type AiBackend = z.infer<typeof aiBackendSchema>
 export type AiCli = z.infer<typeof aiCliSchema>
+export type AiCliStatus = z.infer<(typeof ai)['ai.cliStatus']['output']>[number]
 export type AiConversation = z.infer<typeof aiConversationSchema>
 export type AiToolCall = z.infer<typeof aiToolCallSchema>
 export type AiTarget = z.infer<typeof aiTargetSchema>

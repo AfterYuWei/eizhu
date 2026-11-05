@@ -97,3 +97,35 @@ for (const kind of ['codex', 'claude', 'deepseek'] as const) {
     }
   })
 }
+
+test('CLI availability rejects missing programs and versions without required driver flags', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'eizhu-cli-status-'))
+  const host = new CliAgentHost(root, root)
+  const previousPath = process.env.PATH
+  process.env.PATH = root
+  try {
+    const path = join(root, 'codex')
+    const script = (help: string) =>
+      '#!' +
+      process.execPath +
+      '\nconsole.log(process.argv.includes("--version") ? "fixture 1" : ' +
+      JSON.stringify(help) +
+      ')\n'
+    await writeFile(path, script('old CLI'), { mode: 0o700 })
+    let statuses = await host.status([])
+    assert.ok(statuses.every((s) => !s.available))
+    assert.match(statuses.find((s) => s.kind === 'codex')!.message, /必需/)
+    await writeFile(path, script('--listen'), { mode: 0o700 })
+    statuses = await host.status([])
+    assert.deepEqual(
+      statuses.filter((s) => s.available).map((s) => s.kind),
+      ['codex'],
+    )
+    assert.equal(statuses.find((s) => s.kind === 'claude')!.available, false)
+  } finally {
+    if (previousPath === undefined) delete process.env.PATH
+    else process.env.PATH = previousPath
+    await host.close()
+    await rm(root, { recursive: true, force: true })
+  }
+})
