@@ -118,7 +118,11 @@ parentPort!.on('message', async (message) =>
                 protocol: 'responses',
                 endpoint: 'https://fixture.invalid/v1',
                 model: 'fixture',
-                contextWindow: 64000,
+                contextWindow: 96000,
+                models: [
+                  { id: 'fixture', name: 'fixture' },
+                  { id: 'ai-v2-discovered-model', name: 'ai-v2-model-label' },
+                ],
                 apiKey: 'ai-v2-storage-secret',
               },
             ],
@@ -149,13 +153,17 @@ parentPort!.on('message', async (message) =>
             rows.every(
               (r) =>
                 !r.data.includes(Buffer.from('ai-v2-storage-secret')) &&
-                !r.data.includes(Buffer.from('ai-v2-storage-message')),
+                !r.data.includes(Buffer.from('ai-v2-storage-message')) &&
+                !r.data.includes(Buffer.from('ai-v2-discovered-model')) &&
+                !r.data.includes(Buffer.from('ai-v2-model-label')),
             ),
           )
           agent.close()
           agent = new AgentRepository(aiDb, key, 'offline')
           const restored = storedAiConfigSchema.parse(agent.execute({ kind: 'config.read' }))
           assert.equal(restored.providers[0].apiKey, 'ai-v2-storage-secret')
+          assert.equal(restored.providers[0].contextWindow, 96000)
+          assert.deepEqual(restored.providers[0].models, config.providers[0].models)
           assert.equal(restored.enabled, false)
           assert.equal((agent.execute({ kind: 'list' }) as unknown[]).length, 1)
           assert.ok(aiDb.prepare("SELECT data FROM local_state WHERE key='other-setting'").get())

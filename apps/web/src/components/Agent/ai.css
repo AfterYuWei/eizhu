@@ -660,6 +660,8 @@
 
 .ai-settings .ai-config-section { margin-top: 24px; }
 .ai-settings .ai-settings-advanced > summary { padding: 14px 16px; cursor: pointer; color: var(--fg-2); font-size: 13px; }
+.ai-settings .ai-settings-controls { display: flex; flex-direction: column; gap: 8px; }
+.ai-settings .ai-settings-controls > :is(input, button) { width: 100%; }
 .ai-settings .ai-settings-message { margin: 12px 0 0; color: var(--fg-3); font-size: 13px; line-height: 1.6; }
 .ai-backend-current { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; }
 .ai-backend-current > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

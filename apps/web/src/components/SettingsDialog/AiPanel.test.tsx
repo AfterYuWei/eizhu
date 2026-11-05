@@ -71,27 +71,69 @@ beforeEach(async () => {
   HTMLElement.prototype.scrollIntoView = vi.fn()
   useAiStore.setState(useAiStore.getInitialState(), true)
   api.ai.settings.mockResolvedValue(structuredClone(settings))
-  api.ai.setDefault.mockImplementation(async (backend: AiBackend) => ({
-    ...useAiStore.getState().settings!,
-    defaultBackend: backend,
-  }))
+  api.ai.setDefault.mockImplementation(async (backend: AiBackend) => {
+    const next = { ...useAiStore.getState().settings!, defaultBackend: backend }
+    api.ai.settings.mockResolvedValue(next)
+    return next
+  })
   api.ai.setEnabled.mockImplementation(async ({ enabled }: { enabled: boolean }) => ({
     ...useAiStore.getState().settings!,
     enabled,
   }))
   api.ai.discover.mockImplementation(async (input: AiConnection) => {
     ai['ai.discover'].input.parse(input)
-    return {
-      models: [{ id: 'model-a', name: 'model-a' }],
+    const result = {
+      models: [
+        { id: 'model-a', name: 'model-a' },
+        { id: 'model-c', name: 'model-c' },
+      ],
       defaultModel: 'model-a',
       message: '',
     }
+    const current = useAiStore.getState().settings!
+    api.ai.settings.mockResolvedValue({
+      ...current,
+      providers: current.providers.map((p) =>
+        p.id === input.id &&
+        p.endpoint === input.endpoint &&
+        p.protocol === input.protocol &&
+        !input.apiKey &&
+        !input.clearKey
+          ? { ...p, models: result.models }
+          : p,
+      ),
+    })
+    return result
   })
   api.ai.test.mockImplementation(async (input: AiConnection) => {
     ai['ai.test'].input.parse(input)
     return { message: '测试通过' }
   })
-  api.ai.configure.mockResolvedValue(settings)
+  api.ai.configure.mockImplementation(async (raw: AiConnection) => {
+    const input = aiConnectionSchema.parse(raw)
+    const current = useAiStore.getState().settings!
+    const old = current.providers.find((p) => p.id === input.id)
+    const next = {
+      ...current,
+      providers: [
+        ...current.providers.filter((p) => p.id !== input.id),
+        {
+          id: input.id,
+          name: input.name,
+          protocol: input.protocol,
+          endpoint: input.endpoint,
+          model: input.model,
+          models: input.models,
+          contextWindow: input.contextWindow,
+          hasApiKey:
+            !input.clearKey &&
+            (Boolean(input.apiKey) || Boolean(old?.hasApiKey && old.endpoint === input.endpoint)),
+        },
+      ],
+    }
+    api.ai.settings.mockResolvedValue(next)
+    return next
+  })
   api.ai.configureCli.mockResolvedValue(settings)
   host = document.createElement('div')
   document.body.append(host)
@@ -272,4 +314,80 @@ it('uses the official backend after deleting a provider instead of reselecting i
   expect(api.ai.setDefault).toHaveBeenLastCalledWith({ kind: 'official', model: '' })
   expect(host.querySelector('[aria-label="官方AI配置"]')).not.toBeNull()
   expect(useAiStore.getState().settings!.providers).toHaveLength(1)
+})
+it('remembers discovered models per provider after switching, saving a model, and reopening settings', async () => {
+  await choose('ai-source', '服务A')
+  await act(async () => button('自动发现模型').click())
+  expect(api.ai.configure).not.toHaveBeenCalled()
+  await choose('ai-source', '服务B')
+  expect(host.querySelector<HTMLInputElement>('#ai-model')!.value).toBe('model-b')
+  await choose('ai-source', '服务A')
+  await choose('ai-model', 'model-c')
+  await act(async () => button('保存并使用').click())
+  expect(api.ai.setDefault).toHaveBeenLastCalledWith({ kind: 'custom', providerId: 'p', model: 'model-c' })
+  await act(async () => root.render(null))
+  await act(async () => root.render(<AiPanel />))
+  expect(host.querySelector('#ai-model')!.textContent).toBe('model-c')
+  await choose('ai-model', 'model-a')
+  expect(api.ai.discover).toHaveBeenCalledOnce()
+})
+it('saves a new provider catalog and keeps custom model input available alongside it', async () => {
+  await choose('ai-source', '新增供应商')
+  await fill('ai-endpoint', 'https://private.invalid/v1')
+  await act(async () => button('自动发现模型').click())
+  await choose('ai-model', '自定义模型')
+  await fill('ai-custom-model', 'private-model')
+  await act(async () => button('保存并使用').click())
+  expect(api.ai.configure).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      model: 'private-model',
+      models: [
+        { id: 'model-a', name: 'model-a' },
+        { id: 'model-c', name: 'model-c' },
+      ],
+    }),
+  )
+  await act(async () => root.render(null))
+  await act(async () => root.render(<AiPanel />))
+  expect(host.querySelector('#ai-model')!.textContent).toBe('自定义模型')
+  expect(host.querySelector<HTMLInputElement>('#ai-custom-model')!.value).toBe('private-model')
+  await choose('ai-model', 'model-c')
+  expect(host.querySelector('#ai-custom-model')).toBeNull()
+})
+it('moves context into advanced settings and persists preset or custom values', async () => {
+  await choose('ai-source', '服务A')
+  expect(host.querySelector<HTMLDetailsElement>('.ai-settings-advanced')!.open).toBe(false)
+  expect(host.querySelector('#ai-context')!.closest('details')).not.toBeNull()
+  await act(async () => host.querySelector<HTMLElement>('.ai-settings-advanced summary')!.click())
+  expect(host.querySelector('#ai-context')!.textContent).toBe('64K')
+  await choose('ai-context', '128K')
+  await choose('ai-context', '自定义')
+  expect(host.querySelector<HTMLInputElement>('#ai-custom-context')!.value).toBe('128000')
+  await fill('ai-custom-context', '96000')
+  await act(async () => button('保存并使用').click())
+  expect(api.ai.configure).toHaveBeenLastCalledWith(expect.objectContaining({ contextWindow: 96000 }))
+  await act(async () => root.render(null))
+  await act(async () => root.render(<AiPanel />))
+  expect(host.querySelector('#ai-context')!.textContent).toBe('自定义')
+  expect(host.querySelector<HTMLInputElement>('#ai-custom-context')!.value).toBe('96000')
+  await act(async () => host.querySelector<HTMLElement>('.ai-settings-advanced summary')!.click())
+  await choose('ai-context', '200K')
+  expect(host.querySelector('#ai-custom-context')).toBeNull()
+  await act(async () => button('保存并使用').click())
+  expect(api.ai.configure).toHaveBeenLastCalledWith(expect.objectContaining({ contextWindow: 200000 }))
+})
+it('opens advanced context validation and clears a stale catalog when its connection changes', async () => {
+  await choose('ai-source', '服务A')
+  await act(async () => button('自动发现模型').click())
+  await act(async () => host.querySelector<HTMLElement>('.ai-settings-advanced summary')!.click())
+  await choose('ai-context', '自定义')
+  await fill('ai-custom-context', '2000001')
+  await act(async () => host.querySelector<HTMLElement>('.ai-settings-advanced summary')!.click())
+  await act(async () => button('保存并使用').click())
+  expect(host.querySelector<HTMLDetailsElement>('.ai-settings-advanced')!.open).toBe(true)
+  expect(document.activeElement?.id).toBe('ai-custom-context')
+  expect(host.querySelector('[role=status]')!.textContent).toContain('上下文窗口')
+  expect(api.ai.configure).not.toHaveBeenCalled()
+  await fill('ai-endpoint', 'https://changed.invalid/v1')
+  expect(host.querySelector('#ai-model')!.tagName).toBe('INPUT')
 })

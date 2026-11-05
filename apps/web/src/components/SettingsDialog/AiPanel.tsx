@@ -17,9 +17,11 @@ const fresh = (): AiConnection => ({
   endpoint: '',
   model: '',
   contextWindow: 64000,
+  models: [],
   clearKey: false,
 })
 const cliNames = { codex: 'Codex', claude: 'Claude Code', deepseek: 'DeepSeek Harness' }
+const contextWindows = [8000, 16000, 32000, 64000, 128000, 200000, 256000, 512000, 1000000, 2000000]
 const connectionFeedback: Record<string, { id: string; message: string }> = {
   name: { id: 'ai-name', message: '请填写供应商名称（1–80个字符）。' },
   endpoint: { id: 'ai-endpoint', message: '请输入有效的接口基础地址，远程使用HTTPS，本机服务可使用HTTP。' },
@@ -56,7 +58,8 @@ export function AiPanel() {
   const [draft, setDraft] = useState<AiConnection>(fresh)
   const [source, setSource] = useState('official')
   const [cli, setCli] = useState<AiCli>({ kind: 'codex', path: '', model: '' })
-  const [catalog, setCatalog] = useState<AiModelCatalog | null>(null)
+  const [manualModel, setManualModel] = useState(false)
+  const [customContext, setCustomContext] = useState(false)
   const [official, setOfficial] = useState<AiModelCatalog | null>(null)
   const [message, setMessage] = useState(''),
     [busy, setBusy] = useState(false)
@@ -71,10 +74,12 @@ export function AiPanel() {
         endpoint: provider.endpoint,
         model: provider.model,
         contextWindow: provider.contextWindow,
+        models: provider.models ?? [],
         clearKey: false,
       })
     }
-    setCatalog(null)
+    setManualModel(false)
+    setCustomContext(false)
   }
   useEffect(() => {
     let live = true
@@ -114,8 +119,9 @@ export function AiPanel() {
   }
   const applyBackend = async (backend: AiBackend) => setSettings(await bridge().ai.setDefault(backend))
   const validateDraft = (operation: 'ai.discover' | 'ai.test' | 'ai.configure') => {
+    const { models, ...connection } = draft
     const result = ai[operation].input.safeParse({
-      ...draft,
+      ...(operation === 'ai.configure' ? { ...connection, models } : connection),
       name: draft.name.trim(),
       endpoint: draft.endpoint.trim(),
       model: draft.model.trim(),
@@ -124,7 +130,10 @@ export function AiPanel() {
     const field = result.error.issues[0]?.path[0]
     const feedback = typeof field === 'string' ? connectionFeedback[field] : undefined
     setMessage(feedback?.message ?? '请检查供应商配置。')
-    const control = feedback && document.getElementById(feedback.id)
+    const control =
+      (field === 'model' && document.getElementById('ai-custom-model')) ||
+      (field === 'contextWindow' && document.getElementById('ai-custom-context')) ||
+      (feedback && document.getElementById(feedback.id))
     const advanced = control?.closest<HTMLDetailsElement>('details')
     if (advanced) advanced.open = true
     control?.focus()
@@ -133,6 +142,9 @@ export function AiPanel() {
     settings?.defaultBackend.kind === 'official' || settings?.defaultBackend.kind === 'custom'
       ? 'builtin'
       : (settings?.defaultBackend.kind ?? 'builtin')
+  const models = draft.models ?? []
+  const useModelInput = manualModel || Boolean(draft.model && !models.some((m) => m.id === draft.model))
+  const useCustomContext = customContext || !contextWindows.includes(draft.contextWindow)
   if (!settings)
     return (
       <div className="settings-section ai-settings">
@@ -170,7 +182,8 @@ export function AiPanel() {
                 disabled={busy}
                 onValueChange={(value) =>
                   void run(async () => {
-                    setCatalog(null)
+                    setManualModel(false)
+                    setCustomContext(false)
                     setCliMessage('')
                     if (value === 'builtin') {
                       const provider = settings.providers.find((p) => p.id === source)
@@ -212,7 +225,8 @@ export function AiPanel() {
                   disabled={busy}
                   onValueChange={(value) => {
                     setSource(value)
-                    setCatalog(null)
+                    setManualModel(false)
+                    setCustomContext(false)
                     setMessage('')
                     if (value === 'new') {
                       setDraft(fresh())
@@ -317,7 +331,8 @@ export function AiPanel() {
                     }),
                   })
                   setSource('new')
-                  setCatalog(null)
+                  setManualModel(false)
+                  setCustomContext(false)
                   setMessage('')
                 }}
               >
@@ -351,8 +366,8 @@ export function AiPanel() {
                 value={draft.endpoint}
                 disabled={busy}
                 onChange={(e) => {
-                  setDraft({ ...draft, endpoint: e.target.value })
-                  setCatalog(null)
+                  setDraft({ ...draft, endpoint: e.target.value, models: [] })
+                  setManualModel(false)
                 }}
               />
             </Field>
@@ -373,7 +388,10 @@ export function AiPanel() {
                 placeholder="填写API Key"
                 value={draft.apiKey ?? ''}
                 disabled={busy}
-                onChange={(e) => setDraft({ ...draft, apiKey: e.target.value || undefined, clearKey: false })}
+                onChange={(e) => {
+                  setDraft({ ...draft, apiKey: e.target.value || undefined, clearKey: false, models: [] })
+                  setManualModel(false)
+                }}
               />
             </Field>
             {settings.providers.find((p) => p.id === draft.id)?.hasApiKey && (
@@ -382,28 +400,51 @@ export function AiPanel() {
                   id="ai-clear-key"
                   checked={draft.clearKey}
                   disabled={busy}
-                  onCheckedChange={(clearKey) => setDraft({ ...draft, clearKey, apiKey: undefined })}
+                  onCheckedChange={(clearKey) => {
+                    setDraft({ ...draft, clearKey, apiKey: undefined, models: [] })
+                    setManualModel(false)
+                  }}
                 />
               </Field>
             )}
-            <Field id="ai-model" label="模型" description="可手动填写，或先自动发现模型。">
-              {catalog?.models.length ? (
-                <Select
-                  value={draft.model}
-                  disabled={busy}
-                  onValueChange={(model) => setDraft({ ...draft, model })}
-                >
-                  <SelectTrigger id="ai-model" className="settings-select">
-                    <SelectValue placeholder="选择模型" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {catalog.models.map((m) => (
-                      <SelectItem key={m.id} value={m.id}>
-                        {m.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+            <Field
+              id="ai-model"
+              label="模型"
+              description="发现的列表会保留，选择模型后保存并使用，也可自定义输入。"
+            >
+              {models.length ? (
+                <div className="settings-select ai-settings-controls">
+                  <Select
+                    value={useModelInput ? 'custom' : draft.model ? 'model:' + draft.model : ''}
+                    disabled={busy}
+                    onValueChange={(value) => {
+                      setManualModel(value === 'custom')
+                      if (value !== 'custom') setDraft({ ...draft, model: value.slice(6) })
+                    }}
+                  >
+                    <SelectTrigger id="ai-model" className="w-full">
+                      <SelectValue placeholder="选择模型" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {models.map((m) => (
+                        <SelectItem key={m.id} value={'model:' + m.id}>
+                          {m.name || m.id}
+                        </SelectItem>
+                      ))}
+                      <SelectItem value="custom">自定义模型</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {useModelInput && (
+                    <Input
+                      id="ai-custom-model"
+                      aria-label="自定义模型名称"
+                      value={draft.model}
+                      disabled={busy}
+                      placeholder="输入模型名称"
+                      onChange={(e) => setDraft({ ...draft, model: e.target.value })}
+                    />
+                  )}
+                </div>
               ) : (
                 <Input
                   id="ai-model"
@@ -414,20 +455,48 @@ export function AiPanel() {
                 />
               )}
             </Field>
-            <Field id="ai-context" label="上下文窗口">
-              <Input
-                id="ai-context"
-                className="settings-select"
-                type="number"
-                min={4096}
-                max={2000000}
-                value={draft.contextWindow}
-                disabled={busy}
-                onChange={(e) => setDraft({ ...draft, contextWindow: Number(e.target.value) })}
-              />
-            </Field>
             <details key={draft.id} className="ai-settings-advanced">
               <summary>高级设置</summary>
+              <Field
+                id="ai-context"
+                label="上下文窗口"
+                description="按模型实际支持的容量设置，K为千Token，M为百万Token。"
+              >
+                <div className="settings-select ai-settings-controls">
+                  <Select
+                    value={useCustomContext ? 'custom' : String(draft.contextWindow)}
+                    disabled={busy}
+                    onValueChange={(value) => {
+                      setCustomContext(value === 'custom')
+                      if (value !== 'custom') setDraft({ ...draft, contextWindow: Number(value) })
+                    }}
+                  >
+                    <SelectTrigger id="ai-context" className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {contextWindows.map((value) => (
+                        <SelectItem key={value} value={String(value)}>
+                          {value >= 1000000 ? value / 1000000 + 'M' : value / 1000 + 'K'}
+                        </SelectItem>
+                      ))}
+                      <SelectItem value="custom">自定义</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {useCustomContext && (
+                    <Input
+                      id="ai-custom-context"
+                      aria-label="自定义上下文窗口"
+                      type="number"
+                      min={4096}
+                      max={2000000}
+                      value={draft.contextWindow}
+                      disabled={busy}
+                      onChange={(e) => setDraft({ ...draft, contextWindow: Number(e.target.value) })}
+                    />
+                  )}
+                </div>
+              </Field>
               <Field
                 id="ai-protocol"
                 label="接口协议"
@@ -438,8 +507,8 @@ export function AiPanel() {
                   disabled={busy}
                   onValueChange={(protocol) => {
                     if (protocol === 'responses' || protocol === 'chat' || protocol === 'anthropic') {
-                      setDraft({ ...draft, protocol })
-                      setCatalog(null)
+                      setDraft({ ...draft, protocol, models: [] })
+                      setManualModel(false)
                     }
                   }}
                 >
@@ -466,7 +535,8 @@ export function AiPanel() {
                       setSource('official')
                       await applyBackend({ kind: 'official', model: '' })
                       setDraft(fresh())
-                      setCatalog(null)
+                      setManualModel(false)
+                      setCustomContext(false)
                     })
                   }
                 >
@@ -481,7 +551,9 @@ export function AiPanel() {
                     const input = validateDraft('ai.discover')
                     if (!input) return
                     const result = await bridge().ai.discover(input)
-                    setCatalog(result)
+                    setDraft({ ...draft, models: result.models })
+                    setManualModel(false)
+                    setSettings(await bridge().ai.settings())
                     setMessage(
                       result.models.length
                         ? '模型发现完成，请选择模型后测试或保存；尚未保存配置'

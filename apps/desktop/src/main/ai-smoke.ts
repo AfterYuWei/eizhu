@@ -116,7 +116,14 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
       if (req.url?.endsWith('/models')) {
         directoryRequests++
         res.writeHead(200, { 'content-type': 'application/json' })
-        res.end(JSON.stringify({ data: [{ id: 'synthetic-ai', name: '合成模型' }] }))
+        res.end(
+          JSON.stringify({
+            data: [
+              { id: 'synthetic-ai', name: '合成模型' },
+              { id: 'synthetic-alt', name: '合成备用模型' },
+            ],
+          }),
+        )
         return
       }
       inferenceRequests++
@@ -497,6 +504,53 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
     await wait("return !!document.querySelector('#ai-key')")
     assert.equal(await js("return document.querySelectorAll('#ai-key').length"), 1)
     assert.equal(await js("return document.querySelectorAll('#ai-cli-path').length"), 0)
+    assert.equal(await js("return document.getElementById('ai-context').checkVisibility()"), false)
+    const catalogRequests = directoryRequests
+    await chooseSetting('ai-model', '合成备用模型')
+    await js("document.querySelector('.ai-settings-advanced summary').click()")
+    await chooseSetting('ai-context', '128K')
+    await chooseSetting('ai-context', '自定义')
+    await js(
+      "const input=document.getElementById('ai-custom-context');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,'96000');input.dispatchEvent(new Event('input',{bubbles:true}))",
+    )
+    for (const dark of [false, true]) {
+      await js("document.documentElement.classList.toggle('dark',d)", dark)
+      await captureSetting(dark ? 'ai-settings-context-dark.png' : 'ai-settings-context-light.png')
+    }
+    window.setContentSize(900, 760)
+    await js("document.getElementById('ai-custom-context').scrollIntoView({block:'center'})")
+    await captureSetting('ai-settings-context-narrow.png')
+    window.setContentSize(1280, 900)
+    await js(
+      "[...document.querySelectorAll('.ai-settings button')].find(b=>b.textContent==='保存并使用').click()",
+    )
+    await wait(
+      "return !!document.querySelector('.ai-settings [role=status]')?.textContent.includes('已保存并使用')&&!document.getElementById('ai-enabled').disabled",
+    )
+    const switched = aiSettingsSchema.parse(await call('ai', 'settings'))
+    assert.equal(switched.defaultBackend.model, 'synthetic-alt')
+    assert.equal(switched.providers.find((p) => p.id === 'responses')?.contextWindow, 96000)
+    assert.equal(switched.providers.find((p) => p.id === 'responses')?.models?.length, 2)
+    assert.equal(
+      aiConversationSchema.parse(await call('ai', 'read', { conversationId: proposed.id })).backend.model,
+      'synthetic-alt',
+    )
+    await js("document.querySelector('.settings-page-back').click()")
+    await wait("return !!document.querySelector('button[aria-label=AI设置]')")
+    await js("document.querySelector('button[aria-label=AI设置]').click()")
+    await wait("return document.getElementById('ai-model')?.textContent==='合成备用模型'")
+    assert.equal(await js("return document.getElementById('ai-context').textContent"), '自定义')
+    assert.equal(await js("return document.getElementById('ai-custom-context').value"), '96000')
+    await chooseSetting('ai-source', '合成 chat')
+    await chooseSetting('ai-model', '合成备用模型')
+    await chooseSetting('ai-source', '合成 responses')
+    assert.equal(await js("return document.getElementById('ai-model').textContent"), '合成备用模型')
+    assert.equal(directoryRequests, catalogRequests)
+    await chooseSetting('ai-model', '合成模型')
+    await js(
+      "[...document.querySelectorAll('.ai-settings button')].find(b=>b.textContent==='保存并使用').click()",
+    )
+    await wait("return !document.getElementById('ai-enabled').disabled")
     await captureSetting('ai-settings-provider.png')
     await chooseSetting('ai-source', '新增供应商')
     assert.equal(await js("return document.getElementById('ai-protocol').textContent"), 'Responses')
@@ -599,6 +653,7 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
       const bytes = await readFile(join(root, name))
       assert.ok(!bytes.includes(Buffer.from('synthetic-ai-api-key')))
       assert.ok(!bytes.includes(Buffer.from('合成验收：检查两个连接')))
+      assert.ok(!bytes.includes(Buffer.from('合成备用模型')))
     }
     const saved = aiConversationSchema.parse(await call('ai', 'read', { conversationId: proposed.id }))
     assert.equal(saved.id, proposed.id)
@@ -623,6 +678,8 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
       settingsRequiredFieldFeedback: true,
       settingsConnectionTestAutomaticTools: true,
       settingsConnectionTextUnverified: true,
+      settingsContextPresetsAndCustom: true,
+      settingsCachedModelSwitch: true,
       settingsEnableSwitch: true,
       settingsResponsiveLayout: true,
       remoteFileConflictAndEdit: Boolean(sftpServer),

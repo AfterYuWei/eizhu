@@ -412,9 +412,11 @@ for (const protocol of ['responses', 'chat', 'anthropic'] as const)
         model: '',
         clearKey: false,
       }
+      await f.service.execute('ai.configure', { ...input, model: 'fixture' }, 1)
       const catalog = aiModelCatalogSchema.parse(await f.service.execute('ai.discover', input, 1))
       assert.deepEqual(catalog.models, [{ id: 'discovered', name: '发现的模型' }])
       assert.equal(catalog.defaultModel, '')
+      assert.deepEqual(f.config.providers[0].models, catalog.models)
       assert.deepEqual(await f.service.execute('ai.discover', { ...input, model: undefined }, 1), catalog)
       assert.equal(requests, 2)
       await assert.rejects(f.service.execute('ai.test', input, 1), { name: 'ZodError' })
@@ -423,6 +425,121 @@ for (const protocol of ['responses', 'chat', 'anthropic'] as const)
       assert.equal(f.config.providers[0].model, 'fixture')
       assert.equal(f.config.providers[0].apiKey, 'test-key')
       assert.equal(f.execs.length, 0)
+    } finally {
+      await f.service.close()
+    }
+  })
+test('model refresh caches metadata without stopping an Agent or saving a draft key', async () => {
+  const f = fixture([], undefined, async (request, _signal, consume) => {
+    await consume(
+      Buffer.from(
+        request.method === 'GET'
+          ? JSON.stringify({
+              data:
+                request.authorization === 'Bearer unsaved-draft-key'
+                  ? [{ id: 'draft-only', name: '草稿模型' }]
+                  : [{ id: 'other-model', name: '其他模型' }],
+            })
+          : modelFixture('responses', '', [
+              { id: 'pending-call', name: 'terminal_execute', args: command() },
+            ]),
+      ),
+    )
+  })
+  try {
+    const c = await f.open()
+    await f.send(c.id)
+    const pending = await f.pending()
+    const input = {
+      id: 'p',
+      name: '测试',
+      protocol: 'responses',
+      endpoint: 'http://127.0.0.1/v1',
+      model: '',
+      clearKey: false,
+    }
+    await f.service.execute('ai.discover', input, 1)
+    const models = [{ id: 'other-model', name: '其他模型' }]
+    assert.deepEqual(f.config.providers[0].models, models)
+    assert.equal(f.current.status, 'awaiting_confirmation')
+    assert.equal(f.current.messages.find((m) => m.tool?.id === pending.id)?.tool?.state, 'pending')
+    await f.service.execute('ai.discover', { ...input, apiKey: 'unsaved-draft-key' }, 1)
+    assert.equal(f.config.providers[0].apiKey, 'test-key')
+    assert.deepEqual(f.config.providers[0].models, models)
+    await f.service.execute('ai.discover', { ...input, id: 'unsaved-provider' }, 1)
+    assert.equal(f.config.providers.length, 1)
+    assert.equal(f.execs.length, 0)
+  } finally {
+    await f.service.close()
+  }
+})
+test('model refresh cannot overwrite a changed connection and preserves cached data on failure', async () => {
+  let release: (() => void) | undefined
+  let broken = false
+  const f = fixture([], undefined, async (_request, _signal, consume) => {
+    if (broken) throw new Error('Discovery unavailable')
+    await new Promise<void>((resolve) => {
+      release = resolve
+    })
+    await consume(Buffer.from(JSON.stringify({ data: [{ id: 'stale-model' }] })))
+  })
+  try {
+    const input = {
+      id: 'p',
+      name: '测试',
+      protocol: 'responses',
+      endpoint: 'http://127.0.0.1/v1',
+      model: '',
+      clearKey: false,
+    }
+    const pending = f.service.execute('ai.discover', input, 1)
+    await until(() => Boolean(release))
+    const models = [{ id: 'new-model', name: '新模型' }]
+    await f.service.execute(
+      'ai.configure',
+      { ...input, endpoint: 'https://new.invalid/v1', model: 'new-model', models },
+      1,
+    )
+    release!()
+    await pending
+    assert.equal(f.config.providers[0].endpoint, 'https://new.invalid/v1')
+    assert.deepEqual(f.config.providers[0].models, models)
+    broken = true
+    await assert.rejects(
+      f.service.execute('ai.discover', { ...input, endpoint: 'https://new.invalid/v1' }, 1),
+      /Discovery unavailable/,
+    )
+    assert.deepEqual(f.config.providers[0].models, models)
+  } finally {
+    release?.()
+    await f.service.close()
+  }
+})
+for (const change of [
+  { endpoint: 'https://new.invalid/v1' },
+  { protocol: 'chat' },
+  { apiKey: 'rotated-key' },
+])
+  test(`model catalog is retained for a model switch and invalidated on ${Object.keys(change)[0]} changes`, async () => {
+    const f = fixture([])
+    try {
+      const input = {
+        id: 'p',
+        name: '测试',
+        protocol: 'responses',
+        endpoint: 'http://127.0.0.1/v1',
+        model: 'fixture',
+        clearKey: false,
+      }
+      const models = [
+        { id: 'fixture', name: '原模型' },
+        { id: 'next-model', name: '下一模型' },
+      ]
+      await f.service.execute('ai.configure', { ...input, models }, 1)
+      await f.service.execute('ai.configure', { ...input, model: 'next-model' }, 1)
+      assert.deepEqual(f.config.providers[0].models, models)
+      await f.service.execute('ai.configure', { ...input, ...change }, 1)
+      assert.deepEqual(f.config.providers[0].models, [])
     } finally {
       await f.service.close()
     }

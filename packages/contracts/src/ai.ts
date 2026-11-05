@@ -19,6 +19,7 @@ export const aiEndpointSchema = z
     }, '远程接口须使用HTTPS，本机服务可使用HTTP'),
   )
 export const aiProtocolSchema = z.enum(['responses', 'chat', 'anthropic'])
+const aiModelsSchema = z.array(z.strictObject({ id, name: z.string().max(160) })).max(1000)
 export const aiProviderSchema = z.strictObject({
   id,
   name: z.string().min(1).max(80),
@@ -26,13 +27,16 @@ export const aiProviderSchema = z.strictObject({
   endpoint: aiEndpointSchema,
   model: z.string().min(1).max(160),
   contextWindow: z.int().min(4096).max(2000000).default(64000),
+  models: aiModelsSchema.optional(),
   hasApiKey: z.boolean(),
 })
 export const aiConnectionSchema = aiProviderSchema
   .omit({ hasApiKey: true })
   .extend({ apiKey: z.string().max(8192).optional(), clearKey: z.boolean().default(false) })
 // 模型目录发现发生在选择模型之前，不能要求已知模型名。
-export const aiDiscoverySchema = aiConnectionSchema.extend({ model: z.string().max(160).default('') })
+export const aiDiscoverySchema = aiConnectionSchema
+  .omit({ models: true })
+  .extend({ model: z.string().max(160).default('') })
 export const aiCliKindSchema = z.enum(['codex', 'claude', 'deepseek'])
 export const aiCliSchema = z.strictObject({
   kind: aiCliKindSchema,
@@ -51,7 +55,7 @@ export const aiSettingsSchema = z.strictObject({
   defaultBackend: aiBackendSchema,
 })
 export const aiModelCatalogSchema = z.strictObject({
-  models: z.array(z.strictObject({ id, name: z.string().max(160) })).max(1000),
+  models: aiModelsSchema,
   defaultModel: z.string().max(160),
   dailyTokenLimit: z.int().nonnegative().optional(),
   remainingTokens: z.int().nonnegative().optional(),
@@ -122,7 +126,10 @@ export const ai = {
   'ai.setDefault': { input: aiBackendSchema, output: aiSettingsSchema },
   'ai.capabilities': { input: z.undefined(), output: aiCapabilitiesSchema },
   'ai.discover': { input: aiDiscoverySchema, output: aiModelCatalogSchema },
-  'ai.test': { input: aiConnectionSchema, output: z.strictObject({ message: z.string().max(1024) }) },
+  'ai.test': {
+    input: aiConnectionSchema.omit({ models: true }),
+    output: z.strictObject({ message: z.string().max(1024) }),
+  },
   'ai.cliStatus': {
     input: z.undefined(),
     output: z
