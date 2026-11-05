@@ -18,6 +18,7 @@ const api = vi.hoisted(() => ({
     cancel: vi.fn(),
     stopJob: vi.fn(),
     history: vi.fn(),
+    read: vi.fn(),
     cliStatus: vi.fn(),
     capabilities: vi.fn(),
     backend: vi.fn(),
@@ -114,6 +115,15 @@ beforeEach(async () => {
         cwd: '/tmp',
         system: 'Linux',
       },
+      {
+        sessionId: 'b',
+        profileId: 'q',
+        host: 'b.invalid',
+        username: 'test',
+        port: 22,
+        cwd: '/tmp',
+        system: 'Linux',
+      },
     ],
     messages: [{ id: 'u', role: 'user', text: '检查' }],
     jobs: [],
@@ -121,6 +131,21 @@ beforeEach(async () => {
     status: 'idle',
     error: '',
   }
+  api.ai.scope.mockImplementation(
+    async ({ conversationId, sessionIds }: { conversationId: string; sessionIds: string[] }) => ({
+      ...useAiStore.getState().conversations[conversationId],
+      targets: sessionIds.map((sessionId) => ({ ...c.targets[0], sessionId })),
+      revision: useAiStore.getState().conversations[conversationId].revision + 1,
+      status: 'idle',
+      messages: c.messages.filter((m) => !m.tool),
+    }),
+  )
+  api.ai.cancel.mockResolvedValue(undefined)
+  api.ai.read.mockImplementation(async ({ conversationId }: { conversationId: string }) => ({
+    ...useAiStore.getState().conversations[conversationId],
+    status: 'idle',
+    messages: c.messages.filter((m) => !m.tool),
+  }))
   useAiStore.setState(
     { ...useAiStore.getInitialState(), selectedId: c.id, conversations: { [c.id]: c } },
     true,
@@ -201,15 +226,21 @@ it('approval is fixed at the bottom; copy cannot execute; decision includes revi
     revision: 4,
   })
 })
-it('disconnected target disables approval even when a different terminal is connected', async () => {
+it('scope changes disable old approvals before automatic synchronization finishes', async () => {
+  let finish!: (value: AiConversation) => void
+  api.ai.scope.mockReturnValue(
+    new Promise((resolve) => {
+      finish = resolve
+    }),
+  )
   await pending()
   await act(async () =>
-    useSessionStore.setState((s) => ({
-      tabs: s.tabs.map((t) => (t.sessionId === 'a' ? { ...t, status: 'disconnected' } : t)),
-    })),
+    useSessionStore.setState((s) => ({ tabs: s.tabs.filter((t) => t.sessionId !== 'a') })),
   )
   expect(button('允许本次').disabled).toBe(true)
   expect(button('对话内允许此工具').disabled).toBe(true)
+  expect(api.ai.scope).toHaveBeenCalledWith({ conversationId: 'chat', sessionIds: ['b'] })
+  await act(async () => finish({ ...c, targets: [c.targets[1]], messages: [], status: 'idle' }))
 })
 it('approval failures remain visible and do not silently grant access', async () => {
   api.ai.decide.mockRejectedValue(new Error('审批已失效'))
@@ -218,13 +249,41 @@ it('approval failures remain visible and do not silently grant access', async ()
   expect(host.querySelector('.ai-approval')).not.toBeNull()
   expect(host.querySelector('[role="alert"]')?.textContent).toBe('审批已失效')
 })
-it('connection scope applies an explicit selected set instead of following the active tab', async () => {
-  api.ai.scope.mockResolvedValue(c)
-  await act(async () => button('连接范围 · 1').click())
-  const boxes = host.querySelectorAll<HTMLInputElement>('.ai-scope input')
-  await act(async () => boxes[1].click())
-  await act(async () => button('应用连接范围').click())
+it('scope is read-only and automatically follows all connected SSH sessions', async () => {
+  expect(host.querySelector('.ai-scope-summary')!.textContent).toBe('连接范围 · 2')
+  expect(host.querySelector('.ai-scope')).toBeNull()
+  expect(host.querySelector('.ai-session-controls [type=checkbox]')).toBeNull()
+  expect(button('应用连接范围')).toBeUndefined()
+  await act(async () =>
+    useSessionStore.setState((s) => ({
+      tabs: [
+        ...s.tabs,
+        { id: 'tab-c', sessionId: 'c', profileId: 'r', profileName: '主机C', status: 'connected' },
+      ],
+    })),
+  )
+  expect(api.ai.scope).toHaveBeenCalledWith({ conversationId: 'chat', sessionIds: ['a', 'b', 'c'] })
+  expect(host.querySelector('.ai-scope-summary')!.textContent).toBe('连接范围 · 3')
+  api.ai.scope.mockClear()
+  await act(async () => useSessionStore.setState({ activeTabId: 'tab-b' }))
+  expect(api.ai.scope).not.toHaveBeenCalled()
+  await act(async () =>
+    useSessionStore.setState((s) => ({ tabs: s.tabs.filter((t) => t.sessionId !== 'c') })),
+  )
   expect(api.ai.scope).toHaveBeenCalledWith({ conversationId: 'chat', sessionIds: ['a', 'b'] })
+})
+it('closing all SSH sessions stops the Agent and blocks sending', async () => {
+  await act(async () => useSessionStore.setState({ tabs: [], activeTabId: null }))
+  expect(api.ai.cancel).toHaveBeenCalledWith({ conversationId: 'chat' })
+  expect(api.ai.scope).not.toHaveBeenCalled()
+  expect(host.querySelector('.ai-scope-summary')!.textContent).toBe('连接范围 · 0')
+  await fill('不能执行')
+  expect(button('发送').disabled).toBe(true)
+})
+it('execution modes explain confirmation instead of using an ambiguous label', async () => {
+  const control = host.querySelector('[aria-label="执行模式"]')!
+  expect(control.textContent).toBe('执行前确认')
+  expect(control.getAttribute('title')).toContain('执行shell命令或修改文件前')
 })
 
 it('idle Agent retains independent and all-task stop controls for running jobs', async () => {
@@ -318,7 +377,7 @@ it('new chat sends with its chosen supplier and model', async () => {
   await fill('新任务')
   await act(async () => button('发送').click())
   expect(api.ai.open).toHaveBeenCalledWith({
-    sessionIds: ['a'],
+    sessionIds: ['a', 'b'],
     backend: { kind: 'custom', providerId: 'p', model: 'model-b' },
   })
   expect(api.ai.send).toHaveBeenCalledWith({ conversationId: 'new-chat', text: '新任务', attachments: [] })
@@ -361,4 +420,45 @@ it('failed attachment reads release all selected references without partially at
   expect(api.document.release).toHaveBeenCalledTimes(2)
   expect(host.querySelector('.ai-attachment-chip')).toBeNull()
   expect(host.querySelector('[role=alert]')!.textContent).toBe('无法读取文件')
+})
+
+it('rapid session changes synchronize in order and finish with the latest open set', async () => {
+  const scope = api.ai.scope.getMockImplementation()!
+  let finish!: (value: AiConversation) => void
+  api.ai.scope.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve
+      }),
+  )
+  await act(async () =>
+    useSessionStore.setState((s) => ({ tabs: s.tabs.filter((t) => t.sessionId === 'a') })),
+  )
+  expect(api.ai.scope).toHaveBeenCalledTimes(1)
+  await act(async () =>
+    useSessionStore.setState((s) => ({
+      tabs: [
+        ...s.tabs,
+        { id: 'tab-c', sessionId: 'c', profileId: 'r', profileName: '主机C', status: 'connected' },
+      ],
+    })),
+  )
+  expect(api.ai.scope).toHaveBeenCalledTimes(1)
+  await act(async () => finish(await scope({ conversationId: 'chat', sessionIds: ['a'] })))
+  expect(api.ai.scope).toHaveBeenLastCalledWith({ conversationId: 'chat', sessionIds: ['a', 'c'] })
+  expect(useAiStore.getState().conversations.chat.targets.map((t) => t.sessionId)).toEqual(['a', 'c'])
+})
+it('connection status changes and reconnect replace the range without including connecting tabs', async () => {
+  await act(async () =>
+    useSessionStore.setState((s) => ({
+      tabs: s.tabs.map((t) => (t.sessionId === 'a' ? { ...t, status: 'reconnecting' } : t)),
+    })),
+  )
+  expect(api.ai.scope).toHaveBeenLastCalledWith({ conversationId: 'chat', sessionIds: ['b'] })
+  await act(async () =>
+    useSessionStore.setState((s) => ({
+      tabs: s.tabs.map((t) => (t.id === 'tab-a' ? { ...t, sessionId: 'a-new', status: 'connected' } : t)),
+    })),
+  )
+  expect(api.ai.scope).toHaveBeenLastCalledWith({ conversationId: 'chat', sessionIds: ['a-new', 'b'] })
 })

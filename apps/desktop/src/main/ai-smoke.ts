@@ -326,6 +326,7 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
     )
     await wait("return !!document.querySelector('.ai-composer textarea')")
     assert.equal(await js("return !!document.querySelector('.ai-backend-current')"), false)
+    await wait("return !document.getElementById('ai-agent-picker').disabled")
     await js("document.getElementById('ai-agent-picker').click()")
     await wait("return !!document.querySelector('[role=listbox]')")
     const cliStatuses = await call<Array<{ kind: string; available: boolean }>>('ai', 'cliStatus')
@@ -357,13 +358,9 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
     )
     await wait("return !document.querySelector('[role=menu]')")
     assert.equal(await js("return document.querySelector('.ai-inspector').checkVisibility()"), true)
-    await js(
-      "[...document.querySelectorAll('.ai-session-controls button')].find(b=>b.textContent.startsWith('连接范围')).click()",
-    )
-    await js("document.querySelectorAll('.ai-scope input').forEach(b=>{if(!b.checked)b.click()})")
-    await js(
-      "[...document.querySelectorAll('.ai-scope button')].find(b=>b.textContent==='应用连接范围').click()",
-    )
+    assert.equal(await js("return document.querySelector('.ai-scope-summary').textContent"), '连接范围 · 2')
+    assert.equal(await js("return !!document.querySelector('.ai-scope')"), false)
+    assert.equal(await js("return document.querySelector('[aria-label=执行模式]').textContent"), '执行前确认')
     await js(
       "const input=document.querySelector('.ai-composer textarea');Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(input,'合成验收：检查两个连接');input.dispatchEvent(new Event('input',{bubbles:true}))",
     )
@@ -806,6 +803,9 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
       encryptedStorage: true,
       settingsSelectedConfiguration: true,
       composerAgentSelection: true,
+      scopeFollowsOpenSshSessions: true,
+      scopeReadOnly: true,
+      executionModeExplained: true,
       composerCliAvailabilityFiltered: true,
       composerCandidateModelSelection: true,
       composerSwitchExpiresApprovalAndPreservesDraft: true,

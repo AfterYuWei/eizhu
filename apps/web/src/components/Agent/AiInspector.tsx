@@ -11,7 +11,15 @@ import { workspaceGeneration } from '@/lib/workspaceScope'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { ShellIconButton, ShellResizeHandle } from '@/components/Layout/ShellControls'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectGroup,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -33,18 +41,21 @@ export function AiInspector({
   onClose: () => void
   onChoose: () => void
 }) {
-  const { tabs, activeTabId } = useSessionStore()
+  const { tabs } = useSessionStore()
   const { inspectorWidth, setInspectorWidth, setSettingsPage } = useDesktopShellStore()
   const { selectedId, conversations, select, put, progress, forget, settings, setSettings } = useAiStore()
   const conversation = selectedId ? conversations[selectedId] : undefined
+  const conversationId = conversation?.id
   const loggedIn = useAccountStore((s) => s.status?.loggedIn)
   const [cliStatuses, setCliStatuses] = useState<AiCliStatus[]>([])
   const [official, setOfficial] = useState<AiCapabilities | null>(null)
   const [newBackend, setNewBackend] = useState<AiBackend | null>(null)
-  const [selectedSessions, setSelectedSessions] = useState<string[]>(() => {
-    const tab = tabs.find((t) => t.id === activeTabId)
-    return tab?.sessionId && tab.status === 'connected' ? [tab.sessionId] : []
-  })
+  const connectedTabs = tabs.filter((t) => t.sessionId && t.status === 'connected')
+  const sessionIds = [...new Set(connectedTabs.map((t) => t.sessionId!))].sort()
+  const sessionKey = JSON.stringify(sessionIds)
+  const targetKey = JSON.stringify(conversation?.targets.map((t) => t.sessionId).sort() ?? [])
+  const scopeReady = sessionIds.length > 0 && sessionIds.length <= 32 && sessionKey === targetKey
+  const scopeQueue = useRef(Promise.resolve())
   const [drafts, setDrafts] = useState<Record<string, Draft>>({})
   const key = selectedId ?? 'new',
     draft = drafts[key] ?? { text: '', attachments: [] }
@@ -53,7 +64,6 @@ export function AiInspector({
   const [history, setHistory] = useState<Array<
     Pick<AiConversation, 'id' | 'title' | 'updatedAt' | 'backend'>
   > | null>(null)
-  const [scopeOpen, setScopeOpen] = useState(false)
   const messages = useRef<HTMLDivElement>(null),
     follow = useRef(true)
   const pending = conversation?.messages.findLast((m) => m.tool?.state === 'pending')?.tool
@@ -73,7 +83,25 @@ export function AiInspector({
     } finally {
       if (generation === workspaceGeneration()) setLoading(false)
     }
-  }, [])
+  }, [setLoading, setError])
+  useEffect(() => {
+    if (!open || !conversationId || sessionKey === targetKey || !window.eizhu) return
+    let live = true
+    scopeQueue.current = scopeQueue.current.then(async () => {
+      if (!live) return
+      await act(async () => {
+        const ids: string[] = JSON.parse(sessionKey)
+        const next =
+          ids.length && ids.length <= 32
+            ? await bridge().ai.scope({ conversationId, sessionIds: ids })
+            : (await bridge().ai.cancel({ conversationId }), await bridge().ai.read({ conversationId }))
+        if (live) put(next)
+      })
+    })
+    return () => {
+      live = false
+    }
+  }, [open, conversationId, sessionKey, targetKey, act, put])
   useEffect(() => {
     if (!window.eizhu) return
     return bridge().events.on('eizhu-ai-message', (event) => {
@@ -190,7 +218,7 @@ export function AiInspector({
   const newConversation = async () => {
     if (!agent || !ready) throw new Error('请选择可用的Agent和模型')
     const created = await bridge().ai.open({
-      sessionIds: selectedSessions,
+      sessionIds,
       backend: { ...agent.backend, model },
     })
     put(created)
@@ -202,8 +230,11 @@ export function AiInspector({
     act(async () => {
       if (!settings?.enabled || !draft.text.trim()) return
       if (!ready) throw new Error('请选择可用的Agent和模型')
-      if (!conversation && !selectedSessions.length) throw new Error('请先选择连接范围')
+      if (!sessionIds.length) throw new Error('请先打开SSH连接')
+      if (sessionIds.length > 32) throw new Error('AI最多支持32个已连接的SSH会话，请关闭多余连接')
+      await scopeQueue.current
       const c = conversation ?? (await newConversation())
+      if (conversation && !scopeReady) put(await bridge().ai.scope({ conversationId: c.id, sessionIds }))
       await bridge().ai.send({
         conversationId: c.id,
         text: draft.text.trim(),
@@ -275,9 +306,15 @@ export function AiInspector({
       </div>
       <div className="ai-session-controls">
         <div className="ai-inline-actions">
-          <Button size="sm" variant="ghost" onClick={() => setScopeOpen((v) => !v)}>
-            连接范围 · {conversation?.targets.length ?? selectedSessions.length}
-          </Button>
+          <span
+            className="ai-scope-summary"
+            title={
+              '自动包含当前窗口所有已连接的SSH会话，不能手动修改。\n' +
+              (connectedTabs.map((t) => t.profileName).join('\n') || '暂无已连接的SSH会话')
+            }
+          >
+            连接范围 · {sessionIds.length}
+          </span>
           <Select
             value={conversation?.permission ?? 'confirm'}
             disabled={!conversation || loading}
@@ -288,56 +325,29 @@ export function AiInspector({
                 )
             }}
           >
-            <SelectTrigger aria-label="操作权限">
+            <SelectTrigger
+              aria-label="执行模式"
+              title={
+                conversation?.permission === 'observer'
+                  ? '只允许结构化读取，不能执行shell命令或修改文件'
+                  : conversation?.permission === 'auto'
+                    ? '在当前SSH会话范围内直接执行，无需逐次审批'
+                    : '执行shell命令或修改文件前，需要你确认操作'
+              }
+            >
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="observer">观察</SelectItem>
-              <SelectItem value="confirm">确认</SelectItem>
-              <SelectItem value="auto">自动</SelectItem>
+              <SelectGroup>
+                <SelectLabel>执行模式</SelectLabel>
+                <SelectItem value="observer">只读观察</SelectItem>
+                <SelectItem value="confirm">执行前确认</SelectItem>
+                <SelectItem value="auto">自动执行</SelectItem>
+              </SelectGroup>
             </SelectContent>
           </Select>
         </div>
       </div>
-      {scopeOpen && (
-        <div className="ai-scope" aria-label="选择已打开的连接">
-          {tabs
-            .filter((t) => t.sessionId && t.status === 'connected')
-            .map((t) => (
-              <label key={t.id}>
-                <input
-                  type="checkbox"
-                  checked={selectedSessions.includes(t.sessionId!)}
-                  onChange={(e) =>
-                    setSelectedSessions((ids) =>
-                      e.target.checked ? [...ids, t.sessionId!] : ids.filter((id) => id !== t.sessionId),
-                    )
-                  }
-                />
-                {t.profileName}
-              </label>
-            ))}
-          {!selectedSessions.length && <p>请选择已连接的终端</p>}
-          <Button
-            size="sm"
-            disabled={loading || !selectedSessions.length}
-            onClick={() =>
-              void act(async () => {
-                if (conversation)
-                  put(
-                    await bridge().ai.scope({
-                      conversationId: conversation.id,
-                      sessionIds: selectedSessions,
-                    }),
-                  )
-                setScopeOpen(false)
-              })
-            }
-          >
-            应用连接范围
-          </Button>
-        </div>
-      )}
       <div className="ai-transcript">
         {history ? (
           <div className="ai-history">
@@ -350,7 +360,6 @@ export function AiInspector({
                     const c = await bridge().ai.read({ conversationId: h.id })
                     put(c)
                     select(c.id)
-                    setSelectedSessions(c.targets.map((t) => t.sessionId))
                     setHistory(null)
                   })
                 }
@@ -375,7 +384,7 @@ export function AiInspector({
             {!conversation?.messages.length && (
               <div className="ai-welcome">
                 <AiIcon size={25} />
-                <p>选择连接与Agent，开始运维任务</p>
+                <p>打开SSH连接，选择Agent开始运维任务</p>
                 <p>当前对话独立于终端标签</p>
               </div>
             )}
@@ -438,6 +447,8 @@ export function AiInspector({
       {settings?.enabled && !ready && (
         <p className="ai-command-notice">请选择可用的Agent和模型；可在设置中配置供应商或检查CLI安装。</p>
       )}
+      {!sessionIds.length && <p className="ai-command-notice">请先打开SSH连接。</p>}
+      {sessionIds.length > 32 && <p className="ai-command-notice">AI最多支持32个SSH会话，请关闭多余连接。</p>}
       <div className="ai-composer">
         {pending && conversation ? (
           <AiApproval
@@ -446,6 +457,7 @@ export function AiInspector({
             disabled={
               loading ||
               !settings?.enabled ||
+              !scopeReady ||
               !conversation.targets.some(
                 (t) =>
                   t.sessionId === pending.sessionId &&
@@ -598,7 +610,8 @@ export function AiInspector({
                   !settings?.enabled ||
                   !ready ||
                   !draft.text.trim() ||
-                  (!conversation && !selectedSessions.length)
+                  !sessionIds.length ||
+                  sessionIds.length > 32
                 }
                 onClick={() => void send()}
               >
