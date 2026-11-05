@@ -13,7 +13,7 @@ UI 与文档使用中文。当前执行阶段 6 最终工程交付与发布验�
 
 桌面打包测试结束后，确认项目副本无运行进程，注销并删除 `artifacts/desktop/mac/eizhu.app`，避免重复应用入口；保留 `/Applications/eizhu.app` 和用户数据。
 
-2026-11-01 新增 AI 运维助手：右侧对话、逐条确认、独立 SSH exec、自配 Responses 与官方网关客户端。本地配置和历史通过数据库 Worker 加密保存，不进入同步/备份；确认绑定窗口和连接实例，未知结果不重放。官方真实服务与跨平台仍待验，见 `docs/desktop-rebuild/AI_AGENT_2026-11-01.md`、`docs/AI_API.md`。
+2026-11-01 新增 AI 运维助手：右侧对话、逐条确认、自配 Responses 与官方网关客户端。2026-11-04 按用户要求改为在当前 SSH 窗口的交互式 shell 执行，沿用终端环境，命令输出在原终端展示，不再为 AI 命令创建独立 exec 通道；终端忙或有未提交输入时拒绝派发。本地配置和历史通过数据库 Worker 加密保存，不进入同步/备份；确认绑定窗口和连接实例，未知结果不重放。官方真实服务与跨平台仍待验，见 `docs/desktop-rebuild/AI_AGENT_2026-11-01.md`、`docs/AI_API.md`。
 
 Node 24 LTS（至少 24.7）、npm workspaces、一个根锁文件。用户安装应用无需另装 Node。
 

@@ -163,10 +163,10 @@ export function SettingsPage({ onBack, initialTab = 'appearance', onTabChange }:
 
                   <div className="settings-field">
                     <div className="settings-field-info">
-                      <Label htmlFor="settings-terminal-command-highlight" className="settings-field-label">命令输入高亮</Label>
-                      <span id="settings-terminal-command-highlight-desc" className="settings-field-desc">用强调色区分命令与输出，保留已有配色。支持 Bash 4.4+、Zsh 和 Fish。</span>
+                      <Label htmlFor="settings-terminal-command-marker" className="settings-field-label">命令块标识</Label>
+                      <span id="settings-terminal-command-marker-desc" className="settings-field-desc">用右侧竖条标出每次命令及其输出的范围，保留终端原配色。支持 Bash 4.4+、Zsh 和 Fish。</span>
                     </div>
-                    <Switch id="settings-terminal-command-highlight" aria-describedby="settings-terminal-command-highlight-desc" checked={terminalCommandHighlight} onCheckedChange={setTerminalCommandHighlight}/>
+                    <Switch id="settings-terminal-command-marker" aria-describedby="settings-terminal-command-marker-desc" checked={terminalCommandHighlight} onCheckedChange={setTerminalCommandHighlight}/>
                   </div>
 
                   <div className="settings-field">

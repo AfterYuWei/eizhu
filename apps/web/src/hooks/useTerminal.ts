@@ -24,7 +24,7 @@ interface UseTerminalOptions {
     fontFamily?: string;
     fontFamilyCN?: string;
     terminalTheme?: string;
-    commandHighlight?: boolean;
+    commandMarkers?: boolean;
     logHighlight?: boolean;
     onData?: (data: string) => void;
     onFontSizeChange?: (delta: number) => void; // Ctrl+滚轮缩放时调用，delta 为 ±1
@@ -38,7 +38,7 @@ const openLink = (uri: string) => {
     }
 };
 export function useTerminal(options: UseTerminalOptions) {
-    const { containerRef, fontSize = 14, fontFamily, fontFamilyCN, terminalTheme = 'default', commandHighlight = true, logHighlight = false, onData, onFontSizeChange, onResize } = options;
+    const { containerRef, fontSize = 14, fontFamily, fontFamilyCN, terminalTheme = 'default', commandMarkers = true, logHighlight = false, onData, onFontSizeChange, onResize } = options;
     const terminalRef = useRef<Terminal | null>(null);
     const fitAddonRef = useRef<FitAddon | null>(null);
     const highlightingRef = useRef<TerminalHighlighting | null>(null);
@@ -67,7 +67,7 @@ export function useTerminal(options: UseTerminalOptions) {
         const terminal = new Terminal({
             fontSize,
             fontFamily: buildFontFamily(),
-            theme: getTerminalTheme(terminalTheme, commandHighlight),
+            theme: getTerminalTheme(terminalTheme),
             allowProposedApi: true,
             // We handle right-click copy/paste ourselves (Termius-style), so disable
             // xterm's built-in right-click word selection (defaults to true on macOS).
@@ -102,7 +102,7 @@ export function useTerminal(options: UseTerminalOptions) {
         // Enable Unicode 11 character width for better CJK and emoji rendering
         terminal.unicode.activeVersion = '11';
         terminal.open(containerRef.current);
-        const highlighting = new TerminalHighlighting({ theme: terminalTheme, commands: commandHighlight, logs: logHighlight });
+        const highlighting = new TerminalHighlighting({ theme: terminalTheme, commandMarkers, logs: logHighlight });
         terminal.loadAddon(highlighting);
         highlightingRef.current = highlighting;
         // 尝试加载 WebGL 渲染器以提升高频更新性能（如进度条、实时日志）
@@ -396,11 +396,11 @@ export function useTerminal(options: UseTerminalOptions) {
         const terminal = terminalRef.current;
         if (!terminal)
             return;
-        terminal.options.theme = getTerminalTheme(terminalTheme, commandHighlight);
-    }, [terminalTheme, commandHighlight]);
+        terminal.options.theme = getTerminalTheme(terminalTheme);
+    }, [terminalTheme]);
     useEffect(() => {
-        highlightingRef.current?.update({ theme: terminalTheme, commands: commandHighlight, logs: logHighlight });
-    }, [terminalTheme, commandHighlight, logHighlight]);
+        highlightingRef.current?.update({ theme: terminalTheme, commandMarkers, logs: logHighlight });
+    }, [terminalTheme, commandMarkers, logHighlight]);
     const write = useCallback((data: string) => {
         return new Promise<void>((resolve) => { const terminal=terminalRef.current; if(terminal)terminal.write(data,resolve);else resolve() });
     }, []);

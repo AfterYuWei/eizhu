@@ -1,9 +1,9 @@
 import type { IBuffer, IDecoration, IDisposable, IMarker, ITerminalAddon, Terminal } from '@xterm/xterm'
-import { getTerminalHighlightColors } from './terminalThemes'
+import { getTerminalHighlightColors, getTerminalTheme } from './terminalThemes'
 
 interface HighlightOptions {
   theme: string
-  commands: boolean
+  commandMarkers: boolean
   logs: boolean
 }
 type Region = 'prompt' | 'command' | 'output'
@@ -14,6 +14,7 @@ interface Boundary {
   fixed: boolean
   offset: number
   region: Region
+  block?: number
 }
 interface Position { row: number; column: number }
 interface Cell extends Position {
@@ -31,6 +32,10 @@ export class TerminalHighlighting implements ITerminalAddon {
   private subscriptions: IDisposable[] = []
   private decorations = new Map<string, { decoration: IDecoration; marker: IMarker }>()
   private frame?: number
+  private nextBlock = 0
+  private currentBlock?: number
+  private leadingRegion: Region = 'output'
+  private leadingBlock?: number
 
   constructor(options: HighlightOptions) { this.options = options }
 
@@ -40,7 +45,7 @@ export class TerminalHighlighting implements ITerminalAddon {
       terminal.parser.registerOscHandler(133, (data) => {
         const code = data.split(';')[0]
         const region = code === 'A' ? 'prompt' : code === 'B' ? 'command' : code === 'C' ? 'output' : undefined
-        if (region && terminal.buffer.active.type === 'normal') this.capture(region)
+        if (region && terminal.buffer.active.type === 'normal') this.capture(region, data.split(';').includes('k=s'))
         return false
       }),
       terminal.parser.registerCsiHandler({ final: 'J' }, (params) => {
@@ -63,6 +68,8 @@ export class TerminalHighlighting implements ITerminalAddon {
   reset() {
     for (const boundary of this.boundaries) boundary.marker.dispose()
     this.boundaries.clear()
+    this.currentBlock = this.leadingBlock = undefined
+    this.leadingRegion = 'output'
     this.clearDecorations()
     this.schedule()
   }
@@ -84,7 +91,7 @@ export class TerminalHighlighting implements ITerminalAddon {
       && buffer.getLine(row)?.getCell(columns - 1)?.getWidth() === 1 ? columns - 1 : columns
   }
 
-  private capture(region: Region) {
+  private capture(region: Region, continuation: boolean) {
     const terminal = this.terminal!
     const buffer = terminal.buffer.normal
     const row = buffer.baseY + buffer.cursorY
@@ -94,15 +101,22 @@ export class TerminalHighlighting implements ITerminalAddon {
     // Prompt redraws replace boundaries in the overwritten part of the buffer.
     for (const previous of [...this.boundaries].reverse()) {
       if (previous.marker.line < anchor || previous.marker.line === anchor && previous.offset < offset) break
+      this.boundaries.delete(previous)
       previous.marker.dispose()
     }
     const marker = terminal.registerMarker(anchor - row)
     if (!marker) return
     const cellMarker = row === anchor ? marker : terminal.registerMarker(0)
     if (!cellMarker) { marker.dispose(); return }
-    const boundary = { marker, cellMarker, column: buffer.cursorX, fixed: false, offset, region }
+    if (region === 'prompt' && !continuation) this.currentBlock = undefined
+    else if (region === 'command' && this.currentBlock === undefined) this.currentBlock = ++this.nextBlock
+    const boundary = { marker, cellMarker, column: buffer.cursorX, fixed: false, offset, region, block: this.currentBlock }
     this.boundaries.add(boundary)
     marker.onDispose(() => {
+      if (this.boundaries.values().next().value === boundary) {
+        this.leadingRegion = boundary.region
+        this.leadingBlock = boundary.block
+      }
       this.boundaries.delete(boundary)
       if (boundary.cellMarker !== marker) boundary.cellMarker.dispose()
     })
@@ -172,7 +186,7 @@ export class TerminalHighlighting implements ITerminalAddon {
 
   private render() {
     const terminal = this.terminal!
-    if (terminal.buffer.active.type !== 'normal' || !this.options.commands && !this.options.logs) {
+    if (terminal.buffer.active.type !== 'normal' || !this.options.commandMarkers && !this.options.logs) {
       this.clearDecorations()
       return
     }
@@ -180,19 +194,23 @@ export class TerminalHighlighting implements ITerminalAddon {
     const top = buffer.viewportY
     const bottom = Math.min(buffer.length, top + terminal.rows)
     const colors = getTerminalHighlightColors(this.options.theme)
-    const regions: Array<Position & { region: Region }> = []
-    let initial: Region = 'output'
+    const markerColor = getTerminalTheme(this.options.theme).foreground!
+    const regions: Array<Position & { region: Region; block?: number }> = []
+    let initial = this.leadingRegion
+    let initialBlock = this.leadingBlock
     for (const boundary of this.boundaries) {
       if (boundary.marker.line >= bottom) break
       const point = this.position(boundary)
-      if (point.row < top - 8) initial = boundary.region
-      else regions.push({ ...point, region: boundary.region })
+      if (point.row < top - 8) { initial = boundary.region; initialBlock = boundary.block }
+      else regions.push({ ...point, region: boundary.region, block: boundary.block })
     }
     // Include a short margin to recognize log words split across a soft wrap.
     const cells: Cell[] = []
+    const commandRows = new Map<number, number>()
     const characters: Array<Cell | undefined> = []
     let text = ''
     let region = initial
+    let block = initialBlock
     let next = 0
     let draftBottom = buffer.baseY + buffer.cursorY
     while (buffer.getLine(draftBottom + 1)?.isWrapped) draftBottom++
@@ -201,13 +219,17 @@ export class TerminalHighlighting implements ITerminalAddon {
       if (row > Math.max(0, top - 8) && !line.isWrapped) { text += '\n'; characters.push(undefined) }
       const width = this.wrappedWidth(buffer, row)
       for (let column = 0; column < width; column++) {
-        while (next < regions.length && (regions[next].row < row || regions[next].row === row && regions[next].column <= column)) region = regions[next++].region
+        while (next < regions.length && (regions[next].row < row || regions[next].row === row && regions[next].column <= column)) {
+          region = regions[next].region
+          block = regions[next++].block
+        }
         const source = line.getCell(column)!
         if (!source.getWidth()) continue
         const chars = source.getChars() || ' '
         const cell: Cell = { row, column, width: source.getWidth(), region,
           eligible: source.isFgDefault() && !source.isInvisible() && !source.isInverse() }
-        if (region === 'command' && this.options.commands && row <= draftBottom && cell.eligible && source.getChars()) cell.color = colors.command
+        if (this.options.commandMarkers && block !== undefined && row <= draftBottom
+          && (!source.isInvisible() && chars.trim() || region === 'output' && row < buffer.baseY + buffer.cursorY)) commandRows.set(row, block)
         cells.push(cell)
         text += chars
         for (let i = 0; i < chars.length; i++) characters.push(cell)
@@ -224,7 +246,10 @@ export class TerminalHighlighting implements ITerminalAddon {
         }
       }
     }
-    const runs: Array<Position & { width: number; color: string }> = []
+    const runs: Array<Position & { width: number; color?: string; start?: boolean; end?: boolean }> = [...commandRows]
+      .filter(([row]) => row >= top && row < bottom)
+      .map(([row, block]) => ({ row, column: 0, width: 1,
+        start: commandRows.get(row - 1) !== block, end: commandRows.get(row + 1) !== block }))
     for (const cell of cells) {
       if (!cell.color || cell.row < top || cell.row >= bottom) continue
       const previous = runs.at(-1)
@@ -233,7 +258,7 @@ export class TerminalHighlighting implements ITerminalAddon {
     }
     const keep = new Set<string>()
     for (const run of runs) {
-      const key = `${run.row}:${run.column}:${run.width}:${run.color}`
+      const key = run.color ? `${run.row}:${run.column}:${run.width}:${run.color}` : `command:${run.row}:${markerColor}:${run.start}:${run.end}`
       keep.add(key)
       const existing = this.decorations.get(key)
       if (existing && !existing.marker.isDisposed && existing.marker.line === run.row) continue
@@ -242,8 +267,19 @@ export class TerminalHighlighting implements ITerminalAddon {
       this.decorations.delete(key)
       const marker = terminal.registerMarker(run.row - buffer.baseY - buffer.cursorY)
       if (!marker) continue
-      const decoration = terminal.registerDecoration({ marker, x: run.column, width: run.width, foregroundColor: run.color, layer: 'bottom' })
-      if (decoration) this.decorations.set(key, { marker, decoration })
+      const decoration = terminal.registerDecoration(run.color
+        ? { marker, x: run.column, width: run.width, foregroundColor: run.color, layer: 'bottom' }
+        : { marker, anchor: 'right', layer: 'bottom' })
+      if (decoration) {
+        if (!run.color) decoration.onRender((element) => {
+          element.classList.add('eizhu-command-marker')
+          element.classList.toggle('is-block-start', !!run.start)
+          element.classList.toggle('is-block-end', !!run.end)
+          element.style.setProperty('--terminal-command-marker-color', markerColor)
+          element.setAttribute('aria-hidden', 'true')
+        })
+        this.decorations.set(key, { marker, decoration })
+      }
       else marker.dispose()
     }
     for (const [key, value] of this.decorations) {

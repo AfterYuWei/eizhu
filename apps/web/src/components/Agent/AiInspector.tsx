@@ -317,7 +317,12 @@ export function AiInspector({
                   busy={Boolean(loading || busy || !connected)}
                   onError={setError}
                   onDecide={(proposalId, accepted) => {
-                    void act(() => bridge().ai.decide({ proposalId, accepted }))
+                    void act(async () => {
+                      if (!tab?.sessionId || conversation.target.sessionId !== tab.sessionId)
+                        throw new Error('当前 SSH 窗口已变化，请重新打开对话')
+                      await bridge().ai.decide({ proposalId, accepted })
+                      if (accepted) terminalActions(tab.id)?.focus()
+                    })
                   }}
                   onTimeout={(proposalId, seconds) => {
                     void act(() => bridge().ai.setTimeout({ proposalId, seconds }))

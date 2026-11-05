@@ -21,6 +21,7 @@ interface SettingsStore {
   appFontSize: number
   appFontFamily: string
   terminalTheme: string
+  /** 沿用历史偏好键，当前控制命令及其输出右侧的竖条。 */
   terminalCommandHighlight: boolean
   terminalLogHighlight: boolean
   // 自动补全设置

@@ -19,7 +19,11 @@ type Config = z.infer<typeof storedAiConfigSchema>
 const parameters = {
   type: 'object',
   properties: {
-    command: { type: 'string', description: '一条完整的非交互 POSIX shell 命令。sudo 必须使用 sudo -n。' },
+    command: {
+      type: 'string',
+      description:
+        '在当前 SSH 窗口的交互式 shell 执行的一条完整命令，沿用当前终端环境；交互输入由用户在终端完成。',
+    },
     cwd: { type: 'string', description: '远端绝对工作目录' },
     purpose: { type: 'string', description: '中文说明命令目的' },
     impact: { type: 'string', description: '中文说明修改、风险或只读影响' },

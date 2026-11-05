@@ -235,19 +235,19 @@ export async function verifyCompletionUi(
     )
     // Verify the production hook, settings UI and persistence together over the same SSH port.
     await runtime.call('session.input', { id: uiSession, data: 'terminal-colors-smoke\r' })
-    await wait(() => js<boolean>(`return document.querySelectorAll('.xterm-decoration').length===2`), 'command decorations rendered')
+    await wait(() => js<boolean>(`return document.querySelectorAll('.eizhu-command-marker').length===5&&document.querySelectorAll('.eizhu-command-marker.is-block-start').length===2&&document.querySelectorAll('.eizhu-command-marker.is-block-end').length===2`), 'command and output blocks rendered')
     await capture('terminal-highlighting-shell.png')
     await js(`document.dispatchEvent(new KeyboardEvent('keydown',{key:'y',ctrlKey:true,shiftKey:true,bubbles:true}))`)
     await wait(() => js<boolean>(`return [...document.querySelectorAll('[role="tab"]')].some(tab=>tab.textContent==='终端')`), 'terminal settings available')
     await js(`const tab=[...document.querySelectorAll('[role="tab"]')].find(tab=>tab.textContent==='终端');tab.focus();tab.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}))`)
-    await wait(() => js<boolean>(`return document.querySelector('#settings-terminal-command-highlight')?.getAttribute('aria-checked')==='true'&&document.querySelector('#settings-terminal-log-highlight')?.getAttribute('aria-checked')==='false'`), 'highlight defaults')
+    await wait(() => js<boolean>(`return document.querySelector('#settings-terminal-command-marker')?.getAttribute('aria-checked')==='true'&&document.querySelector('#settings-terminal-log-highlight')?.getAttribute('aria-checked')==='false'`), 'marker and log defaults')
     await js(`document.querySelector('#settings-terminal-log-highlight').click()`)
-    await wait(() => js<boolean>(`return document.querySelectorAll('.xterm-decoration').length===5`), 'log levels immediately decorated')
-    await js(`document.querySelector('#settings-terminal-command-highlight').click()`)
-    await wait(() => js<boolean>(`return document.querySelectorAll('.xterm-decoration').length===3`), 'commands independently disabled')
+    await wait(() => js<boolean>(`return document.querySelectorAll('.xterm-decoration:not(.eizhu-command-marker)').length===3&&document.querySelectorAll('.eizhu-command-marker').length===5`), 'log levels independently decorated')
+    await js(`document.querySelector('#settings-terminal-command-marker').click()`)
+    await wait(() => js<boolean>(`return document.querySelectorAll('.eizhu-command-marker').length===0&&document.querySelectorAll('.xterm-decoration').length===3`), 'command blocks independently disabled')
     await js(`document.querySelector('#settings-terminal-log-highlight').click()`)
     await wait(() => js<boolean>(`return document.querySelectorAll('.xterm-decoration').length===0`), 'original colors restored')
-    await js(`document.querySelector('#settings-terminal-command-highlight').click()`)
+    await js(`document.querySelector('#settings-terminal-command-marker').click()`)
     await wait(async () => {
       const values = await runtime.call<Record<string, string>>('settings.read')
       const state = JSON.parse(values['eizhu-settings']).state
@@ -255,7 +255,7 @@ export async function verifyCompletionUi(
     }, 'highlight preferences persisted')
     await capture('terminal-highlighting-settings.png')
     await js(`document.querySelector('.settings-page-back').click()`)
-    await wait(() => js<boolean>(`return !document.querySelector('.settings-page')&&document.querySelectorAll('.xterm-decoration').length===2`), 'terminal retained after settings')
+    await wait(() => js<boolean>(`return !document.querySelector('.settings-page')&&document.querySelectorAll('.eizhu-command-marker').length===5`), 'terminal retained after settings')
     return {
       passed: true,
       cases,
@@ -268,6 +268,7 @@ export async function verifyCompletionUi(
       serverDetailFollowCwd: true,
       nativeIme: false,
       terminalHighlighting: true,
+      terminalCommandBlocks: true,
     }
   } catch (error) {
     const state = await js(`const p=document.querySelector('.xctrl-completion-panel');return {focus:document.activeElement?.className,popup:p?.textContent,rect:p?.getBoundingClientRect().toJSON(),viewport:[innerWidth,innerHeight]}`)

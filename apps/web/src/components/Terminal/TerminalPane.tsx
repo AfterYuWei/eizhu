@@ -150,7 +150,7 @@ export function TerminalPane({ tab, isActive, isVisible = isActive }: TerminalPa
         fontFamily,
         fontFamilyCN,
         terminalTheme: effectiveTerminalTheme,
-        commandHighlight: terminalCommandHighlight,
+        commandMarkers: terminalCommandHighlight,
         logHighlight: terminalLogHighlight,
         onData: (data) => {
             if (useWorkspaceViewStore.getState().activePage !== 'terminal' || useSessionStore.getState().activeTabId !== tab.id || !tab.sessionId)

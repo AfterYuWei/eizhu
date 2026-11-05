@@ -20,7 +20,7 @@ import { useSessionStore } from '@/store/session'
 import { useSidebarDetailStore } from '@/store/sidebarDetail'
 import { useTerminalLayoutStore } from '@/store/terminalLayout'
 import { useSettingsStore,useResolvedTheme } from '@/store/settings'
-import { getTerminalHighlightColors,getTerminalThemeMeta,resolveTerminalThemeId } from '@/lib/terminalThemes'
+import { getTerminalThemeMeta,resolveTerminalThemeId } from '@/lib/terminalThemes'
 import { useDesktopShellStore } from '@/store/desktopShell'
 import { useSplitSidebar } from '@/hooks/useSplitSidebar'
 import { useSidebarPreview } from '@/hooks/useSidebarPreview'
@@ -170,7 +170,7 @@ export function Layout() {
     '--shell-sidebar-default-width': `${DEFAULT_DESKTOP_SIDEBAR_WIDTH}px`,
     '--shell-sidebar-inset': `${DESKTOP_SIDEBAR_INSET}px`,
     '--shell-terminal-bg': terminalPalette.theme.background,
-    '--shell-terminal-fg': getTerminalHighlightColors(terminalThemeId).command,
+    '--shell-terminal-fg': terminalPalette.category === 'dark' ? '#FFFFFF' : '#171717',
   } as CSSProperties} role="application" aria-label="eizhu">
     <div className="shell-session-view" ref={sessionView} inert={settingsOpen} aria-hidden={settingsOpen || undefined}>
       <div ref={sidebarSpace} className={`shell-sidebar-space ${sidebarHidden ? 'is-collapsed' : ''} ${sidebarButtonMotion ? 'is-button-motion' : ''}`} style={{ width: sidebarHidden ? 0 : visibleSidebarWidth }}>

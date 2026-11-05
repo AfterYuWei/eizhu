@@ -351,11 +351,9 @@ export const terminalThemes: TerminalTheme[] = [
   },
 ]
 
-/** Light terminals use a readable gray for plain text while commands are emphasized. */
-export function getTerminalTheme(id: string, commandHighlight = false): ITheme {
-  const meta = getTerminalThemeMeta(id)
-  return commandHighlight && meta.category === 'light'
-    ? { ...meta.theme, foreground: '#686868' } : meta.theme
+/** 获取原始终端配色，命令标识不修改文字颜色。 */
+export function getTerminalTheme(id: string): ITheme {
+  return getTerminalThemeMeta(id).theme
 }
 
 /** 获取主题元信息（包含背景色与分类） */
@@ -388,7 +386,6 @@ export function getTerminalHighlightColors(id: string) {
     return theme.foreground!
   }
   return {
-    command: readable(meta.category === 'dark' ? '#FFFFFF' : '#171717'),
     error: readable(theme.red!),
     warning: readable(theme.yellow!),
     info: readable(theme.cyan!),

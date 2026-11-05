@@ -51,6 +51,38 @@ test('bootstrap fallback releases pending output and bounds retained data', () =
   assert.equal(large.data.length, 65537)
 })
 
+test('only a fresh shell prompt permits AI input; cwd updates and partial user input do not', () => {
+  const output = new ShellOutput()
+  assert.equal(output.atPrompt, false)
+  output.push(Buffer.from('\x1b]7;file:///tmp\x07'))
+  assert.equal(output.atPrompt, false)
+  for (const byte of Buffer.from('\x1b]1337;eizhuPrompt\x07')) output.push(Buffer.from([byte]))
+  assert.equal(output.atPrompt, true)
+  output.input()
+  assert.equal(output.atPrompt, false)
+  output.push(Buffer.from('vim is running\x1b]7;file:///srv\x07'))
+  assert.equal(output.atPrompt, false)
+  output.push(Buffer.from('\x1b]1337;eizhuPrompt\x07'))
+  assert.equal(output.atPrompt, true)
+})
+
+test('AI wrapper echoes are hidden while actual command output and prompts remain visible', () => {
+  const output = new ShellOutput(), begin = Buffer.from('\x1b]1337;eizhuAi;token;start\x07')
+  output.startAgent(begin)
+  const packet = Buffer.concat([
+    Buffer.from(" printf '\\033]1337;eizhuAi;token;start\\007'; eval 'printf hello'\r\n"),
+    begin,
+    Buffer.from('hello eizhuAi; is ordinary output\r\nprompt$ '),
+  ])
+  const chunks: Buffer[] = []
+  for (const byte of packet) chunks.push(output.push(Buffer.from([byte])).data)
+  assert.equal(Buffer.concat(chunks).toString(), 'hello eizhuAi; is ordinary output\r\nprompt$ ')
+  output.startAgent(begin)
+  output.push(Buffer.from(" printf 'eizhuAi;token;start'"))
+  assert.equal(output.finishBootstrap().length, 0)
+  assert.equal(output.push(Buffer.from('^C\r\nprompt$ ')).data.toString(), '^C\r\nprompt$ ')
+})
+
 test('hides setup echoes redrawn by ZLE while retaining actual shell errors and banners', () => {
   const output = new ShellOutput(), setup = shellSetupCommand('/bin/zsh')!
   output.startBootstrap(setup)

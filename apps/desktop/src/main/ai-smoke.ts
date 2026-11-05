@@ -15,6 +15,7 @@ import { aiConversationSchema } from '@eizhu/contracts'
 export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHost, root: string) {
   const clients = new Set<Connection>(),
     commands: string[] = [],
+    execCommands: string[] = [],
     requests: string[] = []
   let modelMode: 'normal' | 'quota' | 'unauthorized' | 'interrupted' | 'unsupported' = 'normal'
   const key = utils.generateKeyPairSync('ed25519'),
@@ -38,21 +39,30 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
           const channel = accept()
           channel.on('error', () => undefined)
           channel.write('AI synthetic terminal\r\n$ ')
+          channel.on('data', (data: Buffer) => {
+            const script = data.toString()
+            channel.write(script + '\r\n')
+            if (!script.includes('\r') && !script.includes('\n') && !script.includes('\x03')) return
+            const token = script.match(/eizhuAi;([\w-]+);start/)?.[1]
+            if (token) {
+              commands.push(script)
+              channel.write(`\x1b]1337;eizhuAi;${token};start\x07`)
+              const bytes = Buffer.from('你好 🧪\r\nsynthetic warning\r\n')
+              channel.write(bytes.subarray(0, 2))
+              channel.write(bytes.subarray(2))
+              channel.write(`\x1b]1337;eizhuAi;${token};end;3\x07`)
+            }
+            channel.write('\x1b]7;file:///tmp\x07\x1b]1337;eizhuPrompt\x07')
+            if (script.includes('__eizhu_osc7')) channel.write('\x1b]1337;eizhuOsc7Ready\x07')
+            channel.write('$ ')
+          })
         })
         s.on('exec', (accept, _reject, info) => {
+          execCommands.push(info.command)
           const channel = accept()
           channel.on('error', () => undefined)
-          if (info.command.startsWith('cd -- ')) {
-            commands.push(info.command)
-            const bytes = Buffer.from('你好 🧪\n')
-            channel.write(bytes.subarray(0, 2))
-            channel.write(bytes.subarray(2))
-            channel.stderr.write('synthetic warning\n')
-            channel.exit(3)
-          } else {
-            channel.write('/bin/sh\n')
-            channel.exit(0)
-          }
+          channel.write('/bin/bash\n')
+          channel.exit(0)
           channel.end()
         })
       }),
@@ -265,7 +275,7 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
     await wait(
       "return window.__aiSmoke?.status==='awaiting_confirmation'&&!!document.querySelector('.ai-command')",
     )
-    assert.equal(commands.length, 0, 'No SSH exec before user confirmation')
+    assert.equal(commands.length, 0, 'No AI terminal input before user confirmation')
     const proposed = aiConversationSchema.parse(await js('return window.__aiSmoke'))
     const proposalId = proposed.messages.at(-1)!.proposal!.id
     await js('document.querySelector(\'.ai-command button[aria-label="复制命令"]\').click()')
@@ -301,12 +311,13 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
       .messages.find((m) => m.proposal?.id === proposalId)!.proposal!.result!
     assert.equal(commands.length, 1)
     assert.equal(result.exitCode, 3)
-    assert.equal(result.stdout, '你好 🧪\n')
-    assert.equal(result.stderr, 'synthetic warning\n')
-    for (const [label, expected] of [
-      ['标准输出', result.stdout],
-      ['错误输出', result.stderr],
-    ]) {
+    assert.equal(result.stdout, '你好 🧪\r\nsynthetic warning\r\n')
+    assert.equal(result.stderr, '')
+    assert.ok(
+      execCommands.every((command) => !command.includes('eizhuAi') && !command.startsWith('cd -- ')),
+      'AI must reuse the current shell instead of opening an exec channel',
+    )
+    for (const [label, expected] of [['标准输出', result.stdout]]) {
       await js('document.querySelector(d).click()', `.ai-command button[aria-label="复制${label}"]`)
       await wait(`return window.eizhu.clipboard.read().then(text=>text===${JSON.stringify(expected)})`)
     }
@@ -323,7 +334,8 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
       `return window.eizhu.clipboard.read().then(text=>text===${JSON.stringify("printf '检查完成'\n")})`,
     )
     await wait('return !document.querySelector(\'.ai-code-block [role="status"]\')')
-    assert.ok(commands[0].startsWith("cd -- '/tmp' && exec sh -c "))
+    assert.ok(commands[0].includes("cd -- '/tmp' && eval "))
+    assert.ok(!commands[0].includes('exec sh -c'))
     assert.ok(!requests.join('').includes('synthetic-ai-ssh-password'))
     const rows = await call<Array<{ id: string }>>('ai', 'history', { profileId })
     assert.equal(rows.length, 1)
@@ -392,6 +404,22 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
     )
     assert.equal(commands.length, 1, 'Switching sidebar content must retain the conversation without replay')
     const sessionId = proposed.target.sessionId
+    const blocked = aiConversationSchema.parse(await call('ai', 'open', { sessionId }))
+    await call('ai', 'send', { conversationId: blocked.id, text: '验证终端输入占用', attachments: [] })
+    await wait(
+      `return window.__aiSmoke?.id===${JSON.stringify(blocked.id)}&&window.__aiSmoke.status==='awaiting_confirmation'`,
+    )
+    const blockedProposal = aiConversationSchema
+      .parse(await js('return window.__aiSmoke'))
+      .messages.at(-1)!.proposal!
+    await call('session', 'input', { id: sessionId, data: 'unfinished-input' })
+    await call('ai', 'decide', { proposalId: blockedProposal.id, accepted: true })
+    await wait(
+      `return window.__aiSmoke?.id===${JSON.stringify(blocked.id)}&&window.__aiSmoke.status==='error'`,
+    )
+    assert.ok(aiConversationSchema.parse(await js('return window.__aiSmoke')).error.includes('未提交输入'))
+    assert.equal(commands.length, 1, 'AI must not append commands to pending manual terminal input')
+    await call('session', 'input', { id: sessionId, data: '\x03' })
     for (const mode of ['quota', 'unauthorized', 'interrupted'] as const) {
       modelMode = mode
       const c = aiConversationSchema.parse(await call('ai', 'open', { sessionId }))
@@ -420,6 +448,8 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
       approvalRequired: true,
       duplicateRejected: true,
       outputAndExitCode: true,
+      currentTerminalExecution: true,
+      pendingTerminalInputBlocked: true,
       encryptedStorage: true,
       historyDeletion: true,
       quotaAndAuthErrors: true,

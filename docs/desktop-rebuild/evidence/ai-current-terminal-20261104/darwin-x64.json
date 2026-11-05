@@ -1,0 +1,92 @@
+{
+  "date": "2026-11-04",
+  "platform": "darwin",
+  "arch": "x64",
+  "build": {
+    "base": "0.5.0",
+    "version": "0.5.0-test.373.e282a43a",
+    "channel": "test",
+    "revision": "e282a43ab3e26f29cb71fdbc90c38a1b742746e2",
+    "platform": "darwin",
+    "arch": "x64",
+    "feeds": {},
+    "updateRepository": {
+      "owner": "AfterYuWei",
+      "repo": "eizhu"
+    },
+    "sourceDigest": "0f8543c53d8f8109e903ce15532960e1507f0de539b75ea05a58cbfb6ddaaa8c"
+  },
+  "installer": "artifacts/desktop/eizhu-0.5.0-test.373.e282a43a-mac-x64.dmg",
+  "sha256": "855b154ee08073b0406a9ccf815a91d83be622ae923793cc63b5f95b7995b9c4",
+  "packagedSourceMatchesCurrent": true,
+  "signed": false,
+  "tests": {
+    "foundation": {
+      "passed": 208,
+      "skipped": 2
+    },
+    "web": {
+      "passed": 941
+    },
+    "baseline": {
+      "passed": 10
+    },
+    "finalFocused": {
+      "passed": 40,
+      "skipped": 2
+    }
+  },
+  "checks": {
+    "types": true,
+    "lint": true,
+    "frozenBaseline": true,
+    "architecture": true
+  },
+  "packagedSmoke": {
+    "passed": true,
+    "model": "loopback-synthetic",
+    "ssh": "loopback-synthetic",
+    "approvalRequired": true,
+    "duplicateRejected": true,
+    "outputAndExitCode": true,
+    "currentTerminalExecution": true,
+    "pendingTerminalInputBlocked": true,
+    "encryptedStorage": true,
+    "historyDeletion": true,
+    "quotaAndAuthErrors": true,
+    "responsesOnly": true,
+    "settingsDiscoveryAndTest": true,
+    "sharedSettingsSelect": true,
+    "incompleteStreamRejected": true,
+    "unsupportedToolsRejected": true,
+    "codeBlockCopyOnly": true,
+    "borderlessAiContent": true,
+    "sharedSidebar": {
+      "gap": 8,
+      "topAligned": true,
+      "heightAligned": true,
+      "radius": 16,
+      "independent": true
+    },
+    "screenshots": [
+      "ai-settings-models.png",
+      "ai-settings-responses.png",
+      "right-sidebar-picker.png",
+      "ai-chat-approval.png",
+      "ai-chat-light.png",
+      "ai-chat-dark.png",
+      "ai-chat-start.png",
+      "ai-chat-narrow.png"
+    ]
+  },
+  "unverified": [
+    "Fish 实际 shell",
+    "真实远端 PTY/sudo/TUI/中断",
+    "Windows x64",
+    "macOS arm64",
+    "Linux x64",
+    "签名/公证",
+    "真实模型服务",
+    "长时间运行"
+  ]
+}

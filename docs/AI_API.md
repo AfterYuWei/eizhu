@@ -65,7 +65,7 @@
 
 | 参数 | 类型 | 含义 |
 |---|---|---|
-| command | string | 完整非交互 POSIX shell 命令，最多 16384 字符 |
+| command | string | 在当前 SSH 窗口交互式 shell 执行的完整命令，最多 16384 字符；沿用终端环境，交互输入由用户在终端完成 |
 | cwd | string | 绝对工作目录，最多 32768 字符 |
 | purpose | string | 中文目的说明，最多 2048 字符 |
 | impact | string | 中文影响说明，最多 2048 字符 |
@@ -74,7 +74,7 @@ SSE 使用 `data: <JSON>\n\n`。网关转发 `response.output_text.delta` 的 `d
 
 只有上游流完整、工具参数有效，且 `response.usage.input_tokens + output_tokens` 已持久化结算后，才发送最终完成事件。缓存输入和推理 Token 属于这两个值的明细，不重复计算。`response.incomplete`、`response.failed`、缺少可信 usage 或结算失败都不会产生完成事件；桌面不能生成可执行命令。网关错误流为 `type: "error"`，仅包含安全错误码和说明。
 
-确认发生在桌面端，网关和模型均不能确认命令。执行结果作为 `{ "type": "function_call_output", "call_id": "...", "output": "..." }` 回传，包含状态、stdout/stderr、退出码、耗时和截断标识。结果未知时明确标记，不能自动重跑。旧版本对话仍可查看；协议升级前的上下文须新建对话才能继续。
+确认发生在桌面端，网关和模型均不能确认命令。2026-11-04 起，AI 命令在绑定的当前 SSH 终端执行，不创建独立 exec 通道；终端忙或有未提交输入时拒绝派发，停止和超时向该终端发送 Ctrl+C，保留 SSH 会话。执行结果作为 `{ "type": "function_call_output", "call_id": "...", "output": "..." }` 回传，包含状态、stdout/stderr、退出码、耗时和截断标识；PTY 输出合并在 stdout，stderr 为空。结果未知时明确标记，不能自动重跑。旧版本对话仍可查看；协议升级前的上下文须新建对话才能继续。
 
 准入预占预算为规范化上游请求的 UTF-8 字节数 + 256 Token 余量 + 模型输出上限。余额接近耗尽时可能提前拒绝；正常结算释放差额。超过预算的实际用量完整入账并停用模型。
 

@@ -1,5 +1,5 @@
 import { randomUUID,createHash } from 'node:crypto'
-import { executeAgentCommand } from '../agent/executor.ts'
+import { executeAgentCommand, shellQuote } from '../agent/executor.ts'
 import type { AiTarget, AiProposal } from '@eizhu/contracts'
 import { posix } from 'node:path'
 import type { ClientChannel } from 'ssh2'
@@ -13,7 +13,7 @@ import { SshConnection, execBounded } from './connection.ts'
 import type { HandshakeHooks } from './connection.ts'
 import type { ConnectionHop } from './plan.ts'
 import { TerminalStream } from './stream.ts'
-import { ShellOutput, shellSetupCommand } from './shell.ts'
+import { ShellOutput, shellSetupCommand, loginShell } from './shell.ts'
 import type { BinaryPort } from './stream.ts'
 import { complete, readDirectory } from './completion.ts'
 import { INFO_COMMAND, SUMMARY_COMMAND, METRIC_COMMANDS, parseInfo, parseSummary, parseMetricDetail } from './metrics.ts'
@@ -27,6 +27,9 @@ interface TerminalSession {
   connection: SshConnection
   stream: TerminalStream
   shell?: ClientChannel
+  shellKind?: ReturnType<typeof loginShell>
+  output?: ShellOutput
+  agentRunning?: boolean
   task?: Promise<void>
   closing?: Promise<void>
   closed: boolean
@@ -77,8 +80,26 @@ export class SshService {
   async agentExecute(sessionId: string, binding: object, p: AiProposal, signal: AbortSignal, output: (stdout: string, stderr: string) => void) {
     if (!this.agentConnected(sessionId, binding)) fail('AI_PROPOSAL_EXPIRED', 'SSH 连接已变化，命令未执行')
     const s = this.connected(sessionId)
-    return executeAgentCommand(s.connection.client!, p.command, p.cwd, p.timeoutSeconds,
-      AbortSignal.any([signal, s.connection.controller.signal]), output)
+    if (!s.shell || !s.shellKind || !s.output) fail('SSH_SHELL_FAILED', '当前终端未启用 shell 集成，请在终端手动执行')
+    if (s.agentRunning || !s.output.atPrompt) fail('AI_BUSY', '当前终端正在运行程序或有未提交输入，请返回空闲提示符后重新生成命令')
+    if (s.shell.writableLength > 65536) fail('QUEUE_FULL', '终端输入过快，请稍后重试')
+    s.agentRunning = true
+    const terminalOutput = s.output
+    terminalOutput.input()
+    try {
+      return await executeAgentCommand(s.shell, s.shellKind, p.command, p.cwd, p.timeoutSeconds,
+        AbortSignal.any([signal, s.connection.controller.signal]), output, (begin) => {
+          terminalOutput.startAgent(begin)
+          const visible = (p.cwd !== s.cwd ? `cd -- ${shellQuote(p.cwd)}\n` : '') + p.command
+          s.stream.output(Buffer.from(visible.replaceAll('\n', '\r\n') + '\r\n'))
+        })
+    } finally {
+      if (s.output === terminalOutput) {
+        const pending = terminalOutput.finishBootstrap()
+        if (pending.length) s.stream.output(pending)
+      }
+      s.agentRunning = false
+    }
   }
   private compute: WorkerClient
   private database: WorkerClient
@@ -347,6 +368,7 @@ export class SshService {
     }
     s.shell = shell
     const output = new ShellOutput()
+    s.output = output
     let ready = false,
       bootstrapTimer: NodeJS.Timeout | undefined
     const markReady = () => {
@@ -387,8 +409,10 @@ export class SshService {
     })
     // Open the interactive channel first so an auxiliary exec does not consume the login banner.
     // Restricted servers may deny exec; directory tracking is optional in that case.
-    const setup = await execBounded(client, 'printf \'%s\\n\' "$SHELL"', connection.controller.signal, 4096)
-      .then((result) => result.code === 0 ? shellSetupCommand(result.output) : undefined, () => undefined)
+    const detected = await execBounded(client, 'printf \'%s\\n\' "$SHELL"', connection.controller.signal, 4096)
+      .then((result) => result.code === 0 ? result.output : '', () => '')
+    s.shellKind = loginShell(detected)
+    const setup = shellSetupCommand(detected)
     if (s.closed || s.connection !== connection || s.shell !== shell || connection.controller.signal.aborted) return
     if (!setup) {
       markReady()
@@ -420,6 +444,8 @@ export class SshService {
     if (s.closed) fail('CANCELLED', '会话已关闭')
     s.connection = new SshConnection()
     s.shell = undefined
+    s.shellKind = undefined
+    s.output = undefined
     s.metadata = undefined
     s.cwd = undefined
     s.cache.clear()
@@ -562,6 +588,7 @@ export class SshService {
           s = this.connected(d.id)
         if (!s.shell) fail('SSH_NOT_CONNECTED', '终端未就绪')
         if (s.shell.writableLength > 65536) fail('QUEUE_FULL', '终端输入过快，请稍后重试')
+        s.output?.input()
         s.shell.write(d.data)
         return
       }

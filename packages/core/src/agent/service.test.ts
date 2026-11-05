@@ -171,6 +171,9 @@ async function fixture() {
       stdout = value
     },
     requests: () => requests,
+    setCwd: (cwd: string) => {
+      target.cwd = cwd
+    },
     records,
     restart: async () => {
       await service.close()
@@ -204,6 +207,21 @@ test('no command before approval; duplicate confirmation executes once and next 
     assert.equal(result?.exitCode, 7)
     assert.equal(result?.stderr, 'warning')
     assert.equal(f.current().messages.at(-1)?.proposal?.state, 'pending')
+  } finally {
+    await f.service.close()
+  }
+})
+test('every model request uses the current terminal directory and interactive execution instructions', async () => {
+  const f = await fixture()
+  try {
+    f.setCwd('/srv/current-terminal')
+    await f.send()
+    const request = JSON.parse(f.requests().at(-1)!)
+    const system = request.input.find((item: { role?: string }) => item.role === 'system').content
+    assert.ok(system.includes('当前 SSH 窗口的交互式 shell'))
+    assert.ok(system.includes('/srv/current-terminal'))
+    assert.ok(!system.includes('独立的非交互'))
+    assert.equal(f.current().target.cwd, '/srv/current-terminal')
   } finally {
     await f.service.close()
   }

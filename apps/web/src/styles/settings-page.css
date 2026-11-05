@@ -26,6 +26,8 @@
 .settings-page .settings-nav-item:hover, .settings-page .settings-page-back:hover { color: var(--fg-2); background: var(--shell-hover); }
 .settings-page-main { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; }
 .settings-page-heading { flex-shrink: 0; padding: 48px 40px 24px; user-select: none; }
+/* Native drag regions must not overlap the separate window buttons above them. */
+.desktop-shell:not(.is-mac) .settings-page-heading { margin-right: var(--shell-window-controls-width); }
 .settings-page-heading h1 { margin: 0; font: 600 20px / 28px var(--sans); color: var(--fg); }
 .settings-page .settings-content { padding: 0 40px 48px; scrollbar-gutter: stable; container-type: inline-size; }
 .settings-page .settings-section { max-width: 1120px; padding: 0; margin-bottom: 28px; }
