@@ -4,6 +4,8 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { SyncPanel } from './SyncPanel'
 import { syncApi } from '@/api/sync'
+import { vaultApi } from '@/api/vault'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import { useAccountStore } from '@/store/account'
 import { useSyncStore } from '@/store/sync'
 import type { SyncStatus } from '@/types/sync'
@@ -17,8 +19,10 @@ vi.mock('@/api/sync', () => ({
     preview: vi.fn(),
     bootstrap: vi.fn(),
     resolveConflict: vi.fn(),
+    resolveConflicts: vi.fn(),
   },
 }))
+vi.mock('@/api/vault', () => ({ vaultApi: { list: vi.fn().mockResolvedValue([]) } }))
 vi.mock('@/lib/desktopActions', () => ({ runDesktopAction: vi.fn() }))
 let host: HTMLDivElement, root: Root
 const initial: SyncStatus = {
@@ -34,6 +38,7 @@ const initial: SyncStatus = {
 }
 beforeEach(async () => {
   vi.resetAllMocks()
+  vi.mocked(vaultApi.list).mockResolvedValue([])
   ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
   vi.mocked(syncApi.status).mockResolvedValue(initial)
   vi.mocked(syncApi.conflicts).mockResolvedValue([])
@@ -68,7 +73,13 @@ beforeEach(async () => {
   host = document.createElement('div')
   document.body.append(host)
   root = createRoot(host)
-  await act(async () => root.render(<SyncPanel />))
+  await act(async () =>
+    root.render(
+      <TooltipProvider>
+        <SyncPanel />
+      </TooltipProvider>,
+    ),
+  )
 })
 afterEach(async () => {
   await act(async () => root.unmount())
@@ -100,4 +111,139 @@ it('uploads only after explicit merge confirmation and explains full replacement
 it('uses the login key and offers no independent sync-password input', async () => {
   expect(host.querySelector('#sync-password')).toBeNull()
   expect(host.textContent).toContain('预览首次接入')
+})
+
+it('keeps conflict actions inside an independent dialog and only applies explicitly previewed choices', async () => {
+  const conflict = {
+    itemType: 'profile' as const,
+    itemId: 'mock-profile',
+    name: 'Mock 服务器',
+    reason: 'concurrent_edit' as const,
+    remoteRevision: 2,
+    localRevision: 4,
+    remoteSource: 'cloud' as const,
+    localDeleted: false,
+    remoteDeleted: false,
+    local: { name: 'Mock 服务器', host: '192.0.2.12', note: '本机备注' },
+    remote: { name: 'Mock 服务器', host: '192.0.2.18', note: '云端备注' },
+  }
+  vi.mocked(syncApi.conflicts).mockResolvedValue([conflict])
+  vi.mocked(syncApi.status).mockResolvedValue({
+    ...initial,
+    initialized: true,
+    conflictCount: 1,
+    status: 'paused',
+  })
+  await act(async () => useSyncStore.getState().refresh())
+  expect(host.textContent).toContain('1 项冲突待处理')
+  expect(host.textContent).not.toContain('Mock 服务器')
+  expect(document.querySelector('[role="dialog"]')).toBeNull()
+  await click('处理冲突')
+  const dialog = () => document.querySelector('[role="dialog"]')!
+  expect(dialog().textContent).toContain('合并工作台')
+  expect(host.textContent).not.toContain('整条用本机')
+  await click('整条用本机')
+  expect(
+    [...dialog().querySelectorAll('button')]
+      .find((button) => button.textContent === '整条用本机')
+      ?.getAttribute('aria-pressed'),
+  ).toBe('true')
+  expect(dialog().querySelector('[aria-label="主机地址：采用本机"]')?.getAttribute('aria-pressed')).toBe(
+    'true',
+  )
+  await act(async () => dialog().querySelector<HTMLButtonElement>('[aria-label="备注：采用云端"]')!.click())
+  expect(
+    [...dialog().querySelectorAll('button')]
+      .find((button) => button.textContent === '整条用本机')
+      ?.getAttribute('aria-pressed'),
+  ).toBe('false')
+  expect(dialog().querySelector('[aria-label="主机地址：采用本机"]')?.getAttribute('aria-pressed')).toBe(
+    'true',
+  )
+  await click('暂存此项')
+  await click('稍后处理')
+  expect(document.querySelector('[role="dialog"]')).toBeNull()
+  expect(syncApi.resolveConflicts).not.toHaveBeenCalled()
+  await click('处理冲突')
+  await click('预览已选（1）')
+  expect(syncApi.resolveConflicts).not.toHaveBeenCalled()
+  vi.mocked(syncApi.conflicts).mockResolvedValue([])
+  await click('应用至本机')
+  expect(syncApi.resolveConflicts).toHaveBeenCalledWith({
+    localRevision: 4,
+    resolutions: [
+      {
+        itemType: 'profile',
+        itemId: 'mock-profile',
+        remoteRevision: 2,
+        remoteSource: 'cloud',
+        choice: 'merge',
+        fields: { host: 'local', note: 'cloud' },
+      },
+    ],
+  })
+  expect(dialog().textContent).toContain('本次冲突已处理')
+  expect(useAccountStore.getState().status?.syncEnabled).toBe(false)
+})
+
+it('opens a focused conflict in the dialog and does not replay stale staged selections', async () => {
+  const conflict = {
+    itemType: 'snippet' as const,
+    itemId: 'deleted',
+    name: '删除冲突',
+    reason: 'concurrent_edit' as const,
+    remoteRevision: 2,
+    localRevision: 4,
+    remoteSource: 'cloud' as const,
+    localDeleted: true,
+    remoteDeleted: false,
+    local: null,
+    remote: { name: '删除冲突', content: 'echo mock' },
+  }
+  vi.mocked(syncApi.conflicts).mockResolvedValue([conflict])
+  await act(async () => useSyncStore.getState().refresh())
+  await act(async () => useSyncStore.getState().focusConflict('snippet', 'deleted'))
+  expect(document.querySelector('[role="dialog"]')?.textContent).toContain('删除与修改冲突')
+  expect(document.querySelector('[role="dialog"]')?.textContent).toContain('echo mock')
+  await act(async () => document.querySelector<HTMLButtonElement>('[aria-label="恢复云端条目"]')!.click())
+  expect(document.querySelector('[aria-label="恢复云端条目"]')?.getAttribute('aria-pressed')).toBe('true')
+  expect(document.querySelector('[aria-label="保留本机删除"]')?.getAttribute('aria-pressed')).toBe('false')
+  await click('暂存此项')
+  vi.mocked(syncApi.conflicts).mockResolvedValue([{ ...conflict, localRevision: 5 }])
+  await act(async () => useSyncStore.getState().refresh())
+  expect(document.querySelector('[role="dialog"]')?.textContent).toContain('数据已变化')
+  const preview = [...document.querySelectorAll<HTMLButtonElement>('button')].find(
+    (button) => button.textContent === '预览已选（1）',
+  )!
+  expect(preview.disabled).toBe(true)
+  expect(syncApi.resolveConflicts).not.toHaveBeenCalled()
+})
+
+it('discards staged choices when account ownership changes, even if conflict IDs and revisions match', async () => {
+  const conflict = {
+    itemType: 'group' as const,
+    itemId: 'same-id',
+    name: '分组',
+    reason: 'concurrent_edit' as const,
+    remoteRevision: 1,
+    localRevision: 2,
+    remoteSource: 'cloud' as const,
+    localDeleted: false,
+    remoteDeleted: false,
+    local: { name: '本机分组' },
+    remote: { name: '云端分组' },
+  }
+  vi.mocked(syncApi.conflicts).mockResolvedValue([conflict])
+  await act(async () => useSyncStore.getState().refresh())
+  await click('处理冲突')
+  await click('整条用本机')
+  await click('暂存此项')
+  expect(document.querySelector('[role="dialog"]')?.textContent).toContain('已暂存 1 / 1 项')
+  const previous = useAccountStore.getState().status!
+  if (!previous.loggedIn) throw new Error('Expected authenticated fixture')
+  await act(async () =>
+    useAccountStore.setState({ status: { ...previous, user: { ...previous.user, id: 99 } } }),
+  )
+  expect(document.querySelector('[role="dialog"]')?.textContent).toContain('已暂存 0 / 1 项')
+  expect(syncApi.resolveConflicts).not.toHaveBeenCalled()
 })

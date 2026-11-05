@@ -161,13 +161,30 @@ export function summary(type: ItemType, value: Entity | null, other?: Entity | n
   const fields: Record<ItemType, string[]> = {
     group: ['name', 'parent_id', 'icon', 'sort_order'],
     vault: ['name', 'type', 'username', 'remark', 'fingerprint'],
-    profile: ['name', 'host', 'port', 'username', 'auth_type', 'group_id', 'vault_id', 'tags', 'note'],
+    profile: [
+      'name',
+      'host',
+      'port',
+      'username',
+      'auth_type',
+      'group_id',
+      'vault_id',
+      'icon',
+      'sort_order',
+      'tags',
+      'note',
+    ],
     snippet: ['name', 'content', 'description', 'tags', 'is_global'],
   }
   for (const key of fields[type]) if (v[key] !== undefined) result[key] = v[key]
   if (type === 'profile') {
     try {
       result.jump_profile_id = proxyOf(value as StoredProfile).jump_profile_id
+      const options = (item: Entity | null | undefined) => {
+        const raw = (item as StoredProfile | null | undefined)?.options || '{}'
+        return JSON.stringify(canonical(JSON.parse(portableOptions(raw))))
+      }
+      result.options_changed = options(value) !== options(other)
     } catch {
       /* A malformed remote dependency must remain inspectable without exposing raw options. */
     }
@@ -175,7 +192,12 @@ export function summary(type: ItemType, value: Entity | null, other?: Entity | n
   if (type === 'profile' || type === 'vault') {
     const secrets = (item: Entity | null | undefined) => {
       const v = item as unknown as Record<string, unknown> | null
-      return JSON.stringify([v?.credential, v?.inline_credential, v?.proxy_password])
+      return JSON.stringify([
+        v?.credential,
+        v?.inline_credential,
+        v?.proxy_password,
+        ...(type === 'profile' ? [v?.auth_type, v?.vault_id] : [v?.type]),
+      ])
     }
     result.credential_changed = secrets(value) !== secrets(other)
   }

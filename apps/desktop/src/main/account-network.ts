@@ -31,7 +31,7 @@ export async function closeAccountNetwork(): Promise<void> {
   await networkSession?.closeAllConnections()
 }
 
-/** Production always uses the fixed HTTPS account origin. Injection is owned by isolated smoke tests. */
+/** Production always uses the fixed HTTPS account origin. Only isolated smoke/development fixtures inject transport. */
 export async function accountRequest(
   raw: unknown,
   signal: AbortSignal,

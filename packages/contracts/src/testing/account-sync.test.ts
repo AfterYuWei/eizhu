@@ -99,6 +99,7 @@ test('sync boundaries reject secret summaries, unsafe cursors and unbound replac
     name: 'server',
     reason: 'concurrent_edit',
     remoteRevision: 1,
+    localRevision: 1,
     localDeleted: false,
     remoteDeleted: false,
     local: { name: 'server', credential_changed: true },

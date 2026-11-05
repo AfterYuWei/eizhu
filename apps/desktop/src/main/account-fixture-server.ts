@@ -39,7 +39,7 @@ export interface AccountFixture {
   close(): Promise<void>
 }
 
-/** Local protocol simulator, created exclusively by the validated --smoke-test entry. No real mail/accounts. */
+/** Local protocol simulator for isolated smoke tests and explicitly enabled development mocks. No real mail/accounts. */
 export async function createAccountFixture(): Promise<AccountFixture> {
   const users = new Map<string, User>(),
     access = new Map<string, User>(),

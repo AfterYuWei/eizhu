@@ -7,8 +7,9 @@ import {
   syncPushSchema,
   syncStatusSchema,
   syncWireItemSchema,
+  syncResolveBatchSchema,
 } from '@eizhu/contracts'
-import type { SyncConflict, SyncStatus } from '@eizhu/contracts'
+import type { SyncConflict, SyncStatus, SyncResolveBatch } from '@eizhu/contracts'
 import type { LocalStore } from '../database/local-store.ts'
 import { LocalCipher } from '../local/crypto.ts'
 import { emptyPayload } from '../local/model.ts'
@@ -27,6 +28,7 @@ import {
   typeOf,
 } from './model.ts'
 import type { Entity, ItemType, Remote, PlainItem, WireItem } from './model.ts'
+import { mergeConflictValue } from './merge.ts'
 
 type State = {
   deviceId: string
@@ -182,6 +184,7 @@ export class SyncRepository {
         name: local?.name ?? r.value?.name ?? r.itemId,
         reason: conflict.reason,
         remoteRevision: r.revision,
+        localRevision: this.local.dataRevision(),
         localDeleted: !local,
         remoteDeleted: !r.value,
         remoteSource: conflict.source ?? 'cloud',
@@ -217,20 +220,18 @@ export class SyncRepository {
       lastConfirmed: s.lastConfirmed,
       lastError: s.lastError,
       lastErrorCode: s.lastErrorCode,
-      items: pending
-        .slice(0, 10000)
-        .map((p) => ({
-          itemType: typeOf[p.kind],
-          itemId: p.itemId,
-          generation: p.revision,
-          name: p.value?.name,
-          status: conflicts.has(identity(typeOf[p.kind], p.itemId))
-            ? 'conflict'
-            : status === 'syncing'
-              ? 'syncing'
-              : 'pending',
-          deleted: !p.value,
-        })),
+      items: pending.slice(0, 10000).map((p) => ({
+        itemType: typeOf[p.kind],
+        itemId: p.itemId,
+        generation: p.revision,
+        name: p.value?.name,
+        status: conflicts.has(identity(typeOf[p.kind], p.itemId))
+          ? 'conflict'
+          : status === 'syncing'
+            ? 'syncing'
+            : 'pending',
+        deleted: !p.value,
+      })),
     })
   }
   note(phase: State['phase'], message = '', code = ''): void {
@@ -291,6 +292,7 @@ export class SyncRepository {
             name: current.name,
             reason: 'dependency' in r && r.dependency ? 'dependency' : 'concurrent_edit',
             remoteRevision: r.revision,
+            localRevision: this.local.dataRevision(),
             localDeleted: false,
             remoteDeleted: !r.value,
             local: summary(r.itemType, current, r.value),
@@ -704,7 +706,67 @@ export class SyncRepository {
       this.applyValues([], this.state().cursor, this.state().epoch, false)
     })()
   }
+  resolveBatch(input: SyncResolveBatch): void {
+    this.db.transaction(() => {
+      if (this.frozen()) fail('SYNC_BUSY', '请先确认正在提交的修改')
+      if (this.local.dataRevision() !== input.localRevision)
+        fail('CONFLICT_CHANGED', '本机或云端数据已变化，请重新查看并选择')
+      const before = this.local.snapshot(),
+        candidate = structuredClone(before)
+      const conflicts = this.rows<Conflict>('sync_conflicts')
+      const pending: Array<{ type: ItemType; id: string; value: Entity | null }> = []
+      for (const resolution of input.resolutions) {
+        const { itemType: type, itemId: id } = resolution
+        const conflict = conflicts.get(identity(type, id))
+        if (
+          !conflict ||
+          conflict.remote.revision !== resolution.remoteRevision ||
+          (conflict.source ?? 'cloud') !== resolution.remoteSource
+        )
+          fail('CONFLICT_CHANGED', '冲突内容已变化，请重新查看并选择')
+        const local = get(before, type, id),
+          remote = conflict.remote.value
+        let value: Entity | null
+        if (resolution.choice === 'use_cloud') value = remote
+        else if (resolution.choice === 'merge')
+          value = mergeConflictValue(type, local, remote, resolution.fields!)
+        else value = local
+        if (resolution.choice === 'keep_both') {
+          if (!local || !remote) fail('SYNC_MERGE_INVALID', '删除冲突不能保留双方副本')
+          const suffix = '（云端副本）',
+            copy = { ...remote, id: randomUUID(), name: remote.name.slice(0, 512 - suffix.length) + suffix }
+          put(candidate, type, copy.id, copy)
+          pending.push({ type, id: copy.id, value: copy })
+        }
+        put(candidate, type, id, value)
+        if (conflict.source === 'offline' || !equal(value, remote)) pending.push({ type, id, value })
+      }
+      try {
+        graph(candidate)
+      } catch {
+        fail('SYNC_DEPENDENCY', '所选结果的关联关系无效，请一起处理关联分组、凭据或跳板服务器')
+      }
+      this.local.syncApply(candidate, 'sync_resolve_batch', false)
+      for (const { itemType, itemId } of input.resolutions) {
+        this.clear(itemType, itemId, Number.MAX_SAFE_INTEGER)
+        this.removeConflict(itemType, itemId)
+      }
+      const revision = this.local.dataRevision()
+      for (const { type, id, value } of pending)
+        this.db
+          .prepare('INSERT INTO outbox(kind,item_id,revision,deleted,payload) VALUES (?,?,?,?,?)')
+          .run(
+            kindOf[type],
+            id,
+            revision,
+            value ? 0 : 1,
+            this.cipher.seal(value ?? { id, deleted: true }, `outbox:${kindOf[type]}:${id}:${revision}`),
+          )
+      this.applyValues([], this.state().cursor, this.state().epoch, false)
+    })()
+  }
   execute(operation: string, raw: unknown): unknown {
+    if (operation === 'sync.storage.resolveBatch') return this.resolveBatch(syncResolveBatchSchema.parse(raw))
     if (operation === 'sync.storage.preview') {
       const d = z
         .object({

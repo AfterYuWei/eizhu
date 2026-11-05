@@ -6,6 +6,9 @@ import { randomBytes, randomUUID } from 'node:crypto'
 import Database from 'better-sqlite3'
 import { DesktopError, offlineWorkspace } from '@eizhu/contracts'
 import { FoundationStore } from './store.ts'
+import { payloadSchema } from '../local/model.ts'
+import { entries } from '../sync/model.ts'
+import type { SyncResolveBatch } from '@eizhu/contracts'
 import { masterCrypto } from '../account/crypto.ts'
 import type { MasterKeys } from '../account/crypto.ts'
 import { AccountService } from '../account/service.ts'
@@ -417,6 +420,77 @@ async function verify() {
     assert.deepEqual(a.store.local.snapshot(), before)
     assert.equal((await a.sync.status()).cursor, cursor)
     checks.push('超限整体替换明确拒绝且不拆分；远端业务/审计/影子/冲突/游标事务中途失败整体回滚')
+    const workbench = create('merge-workbench')
+    const mergeBase = payloadSchema.parse({
+      groups: [{ id: 'merge-group', name: '本机分组', icon: 'folder', sort_order: 0, created_at: '2026-11-05' }],
+      vault: [{ id: 'merge-vault', name: '合成凭据', type: 'password', username: 'deploy', remark: '', fingerprint: '', credential: { password: 'synthetic-local' } }],
+      profiles: [{ id: 'merge-profile', name: '合成服务器', host: '192.0.2.12', port: 22, username: 'deploy', auth_type: 'vault', vault_id: 'merge-vault', group_id: 'merge-group', options: '{}', note: '本机备注', sort_order: 0 }],
+      snippets: [{ id: 'merge-snippet', name: '删除冲突', content: 'echo base', description: '', tags: [], is_global: true }],
+    })
+    workbench.store.local.syncApply(mergeBase, 'fixture_merge_base', true)
+    workbench.store.local.execute('snippet.delete', { id: 'merge-snippet' })
+    workbench.store.local.sshExecute('ssh.trust', { endpoint: '192.0.2.12:22', fingerprint: 'public-synthetic-host-trust' })
+    const mergeCloud = structuredClone(mergeBase)
+    mergeCloud.groups[0].name = '云端分组'
+    mergeCloud.vault[0].credential = { password: 'synthetic-cloud' }
+    mergeCloud.profiles[0].host = '192.0.2.18'
+    mergeCloud.profiles[0].note = '云端备注'
+    mergeCloud.snippets[0].content = 'echo cloud'
+    const mergeRemote = entries(mergeCloud).map(item => ({ ...item, revision: 1, epoch: 1 }))
+    const mergePreview = workbench.store.sync.preview(workbench.runtimeId, 1, 1, mergeRemote, false)
+    workbench.store.sync.bootstrap(mergePreview.token, workbench.runtimeId, 'merge')
+    const mergeConflicts = workbench.store.sync.conflicts()
+    assert.equal(mergeConflicts.length, 4)
+    const mergeRequest: SyncResolveBatch = {
+      localRevision: mergeConflicts[0].localRevision,
+      resolutions: mergeConflicts.map(c => ({
+        itemType: c.itemType, itemId: c.itemId, remoteRevision: c.remoteRevision, remoteSource: 'cloud',
+        choice: c.itemType === 'profile' ? 'merge' : 'use_cloud',
+        ...(c.itemType === 'profile' ? { fields: { host: 'local', note: 'cloud' } as const } : {}),
+      })),
+    }
+    const beforeMerge = workbench.store.local.snapshot()
+    const beforePending = workbench.store.local.syncPending()
+    assert.throws(() => workbench.store.sync.resolveBatch({ ...mergeRequest, localRevision: mergeRequest.localRevision - 1 }), code('CONFLICT_CHANGED'))
+    assert.deepEqual(workbench.store.local.snapshot(), beforeMerge)
+    const mergeDb = new Database(join(workbench.directory, 'workspaces', workspace.id, 'workspace.sqlite'))
+    mergeDb.exec("CREATE TRIGGER merge_failure BEFORE INSERT ON audit WHEN NEW.action='sync_resolve_batch' BEGIN SELECT RAISE(ABORT,'synthetic merge rollback'); END")
+    assert.throws(() => workbench.store.sync.resolveBatch(mergeRequest))
+    assert.deepEqual(workbench.store.local.snapshot(), beforeMerge)
+    assert.deepEqual(workbench.store.local.syncPending(), beforePending)
+    assert.equal(workbench.store.sync.conflicts().length, 4)
+    mergeDb.exec('DROP TRIGGER merge_failure')
+    mergeDb.close()
+    workbench.store.sync.resolveBatch(mergeRequest)
+    const mergedPayload = workbench.store.local.snapshot()
+    assert.equal(mergedPayload.profiles[0].host, '192.0.2.12')
+    assert.equal(mergedPayload.profiles[0].note, '云端备注')
+    assert.equal(mergedPayload.vault[0].credential?.password, 'synthetic-cloud')
+    assert.equal(mergedPayload.snippets[0].content, 'echo cloud')
+    assert.equal(workbench.store.sync.conflicts().length, 0)
+    assert.deepEqual(workbench.store.local.syncPending().map(item => item.itemId), ['merge-profile'])
+    assert.equal(workbench.store.local.sshExecute('ssh.known', { endpoint: '192.0.2.12:22' }), 'public-synthetic-host-trust')
+    assert.equal(workbench.store.accounts.status(workspace).syncEnabled, false)
+    workbench.store.sync.apply([{ itemType: 'profile', itemId: 'merge-profile', value: { ...mergeCloud.profiles[0], note: '再次云端修改' }, revision: 2, epoch: 1 }], 2, 1)
+    const duplicate = workbench.store.sync.conflicts()[0]
+    workbench.store.sync.resolveBatch({ localRevision: duplicate.localRevision, resolutions: [{ itemType: 'profile', itemId: duplicate.itemId, remoteRevision: duplicate.remoteRevision, remoteSource: 'cloud', choice: 'keep_both' }] })
+    assert.equal(workbench.store.local.snapshot().profiles.length, 2)
+    assert(workbench.store.local.snapshot().profiles.some(profile => profile.name.endsWith('（云端副本）') && profile.id !== 'merge-profile'))
+    const deletionRemote = workbench.store.local.snapshot().profiles.map(profile => ({ itemType: 'profile' as const, itemId: profile.id, value: null, revision: 3, epoch: 1 }))
+    workbench.store.sync.apply([...deletionRemote, { itemType: 'group', itemId: 'merge-group', value: null, revision: 2, epoch: 1 }], 3, 1)
+    const deletionConflicts = workbench.store.sync.conflicts()
+    const groupConflict = deletionConflicts.find(c => c.itemType === 'group')!
+    const beforeDependency = workbench.store.local.snapshot()
+    const groupDecision = { itemType: groupConflict.itemType, itemId: groupConflict.itemId, remoteRevision: groupConflict.remoteRevision, remoteSource: 'cloud' as const, choice: 'use_cloud' as const }
+    assert.throws(() => workbench.store.sync.resolveBatch({ localRevision: groupConflict.localRevision, resolutions: [groupDecision] }), code('SYNC_DEPENDENCY'))
+    assert.deepEqual(workbench.store.local.snapshot(), beforeDependency)
+    workbench.store.sync.resolveBatch({ localRevision: groupConflict.localRevision, resolutions: deletionConflicts.map(c => ({ itemType: c.itemType, itemId: c.itemId, remoteRevision: c.remoteRevision, remoteSource: 'cloud', choice: 'use_cloud' })) })
+    assert.equal(workbench.store.local.snapshot().profiles.length, 0)
+    assert.equal(workbench.store.local.snapshot().groups.length, 0)
+    assert.equal(workbench.store.sync.conflicts().length, 0)
+    await close(workbench)
+    workbench.key.fill(0)
+    checks.push('合并工作台：逐字段/凭据/删除批量应用；失效选择拒绝；事务失败整体回滚；保留双方副本；关联删除统一校验；主机指纹仅本机且自动同步保持暂停')
     const raw = await readFile(join(a.directory, 'workspaces', workspace.id, 'workspace.sqlite'))
     assert.equal(raw.includes(Buffer.from('轮换后的同步密码')), false)
     assert.equal(raw.includes(Buffer.from(beforeKey)), false)

@@ -1,7 +1,7 @@
 .PHONY: dev check test build package smoke
 
 dev:
-	npm run desktop:dev
+	EIZHU_DEV_MOCK=1 npm run desktop:dev
 check:
 	npm run check
 	npm run lint

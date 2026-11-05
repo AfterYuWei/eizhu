@@ -512,11 +512,11 @@ export class SyncService {
           this.wake()
           return
         }
-        if (operation === 'sync.resolveConflict') {
+        if (operation === 'sync.resolveConflict' || operation === 'sync.resolveConflicts') {
           const frozen = await this.db<Frozen | null>('frozen')
           if (frozen) await this.sendFrozen(frozen, true)
           await this.pull()
-          await this.db('resolve', sync[operation].input.parse(input))
+          await this.db(operation === 'sync.resolveConflicts' ? 'resolveBatch' : 'resolve', sync[operation].input.parse(input))
           this.blocked = false
           this.wake()
           await this.publish(true)

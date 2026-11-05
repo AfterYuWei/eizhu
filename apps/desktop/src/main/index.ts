@@ -18,7 +18,7 @@ import { nativePath } from '@eizhu/core/sftp/endpoint'
 import { pathToFileURL } from 'node:url'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
-import { lstatSync, readdirSync, realpathSync, mkdirSync } from 'node:fs'
+import { lstatSync, readdirSync, realpathSync, mkdirSync, mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { randomUUID } from 'node:crypto'
 import {
@@ -51,6 +51,7 @@ import { RuntimeHost } from './runtime-host.ts'
 import { replaceWorkspaceRuntime } from './workspace-runtime.ts'
 import { closeAccountNetwork } from './account-network.ts'
 import { Windows } from './windows.ts'
+import { devMockEnabled } from './dev-mock-data.ts'
 import { assetPath, isTrustedPage } from './security.ts'
 import { DocumentGrants, saveAtomically,exportFileAtomically } from './documents.ts'
 import { SensitiveClipboard } from './sensitive-clipboard.ts'
@@ -62,6 +63,8 @@ declare const __EIZHU_UPDATE_FEEDS__: Partial<Record<'stable' | 'test', string>>
 declare const __EIZHU_UPDATE_REPOSITORY__: { owner: string; repo: string }
 
 const smoke = process.argv.includes('--smoke-test')
+const devUrl = !app.isPackaged ? process.env.ELECTRON_RENDERER_URL : undefined
+const devMock = devMockEnabled(process.env.EIZHU_DEV_MOCK, app.isPackaged, devUrl, smoke)
 const smokeRoot = process.argv.find((value) => value.startsWith('--smoke-root='))?.slice(13)
 if (smoke && !smokeRoot) throw new Error('Smoke test requires an isolated --smoke-root')
 if (
@@ -74,6 +77,7 @@ if (
 if (process.platform !== 'win32') process.umask(0o077)
 const dataRoot = smoke
   ? join(smokeRoot!, 'profile')
+  : devMock ? mkdtempSync(join(tmpdir(), 'eizhu-dev-mock-'))
   : join(app.getPath('appData'), app.isPackaged ? 'eizhu-desktop' : 'eizhu-desktop-dev')
 // Electron path overrides require existing directories, including on the first normal installation.
 mkdirSync(dataRoot, { recursive: true, mode: 0o700 })
@@ -88,7 +92,6 @@ protocol.registerSchemesAsPrivileged([
     privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true },
   },
 ])
-const devUrl = !app.isPackaged ? process.env.ELECTRON_RENDERER_URL : undefined
 let runtime: RuntimeHost
 let windows: Windows
 let settings: Bootstrap['settings'] = {}
@@ -654,7 +657,7 @@ async function start(): Promise<void> {
   await chmod(dataRoot, 0o700)
   const key = await loadDeviceKey(dataRoot, {
     available: () =>
-      !smoke &&
+      !smoke && !devMock &&
       safeStorage.isEncryptionAvailable() &&
       (process.platform !== 'linux' || safeStorage.getSelectedStorageBackend() !== 'basic_text'),
     wrap: (value) => safeStorage.encryptString(value),
@@ -671,9 +674,14 @@ async function start(): Promise<void> {
   })
   keyMode = key.mode
   deviceKey = key.key
-  if (smoke) {
+  if (smoke || devMock) {
     const { createAccountFixture } = await import('./account-fixture-server.ts')
     accountFixture = await createAccountFixture()
+    if (devMock) {
+      const { seedDevMock } = await import('./dev-mock.ts')
+      const seeded = await seedDevMock(dataRoot, __dirname, deviceKey, accountFixture)
+      console.log('EIZHU_DEV_MOCK_READY', JSON.stringify({ ...seeded, profile: dataRoot, synthetic: true, production: false }))
+    }
   }
   runtime = new RuntimeHost(dataRoot, __dirname, 1, runtimeFailed, deviceKey, undefined, accountFixture?.transport,accountFixture?.events)
   await runtime.start()
@@ -761,6 +769,7 @@ async function start(): Promise<void> {
   })
   const window = windows.create('main')
   await load(window)
+  if (devMock) window.setTitle('eizhu · Mock 开发环境')
   if (smoke) {
     const { runSmoke } = await import('./smoke.ts')
     await runSmoke({ windows, runtime: () => runtime, load, root: dataRoot, keyMode, startedAt,assets:join(__dirname,'../renderer/assets'), accountFixture })

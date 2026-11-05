@@ -204,6 +204,7 @@ export interface DomainOperations {
     output: void
   }
   'sync.status': { input: void; output: SyncStatus }
+  'sync.resolveConflicts': { input: import('./sync.ts').SyncResolveBatch; output: void }
   'tunnel.delete': { input: { id: string }; output: void }
   'tunnel.list': { input: void; output: TunnelConfig[] }
   'tunnel.save': { input: { config: TunnelConfig }; output: TunnelConfig }
@@ -415,6 +416,7 @@ export const reservedOperations = [
   'sync.now',
   'sync.preview',
   'sync.resolveConflict',
+  'sync.resolveConflicts',
   'sync.status',
   'tunnel.delete',
   'tunnel.list',
