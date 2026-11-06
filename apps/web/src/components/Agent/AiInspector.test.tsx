@@ -343,7 +343,7 @@ it('blocks sending and Agent selection when AI is disabled', async () => {
       .getState()
       .setSettings({ enabled: false, providers: [], clis: [], defaultBackend: { kind: 'codex', model: '' } }),
   )
-  expect(host.querySelector<HTMLButtonElement>('[aria-label="选择Agent"]')!.disabled).toBe(true)
+  expect(host.querySelector<HTMLButtonElement>('[id="ai-agent-picker"]')!.disabled).toBe(true)
   expect(host.textContent).toContain('启用AI助手')
   expect(button('发送').disabled).toBe(true)
 })

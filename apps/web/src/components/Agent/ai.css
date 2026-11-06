@@ -688,8 +688,12 @@
 .ai-agent-option { display: inline-flex; align-items: center; gap: 8px; }
 .ai-agent-option > svg { flex-shrink: 0; }
 @container (max-width: 340px) {
-  .ai-composer-actions { flex-wrap: wrap; }
-  .ai-composer-start { flex-basis: 100%; }
-  .ai-composer-end { margin-left: auto; max-width: 100%; }
-  .ai-agent-picker { max-width: 160px; }
+  .ai-composer-start { flex: 0 0 auto; }
+  .ai-permission-picker,
+  .ai-agent-picker { width: 28px; min-width: 28px; max-width: 28px; height: 28px; padding: 4px; flex: 0 0 28px; justify-content: center; }
+  .ai-permission-picker > span,
+  .ai-permission-picker > svg:last-child,
+  .ai-agent-picker > [data-slot='select-value'],
+  .ai-agent-picker > svg:last-child { display: none; }
+  .ai-composer-end { flex: 1; justify-content: flex-end; max-width: calc(100% - 94px); }
 }

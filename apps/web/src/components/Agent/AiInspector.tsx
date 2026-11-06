@@ -17,6 +17,7 @@ import { useAccountStore } from '@/store/account'
 import { workspaceGeneration } from '@/lib/workspaceScope'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { ShellIconButton, ShellResizeHandle } from '@/components/Layout/ShellControls'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
@@ -531,20 +532,27 @@ export function AiInspector({
               </DropdownMenuContent>
             </DropdownMenu>
             <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  id="ai-permission-picker"
-                  variant="ghost"
-                  className="ai-permission-picker"
-                  aria-label={'执行模式：' + mode.label}
-                  title={mode.description}
-                  disabled={!conversation || loading || !settings?.enabled}
-                >
-                  <mode.Icon size={14} />
-                  <span>{mode.short}</span>
-                  <ChevronDown size={12} />
-                </Button>
-              </DropdownMenuTrigger>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      id="ai-permission-picker"
+                      variant="ghost"
+                      className="ai-permission-picker"
+                      aria-label={'执行模式：' + mode.label}
+                      title={mode.description}
+                      disabled={!conversation || loading || !settings?.enabled}
+                    >
+                      <mode.Icon size={14} />
+                      <span>{mode.short}</span>
+                      <ChevronDown size={12} />
+                    </Button>
+                  </DropdownMenuTrigger>
+                </TooltipTrigger>
+                <TooltipContent side="top">
+                  {mode.label}：{mode.description}
+                </TooltipContent>
+              </Tooltip>
               <DropdownMenuContent side="top" align="start" className="ai-permission-menu">
                 <DropdownMenuLabel>AI操作权限</DropdownMenuLabel>
                 <DropdownMenuGroup aria-label="执行模式">
@@ -589,15 +597,20 @@ export function AiInspector({
                 if (next) void changeBackend(next.backend)
               }}
             >
-              <SelectTrigger
-                id="ai-agent-picker"
-                className="ai-agent-picker"
-                aria-label="选择Agent"
-                title={agent?.label}
-              >
-                <AiAgentIcon kind={agent?.backend.kind} provider={agent?.provider} size={14} />
-                <SelectValue placeholder="Agent">{agent?.label}</SelectValue>
-              </SelectTrigger>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <SelectTrigger
+                    id="ai-agent-picker"
+                    className="ai-agent-picker"
+                    aria-label={agent ? '选择Agent：' + agent.label : '选择Agent'}
+                    title={agent?.label}
+                  >
+                    <AiAgentIcon kind={agent?.backend.kind} provider={agent?.provider} size={14} />
+                    <SelectValue placeholder="Agent">{agent?.label}</SelectValue>
+                  </SelectTrigger>
+                </TooltipTrigger>
+                <TooltipContent side="top">{agent?.label ?? '选择Agent'}</TooltipContent>
+              </Tooltip>
               <SelectContent>
                 {agents.map((a) => (
                   <SelectItem key={a.value} value={a.value}>

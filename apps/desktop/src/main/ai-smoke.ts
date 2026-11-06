@@ -654,6 +654,13 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
           ),
           true,
         )
+        assert.equal(
+          await js(
+            "const p=document.querySelector('#ai-permission-picker'),a=document.querySelector('#ai-agent-picker'),narrow=d===320;return [p.querySelector('span'),a.querySelector('[data-slot=select-value]')].every(e=>(getComputedStyle(e).display==='none')===narrow)&&(!narrow||([p,a].every(e=>e.getBoundingClientRect().width<=29)&&Math.abs(p.getBoundingClientRect().top-document.querySelector('.ai-submit').getBoundingClientRect().top)<=3))",
+            width,
+          ),
+          true,
+        )
         const name = 'ai-composer-' + width + (dark ? '-dark' : '-light') + '.png'
         const capture = await window.webContents.capturePage(undefined, { stayAwake: true })
         const dimensions = capture.getSize(),
@@ -664,6 +671,18 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
         await writeFile(join(root, name), capture.toPNG())
         screenshots.push(name)
         await wait("return !document.getElementById('ai-permission-picker').disabled")
+        if (width === 320) {
+          await js("document.getElementById('ai-permission-picker').focus()")
+          await wait("return !!document.querySelector('[role=tooltip]')?.textContent.includes('执行前确认')")
+          await js("document.getElementById('ai-permission-picker').blur()")
+          await wait("return !document.querySelector('[role=tooltip]')")
+          await js("document.getElementById('ai-agent-picker').focus()")
+          await wait(
+            "return !!document.querySelector('[role=tooltip]')?.textContent.includes('合成 responses')",
+          )
+          await js("document.getElementById('ai-agent-picker').blur()")
+          await wait("return !document.querySelector('[role=tooltip]')")
+        }
         await js(
           "document.getElementById('ai-permission-picker').dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}))",
         )
@@ -835,6 +854,9 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
       scopeReadOnly: true,
       executionModeExplained: true,
       executionModeInsideComposer: true,
+      compactIconOnlyControls: true,
+      compactSingleToolbarRow: true,
+      compactKeyboardTooltips: true,
       permissionPopupLayout: true,
       composerCliAvailabilityFiltered: true,
       composerCandidateModelSelection: true,
