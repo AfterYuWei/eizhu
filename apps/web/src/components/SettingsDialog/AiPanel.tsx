@@ -3,6 +3,7 @@ import type { AiConnection, AiModelCatalog, AiCli, AiBackend, AiSettings } from 
 import { ai } from '@eizhu/contracts'
 import { bridge } from '@/lib/bridge'
 import { useAiStore } from '@/store/ai'
+import { AiAgentIcon } from '@/lib/serverIcons'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -242,9 +243,12 @@ export function AiPanel() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="official">官方AI</SelectItem>
+                    <SelectItem value="official">
+                      <AiAgentIcon kind="official" size={16} />官方AI
+                    </SelectItem>
                     {settings.providers.map((p) => (
                       <SelectItem key={p.id} value={p.id}>
+                        <AiAgentIcon kind="custom" provider={p} size={16} />
                         {p.name}
                       </SelectItem>
                     ))}
@@ -337,6 +341,7 @@ export function AiPanel() {
                 <SelectContent>
                   {aiProviderPresets.map((p) => (
                     <SelectItem key={p.key} value={p.key}>
+                      <AiAgentIcon kind="custom" provider={p} size={16} />
                       {p.name}
                     </SelectItem>
                   ))}

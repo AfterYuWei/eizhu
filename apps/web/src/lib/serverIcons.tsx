@@ -16,7 +16,6 @@ Layers,
 Gauge,
 ServerCog,
 Blocks,
-Orbit,
 Bot,
 Hand,
 ShieldAlert,
@@ -74,13 +73,13 @@ siUmbrel,
 siUnraid,
 siVoidlinux,
 siYunohost,
-type SimpleIcon,
 } from 'simple-icons'
 
 import amazonLinuxIcon from '@/assets/server-icons/amazon-linux.png'
 import casaOsIcon from '@/assets/server-icons/casaos.svg'
 import fnOsLogo from '@/assets/server-icons/fnos.png'
 import oracleLinuxIcon from '@/assets/server-icons/oracle-linux.png'
+import { aiProviderMarks } from '@/assets/ai-provider-icons'
 import { DEFAULT_SERVER_ICON } from '@/lib/serverIconKeys'
 
 type ServerIconComponent = ComponentType<LucideProps>
@@ -104,7 +103,11 @@ export const AiIcon = forwardRef<SVGSVGElement, LucideProps>(({ size = 24, color
 ))
 AiIcon.displayName = 'AiIcon'
 
-function simpleIcon(icon: SimpleIcon): ServerIconComponent {
+function simpleIcon(icon: {
+  title: string
+  path: string | readonly { d: string; fillOpacity?: number }[]
+  fillRule?: LucideProps['fillRule']
+}): ServerIconComponent {
   const Component = forwardRef<SVGSVGElement, LucideProps>(({ size = 24, color = 'currentColor', ...props }, ref) => (
     <svg
       {...props}
@@ -113,10 +116,15 @@ function simpleIcon(icon: SimpleIcon): ServerIconComponent {
       height={size}
       viewBox="0 0 24 24"
       fill={color}
+      fillRule={icon.fillRule}
       stroke="none"
       xmlns="http://www.w3.org/2000/svg"
     >
-      <path d={icon.path} />
+      {typeof icon.path === 'string' ? (
+        <path d={icon.path} />
+      ) : (
+        icon.path.map((path, index) => <path key={index} {...path} />)
+      )}
     </svg>
   ))
   Component.displayName = `${icon.title}ServerIcon`
@@ -134,11 +142,22 @@ const AI_PROVIDER_ICONS = [
   { match: /moonshot|kimi/i, key: 'moonshot', Icon: simpleIcon(siMoonshotai) },
   { match: /openrouter/i, key: 'openrouter', Icon: simpleIcon(siOpenrouter) },
   { match: /ollama/i, key: 'ollama', Icon: simpleIcon(siOllama) },
-  { match: /openai/i, key: 'openai', Icon: Orbit },
+  {
+    match: /siliconflow|siliconcloud|硅基/i,
+    key: 'siliconflow',
+    Icon: simpleIcon(aiProviderMarks.siliconflow),
+  },
+  { match: /bigmodel|zhipu|z\.ai|智谱|\bglm\b/i, key: 'zhipu', Icon: simpleIcon(aiProviderMarks.zhipu) },
+  {
+    match: /volces|volcengine|doubao|火山|豆包/i,
+    key: 'volcengine',
+    Icon: simpleIcon(aiProviderMarks.volcengine),
+  },
+  { match: /openai/i, key: 'openai', Icon: simpleIcon(aiProviderMarks.openai) },
 ]
 const ClaudeCodeIcon = simpleIcon(siClaudecode)
 
-/** Provider marks use installed local assets and inherit the interface foreground. */
+/** Provider marks are bundled locally and inherit the interface foreground. */
 export function AiAgentIcon({
   kind,
   provider,
@@ -150,11 +169,11 @@ export function AiAgentIcon({
   if (kind === 'official') return <AiIcon {...props} data-ai-brand="eizhu" />
   if (kind === 'codex') return <Terminal {...props} data-ai-brand="codex" />
   if (kind === 'claude') return <ClaudeCodeIcon {...props} data-ai-brand="claude-code" />
-  const brand = AI_PROVIDER_ICONS.find((entry) =>
-    entry.match.test(
-      kind === 'deepseek' ? 'deepseek' : provider ? provider.endpoint + ' ' + provider.name : '',
-    ),
-  )
+  const brand =
+    kind === 'deepseek'
+      ? AI_PROVIDER_ICONS.find((entry) => entry.key === 'deepseek')
+      : (AI_PROVIDER_ICONS.find((entry) => entry.match.test(provider?.endpoint ?? '')) ??
+        AI_PROVIDER_ICONS.find((entry) => entry.match.test(provider?.name ?? '')))
   const attributes = { ...props, 'aria-hidden': true, 'data-ai-brand': brand?.key ?? 'custom' }
   return createElement(brand?.Icon ?? Blocks, attributes)
 }
