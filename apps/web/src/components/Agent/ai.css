@@ -341,12 +341,12 @@
 .ai-composer-end {
   gap: 4px;
   min-width: 0;
-  max-width: 44%;
-  flex-shrink: 0;
+  flex: 1;
+  justify-content: flex-end;
 }
 .ai-model-picker {
   height: 28px;
-  max-width: 200px;
+  max-width: 100%;
   flex-shrink: 1;
   min-width: 0;
   gap: 6px;
@@ -659,7 +659,7 @@
 .ai-model-add-row > button:last-child { flex-shrink: 0; }
 .ai-model-hint { margin: 0; color: var(--fg-3); font-size: 12px; }
 .ai-settings .ai-settings-message { margin: 12px 0 0; color: var(--fg-3); font-size: 13px; line-height: 1.6; }
-.ai-composer-start { flex: 1; min-width: 0; gap: 2px; }
+.ai-composer-start { flex: 0 1 auto; min-width: 0; gap: 2px; }
 .ai-composer-actions { flex-shrink: 0; }
 .ai-agent-picker { min-width: 0; max-width: 200px; flex-shrink: 1; height: 28px; background: transparent; gap: 4px; padding: 2px 4px; border: 0; box-shadow: none; font-size: 12px; font-weight: 400; color: var(--fg-2); }
 .ai-agent-picker > :not(svg) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -679,7 +679,7 @@
 .ai-permission-menu [data-permission='auto'] > svg:first-child { color: var(--yellow); }
 .ai-agent-option { display: inline-flex; align-items: center; gap: 8px; }
 .ai-agent-option > svg { flex-shrink: 0; }
-@container (max-width: 340px) {
+@container (max-width: 420px) {
   .ai-composer-start { flex: 0 0 auto; }
   .ai-permission-picker,
   .ai-agent-picker { width: 28px; min-width: 28px; max-width: 28px; height: 28px; padding: 4px; flex: 0 0 28px; justify-content: center; }
@@ -687,7 +687,6 @@
   .ai-permission-picker > svg:last-child,
   .ai-agent-picker > [data-slot='select-value'],
   .ai-agent-picker > svg:last-child { display: none; }
-  .ai-composer-end { flex: 1; justify-content: flex-end; max-width: calc(100% - 94px); }
 }
 
 .ai-history-dialog { display: flex; flex-direction: column; width: min(560px, calc(100vw - 32px)); max-height: min(640px, calc(100vh - 48px)); font: var(--sans-size) / 1.5 var(--sans); color: var(--fg); }
