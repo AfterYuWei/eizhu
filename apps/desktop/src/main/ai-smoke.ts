@@ -302,13 +302,9 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
       const name = names[i],
         profileId = profiles[i]
       await wait(
-        "return [...document.querySelectorAll('.srv')].some(r=>r.title.startsWith(" +
+        "const row=[...document.querySelectorAll('.srv')].find(r=>r.title.startsWith(" +
           JSON.stringify(name + ' ·') +
-          '))',
-      )
-      await js(
-        "const row=[...document.querySelectorAll('.srv')].find(r=>r.title.startsWith(d));row.dispatchEvent(new MouseEvent('dblclick',{bubbles:true}))",
-        name + ' ·',
+          "));if(!row)return false;row.dispatchEvent(new MouseEvent('dblclick',{bubbles:true}));return true",
       )
       await wait(
         "const trust=[...document.querySelectorAll('[role=dialog] button')].find(b=>b.textContent==='信任并继续');if(trust){trust.click();return false}return window.eizhu.session.list().then(rows=>rows.some(r=>r.profile_id===" +
