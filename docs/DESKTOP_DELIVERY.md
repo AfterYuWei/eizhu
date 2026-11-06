@@ -19,7 +19,7 @@ npm run desktop:smoke:package -- <安装包路径> --duration=60000
 
 ## 独立更新源
 
-首个 Electron 版本手动安装。开发启动及 Linux deb/rpm 提示手动安装；NSIS、macOS 和 AppImage 接入 `electron-updater`。当前尚未部署真实更新源，默认不联网检查，也不自动下载/退出安装。
+首个 Electron 版本手动安装。开发启动及 Linux deb/rpm 提示手动安装；NSIS、macOS 和 AppImage 接入 `electron-updater`。默认更新源是 `AfterYuWei/eizhu` 的 GitHub Releases，stable 与 test 通道独立选择；也可通过下述独立 HTTPS 基址覆盖。客户端不自动下载或退出安装；未签名 macOS 包建议手动更新。
 
 构建前可设置两个独立的 HTTPS 基址：`EIZHU_UPDATE_STABLE_URL=https://<域名>/<可选前缀>/electron/stable/`、`EIZHU_UPDATE_TEST_URL=https://<域名>/<可选前缀>/electron/test/`。示例不能直接用于发布。构建追加 `<platform>-<arch>/`，从而隔离四目标；当前通道的 generic provider 写入安装包更新配置，同时生成对应元数据。跨通道检查只访问另一个明确配置的基址。拒绝认证信息、查询令牌、占位域和旧协议路径。
 

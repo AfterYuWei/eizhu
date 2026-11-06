@@ -20,7 +20,7 @@
 
 默认更新源为公开仓库 `AfterYuWei/eizhu` 的 GitHub Releases，客户端无需令牌。正式通道使用 latest 正式发布，测试通道显式选择 test 预览发布；拒绝自动降级。发布工具从最终安装包字节生成 SHA-512、文件大小与平台更新元数据：正式版 `latest.yml` / `latest-mac.yml` / `latest-linux.yml`，测试版生成 `test.yml` 和 `test-mac.yml`。正式版 macOS 元数据合并 x64 与 arm64 文件，测试版仅包含 x64；元数据也计入 SHA256SUMS.txt。macOS arm64 与 Linux 继续使用正式版，新的测试版本不提供这两个目标的安装或更新资产。
 
-可选 Variables `EIZHU_UPDATE_STABLE_URL`、`EIZHU_UPDATE_TEST_URL` 仍可分别覆盖对应通道，要求无凭据 HTTPS 地址并以 `/electron/stable/`、`/electron/test/` 结尾；追加目标目录后读取 `latest*.yml`。配置覆盖时需另行部署独立源，工作流只发布 GitHub Releases。已有 0.5.0 安装包不含本轮适配，需手动安装首个接入版本；真实签名升级仍待验。详见 [更新适配](../docs/desktop-rebuild/UPDATES.md)。官方账号服务仍待开发，构建不依赖账号服务地址。
+可选 Variables `EIZHU_UPDATE_STABLE_URL`、`EIZHU_UPDATE_TEST_URL` 仍可分别覆盖对应通道，要求无凭据 HTTPS 地址并以 `/electron/stable/`、`/electron/test/` 结尾；追加目标目录后读取 `latest*.yml`。配置覆盖时需另行部署独立源，工作流只发布 GitHub Releases。已有 0.5.0 安装包不含本轮适配，需手动安装首个接入版本；真实签名升级仍待验。详见 [更新适配](../docs/desktop-rebuild/UPDATES.md)。0.6.0 已接通官方账号与同步客户端，真实后端和 AI v2 网关按各自验收记录部署复验；构建不连接生产账号服务。
 
 默认 `validation=full`，执行全部回归。仅烟测工具变化、已有对应回归证据且业务/存储/兼容实现未变时，才允许 `package-only` 或提交标题 `[package-only]`；跳过的回归必须引用原证据，不能记为本轮通过。类型、lint、基线、架构、构建、打包和最终包启动仍执行。
 
