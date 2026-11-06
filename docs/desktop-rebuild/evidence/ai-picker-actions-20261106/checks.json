@@ -1,0 +1,37 @@
+{
+  "sourceSha256": {
+    "apps/web/src/components/Agent/AiInspector.tsx": "ddb5cd0b78ec34cafa3e6302a7be7f20a62e455b69e0d96afb815b87174b4589",
+    "apps/web/src/components/Agent/AiInspector.test.tsx": "b62d903cbddb408ed66322c4e471b38a92025508be38c31f90db7cd1d3cc9af0",
+    "apps/desktop/src/main/ai-smoke.ts": "480a8964c2b0edf4d784cad421ebda32b42f98e3be6712e7e09caa7bbbc9955c"
+  },
+  "check": true,
+  "lint": true,
+  "focusedInspectorTests": 30,
+  "web": {
+    "files": 87,
+    "passed": 1005
+  },
+  "baselineVerify": true,
+  "fixedBaselineTests": 10,
+  "architectureVerify": true,
+  "webBuild": true,
+  "visualLayoutCases": 16,
+  "tooltipHoverAndFocusCases": 18,
+  "menuPosition": "above trigger; may overlap card; current controls stay visible",
+  "tooltipLabels": [
+    "切换操作权限",
+    "切换供应商",
+    "切换模型"
+  ],
+  "keyboardOpenAndFocusRestore": true,
+  "modelSwitchPreservesDraft": true,
+  "cleanup": {
+    "ownedPreviewProcesses": 0,
+    "temporaryProfilesRemoved": true
+  },
+  "productionCodeScope": "renderer only",
+  "electronSmoke": "assertion text updated; not run this UI followup",
+  "toolDownloads": false,
+  "pushed": false,
+  "unrelatedChangesPreserved": true
+}

@@ -104,10 +104,7 @@ export function AiInspector({
     Pick<AiConversation, 'id' | 'title' | 'updatedAt' | 'backend'>
   > | null>(null)
   const [historyError, setHistoryError] = useState('')
-  const [pickerPosition, setPickerPosition] = useState<{ offset: number; boundary: HTMLElement | null }>({
-    offset: 8,
-    boundary: null,
-  })
+  const [pickerBoundary, setPickerBoundary] = useState<HTMLElement | null>(null)
   const messages = useRef<HTMLDivElement>(null),
     follow = useRef(true)
   const pending = conversation?.messages.findLast((m) => m.tool?.state === 'pending')?.tool
@@ -117,13 +114,7 @@ export function AiInspector({
     conversation?.status === 'awaiting_confirmation'
   const update = (value: Partial<Draft>) => setDrafts((s) => ({ ...s, [key]: { ...draft, ...value } }))
   const positionPicker = (id: 'ai-agent-picker' | 'ai-chat-model') => {
-    const trigger = document.getElementById(id)
-    const composer = trigger?.closest<HTMLElement>('.ai-composer')
-    if (!trigger || !composer) return
-    setPickerPosition({
-      offset: trigger.getBoundingClientRect().top - composer.getBoundingClientRect().top + 8,
-      boundary: trigger.closest<HTMLElement>('.ai-inspector'),
-    })
+    setPickerBoundary(document.getElementById(id)?.closest<HTMLElement>('.ai-inspector') ?? null)
   }
   const act = useCallback(
     async (action: () => Promise<unknown>, onError: (message: string) => void = setError) => {
@@ -609,7 +600,6 @@ export function AiInspector({
                       className="ai-permission-picker"
                       data-permission={mode.value}
                       aria-label={'执行模式：' + mode.label}
-                      title={mode.description}
                       disabled={loading || !settings?.enabled}
                     >
                       <mode.Icon size={14} />
@@ -618,9 +608,7 @@ export function AiInspector({
                     </Button>
                   </DropdownMenuTrigger>
                 </TooltipTrigger>
-                <TooltipContent side="top">
-                  {mode.label}：{mode.description}
-                </TooltipContent>
+                <TooltipContent side="top">切换操作权限</TooltipContent>
               </Tooltip>
               <DropdownMenuContent side="top" align="start" className="ai-permission-menu">
                 <DropdownMenuLabel>AI操作权限</DropdownMenuLabel>
@@ -680,20 +668,19 @@ export function AiInspector({
                     id="ai-agent-picker"
                     className="ai-agent-picker"
                     aria-label={agent ? '选择Agent：' + agent.label : '选择Agent'}
-                    title={agent?.label}
                   >
                     <AiAgentIcon kind={agent?.backend.kind} provider={agent?.provider} size={14} />
                     <SelectValue placeholder="Agent">{agent?.label}</SelectValue>
                   </SelectTrigger>
                 </TooltipTrigger>
-                <TooltipContent side="top">{agent?.label ?? '选择Agent'}</TooltipContent>
+                <TooltipContent side="top">切换供应商</TooltipContent>
               </Tooltip>
               <SelectContent
                 position="popper"
                 side="top"
                 align="start"
-                sideOffset={pickerPosition.offset}
-                collisionBoundary={pickerPosition.boundary}
+                sideOffset={8}
+                collisionBoundary={pickerBoundary}
                 collisionPadding={8}
                 className="ai-composer-select"
               >
@@ -724,20 +711,24 @@ export function AiInspector({
                 if (agent) void changeBackend({ ...agent.backend, model: value.slice(6) })
               }}
             >
-              <SelectTrigger
-                id="ai-chat-model"
-                className="ai-model-picker"
-                aria-label="选择模型"
-                title={model}
-              >
-                <SelectValue placeholder="模型" />
-              </SelectTrigger>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <SelectTrigger
+                    id="ai-chat-model"
+                    className="ai-model-picker"
+                    aria-label="选择模型"
+                  >
+                    <SelectValue placeholder="模型" />
+                  </SelectTrigger>
+                </TooltipTrigger>
+                <TooltipContent side="top">切换模型</TooltipContent>
+              </Tooltip>
               <SelectContent
                 position="popper"
                 side="top"
                 align="end"
-                sideOffset={pickerPosition.offset}
-                collisionBoundary={pickerPosition.boundary}
+                sideOffset={8}
+                collisionBoundary={pickerBoundary}
                 collisionPadding={8}
                 className="ai-composer-select"
               >

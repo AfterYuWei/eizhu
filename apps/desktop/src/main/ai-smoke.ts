@@ -692,14 +692,14 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
           await js(
             "document.getElementById('ai-permission-picker').blur();document.getElementById('ai-permission-picker').focus()",
           )
-          await wait("return !!document.querySelector('[role=tooltip]')?.textContent.includes('执行前确认')")
+          await wait("return !!document.querySelector('[role=tooltip]')?.textContent.includes('切换操作权限')")
           await js("document.getElementById('ai-permission-picker').blur()")
           await wait("return !document.querySelector('[role=tooltip]')")
           await js(
             "document.getElementById('ai-agent-picker').blur();document.getElementById('ai-agent-picker').focus()",
           )
           await wait(
-            "return !!document.querySelector('[role=tooltip]')?.textContent.includes('合成 responses')",
+            "return !!document.querySelector('[role=tooltip]')?.textContent.includes('切换供应商')",
           )
           await js("document.getElementById('ai-agent-picker').blur()")
           await wait("return !document.querySelector('[role=tooltip]')")

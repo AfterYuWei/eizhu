@@ -297,7 +297,6 @@ it('permission control is inside the input card and explains all three remote mo
   expect(host.querySelector('.ai-composer #ai-permission-picker')).toBe(control)
   expect(host.querySelector('.ai-session-controls #ai-permission-picker')).toBeNull()
   expect(control.getAttribute('aria-label')).toBe('执行模式：执行前确认')
-  expect(control.getAttribute('title')).toContain('命令执行和文件修改前由你审批')
   await act(async () => control.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })))
   const options = [...document.querySelectorAll<HTMLElement>('[role=menuitemradio]')]
   expect(options).toHaveLength(3)
