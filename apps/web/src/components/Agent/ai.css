@@ -596,12 +596,6 @@
   overflow: auto;
   overscroll-behavior: contain;
 }
-.desktop-shell .ai-inspector .ai-approval-purpose {
-  margin: 0 0 6px;
-  font-size: 13px;
-  line-height: 21px;
-  overflow-wrap: anywhere;
-}
 .desktop-shell .ai-inspector .ai-approval .ai-code-block {
   margin: 8px 0;
 }

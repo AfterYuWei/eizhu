@@ -2,7 +2,7 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { beforeEach, afterEach, expect, it, vi } from 'vitest'
-import type { AiConversation } from '@eizhu/contracts'
+import type { AiConversation, AiToolCall } from '@eizhu/contracts'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useAiStore } from '@/store/ai'
 import { useAccountStore } from '@/store/account'
@@ -188,7 +188,15 @@ afterEach(async () => {
   host.remove()
   vi.unstubAllGlobals()
 })
-async function pending() {
+async function pending(overrides: Partial<AiToolCall> = {}) {
+  const args = {
+    sessionId: 'a',
+    command: 'printf hello',
+    cwd: '/tmp',
+    purpose: '检查终端',
+    impact: '只读查询',
+    timeoutSeconds: 60,
+  }
   await act(async () => {
     c = {
       ...c,
@@ -202,11 +210,12 @@ async function pending() {
           tool: {
             id: 'call',
             name: 'terminal_execute',
-            args: { sessionId: 'a' },
+            args,
             sessionId: 'a',
             state: 'pending',
-            preview: 'printf hello',
+            preview: JSON.stringify(args, null, 2),
             error: '',
+            ...overrides,
           },
         },
       ],
@@ -223,9 +232,12 @@ it('changing terminal tab preserves the independent conversation and never opens
 it('approval is fixed at the bottom; copy cannot execute; decision includes revision and scope', async () => {
   await pending()
   expect(host.querySelector('.ai-messages .ai-approval')).toBeNull()
-  expect(host.querySelector('.ai-composer .ai-approval')).not.toBeNull()
+  const approval = host.querySelector('.ai-composer .ai-approval')!
+  expect(approval.querySelector('pre')!.textContent).toBe('printf hello')
+  expect(approval.textContent).not.toMatch(/terminal_execute|sessionId|timeoutSeconds|只读查询/)
+  expect(approval.querySelector('.ai-command-target')!.textContent).toContain('test@a.invalid:22 · /tmp')
   await act(async () =>
-    host.querySelector<HTMLButtonElement>('.ai-approval [aria-label="复制操作预览"]')!.click(),
+    host.querySelector<HTMLButtonElement>('.ai-approval [aria-label="复制命令"]')!.click(),
   )
   expect(api.clipboard.write).toHaveBeenCalledWith({ text: 'printf hello' })
   expect(api.ai.decide).not.toHaveBeenCalled()
@@ -236,6 +248,32 @@ it('approval is fixed at the bottom; copy cannot execute; decision includes revi
     decision: 'conversation',
     revision: 4,
   })
+})
+it('long task approval copies the exact multiline Unicode command instead of the parameter preview', async () => {
+  const command = 'printf "%s\\n" "你好，🌙"\nls -- "项目目录"\n'
+  await pending({ name: 'terminal_start', args: { sessionId: 'a', command, cwd: '/tmp/项目' } })
+  const approval = host.querySelector('.ai-approval')!
+  const lines = [...approval.querySelectorAll('.ai-code-line > span:last-child')].map((line) => line.textContent)
+  expect(lines.join('\n')).toBe(command.slice(0, -1))
+  await act(async () => approval.querySelector<HTMLButtonElement>('[aria-label="复制命令"]')!.click())
+  expect(api.clipboard.write).toHaveBeenCalledWith({ text: command })
+  expect(api.ai.decide).not.toHaveBeenCalled()
+})
+it('file approval retains the path and prepared diff instead of rendering file contents as a shell command', async () => {
+  const preview = '文件：/etc/app.conf\n--- 修改前\nport=80\n+++ 修改后\nport=8080'
+  await pending({
+    name: 'file_edit',
+    args: { sessionId: 'a', path: '/etc/app.conf', oldText: 'port=80', newText: 'port=8080' },
+    preview,
+  })
+  const approval = host.querySelector('.ai-approval')!
+  expect(approval.textContent).toContain('允许此操作？')
+  expect(approval.textContent).toContain('/etc/app.conf')
+  expect(approval.textContent).toContain('port=80')
+  expect(approval.textContent).toContain('port=8080')
+  await act(async () => approval.querySelector<HTMLButtonElement>('[aria-label="复制操作预览"]')!.click())
+  expect(api.clipboard.write).toHaveBeenCalledWith({ text: preview })
+  expect(api.ai.decide).not.toHaveBeenCalled()
 })
 it('scope changes disable old approvals before automatic synchronization finishes', async () => {
   let finish!: (value: AiConversation) => void

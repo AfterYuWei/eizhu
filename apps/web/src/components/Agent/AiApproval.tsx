@@ -14,20 +14,23 @@ export function AiApproval({
   onDecide: (decision: 'once' | 'conversation' | 'reject') => void
   onError: (message: string) => void
 }) {
+  const commandCall = call.name === 'terminal_execute' || call.name === 'terminal_start'
+  const command = commandCall && typeof call.args.command === 'string' ? call.args.command : undefined
+  const cwd = commandCall && typeof call.args.cwd === 'string' ? call.args.cwd : undefined
   return (
     <section className="ai-approval" aria-label="工具操作审批">
-      <div className="ai-approval-heading">允许此操作？</div>
+      <div className="ai-approval-heading">{commandCall ? '执行此命令？' : '允许此操作？'}</div>
       <div className="ai-approval-content">
-        <p className="ai-approval-purpose">{call.name}</p>
         {target && (
           <div className="ai-command-target">
             {target.username}@{target.host}:{target.port}
+            {cwd && <> · {cwd}</>}
           </div>
         )}
         <AiCodeBlock
-          label="操作预览"
-          language={call.name.startsWith('file_') ? 'Diff' : 'Shell'}
-          content={call.preview}
+          label={commandCall ? '命令' : '操作预览'}
+          language={call.name.startsWith('file_') ? 'Diff' : undefined}
+          content={command ?? call.preview}
           wrap
           onError={onError}
         />

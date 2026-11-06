@@ -1,0 +1,60 @@
+{
+  "browser": "Installed Microsoft Edge (static Web)",
+  "productionComponent": "AiInspector / AiApproval",
+  "cases": [
+    {
+      "dark": false,
+      "width": 320,
+      "commandExact": true,
+      "metadataHidden": true,
+      "overflow": false,
+      "approvalControlsVisible": true
+    },
+    {
+      "dark": false,
+      "width": 400,
+      "commandExact": true,
+      "metadataHidden": true,
+      "overflow": false,
+      "approvalControlsVisible": true
+    },
+    {
+      "dark": false,
+      "width": 560,
+      "commandExact": true,
+      "metadataHidden": true,
+      "overflow": false,
+      "approvalControlsVisible": true
+    },
+    {
+      "dark": true,
+      "width": 320,
+      "commandExact": true,
+      "metadataHidden": true,
+      "overflow": false,
+      "approvalControlsVisible": true
+    },
+    {
+      "dark": true,
+      "width": 400,
+      "commandExact": true,
+      "metadataHidden": true,
+      "overflow": false,
+      "approvalControlsVisible": true
+    },
+    {
+      "dark": true,
+      "width": 560,
+      "commandExact": true,
+      "metadataHidden": true,
+      "overflow": false,
+      "approvalControlsVisible": true
+    }
+  ],
+  "exactCopyWithoutApproval": true,
+  "multilineUnicodeCopy": true,
+  "fileDiffRetained": true,
+  "approvalPayloadUnchanged": true,
+  "runtimeErrors": 0,
+  "externalRequests": 0
+}

@@ -1,0 +1,33 @@
+{
+  "sourceSha256": {
+    "apps/web/src/components/Agent/AiApproval.tsx": "2fa36568411f745e84056aee2570fb59cac7c777aba0109439295247fcf5b739",
+    "apps/web/src/components/Agent/AiInspector.test.tsx": "608348c07894e8f0fc0b39a35478ee32f587d9b068139044f38061910592b7e2",
+    "apps/web/src/components/Agent/ai.css": "713f541a04fa51f795eb5cfba705feb56ac18695a24394c1fecd8a97956d3292"
+  },
+  "check": true,
+  "lint": true,
+  "focusedInspectorTests": 32,
+  "web": {
+    "files": 87,
+    "passed": 1007
+  },
+  "baselineVerify": true,
+  "fixedBaselineTests": 10,
+  "architectureVerify": true,
+  "webBuild": true,
+  "visualCases": 6,
+  "exactCommandDisplayAndCopy": true,
+  "multilineUnicodeAndTrailingNewlinePreserved": true,
+  "copyDoesNotApprove": true,
+  "approvalPayloadUnchanged": true,
+  "fileDiffRetained": true,
+  "cleanup": {
+    "ownedPreviewProcesses": 0,
+    "temporaryProfilesRemoved": true
+  },
+  "electronSmoke": "not-run-renderer-only",
+  "realCommandsExecuted": false,
+  "toolDownloads": false,
+  "pushed": false,
+  "unrelatedChangesPreserved": true
+}
