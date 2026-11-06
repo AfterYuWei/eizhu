@@ -54,6 +54,8 @@ it.each(['appearance', 'account'] as const)(
       )
     }
   },
+  // StrictMode 下反复挂载完整设置页；macOS Intel CI 的实际渲染可能超过默认 5 秒。
+  15_000,
 )
 
 it('整页设置通过返回应用或 Esc 退出', async () => {
