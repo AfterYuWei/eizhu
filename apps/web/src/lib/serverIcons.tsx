@@ -85,7 +85,7 @@ import { DEFAULT_SERVER_ICON } from '@/lib/serverIconKeys'
 
 type ServerIconComponent = ComponentType<LucideProps>
 
-export { CircleHelp as HelpIcon, Check as AiModeCheckIcon } from 'lucide-react'
+export { CircleHelp as HelpIcon, Check as AiModeCheckIcon, Trash2 as AiDeleteIcon } from 'lucide-react'
 
 export const AiIcon = forwardRef<SVGSVGElement, LucideProps>(({ size = 24, color = 'currentColor', ...props }, ref) => (
   <svg

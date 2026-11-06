@@ -10,7 +10,7 @@ import { spawn } from 'node:child_process'
 import { Server, utils } from 'ssh2'
 import type { Connection } from 'ssh2'
 import type { AddressInfo } from 'node:net'
-import type { BrowserWindow } from 'electron'
+import { app, type BrowserWindow } from 'electron'
 import type { RuntimeHost } from './runtime-host.ts'
 import { aiConversationSchema, aiModelCatalogSchema, aiSettingsSchema } from '@eizhu/contracts'
 import { modelFixture } from '@eizhu/core/agent/model-fixture'
@@ -232,12 +232,14 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
     throw new Error('AI v2 smoke timeout: ' + source + ' ' + JSON.stringify(state))
   }
   const chooseSetting = async (id: string, label: string) => {
+    await wait("return !document.querySelector('[role=listbox]')")
     await wait(
       'const control=document.getElementById(' + JSON.stringify(id) + ');return !!control&&!control.disabled',
     )
     await js('document.getElementById(d).click()', id)
     await wait("return !!document.querySelector('[role=listbox]')")
     await js("[...document.querySelectorAll('[role=option]')].find(e=>e.textContent===d).click()", label)
+    await wait("return !document.querySelector('[role=listbox]')")
   }
   const snapshot = () => js('return window.__aiV2')
   const read = async () => aiConversationSchema.parse(await snapshot())
@@ -358,7 +360,12 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
     )
     await wait("return !document.querySelector('[role=menu]')")
     assert.equal(await js("return document.querySelector('.ai-inspector').checkVisibility()"), true)
-    assert.equal(await js("return document.querySelector('.ai-scope-summary').textContent"), '连接范围 · 2')
+    assert.equal(
+      await js(
+        "return !!document.querySelector('.ai-scope-summary')||!!document.querySelector('.ai-session-controls')",
+      ),
+      false,
+    )
     assert.equal(await js("return !!document.querySelector('.ai-scope')"), false)
     assert.equal(
       await js("return document.querySelector('#ai-permission-picker').getAttribute('aria-label')"),
@@ -678,6 +685,10 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
         screenshots.push(name)
         await wait("return !document.getElementById('ai-permission-picker').disabled")
         if (width === 320) {
+          app.focus({ steal: true })
+          window.focus()
+          window.webContents.focus()
+          await wait('return document.hasFocus()')
           await js(
             "document.getElementById('ai-permission-picker').blur();document.getElementById('ai-permission-picker').focus()",
           )
@@ -842,6 +853,86 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
       assert.ok(!bytes.includes(Buffer.from('合成验收：检查两个连接')))
       assert.ok(!bytes.includes(Buffer.from('合成备用模型')))
     }
+    const historyChat = aiConversationSchema.parse(
+      await call('ai', 'open', {
+        sessionIds: targetIds,
+        backend: { kind: 'custom', providerId: 'responses', model: 'synthetic-ai' },
+      }),
+    )
+    conversations.push(historyChat.id)
+    await wait("return !document.querySelector('[aria-label=对话历史]').disabled")
+    await js("document.querySelector('[aria-label=对话历史]').click()")
+    await wait(
+      "return [...document.querySelectorAll('.ai-history-row')].some(row=>row.dataset.conversationId===" +
+        JSON.stringify(historyChat.id) +
+        ")&&!document.querySelector('.ai-history-delete').disabled",
+    )
+    assert.equal(
+      await js(
+        "return !document.querySelector('.ai-inspector .ai-history-delete')&&!document.querySelector('.ai-scope-summary')",
+      ),
+      true,
+    )
+    for (const dark of [false, true]) {
+      await js(
+        "document.documentElement.classList.toggle('dark',d);await document.fonts.ready;await new Promise(r=>setTimeout(r,150))",
+        dark,
+      )
+      assert.equal(
+        await js(
+          "const e=document.querySelector('.ai-history-dialog'),r=e.getBoundingClientRect();return e.scrollWidth<=e.clientWidth+1&&r.left>=0&&r.right<=innerWidth+1&&r.top>=0&&r.bottom<=innerHeight+1",
+        ),
+        true,
+      )
+      const name = dark ? 'ai-history-dark.png' : 'ai-history-light.png'
+      await writeFile(
+        join(root, name),
+        (await window.webContents.capturePage(undefined, { stayAwake: true })).toPNG(),
+      )
+      screenshots.push(name)
+    }
+    await js(
+      "[...document.querySelectorAll('.ai-history-row')].find(row=>row.dataset.conversationId===d).querySelector('button').click()",
+      historyChat.id,
+    )
+    await wait(
+      "return !document.querySelector('.ai-history-dialog')&&!!document.querySelector('.ai-composer textarea')",
+    )
+    await js("document.querySelector('[aria-label=对话历史]').click()")
+    await wait(
+      "return [...document.querySelectorAll('.ai-history-row')].some(row=>row.dataset.conversationId===" +
+        JSON.stringify(historyChat.id) +
+        ")&&!document.querySelector('.ai-history-delete').disabled",
+    )
+    await js(
+      "[...document.querySelectorAll('.ai-history-row')].find(row=>row.dataset.conversationId===d).querySelector('.ai-history-delete').click()",
+      historyChat.id,
+    )
+    await wait(
+      "return ![...document.querySelectorAll('.ai-history-row')].some(row=>row.dataset.conversationId===" +
+        JSON.stringify(historyChat.id) +
+        ")&&!document.querySelector('[aria-label=对话历史]').disabled",
+    )
+    assert.ok(!(await call<Array<{ id: string }>>('ai', 'history')).some((h) => h.id === historyChat.id))
+    const connected = await call<Array<{ id: string; status: string }>>('session', 'list')
+    assert.equal(
+      connected.filter((s) => targetIds.includes(s.id) && s.status === 'connected').length,
+      targetIds.length,
+    )
+    conversations.splice(conversations.indexOf(historyChat.id), 1)
+    await js(
+      "document.querySelector('.ai-history-dialog [aria-label=关闭对话历史]').click()",
+    )
+    await wait(
+      "return !document.querySelector('.ai-history-dialog')&&document.querySelector('.ai-inspector').checkVisibility()",
+    )
+    await wait("return document.activeElement?.getAttribute('aria-label')==='对话历史'")
+    assert.equal(
+      await js(
+        "return ![...document.querySelectorAll('.ai-inspector button')].some(b=>(b.getAttribute('aria-label')||b.textContent).startsWith('删除对话'))",
+      ),
+      true,
+    )
     const saved = aiConversationSchema.parse(await call('ai', 'read', { conversationId: proposed.id }))
     assert.equal(saved.id, proposed.id)
     assert.ok(fingerprint.startsWith('SHA256:'))
@@ -862,6 +953,9 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
       composerAgentSelection: true,
       scopeFollowsOpenSshSessions: true,
       scopeReadOnly: true,
+      scopeHidden: true,
+      conversationHistoryDialog: true,
+      deleteOnlyInHistory: true,
       executionModeExplained: true,
       executionModeInsideComposer: true,
       compactIconOnlyControls: true,

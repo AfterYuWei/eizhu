@@ -12,11 +12,22 @@ import { useAiStore } from '@/store/ai'
 import { useSessionStore } from '@/store/session'
 import { useDesktopShellStore } from '@/store/desktopShell'
 import { bridge } from '@/lib/bridge'
-import { AiIcon, AiAgentIcon, AiModeCheckIcon, AI_PERMISSION_ICONS } from '@/lib/serverIcons'
+import { AiIcon, AiAgentIcon, AiModeCheckIcon, AiDeleteIcon, AI_PERMISSION_ICONS } from '@/lib/serverIcons'
 import { useAccountStore } from '@/store/account'
 import { workspaceGeneration } from '@/lib/workspaceScope'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog'
+import { InlineError } from '@/components/ui/inline-error'
+import { Loading } from '@/components/ui/loading'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { ShellIconButton, ShellResizeHandle } from '@/components/Layout/ShellControls'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -91,6 +102,7 @@ export function AiInspector({
   const [history, setHistory] = useState<Array<
     Pick<AiConversation, 'id' | 'title' | 'updatedAt' | 'backend'>
   > | null>(null)
+  const [historyError, setHistoryError] = useState('')
   const messages = useRef<HTMLDivElement>(null),
     follow = useRef(true)
   const pending = conversation?.messages.findLast((m) => m.tool?.state === 'pending')?.tool
@@ -100,14 +112,14 @@ export function AiInspector({
     conversation?.status === 'awaiting_confirmation'
   const update = (value: Partial<Draft>) => setDrafts((s) => ({ ...s, [key]: { ...draft, ...value } }))
   const act = useCallback(
-    async (action: () => Promise<unknown>) => {
+    async (action: () => Promise<unknown>, onError: (message: string) => void = setError) => {
       const generation = workspaceGeneration()
       setLoading(true)
-      setError('')
+      onError('')
       try {
         await action()
       } catch (e) {
-        if (generation === workspaceGeneration()) setError(e instanceof Error ? e.message : '操作失败')
+        if (generation === workspaceGeneration()) onError(e instanceof Error ? e.message : '操作失败')
       } finally {
         if (generation === workspaceGeneration()) setLoading(false)
       }
@@ -289,7 +301,7 @@ export function AiInspector({
         if (
           e.key === 'Escape' &&
           !e.defaultPrevented &&
-          !(e.target instanceof Element && e.target.closest('[role=menu],[role=listbox]'))
+          !(e.target instanceof Element && e.target.closest('[role=menu],[role=listbox],[role=dialog]'))
         ) {
           e.preventDefault()
           onClose()
@@ -325,81 +337,118 @@ export function AiInspector({
           >
             <Plus size={15} />
           </ShellIconButton>
-          <ShellIconButton
-            label="对话历史"
-            onClick={() => void act(async () => setHistory(await bridge().ai.history()))}
+          <Dialog
+            open={open && history !== null}
+            onOpenChange={(value) => {
+              if (!value) {
+                setHistory(null)
+                return
+              }
+              setHistory([])
+              void act(async () => {
+                const rows = await bridge().ai.history()
+                setHistory((current) => (current === null ? null : rows))
+              }, setHistoryError)
+            }}
           >
-            <History size={15} />
-          </ShellIconButton>
+            <DialogTrigger asChild>
+              <ShellIconButton label="对话历史" disabled={loading}>
+                <History size={15} />
+              </ShellIconButton>
+            </DialogTrigger>
+            <DialogContent className="ai-history-dialog" showCloseButton={false}>
+              <DialogHeader className="ai-history-heading">
+                <div>
+                  <DialogTitle>对话历史</DialogTitle>
+                  <DialogDescription>打开或删除已保存的对话。</DialogDescription>
+                </div>
+                <DialogClose asChild>
+                  <ShellIconButton label="关闭对话历史">
+                    <X size={16} />
+                  </ShellIconButton>
+                </DialogClose>
+              </DialogHeader>
+              <div className="ai-history-list">
+                {history?.map((h) => (
+                  <div className="ai-history-row" key={h.id} data-conversation-id={h.id}>
+                    <Button
+                      variant="ghost"
+                      disabled={loading}
+                      aria-label={'打开对话：' + h.title}
+                      aria-current={selectedId === h.id ? 'true' : undefined}
+                      onClick={() =>
+                        void act(async () => {
+                          const c = await bridge().ai.read({ conversationId: h.id })
+                          put(c)
+                          select(c.id)
+                          setHistory(null)
+                        }, setHistoryError)
+                      }
+                    >
+                      <span>{h.title}</span>
+                      <small>{new Date(h.updatedAt).toLocaleString('zh-CN')}</small>
+                    </Button>
+                    <ShellIconButton
+                      label={'删除对话：' + h.title}
+                      className="ai-history-delete"
+                      disabled={loading}
+                      onClick={() =>
+                        void act(async () => {
+                          await scopeQueue.current
+                          await bridge().ai.remove({ conversationId: h.id })
+                          forget(h.id)
+                          setHistory((current) => current?.filter((row) => row.id !== h.id) ?? null)
+                          setDrafts((current) => {
+                            const next = { ...current }
+                            delete next[h.id]
+                            return next
+                          })
+                        }, setHistoryError)
+                      }
+                    >
+                      <AiDeleteIcon size={16} />
+                    </ShellIconButton>
+                  </div>
+                ))}
+                {loading && !history?.length && <Loading />}
+                {!loading && !history?.length && !historyError && (
+                  <p className="ai-history-empty">暂无历史对话</p>
+                )}
+              </div>
+              <InlineError message={historyError} />
+            </DialogContent>
+          </Dialog>
           <ShellIconButton label="AI设置" onClick={() => setSettingsPage('ai')}>
             <Settings2 size={15} />
           </ShellIconButton>
         </div>
       </div>
-      <div className="ai-session-controls">
-        <div className="ai-inline-actions">
-          <span
-            className="ai-scope-summary"
-            title={
-              '自动包含当前窗口所有已连接的SSH会话，不能手动修改。\n' +
-              (connectedTabs.map((t) => t.profileName).join('\n') || '暂无已连接的SSH会话')
-            }
-          >
-            连接范围 · {sessionIds.length}
-          </span>
-        </div>
-      </div>
       <div className="ai-transcript">
-        {history ? (
-          <div className="ai-history">
-            {history.map((h) => (
-              <Button
-                key={h.id}
-                variant="ghost"
-                onClick={() =>
-                  void act(async () => {
-                    const c = await bridge().ai.read({ conversationId: h.id })
-                    put(c)
-                    select(c.id)
-                    setHistory(null)
-                  })
-                }
-              >
-                {h.title}
-              </Button>
-            ))}
-            {!history.length && <p>暂无历史对话</p>}
-            <Button variant="ghost" onClick={() => setHistory(null)}>
-              返回对话
-            </Button>
-          </div>
-        ) : (
-          <div
-            className="ai-messages"
-            ref={messages}
-            onScroll={() => {
-              const el = messages.current
-              if (el) follow.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80
-            }}
-          >
-            {!conversation?.messages.length && (
-              <div className="ai-welcome">
-                <AiIcon size={25} />
-                <p>打开SSH连接，选择Agent开始运维任务</p>
-                <p>当前对话独立于终端标签</p>
-              </div>
-            )}
-            {conversation?.messages.map((m, i) => (
-              <AiMessage
-                key={m.id}
-                message={m}
-                target={conversation.targets.find((t) => t.sessionId === m.tool?.sessionId)}
-                continuation={i > 0 && conversation.messages[i - 1].role !== 'user' && m.role !== 'user'}
-                onError={setError}
-              />
-            ))}
-          </div>
-        )}
+        <div
+          className="ai-messages"
+          ref={messages}
+          onScroll={() => {
+            const el = messages.current
+            if (el) follow.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80
+          }}
+        >
+          {!conversation?.messages.length && (
+            <div className="ai-welcome">
+              <AiIcon size={25} />
+              <p>打开SSH连接，选择Agent开始运维任务</p>
+              <p>当前对话独立于终端标签</p>
+            </div>
+          )}
+          {conversation?.messages.map((m, i) => (
+            <AiMessage
+              key={m.id}
+              message={m}
+              target={conversation.targets.find((t) => t.sessionId === m.tool?.sessionId)}
+              continuation={i > 0 && conversation.messages[i - 1].role !== 'user' && m.role !== 'user'}
+              onError={setError}
+            />
+          ))}
+        </div>
       </div>
       {conversation?.jobs.some((j) => j.status === 'running') && (
         <div className="ai-task-state">
@@ -688,21 +737,6 @@ export function AiInspector({
           </div>
         </div>
       </div>
-      {conversation && (
-        <Button
-          size="sm"
-          variant="ghost"
-          disabled={loading || busy}
-          onClick={() =>
-            void act(async () => {
-              await bridge().ai.remove({ conversationId: conversation.id })
-              forget(conversation.id)
-            })
-          }
-        >
-          删除对话
-        </Button>
-      )}
     </aside>
   )
 }

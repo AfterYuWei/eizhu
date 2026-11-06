@@ -18,6 +18,7 @@ const api = vi.hoisted(() => ({
     cancel: vi.fn(),
     stopJob: vi.fn(),
     history: vi.fn(),
+    remove: vi.fn(),
     read: vi.fn(),
     cliStatus: vi.fn(),
     capabilities: vi.fn(),
@@ -132,6 +133,11 @@ beforeEach(async () => {
     status: 'idle',
     error: '',
   }
+  api.ai.history.mockResolvedValue([
+    { id: c.id, title: c.title, updatedAt: c.updatedAt, backend: c.backend },
+    { id: 'other-chat', title: '旧对话', updatedAt: 1, backend: c.backend },
+  ])
+  api.ai.remove.mockResolvedValue(undefined)
   api.ai.scope.mockImplementation(
     async ({ conversationId, sessionIds }: { conversationId: string; sessionIds: string[] }) => ({
       ...useAiStore.getState().conversations[conversationId],
@@ -254,8 +260,9 @@ it('approval failures remain visible and do not silently grant access', async ()
   expect(host.querySelector('.ai-approval')).not.toBeNull()
   expect(host.querySelector('[role="alert"]')?.textContent).toBe('审批已失效')
 })
-it('scope is read-only and automatically follows all connected SSH sessions', async () => {
-  expect(host.querySelector('.ai-scope-summary')!.textContent).toBe('连接范围 · 2')
+it('scope stays hidden and automatically follows all connected SSH sessions', async () => {
+  expect(host.querySelector('.ai-scope-summary')).toBeNull()
+  expect(host.textContent).not.toContain('连接范围')
   expect(host.querySelector('.ai-scope')).toBeNull()
   expect(host.querySelector('.ai-session-controls [type=checkbox]')).toBeNull()
   expect(button('应用连接范围')).toBeUndefined()
@@ -268,7 +275,7 @@ it('scope is read-only and automatically follows all connected SSH sessions', as
     })),
   )
   expect(api.ai.scope).toHaveBeenCalledWith({ conversationId: 'chat', sessionIds: ['a', 'b', 'c'] })
-  expect(host.querySelector('.ai-scope-summary')!.textContent).toBe('连接范围 · 3')
+  expect(host.textContent).not.toContain('连接范围')
   api.ai.scope.mockClear()
   await act(async () => useSessionStore.setState({ activeTabId: 'tab-b' }))
   expect(api.ai.scope).not.toHaveBeenCalled()
@@ -281,7 +288,7 @@ it('closing all SSH sessions stops the Agent and blocks sending', async () => {
   await act(async () => useSessionStore.setState({ tabs: [], activeTabId: null }))
   expect(api.ai.cancel).toHaveBeenCalledWith({ conversationId: 'chat' })
   expect(api.ai.scope).not.toHaveBeenCalled()
-  expect(host.querySelector('.ai-scope-summary')!.textContent).toBe('连接范围 · 0')
+  expect(host.textContent).not.toContain('连接范围')
   await fill('不能执行')
   expect(button('发送').disabled).toBe(true)
 })
@@ -303,18 +310,16 @@ it('permission control is inside the input card and explains all three remote mo
 })
 it('supplier icon follows the provider and available native CLI instead of a robot', async () => {
   await act(async () =>
-    useAiStore
-      .getState()
-      .setSettings({
-        ...useAiStore.getState().settings!,
-        providers: [
-          {
-            ...useAiStore.getState().settings!.providers[0],
-            name: 'DeepSeek',
-            endpoint: 'https://api.deepseek.com',
-          },
-        ],
-      }),
+    useAiStore.getState().setSettings({
+      ...useAiStore.getState().settings!,
+      providers: [
+        {
+          ...useAiStore.getState().settings!.providers[0],
+          name: 'DeepSeek',
+          endpoint: 'https://api.deepseek.com',
+        },
+      ],
+    }),
   )
   await choose('ai-agent-picker', 'DeepSeek')
   expect(host.querySelector('#ai-agent-picker [data-ai-brand=deepseek]')).not.toBeNull()
@@ -498,4 +503,89 @@ it('connection status changes and reconnect replace the range without including 
     })),
   )
   expect(api.ai.scope).toHaveBeenLastCalledWith({ conversationId: 'chat', sessionIds: ['a-new', 'b'] })
+})
+
+async function openHistory() {
+  await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="对话历史"]')!.click())
+}
+const historyButton = (label: string) =>
+  document.querySelector<HTMLButtonElement>('.ai-history-dialog [aria-label="' + label + '"]')!
+it('history is a dialog; opening a chat closes it and preserves the current draft', async () => {
+  await fill('保留未发送内容')
+  expect(host.querySelector('.ai-history-dialog')).toBeNull()
+  expect(host.textContent).not.toContain('删除对话')
+  await openHistory()
+  expect(document.querySelector('[role=dialog]')!.textContent).toContain('对话历史')
+  expect(host.querySelector('.ai-history-delete')).toBeNull()
+  expect(document.querySelectorAll('.ai-history-dialog .ai-history-delete')).toHaveLength(2)
+  await act(async () => historyButton('打开对话：检查').click())
+  expect(api.ai.read).toHaveBeenCalledWith({ conversationId: 'chat' })
+  expect(document.querySelector('[role=dialog]')).toBeNull()
+  expect(host.querySelector('textarea')!.value).toBe('保留未发送内容')
+})
+it('deleting another chat is restricted to history and preserves the current chat and draft', async () => {
+  await fill('当前草稿')
+  await openHistory()
+  await act(async () => historyButton('删除对话：旧对话').click())
+  expect(api.ai.remove).toHaveBeenCalledWith({ conversationId: 'other-chat' })
+  expect(document.querySelector('.ai-history-dialog [aria-label="删除对话：旧对话"]')).toBeNull()
+  expect(useAiStore.getState().selectedId).toBe('chat')
+  await act(async () => historyButton('关闭对话历史').click())
+  expect(host.querySelector('textarea')!.value).toBe('当前草稿')
+  expect(host.querySelector('.ai-history-delete')).toBeNull()
+})
+it('deleting the current chat clears its selection and leaves history open', async () => {
+  await fill('待删除的草稿')
+  await openHistory()
+  await act(async () => historyButton('删除对话：检查').click())
+  expect(api.ai.remove).toHaveBeenCalledWith({ conversationId: 'chat' })
+  expect(useAiStore.getState().selectedId).toBeNull()
+  expect(useAiStore.getState().conversations.chat).toBeUndefined()
+  expect(document.querySelector('[role=dialog]')).not.toBeNull()
+  expect(document.querySelector('.ai-history-dialog [aria-label="删除对话：检查"]')).toBeNull()
+  await act(async () => historyButton('关闭对话历史').click())
+  expect(host.querySelector('textarea')!.value).toBe('')
+})
+it('failed history deletion retains the row and shows the error inside the dialog', async () => {
+  api.ai.remove.mockRejectedValue(new Error('删除失败'))
+  await openHistory()
+  await act(async () => historyButton('删除对话：检查').click())
+  expect(document.querySelector('.ai-history-dialog [role=alert]')!.textContent).toBe('删除失败')
+  expect(historyButton('删除对话：检查')).not.toBeNull()
+  expect(useAiStore.getState().selectedId).toBe('chat')
+  expect(host.querySelector('[role=alert]')).toBeNull()
+})
+it('history read failures do not report a false empty history', async () => {
+  api.ai.history.mockRejectedValue(new Error('无法读取历史'))
+  await openHistory()
+  expect(document.querySelector('.ai-history-dialog [role=alert]')!.textContent).toBe('无法读取历史')
+  expect(document.querySelector('.ai-history-empty')).toBeNull()
+})
+it('closing history while loading cannot reopen it when the response arrives', async () => {
+  let finish!: (rows: unknown[]) => void
+  api.ai.history.mockReturnValue(
+    new Promise((resolve) => {
+      finish = resolve
+    }),
+  )
+  await openHistory()
+  await act(async () => historyButton('关闭对话历史').click())
+  await act(async () => finish([]))
+  expect(document.querySelector('[role=dialog]')).toBeNull()
+  expect(useAiStore.getState().selectedId).toBe('chat')
+})
+it('history delete dispatches only once while its request is pending', async () => {
+  let finish!: () => void
+  api.ai.remove.mockReturnValue(
+    new Promise<void>((resolve) => {
+      finish = resolve
+    }),
+  )
+  await openHistory()
+  const remove = historyButton('删除对话：旧对话')
+  await act(async () => remove.click())
+  expect(remove.disabled).toBe(true)
+  await act(async () => remove.click())
+  expect(api.ai.remove).toHaveBeenCalledTimes(1)
+  await act(async () => finish())
 })
