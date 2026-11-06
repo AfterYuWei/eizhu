@@ -4,7 +4,8 @@ import { mkdtemp, writeFile, rm } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
 import { randomUUID } from 'node:crypto'
-import { CliAgentHost } from './ai-cli.ts'
+import { pathToFileURL } from 'node:url'
+import { CliAgentHost, cliCommand } from './ai-cli.ts'
 
 // Protocol peers are synthetic; the bundled MCP process and private IPC are real.
 const peer = String.raw`#!/usr/bin/env node
@@ -69,7 +70,9 @@ for (const kind of ['codex', 'claude', 'deepseek'] as const) {
       await writeFile(path, peer, { mode: 0o700 })
       await writeFile(
         join(root, 'ai-mcp.cjs'),
-        'void import(' + JSON.stringify(resolve('apps/desktop/src/runtime/ai-mcp.ts')) + ')',
+        'void import(' +
+          JSON.stringify(pathToFileURL(resolve('apps/desktop/src/runtime/ai-mcp.ts')).href) +
+          ')',
       )
       let text = '',
         calls = 0
@@ -104,7 +107,8 @@ test('CLI availability rejects missing programs and versions without required dr
   const previousPath = process.env.PATH
   process.env.PATH = root
   try {
-    const path = join(root, 'codex')
+    const path = join(root, process.platform === 'win32' ? 'codex.mjs' : 'codex')
+    const clis = process.platform === 'win32' ? [{ kind: 'codex' as const, path, model: '' }] : []
     const script = (help: string) =>
       '#!' +
       process.execPath +
@@ -112,11 +116,11 @@ test('CLI availability rejects missing programs and versions without required dr
       JSON.stringify(help) +
       ')\n'
     await writeFile(path, script('old CLI'), { mode: 0o700 })
-    let statuses = await host.status([])
+    let statuses = await host.status(clis)
     assert.ok(statuses.every((s) => !s.available))
     assert.match(statuses.find((s) => s.kind === 'codex')!.message, /必需/)
     await writeFile(path, script('--listen'), { mode: 0o700 })
-    statuses = await host.status([])
+    statuses = await host.status(clis)
     assert.deepEqual(
       statuses.filter((s) => s.available).map((s) => s.kind),
       ['codex'],
@@ -128,4 +132,28 @@ test('CLI availability rejects missing programs and versions without required dr
     await host.close()
     await rm(root, { recursive: true, force: true })
   }
+})
+
+test('Windows JavaScript CLI entry points retain literal paths and arguments without a shell', () => {
+  const args = ['app-server', '--config', 'literal & value "quoted"'],
+    env = { PATH: 'synthetic' }
+  for (const extension of ['js', 'cjs', 'mjs']) {
+    const path = `C:\\Program Files\\Agent & Tools\\cli.${extension}`
+    assert.deepEqual(cliCommand(path, args, env, 'win32'), {
+      file: process.execPath,
+      args: [path, ...args],
+      env: { ...env, ELECTRON_RUN_AS_NODE: '1' },
+    })
+  }
+  assert.deepEqual(cliCommand('C:\\Agent\\cli.exe', args, env, 'win32'), {
+    file: 'C:\\Agent\\cli.exe',
+    args,
+    env,
+  })
+  assert.deepEqual(cliCommand('/opt/agent/cli.mjs', args, env, 'darwin'), {
+    file: '/opt/agent/cli.mjs',
+    args,
+    env,
+  })
+  assert.deepEqual(env, { PATH: 'synthetic' })
 })

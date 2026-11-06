@@ -15,6 +15,17 @@ import type { AgentExternal } from '@eizhu/core/agent/service'
 
 const exec = promisify(execFile)
 const names = { codex: 'codex', claude: 'claude', deepseek: 'dsh' } as const
+/** Windows cannot execute a JavaScript entry point through its POSIX shebang. */
+export function cliCommand(
+  path: string,
+  args: string[],
+  env: NodeJS.ProcessEnv,
+  platform = process.platform,
+) {
+  return platform === 'win32' && /\.(?:js|cjs|mjs)$/i.test(path)
+    ? { file: process.execPath, args: [path, ...args], env: { ...env, ELECTRON_RUN_AS_NODE: '1' } }
+    : { file: path, args, env }
+}
 const frameSchema = z
   .object({
     id: z.union([z.string(), z.number()]).optional(),
@@ -38,9 +49,10 @@ export class AgentProcess {
   onMessage: (frame: z.infer<typeof frameSchema>) => void = () => {}
   onFailure: (error: unknown) => void = () => {}
   constructor(path: string, args: string[], cwd: string, env: NodeJS.ProcessEnv) {
-    this.child = spawn(path, args, {
+    const command = cliCommand(path, args, env)
+    this.child = spawn(command.file, command.args, {
       cwd,
-      env,
+      env: command.env,
       stdio: 'pipe',
       windowsHide: true,
       detached: process.platform !== 'win32',
@@ -172,12 +184,20 @@ export class CliAgentHost implements AgentExternal {
         const cli = clis.find((c) => c.kind === kind) ?? { kind, path: '', model: '' }
         try {
           const path = await this.resolve(cli)
-          const { stdout } = await exec(path, ['--version'], {
+          const versionCommand = cliCommand(path, ['--version'], process.env)
+          const { stdout } = await exec(versionCommand.file, versionCommand.args, {
+            env: versionCommand.env,
             timeout: 10000,
             maxBuffer: 65536,
             windowsHide: true,
           })
-          const help = await exec(path, kind === 'codex' ? ['app-server', '--help'] : ['--help'], {
+          const helpCommand = cliCommand(
+            path,
+            kind === 'codex' ? ['app-server', '--help'] : ['--help'],
+            process.env,
+          )
+          const help = await exec(helpCommand.file, helpCommand.args, {
+            env: helpCommand.env,
             timeout: 10000,
             maxBuffer: 131072,
             windowsHide: true,
@@ -407,10 +427,11 @@ export const cliDrivers = { codex: codexDriver, claude: claudeDriver, deepseek: 
 async function codexDriver(ctx: CliDriverContext): Promise<string> {
   const { path, cwd, env, input, mcp, append, controller, launch } = ctx
   // Disable existing MCP servers using per-process overrides, never edit global config.
-  const listed = await exec(path, ['mcp', 'list', '--json'], {
+  const listCommand = cliCommand(path, ['mcp', 'list', '--json'], env)
+  const listed = await exec(listCommand.file, listCommand.args, {
     timeout: 10000,
     maxBuffer: 524288,
-    env,
+    env: listCommand.env,
     windowsHide: true,
   })
   const old = z.array(z.object({ name: z.string() })).parse(JSON.parse(listed.stdout))
