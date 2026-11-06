@@ -17,9 +17,9 @@ Gauge,
 ServerCog,
 Blocks,
 Orbit,
-ScanEye,
-ListChecks,
-Zap,
+Bot,
+Hand,
+ShieldAlert,
 type LucideProps,
 } from 'lucide-react'
 import type { AiBackend, AiProvider } from '@eizhu/contracts'
@@ -123,7 +123,7 @@ function simpleIcon(icon: SimpleIcon): ServerIconComponent {
   return Component
 }
 
-export const AI_PERMISSION_ICONS = { observer: ScanEye, confirm: ListChecks, auto: Zap }
+export const AI_PERMISSION_ICONS = { observer: Bot, confirm: Hand, auto: ShieldAlert }
 
 const AI_PROVIDER_ICONS = [
   { match: /deepseek/i, key: 'deepseek', Icon: simpleIcon(siDeepseek) },

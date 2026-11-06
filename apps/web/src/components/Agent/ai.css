@@ -685,6 +685,8 @@
 .ai-permission-copy { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 2px; }
 .ai-permission-copy small { white-space: normal; color: var(--fg-3); font-size: 12px; font-weight: 400; line-height: 1.5; }
 .ai-permission-menu .ai-permission-check { margin-left: auto; color: var(--fg); }
+.ai-permission-picker[data-permission='auto'] > svg:first-child,
+.ai-permission-menu [data-permission='auto'] > svg:first-child { color: var(--yellow); }
 .ai-agent-option { display: inline-flex; align-items: center; gap: 8px; }
 .ai-agent-option > svg { flex-shrink: 0; }
 @container (max-width: 340px) {

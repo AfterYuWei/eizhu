@@ -619,6 +619,9 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
     await js("document.querySelector('.settings-page-back').click()")
     await wait("return !!document.querySelector('button[aria-label=AI设置]')")
     await chooseSetting('ai-chat-model', '合成备用模型')
+    await wait(
+      "return document.getElementById('ai-chat-model').textContent==='合成备用模型'&&!document.getElementById('ai-chat-model').disabled",
+    )
     assert.equal(
       aiConversationSchema.parse(await call('ai', 'read', { conversationId: proposed.id })).backend.model,
       'synthetic-alt',
@@ -630,6 +633,9 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
     await call('ai', 'send', { conversationId: proposed.id, text: '等待审批时切换模型', attachments: [] })
     await wait("return !!document.querySelector('.ai-approval')")
     await chooseSetting('ai-chat-model', 'synthetic-ai')
+    await wait(
+      "return document.getElementById('ai-chat-model').textContent==='synthetic-ai'&&!document.getElementById('ai-chat-model').disabled",
+    )
     await wait("return !!document.querySelector('.ai-composer textarea')")
     assert.equal(
       await js("return document.querySelector('.ai-composer textarea').value"),
@@ -672,11 +678,15 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
         screenshots.push(name)
         await wait("return !document.getElementById('ai-permission-picker').disabled")
         if (width === 320) {
-          await js("document.getElementById('ai-permission-picker').focus()")
+          await js(
+            "document.getElementById('ai-permission-picker').blur();document.getElementById('ai-permission-picker').focus()",
+          )
           await wait("return !!document.querySelector('[role=tooltip]')?.textContent.includes('执行前确认')")
           await js("document.getElementById('ai-permission-picker').blur()")
           await wait("return !document.querySelector('[role=tooltip]')")
-          await js("document.getElementById('ai-agent-picker').focus()")
+          await js(
+            "document.getElementById('ai-agent-picker').blur();document.getElementById('ai-agent-picker').focus()",
+          )
           await wait(
             "return !!document.querySelector('[role=tooltip]')?.textContent.includes('合成 responses')",
           )

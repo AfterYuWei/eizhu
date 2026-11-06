@@ -539,6 +539,7 @@ export function AiInspector({
                       id="ai-permission-picker"
                       variant="ghost"
                       className="ai-permission-picker"
+                      data-permission={mode.value}
                       aria-label={'执行模式：' + mode.label}
                       title={mode.description}
                       disabled={!conversation || loading || !settings?.enabled}
@@ -560,6 +561,7 @@ export function AiInspector({
                     <DropdownMenuItem
                       key={item.value}
                       role="menuitemradio"
+                      data-permission={item.value}
                       aria-checked={mode.value === item.value}
                       onSelect={() => {
                         if (conversation && item.value !== mode.value)
