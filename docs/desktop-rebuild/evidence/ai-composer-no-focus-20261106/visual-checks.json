@@ -1,0 +1,89 @@
+{
+  "browser": "Installed Microsoft Edge (static Web)",
+  "productionComponent": "AiInspector",
+  "layouts": [
+    {
+      "dark": false,
+      "width": 400,
+      "idle": {
+        "rect": {
+          "x": 404,
+          "y": 528,
+          "width": 376,
+          "height": 132
+        },
+        "content": 356,
+        "borderWidth": "0px",
+        "radius": "12px",
+        "shadow": "none",
+        "background": "rgb(244, 244, 244)",
+        "panelBackground": "rgb(255, 255, 255)",
+        "focused": false,
+        "overflow": false,
+        "modelClipped": false,
+        "model": "DeepSeek-V4.1"
+      },
+      "focused": {
+        "rect": {
+          "x": 404,
+          "y": 528,
+          "width": 376,
+          "height": 132
+        },
+        "content": 356,
+        "borderWidth": "0px",
+        "radius": "12px",
+        "shadow": "none",
+        "background": "rgb(244, 244, 244)",
+        "panelBackground": "rgb(255, 255, 255)",
+        "focused": true,
+        "overflow": false,
+        "modelClipped": false,
+        "model": "DeepSeek-V4.1"
+      }
+    },
+    {
+      "dark": true,
+      "width": 400,
+      "idle": {
+        "rect": {
+          "x": 404,
+          "y": 528,
+          "width": 376,
+          "height": 132
+        },
+        "content": 356,
+        "borderWidth": "0px",
+        "radius": "12px",
+        "shadow": "rgba(255, 255, 255, 0.145) 0px 0px 0px 1px inset",
+        "background": "rgb(23, 23, 23)",
+        "panelBackground": "rgb(32, 32, 32)",
+        "focused": false,
+        "overflow": false,
+        "modelClipped": false,
+        "model": "DeepSeek-V4.1"
+      },
+      "focused": {
+        "rect": {
+          "x": 404,
+          "y": 528,
+          "width": 376,
+          "height": 132
+        },
+        "content": 356,
+        "borderWidth": "0px",
+        "radius": "12px",
+        "shadow": "rgba(255, 255, 255, 0.145) 0px 0px 0px 1px inset",
+        "background": "rgb(23, 23, 23)",
+        "panelBackground": "rgb(32, 32, 32)",
+        "focused": true,
+        "overflow": false,
+        "modelClipped": false,
+        "model": "DeepSeek-V4.1"
+      }
+    }
+  ],
+  "geometryUnchanged": true,
+  "runtimeErrors": 0,
+  "externalRequests": 0
+}

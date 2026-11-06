@@ -1,0 +1,20 @@
+{
+  "sourceSha256": "9f7011db93d4be514414b3d8ae0c86b8adb8f4cd46dcb008bbb5b040e6440092",
+  "check": true,
+  "lint": true,
+  "focusedInspectorTests": 30,
+  "baselineVerify": true,
+  "fixedBaselineTests": 10,
+  "visualStates": 4,
+  "focusAndIdleBorderIdentical": true,
+  "inputShadow": "none",
+  "fullRegression": "not-run-small-css-followup",
+  "electronSmoke": "not-run-renderer-only",
+  "cleanup": {
+    "ownedPreviewProcesses": 0,
+    "temporaryProfilesRemoved": true
+  },
+  "toolDownloads": false,
+  "pushed": false,
+  "unrelatedChangesPreserved": true
+}
