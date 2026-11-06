@@ -1,0 +1,30 @@
+{
+  "sourceCommit": "4f9e19a68032e7376aa42c5f9f405c54a0dc6670",
+  "check": true,
+  "lint": true,
+  "baselineVerify": true,
+  "focusedInspectorTests": 18,
+  "electronAiSmoke": true,
+  "visualWidths": [
+    320,
+    560
+  ],
+  "themes": [
+    "light",
+    "dark"
+  ],
+  "iconMapping": {
+    "observer": "Bot",
+    "confirm": "Hand",
+    "auto": "ShieldAlert"
+  },
+  "autoIconColor": "shared --yellow warning token",
+  "testServices": "loopback-synthetic model/SSH and installed OpenSSH SFTP",
+  "productionCodeScope": "renderer icons and styling only; permission behavior unchanged",
+  "fullRegression": "not-rerun-for-icon-only-followup",
+  "packagedSmoke": "not-run-this-ui-followup",
+  "downloads": false,
+  "pushed": false,
+  "unrelatedChangesPreserved": true,
+  "temporaryWorktreeRemoved": true
+}
