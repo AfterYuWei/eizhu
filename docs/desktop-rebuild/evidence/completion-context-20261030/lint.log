@@ -1,0 +1,8 @@
+
+> lint
+> eslint apps/desktop packages scripts/*.mjs && npm run lint --workspace @eizhu/web
+
+
+> lint
+> eslint .
+

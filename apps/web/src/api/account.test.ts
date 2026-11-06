@@ -27,14 +27,14 @@ describe('accountApi 领域接口', () => {
     mockedInvoke.mockResolvedValue(undefined)
     await accountApi.status()
     await accountApi.login('user@example.com', 'secret123')
-    await accountApi.register('new@example.com', 'secret456')
+    await accountApi.register('new@example.com', 'secret456', 'ticket')
     await accountApi.me()
     await accountApi.setSyncEnabled(false)
     await accountApi.logout()
     expect(mockedInvoke.mock.calls).toEqual([
       ['account.status', undefined],
       ['account.login', { email: 'user@example.com', password: 'secret123' }],
-      ['account.register', { email: 'new@example.com', password: 'secret456' }],
+      ['account.register', { email: 'new@example.com', password: 'secret456', ticket: 'ticket' }],
       ['account.me', undefined],
       ['account.setSyncEnabled', { enabled: false }],
       ['account.logout', undefined],

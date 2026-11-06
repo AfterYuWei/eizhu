@@ -10,6 +10,7 @@ import type {
   SftpDeleteResponse,
   DirectoryTransferMode,
   SftpMoveResponse,
+  SftpConflictInfo,
 } from './models/sftp.ts'
 import type { SftpSessionInfo } from './models/api.ts'
 import type { Session, SessionCreateRequest, SessionCreateResponse } from './models/session.ts'
@@ -41,17 +42,14 @@ import type { SyncStatus, SyncConflict, SyncPreview } from './models/sync.ts'
 import type { AccountStatus, AccountUser } from './models/account.ts'
 import type {
   BackupSettings,
+  BackupPreferences,
   BackupStatus,
-  BackupVersion,
-  BackupEvent,
   BackupTargetMeta,
   ProviderConfig,
-  RestorePreview,
 } from './models/backup.ts'
 import type { Snippet, SnippetCreateRequest, SnippetUpdateRequest } from './models/snippet.ts'
 import type {
   ServerInfo,
-  ServerMetrics,
   HistoryEntry,
   LocalStateKey,
   TunnelConfig,
@@ -62,38 +60,40 @@ import type {
   BackupImportResult,
   DocumentDescriptor,
 } from './models/api.ts'
+import type { ServerMetricsSummary, ServerMetricKind, ServerMetricDetail } from './ssh.ts'
 
 /** Reserved domain contracts. Each operation is enabled with its runtime schema in its delivery stage. */
 export interface DomainOperations {
-  'sftp.startDrag':{input:{taskIds:string[]};output:void}
-  'sftp.releaseDrag':{input:{taskIds:string[]};output:void}
-  'sftp.prepareDrag':{input:{sessionId:string;paths:string[]};output:{tasks:TransferTask[]}}
+  'sftp.startDrag': { input: { taskIds: string[] }; output: void }
+  'sftp.releaseDrag': { input: { taskIds: string[] }; output: void }
+  'sftp.prepareDrag': { input: { sessionId: string; paths: string[] }; output: { tasks: TransferTask[] } }
   'audit.list': {
     input: { limit: number }
     output: Array<{ id: string; action: string; entity_id: string; created_at: string }>
   }
   'audit.clear': { input: void; output: void }
-  'backup.prepareRestore': { input: { filePath: string; password?: string }; output: RestorePreview }
   'account.login': { input: { email: string; password: string }; output: AccountStatus }
+  'account.requestRegistrationCode': {
+    input: { email: string }
+    output: { challengeId: string; retryAfterSeconds: number; expiresAt: string }
+  }
+  'account.verifyRegistrationCode': {
+    input: { email: string; challengeId: string; code: string }
+    output: { ticket: string }
+  }
+  'account.recoveryAvailable': { input: { email: string }; output: boolean }
+  'account.changePassword': { input: { password: string; newPassword: string }; output: void }
   'account.logout': { input: void; output: void }
   'account.me': { input: void; output: AccountUser }
-  'account.register': { input: { email: string; password: string }; output: AccountStatus }
-  'account.requestPasswordReset': { input: { email: string }; output: void }
+  'account.updateProfile': { input: { username: string; avatar: string }; output: AccountUser }
+  'account.register': { input: { email: string; password: string; ticket: string }; output: AccountStatus }
+  'account.requestPasswordReset': { input: { email: string }; output: { retryAfterSeconds: number } }
   'account.resetPassword': { input: { email: string; code: string; newPassword: string }; output: void }
-  'account.sendVerificationEmail': { input: void; output: void }
   'account.setSyncEnabled': { input: { enabled: boolean }; output: AccountStatus }
   'account.status': { input: void; output: AccountStatus }
-  'account.verifyEmail': { input: { code: string }; output: void }
-  'backup.applyRestore': { input: { token: string; mode: 'merge' | 'replace' }; output: void }
-  'backup.backupNow': { input: void; output: { created: boolean; message?: string; version?: BackupVersion } }
-  'backup.cloudVersions': {
-    input: { providerId: string }
-    output: Array<{ object: string; size: number; createdAt: string }>
-  }
+  'backup.backupNow': { input: void; output: { path: string; uploaded: number; failed: number } }
   'backup.createProvider': { input: { config: ProviderConfig }; output: BackupTargetMeta }
   'backup.deleteProvider': { input: { id: string }; output: void }
-  'backup.deleteVersion': { input: { id: string; force: boolean }; output: void }
-  'backup.events': { input: { limit: number }; output: BackupEvent[] }
   'backup.export': { input: { mode: CredentialMode; password: string | undefined }; output: string | null }
   'backup.getSettings': { input: void; output: BackupSettings }
   'backup.import': {
@@ -104,29 +104,17 @@ export interface DomainOperations {
     input: { providerType: 'gdrive' | 'onedrive'; providerId: string }
     output: { url: string }
   }
+  'backup.selectDirectory': { input: void; output: string | null }
   'backup.pickFile': { input: void; output: { name: string; reference: string } | string | null }
   'backup.preview': { input: { filePath: string; password: string | undefined }; output: BackupPreview }
-  'backup.previewCloud': {
-    input: { providerId: string; object: string; password: string | undefined }
-    output: RestorePreview
-  }
-  'backup.previewLegacyAccount': { input: { password: string }; output: RestorePreview }
-  'backup.previewSafety': { input: { id: string }; output: RestorePreview }
-  'backup.previewVersion': { input: { id: string; password: string | undefined }; output: RestorePreview }
-  'backup.push': { input: void; output: { started: boolean } }
-  'backup.restoreVersion': { input: { id: string }; output: { restored: boolean } }
-  'backup.revealPassword': { input: void; output: { backup_password: string } }
-  'backup.safetyVersions': { input: void; output: Array<{ id: string; createdAt: string }> }
   'backup.status': { input: void; output: BackupStatus }
-  'backup.submitLatest': { input: void; output: { started: boolean } }
   'backup.targets': { input: void; output: BackupTargetMeta[] }
   'backup.testProvider': { input: { id: string }; output: { saved: boolean } }
   'backup.updateProvider': { input: { id: string; config: ProviderConfig }; output: { saved: boolean } }
   'backup.updateSettings': {
-    input: { settings: BackupSettings; backupPassword: string | undefined }
+    input: { settings: BackupPreferences; backupPassword: string | undefined }
     output: { saved: boolean }
   }
-  'backup.versions': { input: void; output: BackupVersion[] }
   'document.exportText': {
     input: { content: string; suggestedName: string; mimeType: string }
     output: string | null
@@ -154,11 +142,21 @@ export interface DomainOperations {
   'profile.testExisting': { input: { id: string; request: ProfileUpdateRequest }; output: ProfileTestResult }
   'profile.testNew': { input: { request: ProfileCreateRequest }; output: ProfileTestResult }
   'profile.update': { input: { id: string; request: ProfileUpdateRequest }; output: Profile }
-  'serverDetail.create': { input: {profileId:string}; output: {session_id:string;status:string;home_dir?:string} }
-  'serverDetail.close': {input:{sessionId:string};output:void}
-  'serverDetail.listFiles': {input:{sessionId:string;path:string;showHidden:boolean};output:SftpListResponse}
+  'serverDetail.create': {
+    input: { profileId: string }
+    output: { session_id: string; status: string; home_dir?: string }
+  }
+  'serverDetail.close': { input: { sessionId: string }; output: void }
+  'serverDetail.listFiles': {
+    input: { sessionId: string; path: string; showHidden: boolean }
+    output: SftpListResponse
+  }
   'serverDetail.getInfo': { input: { sessionId: string }; output: ServerInfo }
-  'serverDetail.getMetrics': { input: { sessionId: string }; output: ServerMetrics }
+  'serverDetail.getSummary': { input: { sessionId: string }; output: ServerMetricsSummary }
+  'serverDetail.getMetricDetail': {
+    input: { sessionId: string; kind: ServerMetricKind }
+    output: ServerMetricDetail
+  }
   'session.attach': { input: { id: string }; output: SessionMessage[] }
   'session.authRespond': { input: { requestId: string; responses: string[] }; output: void }
   'session.close': { input: { id: string }; output: void }
@@ -196,20 +194,28 @@ export interface DomainOperations {
   'snippet.list': { input: void; output: Snippet[] }
   'snippet.update': { input: { id: string; request: SnippetUpdateRequest }; output: Snippet }
   'sync.bootstrap': { input: { token: string; mode: 'use_cloud' | 'merge' | 'use_local' }; output: void }
-  'sync.changePassword': { input: { password: string }; output: void }
   'sync.conflicts': { input: void; output: SyncConflict[] }
+  'sync.revealConflictCredentials': {
+    input: import('./sync.ts').SyncRevealCredentials
+    output: import('./sync.ts').SyncConflictCredentials
+  }
   'sync.now': { input: void; output: void }
-  'sync.preview': { input: void; output: SyncPreview }
+  'sync.preview': { input: { includeOffline: boolean }; output: SyncPreview }
   'sync.resolveConflict': {
-    input: { itemType: string; itemId: string; choice: 'keep_local' | 'use_cloud'; remoteRevision: number }
+    input: {
+      itemType: SyncConflict['itemType']
+      itemId: string
+      choice: 'keep_local' | 'use_cloud'
+      remoteRevision: number
+    }
     output: void
   }
   'sync.status': { input: void; output: SyncStatus }
-  'sync.unlock': { input: { password: string }; output: void }
+  'sync.resolveConflicts': { input: import('./sync.ts').SyncResolveBatch; output: void }
   'tunnel.delete': { input: { id: string }; output: void }
   'tunnel.list': { input: void; output: TunnelConfig[] }
   'tunnel.save': { input: { config: TunnelConfig }; output: TunnelConfig }
-  'tunnel.start': { input: { id: string }; output: TunnelStatus }
+  'tunnel.start': { input: { id: string; confirmedConfig?: TunnelConfig }; output: TunnelStatus }
   'tunnel.statuses': { input: void; output: TunnelStatus[] }
   'tunnel.stop': { input: { id: string }; output: void }
   'vault.create': { input: { request: VaultCreateRequest }; output: VaultItem }
@@ -246,8 +252,17 @@ export interface DomainOperations {
       destDir: string
       conflictResolution: ConflictResolution
       directoryMode: DirectoryTransferMode
+      background?: boolean
     }
     output: SftpTransferResponse
+  }
+  'sftp.getTransferConflicts': {
+    input: { taskId: string }
+    output: { conflicts: SftpConflictInfo[]; directoryMode?: DirectoryTransferMode }
+  }
+  'sftp.resolveTransferConflicts': {
+    input: { taskId: string; resolution: Exclude<ConflictResolution, 'ask'> }
+    output: TransferTask
   }
   'sftp.move': {
     input: { sessionId: string; paths: string[]; destDir: string; conflictResolution: ConflictResolution }
@@ -269,12 +284,12 @@ export interface DomainOperations {
     output: {
       size: number
       last_modified?: number | null
-      prefix_hash?:string
-      prefix_bytes?:number
+      prefix_hash?: string
+      prefix_bytes?: number
     }
   }
   'sftp.resumeUpload': {
-    input: { taskId: string; size: number; lastModified: number; restart: boolean;prefixHash?:string }
+    input: { taskId: string; size: number; lastModified: number; restart: boolean; prefixHash?: string }
     output: SftpUploadBeginResponse
   }
   'sftp.pauseTransfer': { input: { taskId: string }; output: TransferTask }
@@ -295,48 +310,39 @@ export interface DomainOperations {
     input: { uploadId: string; data: Uint8Array<ArrayBufferLike>; sequence: number }
     output: void
   }
+  /** 接受后台提交；以任务 completed/failed 事件或 listTransfers 查询最终结果。 */
   'sftp.uploadFinish': { input: { uploadId: string }; output: SftpUploadResponse }
 }
 
 export const reservedOperations = [
+  'account.requestRegistrationCode',
+  'account.verifyRegistrationCode',
+  'account.recoveryAvailable',
+  'account.changePassword',
   'account.login',
   'account.logout',
   'account.me',
+  'account.updateProfile',
   'account.register',
   'account.requestPasswordReset',
   'account.resetPassword',
-  'account.sendVerificationEmail',
   'account.setSyncEnabled',
   'account.status',
-  'account.verifyEmail',
-  'backup.applyRestore',
   'backup.backupNow',
-  'backup.cloudVersions',
   'backup.createProvider',
   'backup.deleteProvider',
-  'backup.deleteVersion',
-  'backup.events',
   'backup.export',
   'backup.getSettings',
   'backup.import',
   'backup.oauthUrl',
+  'backup.selectDirectory',
   'backup.pickFile',
   'backup.preview',
-  'backup.previewCloud',
-  'backup.previewLegacyAccount',
-  'backup.previewSafety',
-  'backup.previewVersion',
-  'backup.push',
-  'backup.restoreVersion',
-  'backup.revealPassword',
-  'backup.safetyVersions',
   'backup.status',
-  'backup.submitLatest',
   'backup.targets',
   'backup.testProvider',
   'backup.updateProvider',
   'backup.updateSettings',
-  'backup.versions',
   'document.exportText',
   'document.pick',
   'document.readText',
@@ -359,7 +365,8 @@ export const reservedOperations = [
   'profile.testNew',
   'profile.update',
   'serverDetail.getInfo',
-  'serverDetail.getMetrics',
+  'serverDetail.getSummary',
+  'serverDetail.getMetricDetail',
   'session.attach',
   'session.authRespond',
   'session.close',
@@ -399,6 +406,8 @@ export const reservedOperations = [
   'sftp.retryTransfer',
   'sftp.stat',
   'sftp.transfer',
+  'sftp.getTransferConflicts',
+  'sftp.resolveTransferConflicts',
   'sftp.tree',
   'sftp.uploadBegin',
   'sftp.uploadCheckpoint',
@@ -410,13 +419,13 @@ export const reservedOperations = [
   'snippet.list',
   'snippet.update',
   'sync.bootstrap',
-  'sync.changePassword',
   'sync.conflicts',
+  'sync.revealConflictCredentials',
   'sync.now',
   'sync.preview',
   'sync.resolveConflict',
+  'sync.resolveConflicts',
   'sync.status',
-  'sync.unlock',
   'tunnel.delete',
   'tunnel.list',
   'tunnel.save',

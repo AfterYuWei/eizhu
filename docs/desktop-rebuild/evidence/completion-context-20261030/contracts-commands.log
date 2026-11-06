@@ -1,0 +1,14 @@
+✔ completion contexts remain typed, bounded and reject control characters or shell programs (10.08244ms)
+✔ SSH contract rejects arbitrary completion programs, unsafe listeners and invalid input (3.92448ms)
+✔ connection snapshots preserve a bounded diagnostic code and the actual failing stage (1.027527ms)
+✔ fixed generators quote path and namespace operands and never run package scripts (0.994445ms)
+✔ context options are fixed CLI operands, ordered for Git and safely quoted (0.312766ms)
+✔ metrics preserve CPU, memory, disk and network delta semantics (1.215009ms)
+ℹ tests 6
+ℹ suites 0
+ℹ pass 6
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 384.718699

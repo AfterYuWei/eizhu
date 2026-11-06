@@ -1,0 +1,75 @@
+
+> desktop:smoke
+> node scripts/smoke-desktop.mjs
+
+[41554:1022/155127.174517:WARNING:electron/shell/common/api/electron_api_native_image.cc:229] Argument must be a file path or a NativeImage
+EIZHU_SMOKE_STEP waiting-renderer
+EIZHU_SMOKE_APP_READY 1 true
+EIZHU_SMOKE_STEP renderer-ready
+EIZHU_SMOKE_STEP foundation-bridge-passed
+EIZHU_SMOKE_STEP stage6-updater-passed
+[41554:1022/155129.272260:INFO:CONSOLE:9838] "task queue exceeded allotted deadline by 28ms", source: eizhu://app/assets/index-DlJqqXO4.js (9838)
+EIZHU_SMOKE_STEP workspace-tabs-passed
+EIZHU_SMOKE_STEP local-bridge-passed
+EIZHU_SMOKE_STEP stage2-native-passed
+EIZHU_STAGE3_STEP peers-listening
+EIZHU_STAGE3_STEP host-key-and-utf8-passed
+EIZHU_STAGE3_STEP binary-completion-passed
+EIZHU_STAGE3_STEP details-path-completion-passed
+EIZHU_STAGE3_STEP route-key
+EIZHU_STAGE3_STEP route-keyboard-interactive
+EIZHU_STAGE3_STEP route-http
+EIZHU_STAGE3_STEP route-socks5
+EIZHU_STAGE3_STEP route-jump
+EIZHU_STAGE3_STEP tunnel-local
+EIZHU_STAGE3_STEP tunnel-dynamic
+EIZHU_STAGE3_STEP tunnel-remote
+EIZHU_STAGE3_STEP fault-injection
+EIZHU_STAGE3_STEP mfa-cancel-passed
+EIZHU_STAGE3_STEP host-reject-cancel-passed
+EIZHU_STAGE3_STEP handshake-stop-passed
+EIZHU_STAGE3_STEP proxy-rejection-passed
+EIZHU_STAGE3_STEP port-occupied-passed
+EIZHU_LOAD_PROGRESS 10 3000
+EIZHU_STAGE3_STEP cleanup
+EIZHU_SMOKE_STEP stage3-native-passed
+EIZHU_STAGE4_STEP openssh-connected
+EIZHU_STAGE4_STEP safe-save-and-file-operations
+EIZHU_STAGE4_STEP streaming-relay-archives
+[41554:1022/155151.552419:WARNING:electron/shell/common/api/electron_api_native_image.cc:229] Argument must be a file path or a NativeImage
+EIZHU_STAGE4_STEP editor-ownership-and-dirty-close
+EIZHU_STAGE4_STEP sftp-ui-captured
+EIZHU_SMOKE_STEP stage4-native-passed
+EIZHU_STAGE5_STEP password-ready
+EIZHU_STAGE5_STEP dedup-passed
+EIZHU_STAGE5_STEP submit-latest
+EIZHU_STAGE5_STEP submit-latest
+EIZHU_STAGE5_STEP submit-latest
+EIZHU_STAGE5_STEP submit-latest
+EIZHU_STAGE5_STEP submit-latest
+2026-10-22 15:52:31.504 Electron[41554:319063] TSM AdjustCapsLockLEDForKeyTransitionHandling - _ISSetPhysicalKeyboardCapsLockLED Inhibit
+eizhu initialization failed; existing data retained
+AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+
+false !== true
+
+    at verifyStage5 (/Users/yuwei/Desktop/Projects/yuweinfo/XControl/apps/desktop/out/main/chunks/smoke-v28UQoIj.cjs:1011:30)
+    at async runSmoke (/Users/yuwei/Desktop/Projects/yuweinfo/XControl/apps/desktop/out/main/chunks/smoke-v28UQoIj.cjs:1902:17)
+    at async start (/Users/yuwei/Desktop/Projects/yuweinfo/XControl/apps/desktop/out/main/index.cjs:1444:3) {
+  generatedMessage: true,
+  code: 'ERR_ASSERTION',
+  actual: false,
+  expected: true,
+  operator: 'strictEqual',
+  diff: 'simple'
+}
+file:///Users/yuwei/Desktop/Projects/yuweinfo/XControl/scripts/smoke-desktop.mjs:40
+    else reject(new Error(`Smoke exit ${code}`))
+                ^
+
+Error: Smoke exit 1
+    at ChildProcess.<anonymous> (file:///Users/yuwei/Desktop/Projects/yuweinfo/XControl/scripts/smoke-desktop.mjs:40:17)
+    at ChildProcess.emit (node:events:514:28)
+    at ChildProcess._handle.onexit (node:internal/child_process:324:12)
+
+Node.js v24.22.0

@@ -5,7 +5,7 @@ export type HttpResponse = { status: number; headers: Record<string, string>; bo
 export type Transport = (request: HttpRequest, signal: AbortSignal) => Promise<HttpResponse>
 export function successful(response: HttpResponse): HttpResponse {
   if (response.status === 404) fail('OBJECT_NOT_FOUND', '云端对象不存在')
-  if ([409, 412].includes(response.status)) fail('BACKUP_CONFLICT', '云端目录已变化，请刷新并预览云端版本')
+  if ([409, 412].includes(response.status)) fail('BACKUP_CONFLICT', '云存储目标已变化，请检查后重试')
   if ([401, 403].includes(response.status))
     fail('CLOUD_AUTH_REQUIRED', '云存储认证失败，请检查凭据或重新授权')
   if (response.status === 429) fail('CLOUD_RATE_LIMITED', '云存储请求过于频繁，请稍后重试')

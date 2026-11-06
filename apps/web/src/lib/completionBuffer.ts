@@ -32,8 +32,9 @@ export function isTuiCommand(input: string): boolean {
 }
 
 export function detectTuiSequence(data: string): 'enter' | 'exit' | null {
-  if (data.includes('\x1b[?1049h') || data.includes('\x1b[?1047h')) return 'enter'
-  if (data.includes('\x1b[?1049l') || data.includes('\x1b[?1047l')) return 'exit'
+  const enter = Math.max(data.lastIndexOf('\x1b[?1049h'), data.lastIndexOf('\x1b[?1047h'))
+  const exit = Math.max(data.lastIndexOf('\x1b[?1049l'), data.lastIndexOf('\x1b[?1047l'))
+  if (enter >= 0 || exit >= 0) return enter > exit ? 'enter' : 'exit'
   return null
 }
 

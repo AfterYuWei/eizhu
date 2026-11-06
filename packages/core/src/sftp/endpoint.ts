@@ -2,7 +2,7 @@ import * as fs from 'node:fs/promises'
 import { constants } from 'node:fs'
 import { posix, win32, resolve, dirname, join, sep } from 'node:path'
 import type { SFTPWrapper, Stats, FileEntry, Attributes } from 'ssh2'
-import { fail } from '@eizhu/contracts'
+import { DesktopError, fail, SFTP_TRANSFER_CHUNK_BYTES } from '@eizhu/contracts'
 import type { SftpEntry } from '@eizhu/contracts/models/sftp'
 
 export interface FileStat {
@@ -18,6 +18,16 @@ export interface FileHandle {
   write(offset: number, bytes: Uint8Array): Promise<void>
   close(): Promise<void>
   sync(): Promise<void>
+}
+// Keep 32 KiB packets for server compatibility, with at most 64 outstanding
+// requests (2 MiB) per read/write instead of a 16-request stop-and-wait window.
+const PACKET_BYTES = 32 * 1024
+async function settle<T>(requests: Promise<T>[]): Promise<T[]> {
+  const results = await Promise.allSettled(requests)
+  return results.map((result) => {
+    if (result.status === 'rejected') throw result.reason
+    return result.value
+  })
 }
 export const missing = (e: unknown) => ['ENOENT', 2].includes((e as { code?: string | number })?.code ?? '')
 export function nativePath(path: string): string {
@@ -94,7 +104,8 @@ export class FileEndpoint {
     channel?.on('error', () => undefined)
     channel?.once('close', () => {
       this.closed = true
-      for (const reject of this.pending) reject(new Error('SFTP channel closed'))
+      for (const reject of this.pending)
+        reject(new DesktopError({ code: 'CONNECTION_LOST', message: '文件连接已断开，请重新连接后手动恢复' }))
       this.pending.clear()
     })
   }
@@ -112,7 +123,7 @@ export class FileEndpoint {
       }
       const abort = (e: unknown) => finish(e)
       const timer = setTimeout(() => {
-        finish(new Error('SFTP request timeout'))
+        finish(new DesktopError({ code: 'SFTP_TIMEOUT', message: '服务器 20 秒未响应，请检查连接后手动恢复' }))
         this.channel?.destroy()
       }, 20000)
       this.pending.add(abort)
@@ -171,6 +182,10 @@ export class FileEndpoint {
     }
   }
   async list(path: string): Promise<SftpEntry[]> {
+    return (await this.listStats(path)).map((row) => entry(row.path, row.stat))
+  }
+  /** Keep READDIR attributes so recursive planning does not LSTAT every child again. */
+  async listStats(path: string): Promise<Array<{ path: string; stat: FileStat }>> {
     path = cleanPath(path)
     await this.localPolicy(path)
     if (this.local && process.platform === 'win32' && path === '/') {
@@ -178,7 +193,7 @@ export class FileEndpoint {
       for (const drive of 'ABCDEFGHIJKLMNOPQRSTUVWXYZ') {
         const p = `/${drive}:/`
         const s = await this.optional(p)
-        if (s) roots.push(entry(p, s))
+        if (s) roots.push({ path: p, stat: s })
       }
       return roots
     }
@@ -208,16 +223,16 @@ export class FileEndpoint {
             !r.filename.includes('/') &&
             !r.filename.includes('\0'),
         )
-        .map((r) => entry(posix.join(path, r.filename), convert(r.attrs)))
+        .map((r) => ({ path: posix.join(path, r.filename), stat: convert(r.attrs) }))
     }
     const dir = await fs.opendir(nativePath(path)),
-      rows: SftpEntry[] = []
+      rows: Array<{ path: string; stat: FileStat }> = []
     try {
       for await (const row of dir) {
         if (rows.length >= 10000) fail('DIRECTORY_LIMIT', '目录条目超过 10000 项，请缩小范围')
         const p = posix.join(path, row.name)
         try {
-          rows.push(entry(p, await this.stat(p)))
+          rows.push({ path: p, stat: await this.stat(p) })
         } catch (e) {
           if ((e as { error?: { code?: string } }).error?.code !== 'FORBIDDEN') throw e
         }
@@ -253,27 +268,53 @@ export class FileEndpoint {
     let closed: Promise<void> | undefined
     const handle: FileHandle = {
       read: async (offset, length) => {
-        const buffer = Buffer.alloc(Math.min(length, 512 * 1024))
+        const buffer = Buffer.alloc(Math.min(length, SFTP_TRANSFER_CHUNK_BYTES))
         let n: number
         if (channel) {
-          try {
-            n = await this.call<number>((cb) =>
-              channel.read(remote!, buffer, 0, buffer.length, offset, (e, n) => cb(e, n)),
-            )
-          } catch (e) {
-            if ((e as { code?: number }).code === 1) return Buffer.alloc(0)
-            throw e
+          const requests: Promise<number>[] = []
+          for (let start = 0; start < buffer.length; start += PACKET_BYTES) {
+            const end = Math.min(start + PACKET_BYTES, buffer.length)
+            requests.push((async () => {
+              let position = start
+              while (position < end) {
+                let count: number
+                try {
+                  count = await this.call<number>((cb) => channel.read(
+                    remote!, buffer, position, end - position, offset + position, (e, n) => cb(e, n),
+                  ))
+                } catch (e) {
+                  if ((e as { code?: number }).code === 1) break
+                  throw e
+                }
+                if (!count) break
+                position += count
+              }
+              return position - start
+            })())
+          }
+          n = 0
+          for (const count of await settle(requests)) {
+            n += count
+            if (count < PACKET_BYTES) break
           }
         } else n = (await local!.read(buffer, 0, buffer.length, offset)).bytesRead
         return buffer.subarray(0, n)
       },
       write: async (offset, bytes) => {
         const buffer = Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength)
-        if (channel)
-          await this.call<void>((cb) =>
-            channel.write(remote!, buffer, 0, buffer.length, offset, (e) => cb(e, undefined)),
-          )
-        else {
+        if (channel) {
+          for (let window = 0; window < buffer.length; window += SFTP_TRANSFER_CHUNK_BYTES) {
+            const end = Math.min(window + SFTP_TRANSFER_CHUNK_BYTES, buffer.length)
+            const requests: Promise<void>[] = []
+            for (let start = window; start < end; start += PACKET_BYTES) {
+              const length = Math.min(PACKET_BYTES, end - start)
+              requests.push(this.call<void>((cb) => channel.write(
+                remote!, buffer, start, length, offset + start, (e) => cb(e, undefined),
+              )))
+            }
+            await settle(requests)
+          }
+        } else {
           let n = 0
           while (n < buffer.length) {
             const r = await local!.write(buffer, n, buffer.length - n, offset + n)
@@ -307,6 +348,7 @@ export class FileEndpoint {
     else await fs.mkdir(nativePath(path), { mode: 0o700 })
   }
   async chmod(path: string, mode: number): Promise<void> {
+    await this.guard(path)
     if (this.channel)
       await this.call<void>((cb) => this.channel!.chmod(path, mode & 0o777, (e) => cb(e, undefined)))
     else await fs.chmod(nativePath(path), mode & 0o777)

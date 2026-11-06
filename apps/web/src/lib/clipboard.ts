@@ -1,6 +1,7 @@
 import { bridge } from './bridge'
 
 export async function writeClipboardText(text: string): Promise<void> { await bridge().clipboard.write({ text }) }
+export async function writeSensitiveClipboardText(text: string): Promise<void> { await bridge().clipboard.writeSensitive({ text, clearAfterSeconds: 30 }) }
 export async function readClipboardText(): Promise<string> { return bridge().clipboard.read() }
 
 export type ClipboardCountdown = (remainingSeconds: number, cleared: boolean) => void

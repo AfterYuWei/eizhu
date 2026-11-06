@@ -5,6 +5,37 @@ export const networkError = (
   code = 'SSH_CONNECTION_FAILED',
   message = 'SSH 连接失败，请检查网络、认证与服务器配置',
 ) => new DesktopError({ code, message })
+
+/** 仅输出已识别的原因，不把可能包含凭据的库错误原文交给界面。 */
+export function connectionError(
+  error: { code?: string; level?: string; message: string },
+  proxy = false,
+): DesktopError {
+  const prefix = proxy ? 'PROXY' : 'SSH'
+  const target = proxy ? '代理服务器' : 'SSH 服务器'
+  switch (error.code) {
+    case 'ENOTFOUND':
+    case 'EAI_AGAIN':
+      return networkError(`${prefix}_DNS_FAILED`, `无法解析${target}的域名`)
+    case 'ECONNREFUSED':
+      return networkError(`${prefix}_CONNECTION_REFUSED`, `${target}拒绝了连接，目标端口未接受请求`)
+    case 'EHOSTUNREACH':
+    case 'ENETUNREACH':
+      return networkError(`${prefix}_NETWORK_UNREACHABLE`, `当前网络无法到达${target}`)
+    case 'ETIMEDOUT':
+      return networkError(`${prefix}_TIMEOUT`, `连接${target}超时，未在限定时间内收到响应`)
+    case 'ECONNRESET':
+    case 'EPIPE':
+      return networkError(`${prefix}_CONNECTION_RESET`, `${target}在连接过程中关闭了通道`)
+  }
+  if (error.level === 'client-authentication')
+    return networkError('SSH_AUTH_FAILED', '服务器未接受当前登录凭据或认证方式')
+  if (/no matching (?:key exchange|host key|cipher|hmac|mac|compression)/i.test(error.message))
+    return networkError('SSH_NEGOTIATION_FAILED', '客户端与服务器没有共同支持的 SSH 加密算法')
+  if (error.level === 'client-timeout')
+    return networkError('SSH_TIMEOUT', 'SSH 握手超时，服务器未完成协议协商或认证')
+  return networkError(`${prefix}_CONNECTION_FAILED`, `${target}连接未完成，未能确定具体失败原因`)
+}
 export function addressBytes(host: string): Buffer {
   if (net.isIP(host) === 4) return Buffer.from([1, ...host.split('.').map(Number)])
   if (net.isIP(host) === 6) {

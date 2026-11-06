@@ -39,7 +39,7 @@ export function TerminalFind({ getTerminal, onClose }: { getTerminal: () => Term
     terminal.scrollToLine(match.row)
     setSummary(`${cursor.current + 1}/${matches.length}`)
   }
-  return <div className="absolute right-2 top-2 z-20 flex items-center gap-1 rounded-lg border bg-popover p-2 shadow-lg" role="search" aria-label="查找终端内容">
+  return <div className="absolute right-2 top-2 z-20 flex items-center gap-1 rounded-lg bg-popover p-2 shadow-lg" role="search" aria-label="查找终端内容">
     <Input autoFocus className="h-8 w-52" aria-label="查找内容" value={query} onChange={(e) => { cursor.current = -1; search(e.target.value) }} onKeyDown={(e) => {
       e.stopPropagation()
       if (e.key === 'Enter') { e.preventDefault(); search(query, !e.shiftKey) }

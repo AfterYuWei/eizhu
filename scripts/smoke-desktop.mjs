@@ -29,7 +29,7 @@ await new Promise((accept, reject) => {
   const timer = setTimeout(() => {
     child.kill()
     reject(new Error('Smoke timeout'))
-  }, 180_000 + duration)
+  }, 300_000 + duration)
   child.on('error', (error) => {
     clearTimeout(timer)
     reject(error)
@@ -54,17 +54,27 @@ assert.equal(report.monaco.typescript, true)
 assert.equal(report.monaco.json, true)
 assert.equal(report.editor, true)
 assert.equal(report.stage2.passed, true)
+assert.equal(report.accountFoundation.passed, true)
+assert.equal(report.accountClosure.passed, true)
+assert.equal(report.syncEngine.passed, true)
+assert.equal(report.syncDesktop.passed, true)
 assert.equal(report.stage3.passed, true)
+assert.equal(report.stage3.portMapping.passed, true)
+assert.equal(report.stage3.completionUi.passed, true)
+assert.equal(report.stage3.completionUi.terminalHighlighting, true)
+assert.equal(report.stage3.completionMatrix.generators, 10)
 assert.equal(report.stage3.load.passed, true)
 if (report.stage4.unavailable) console.warn('阶段 4 协议集成待验：本机缺少 OpenSSH sftp-server')
 else assert.equal(report.stage4.passed, true)
 assert.equal(report.stage5.passed, true)
 assert.equal(report.stage6.passed, true)
+assert.equal(report.workspaceTabs.passed, true)
+assert.equal(report.aiDesktop.passed, true)
 if (executableArg) assert.equal(report.packaged, true)
 const evidenceRoot = `artifacts/smoke/${process.platform}-${process.arch}`
 await mkdir(evidenceRoot, { recursive: true })
 // Keep visual evidence outside the temporary profile so CI and later reviews can retrieve it.
-for (const name of ['home-light.png', 'home-dark.png', 'editor-empty.png']) {
+for (const name of ['home-light.png', 'home-dark.png', 'editor-empty.png', ...report.aiDesktop.screenshots, ...report.workspaceTabs.screenshots, ...report.accountClosure.screenshots, ...report.syncDesktop.screenshots, ...report.stage3.completionUi.screenshots, ...report.stage3.portMapping.screenshots]) {
   assert.ok(report.screenshots.includes(name), `Missing screenshot: ${name}`)
   await copyFile(join(root, name), join(evidenceRoot, name))
 }
@@ -72,7 +82,7 @@ if (report.stage5.passed)
   await copyFile(join(root, 'stage5-backup.png'), join(evidenceRoot, 'stage5-backup.png'))
 await copyFile(join(root, 'stage6-update.png'), join(evidenceRoot, 'stage6-update.png'))
 if (report.stage4.passed)
-  for (const name of ['stage4-editor.png', 'stage4-sftp.png'])
+  for (const name of ['stage4-editor.png', 'stage4-sftp.png', ...report.stage4.editorLayout.screenshots])
     await copyFile(join(root, name), join(evidenceRoot, name))
 await writeFile(
   `artifacts/smoke/${process.platform}-${process.arch}.json`,

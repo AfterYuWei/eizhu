@@ -1,12 +1,12 @@
+import { Loading } from '@/components/ui/loading'
 import { EditorMergeDialog } from './EditorMergeDialog'
 import { EditorSaveAsDialog } from './EditorSaveAsDialog'
 import { isEditorDirty as isDirty,saveBeforeEditorClose,type EditorCloseRequest } from '@/lib/editorCloseGuard'
-import { useCallback,useEffect,useState } from 'react'
+import { useCallback,useEffect,useState,useRef } from 'react'
 import { listen } from '@/lib/bridge'
 import { bridge,desktopBootstrap } from '@/lib/bridge'
 import { FileText } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Skeleton } from '@/components/ui/skeleton'
 import { toast } from 'sonner'
 import {
 AlertDialog,AlertDialogAction,AlertDialogCancel,AlertDialogContent,
@@ -21,11 +21,11 @@ import { CodeEditor } from './CodeEditor'
 import { EditorToolbar } from './EditorToolbar'
 import { EditorStatusBar } from './EditorStatusBar'
 import { EditorTabs } from './EditorTabs'
+import { cn } from '@/lib/utils'
 
 
 type PendingClose = EditorCloseRequest
 
-const SKELETON_WIDTHS = [52, 74, 43, 81, 61, 36, 69, 48, 86, 57, 72, 39, 64, 78, 45, 83, 55, 68]
 
 /** Standalone desktop editor webview with its own multi-file tab strip. */
 export function EditorWindowPage() {
@@ -40,6 +40,8 @@ export function EditorWindowPage() {
   const saveFile = useEditorStore((state) => state.saveFile)
   const reloadFile = useEditorStore((state) => state.reloadFile)
   const [pendingClose, setPendingClose] = useState<PendingClose | null>(null)
+  const [accountBusy, setAccountBusy] = useState(false)
+  const accountTransition = useRef<string | null>(null)
   const [saveAsId, setSaveAsId] = useState<string | null>(null)
   const [reloadId, setReloadId] = useState<string | null>(null)
   const [closingBusy, setClosingBusy] = useState(false)
@@ -70,6 +72,7 @@ export function EditorWindowPage() {
     let unlistenOpen: (() => void) | undefined
     let unlistenTransition: (() => void) | undefined
     let unlistenAppClose: (() => void) | undefined
+    let unlistenAccount: (() => void) | undefined
 
     void Promise.all([
       listen('eizhu-editor-open-file', ({ payload }) => {
@@ -78,18 +81,28 @@ export function EditorWindowPage() {
       listen('eizhu-app-close-request', handleAppCloseRequest),
       listen('eizhu-editor-transition', ({ payload }) => {
         if (useEditorStore.getState().tabs.some(isDirty)) setPendingClose({ kind: 'workspace', requestId: payload.requestId })
-        else void bridge().editor.resolveTransition( { requestId: payload.requestId, accepted: true }).catch((e) => toast.error(String(e)))
+        else {
+          if (accountTransition.current !== null) setAccountBusy(true)
+          void bridge().editor.resolveTransition( { requestId: payload.requestId, accepted: true }).catch((e) => { setAccountBusy(false); toast.error(String(e)) })
+        }
       }),
-    ]).then(([stopOpen, stopAppClose, stopTransition]) => {
+      listen('eizhu-account-transition', ({ payload }) => {
+        if (payload.phase === 'confirming') accountTransition.current = payload.requestId
+        else if (payload.phase === 'pending') { accountTransition.current = payload.requestId; setAccountBusy(true) }
+        else if (accountTransition.current === null || accountTransition.current === payload.requestId) { accountTransition.current = null; setAccountBusy(false) }
+      }),
+    ]).then(([stopOpen, stopAppClose, stopTransition, stopAccount]) => {
       if (disposed) {
         stopOpen()
         stopAppClose()
         stopTransition()
+        stopAccount()
         return
       }
       unlistenTransition = stopTransition
       unlistenOpen = stopOpen
       unlistenAppClose = stopAppClose
+      unlistenAccount = stopAccount
       return desktopBootstrap()?.window === 'editor' ? bridge().editor.ready() : undefined
     }).catch((error: unknown) => {
       const message = error instanceof Error ? error.message : String(error)
@@ -100,6 +113,7 @@ export function EditorWindowPage() {
       disposed = true
       unlistenOpen?.()
       unlistenAppClose?.()
+      unlistenAccount?.()
       unlistenTransition?.()
     }
   }, [handleAppCloseRequest, openFile])
@@ -167,7 +181,10 @@ export function EditorWindowPage() {
     const request = pendingClose
     if (!request) return
     if (request.kind === 'workspace') {
-      void bridge().editor.resolveTransition( { requestId: request.requestId, accepted: true }).catch((e) => toast.error(String(e)))
+      if (accountTransition.current !== null) setAccountBusy(true)
+      void bridge().editor.resolveTransition( { requestId: request.requestId, accepted: true }).then(() => {
+        setPendingClose((current) => current?.kind === 'workspace' && current.requestId === request.requestId ? null : current)
+      }).catch((e) => { setAccountBusy(false); toast.error(String(e)) })
       return
     }
     if (request.kind === 'application') {
@@ -194,7 +211,9 @@ export function EditorWindowPage() {
         setPendingClose(null)
         await closeFileTab(request.tabId)
       } else if (request.kind === 'workspace') {
+        if (accountTransition.current !== null) setAccountBusy(true)
         await bridge().editor.resolveTransition( { requestId: request.requestId, accepted: true })
+        setPendingClose(null)
       } else if (request.kind === 'application') {
         await resolveAppClose(true, request.requestId)
       } else {
@@ -232,11 +251,24 @@ export function EditorWindowPage() {
   return (
     <div className="editor-window" role="application" aria-label="文件编辑器">
       <header
-        className={`eizhu-header titlebar editor-window-header ${desktop ? 'is-desktop' : ''} ${mac ? 'is-mac' : ''}`}
+        className={cn('editor-titlebar', desktop && 'is-desktop', mac && desktop && 'is-mac')}
+        data-eizhu-drag-region={desktop ? '' : undefined}
+        aria-label="编辑器窗口栏"
       >
-        <div className="editor-window-drag-region" data-eizhu-drag-region={desktop ? '' : undefined}>
-          <span>eizhu · 文件编辑器</span>
-        </div>
+        <EditorToolbar
+          path={activeTab?.path ?? null}
+          dirty={activeDirty}
+          saving={activeTab?.saving ?? false}
+          readOnly={activeTab?.readOnly ?? false}
+          loading={activeTab?.loading ?? false}
+          conflict={activeTab?.conflict ?? false}
+          hasSession={!!activeTab?.sessionId}
+          onSave={() => { if (activeTab) void saveFile(activeTab.id) }}
+          onCompare={activeTab ? () => void useEditorStore.getState().compareFile(activeTab.id) : undefined}
+          onSaveAs={activeTab ? () => setSaveAsId(activeTab.id) : undefined}
+          onReload={() => { if (activeTab) { if (isDirty(activeTab)) setReloadId(activeTab.id); else void reloadFile(activeTab.id) } }}
+          onClose={!desktop ? requestCloseWindow : undefined}
+        />
         {showControls && (
           <WindowControls
             maximized={maximized}
@@ -244,6 +276,7 @@ export function EditorWindowPage() {
             onToggleMaximize={toggleMaximize}
             onClose={requestCloseWindow}
             closeLabel="关闭编辑器窗口"
+            className="editor-window-controls"
           />
         )}
       </header>
@@ -252,40 +285,17 @@ export function EditorWindowPage() {
         {activeTab ? (
           <>
             <EditorTabs tabs={tabItems} onSelect={setActiveTab} onClose={requestCloseTab} />
-            <EditorToolbar
-              path={activeTab.path}
-              dirty={activeDirty}
-              saving={activeTab.saving}
-              readOnly={activeTab.readOnly}
-              loading={activeTab.loading}
-              conflict={activeTab.conflict}
-              hasSession={!!activeTab.sessionId}
-              onSave={() => void saveFile(activeTab.id)}
-              onCompare={() => void useEditorStore.getState().compareFile(activeTab.id)}
-              onSaveAs={() => setSaveAsId(activeTab.id)}
-              onReload={() => { if (isDirty(activeTab)) setReloadId(activeTab.id); else void reloadFile(activeTab.id) }}
-              onClose={requestCloseWindow}
-            />
             <div className="editor-body">
               {activeTab.loading ? (
-                <div className="editor-loading">
-                  <div className="editor-skeleton">
-                    {SKELETON_WIDTHS.map((width, index) => (
-                      <div key={index} className="editor-skel-line">
-                        <Skeleton className="editor-skel-gutter" />
-                        <Skeleton className="editor-skel-code" style={{ width: `${width}%` }} />
-                      </div>
-                    ))}
-                  </div>
-                </div>
+                <Loading />
               ) : (
                 <CodeEditor
                   content={activeTab.content}
                   language={activeTab.language}
-                  readOnly={activeTab.readOnly}
+                  readOnly={activeTab.readOnly || accountBusy}
                   loading={activeTab.loading}
-                  onChange={(value) => setContent(activeTab.id, value)}
-                  onSave={() => void saveFile(activeTab.id)}
+                  onChange={(value) => { if (!accountBusy) setContent(activeTab.id, value) }}
+                  onSave={() => { if (!accountBusy) void saveFile(activeTab.id) }}
                 />
               )}
             </div>
@@ -324,7 +334,7 @@ export function EditorWindowPage() {
           <AlertDialogFooter>
             <AlertDialogCancel disabled={closingBusy}>继续编辑</AlertDialogCancel>
             <AlertDialogAction
-              className="border bg-background text-foreground hover:bg-accent"
+              className="bg-background text-foreground hover:bg-accent"
               disabled={closingBusy}
               onClick={(event) => {
                 event.preventDefault()

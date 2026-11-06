@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Dialog,DialogContent,DialogHeader,DialogTitle,DialogFooter,} from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { InlineError } from '@/components/ui/inline-error';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select,SelectContent,SelectItem,SelectTrigger,SelectValue } from '@/components/ui/select';
@@ -89,18 +90,17 @@ export function GroupForm({ open, onOpenChange, group, defaultParentId }: GroupF
               {GROUP_ICONS.map((def) => {
             const Selected = def.Icon;
             const active = (icon || 'folder') === def.key;
-            return (<Button key={def.key} type="button" variant="ghost" size="icon-sm" title={def.label} onClick={() => setIcon(def.key)} className={`flex h-8 w-8 items-center justify-center rounded-md border transition-colors ${active
-                    ? 'border-primary bg-primary/10 text-primary'
-                    : 'border-input text-muted-foreground hover:bg-accent hover:text-accent-foreground'}`} aria-label={`选择图标 ${def.label}`} aria-pressed={active}>
+            return (<Button key={def.key} type="button" variant="ghost" size="icon-sm" title={def.label} onClick={() => setIcon(def.key)} className={`flex h-8 w-8 items-center justify-center rounded-md border-0 transition-colors ${active
+                    ? 'bg-primary/10 text-primary'
+                    : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'}`} aria-label={`选择图标 ${def.label}`} aria-pressed={active}>
                     <Selected size={15}/>
                   </Button>);
         })}
             </div>
           </div>
 
-          {error && <div className="text-sm text-destructive">{error}</div>}
-
-          <DialogFooter>
+          <DialogFooter className="flex-row items-center gap-2">
+            <InlineError message={error} className="flex-1"/>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               取消
             </Button>

@@ -1,0 +1,12 @@
+{
+  "passed": true,
+  "synthetic": true,
+  "themes": [
+    "light",
+    "dark"
+  ],
+  "largeFontNarrow": true,
+  "deleteTextColor": "rgb(239, 68, 68)",
+  "revealOnDemand": true,
+  "clearedOnSwitch": true
+}

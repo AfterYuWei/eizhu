@@ -1,3 +1,4 @@
+/* eslint-disable no-control-regex -- Terminal/protocol boundaries handle control bytes explicitly. */
 import type { SessionMessage } from '@eizhu/contracts/models/sessionMessage'
 export interface BinaryPort {
   postMessage(value: unknown): void
@@ -13,6 +14,7 @@ export class TerminalStream {
   private chunks: Buffer[] = []
   private size = 0
   private end = 0
+  private discardedLines = 0
   private sent = 0
   private acked = 0
   private port?: BinaryPort
@@ -30,15 +32,38 @@ export class TerminalStream {
       const excess = this.size - CAPACITY,
         first = this.chunks[0]
       if (first.length <= excess) {
+        for (const byte of first) if (byte === 10) this.discardedLines++
         this.chunks.shift()
         this.size -= first.length
       } else {
+        for (const byte of first.subarray(0, excess)) if (byte === 10) this.discardedLines++
         this.chunks[0] = Buffer.from(first.subarray(excess))
         this.size -= excess
       }
     }
     if (this.port && this.end - this.acked >= CAPACITY - CREDIT) this.flow(true)
     this.schedule()
+  }
+  context(startLine: number | undefined, maxLines: number) {
+    // This is the bounded terminal output transcript, never renderer-provided text.
+    const lines = Buffer.concat(this.chunks)
+      .toString('utf8')
+      .replace(/\x1b\][^\x07]*(?:\x07|\x1b\\)/g, '')
+      .replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, '')
+      .replace(/\r/g, '')
+      .split('\n')
+    const totalLines = this.discardedLines + lines.length
+    const start = Math.min(totalLines, Math.max(this.discardedLines, startLine ?? totalLines - maxLines))
+    const selected = lines
+      .slice(start - this.discardedLines, start - this.discardedLines + maxLines)
+      .join('\n')
+    return {
+      content: selected.slice(0, 131072),
+      startLine: start,
+      endLine: Math.min(totalLines, start + maxLines),
+      totalLines,
+      truncated: this.discardedLines > 0 || selected.length > 131072,
+    }
   }
   event(message: SessionMessage): void {
     this.controls = this.controls.filter((m) => m.type !== message.type)

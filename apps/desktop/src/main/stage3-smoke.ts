@@ -6,6 +6,9 @@ import type { BrowserWindow } from 'electron'
 import type { RuntimeHost } from './runtime-host.ts'
 import { SocketReader, proxyHandshake } from '@eizhu/core/ssh/network'
 import { measureDesktopLoad } from './load-smoke.ts'
+import { verifyCompletionUi } from './completion-ui-smoke.ts'
+import { verifyPortMapping } from './port-mapping-smoke.ts'
+import type { ConnectionStatePayload } from '@eizhu/contracts/models/sessionMessage'
 
 /** Synthetic loopback peers only. Runs in the actual packaged Electron process tree. */
 export async function verifyStage3(window: BrowserWindow, runtime: RuntimeHost, root: string) {
@@ -18,12 +21,13 @@ export async function verifyStage3(window: BrowserWindow, runtime: RuntimeHost, 
   const inputs: string[] = [],
     shells = new Set<ServerChannel>(),
     commands: string[] = [],
+    directories: string[] = [],
     sizes: number[] = []
   let loadInProgress = false
   const fixtureInfo =
     '===HOSTNAME===\nstage3-synthetic\n===OS===\nDebian GNU/Linux\n===OS_ID===\ndebian\n===KERNEL===\n6.1\n===ARCH===\nx86_64\n===CPUS===\n2\n===CPUMHZ===\n2400\n'
   const fixtureMetrics =
-    '===CPU1===\nT 10 0 0 90 0 0 0 0\n===CPU2===\nT 30 0 0 170 0 0 0 0\n===NET1===\neth0 1 2\n===NET2===\neth0 101 202\n===STATIC===\nMT 1000\nMU 400\nDU 100\nDT 200\n'
+    '===TIME1===\n100\n===TIME2===\n101\n===CPU1===\nT 10 0 0 90 0 0 0 0\nC0 10 0 0 90 0 0 0 0\n===CPU2===\nT 30 0 0 170 0 0 0 0\nC0 30 0 0 170 0 0 0 0\n===NET1===\neth0 1 2\n===NET2===\neth0 101 202\n===STATIC===\nMT 1000\nMU 400\nDU 100\nDT 200\nCM 2400\n===PROCESSES===\nMP\t2\t40\tapp\n===VOLUMES===\n/dev/sda 200 100 100 50% /\n'
   const tracked = (socket: net.Socket) => {
     sockets.add(socket)
     socket.on('error', () => undefined)
@@ -68,17 +72,33 @@ export async function verifyStage3(window: BrowserWindow, runtime: RuntimeHost, 
         })
         session.on('shell', (accept) => {
           const stream = accept()
+          let tracking = false
           shells.add(stream)
           stream.on('error', () => undefined)
           stream.once('close', () => shells.delete(stream))
-          const greeting = Buffer.from('阶段三 🧪 终端\r\n\x1b]7;file://synthetic/tmp/stage3\x07')
+          const greeting = Buffer.from('阶段三 🧪 终端\r\n')
           stream.write(greeting.subarray(0, 2))
           setTimeout(() => stream.write(greeting.subarray(2, 9)), 40)
           setTimeout(() => stream.write(greeting.subarray(9)), 80)
           stream.on('data', (b: Buffer) => {
+            if (b.toString().includes('__eizhu_osc7')) {
+              tracking = true
+              // Model a plain Bash login that emits OSC 7 only after the session hook is installed.
+              const reply = Buffer.from(`${b.toString()}\r\n\x1b]7;file://synthetic/tmp/stage3\x07\x1b]1337;eizhuOsc7Ready\x07user@synthetic$ `)
+              setTimeout(() => stream.write(reply.subarray(0, 17)), 100)
+              setTimeout(() => stream.write(reply.subarray(17)), 140)
+              return
+            }
             inputs.push(b.toString('utf8'))
             if (loadInProgress && inputs.length > 1000) inputs.splice(0, inputs.length - 1000)
-            if (b.toString() === 'burst') stream.write('B'.repeat(262144) + '\r\nEND_BURST\r\n')
+            if (b.toString() === '\x03') stream.write('^C\r\nuser@synthetic$ ')
+            else if (tracking && b.toString() === 'cd /tmp/stage3-project\r') stream.write('\x1b]7;file://synthetic/tmp/stage3-project\x07')
+            else if (b.toString() === 'terminal-colors-smoke\r') {
+              const prompt = '\x1b]133;A\x07user@synthetic$ \x1b]133;B\x07'
+              stream.write('\x1b[2J\x1b[H' + prompt + 'tail -n 3 app.log\r\n\x1b]133;C\x07'
+                + 'INFO 服务启动\r\nWARN 请求耗时较长\r\nERROR 数据库连接失败\r\n' + prompt + 'echo 中文')
+            }
+            else if (b.toString() === 'burst') stream.write('B'.repeat(262144) + '\r\nEND_BURST\r\n')
             else stream.write(b)
           })
         })
@@ -87,12 +107,30 @@ export async function verifyStage3(window: BrowserWindow, runtime: RuntimeHost, 
           if (loadInProgress && commands.length > 1000) commands.splice(0, commands.length - 1000)
           const stream = accept()
           stream.on('error', () => undefined)
+          const completionOutput = info.command.includes("git -C '/other-repo'")
+            ? info.command.endsWith(' remote') ? 'other-origin\n' : 'feature/other\n'
+            : info.command.includes("docker --host='tcp://qa.invalid:2375'") ? 'qa123\tqa-web\n'
+            : info.command.includes("kubectl --kubeconfig='/tmp/qa-config'")
+              ? info.command.includes('get-contexts') ? 'qa-context\n' : 'pod/config-web\n'
+            : info.command.includes('systemctl --user ')
+              ? info.command.includes('--state=failed') ? 'broken-user.service\n' : 'user-app.service\n'
+            : info.command.includes('git remote') ? 'origin\nupstream\n'
+            : info.command.includes('docker ps') ? 'abc123\tweb\ndef456\tworker\n'
+            : info.command.includes('kubectl config get-contexts') ? 'dev\nprod\n'
+            : info.command.includes('kubectl ') ? 'pod/web\npod/worker\n'
+            : info.command.includes('--state=failed') ? 'broken.service\n'
+            : info.command.includes('--state=active') ? 'app.service\n'
+            : info.command.includes('systemctl ') ? 'app.service\nworker.service\n'
+            : info.command.includes('node -e') ? 'dev\nbuild:qa\n'
+            : 'main\nfeature/stage3\n'
           stream.write(
-            info.command.includes('===CPU1===')
+            info.command === 'printf \'%s\\n\' "$SHELL"'
+              ? '/bin/bash\n'
+              : (info.command.includes('===CPU1===') || info.command.includes('===NET1===') || info.command.includes('===STATIC==='))
               ? fixtureMetrics
               : info.command.includes('===HOSTNAME===')
                 ? fixtureInfo
-                : 'main\nfeature/stage3\n',
+                : completionOutput,
           )
           stream.exit(0)
           stream.end()
@@ -109,7 +147,8 @@ export async function verifyStage3(window: BrowserWindow, runtime: RuntimeHost, 
               },
             ]),
           )
-          sftp.on('OPENDIR', (id: number) => {
+          sftp.on('OPENDIR', (id: number, path: string) => {
+            directories.push(path)
             listed = false
             sftp.handle(id, Buffer.from('directory'))
           })
@@ -280,6 +319,15 @@ export async function verifyStage3(window: BrowserWindow, runtime: RuntimeHost, 
       (value) => value.includes('阶段三 🧪 终端'),
     )
     assert.equal(await js('return window.__stage3.wrong'), true)
+    const readySnapshot = (
+      await call<Array<{ type: string; payload: ConnectionStatePayload }>>('session.attach', { id })
+    ).find((message) => message.type === 'connection_state')!.payload
+    const operations = readySnapshot.logs!.map((log) => log.stage)
+    assert.ok(operations.indexOf('establishing_ssh') < operations.indexOf('host_key'))
+    assert.ok(operations.indexOf('host_key') < operations.indexOf('ssh_auth'))
+    assert.ok(operations.indexOf('ssh_auth') < operations.indexOf('starting_shell'))
+    assert.equal(operations.at(-1), 'ready')
+    assert.ok(!JSON.stringify(readySnapshot).includes('synthetic-password'))
     const current = await js<{ host_key_request_id: string; host_key_fingerprint: string }>(
       'return window.__stage3.states.find(s=>s.waiting_for_host_key)',
     )
@@ -315,12 +363,30 @@ export async function verifyStage3(window: BrowserWindow, runtime: RuntimeHost, 
         values.some((v) => v.type === 'complete_response' && v.payload?.request_id === 'stage3-completion'),
     )
     assert.ok(commands.some((c) => c.startsWith("cd -- '/tmp/stage3 a'\\''b'")))
+    assert.ok(!(await js<string>('return window.__stage3.output')).includes('__eizhu_osc7'))
+    await call('session.input', { id, data: 'cd /tmp/stage3-project\r' })
+    await wait(
+      () => js<Array<{ type: string; payload?: { path?: string } }>>('return window.__stage3.messages'),
+      (values) => values.some((v) => v.type === 'cwd' && v.payload?.path === '/tmp/stage3-project'),
+    )
+    assert.deepEqual(
+      (await call<Array<{ type: string; payload?: unknown }>>('session.attach', { id })).find((message) => message.type === 'cwd'),
+      { type: 'cwd', payload: { path: '/tmp/stage3-project' } },
+    )
+    await call('session.complete', { id, requestId: 'cwd-paths', generatorId: 'paths', params: { directory: '.' } })
+    assert.ok(directories.includes('/tmp/stage3-project'))
+    await call('session.complete', { id, requestId: 'cwd-git', generatorId: 'git-branches', params: {} })
+    assert.ok(commands.some((c) => c.startsWith("cd -- '/tmp/stage3-project' && git ")))
     step('binary-completion-passed')
     const detail = await call<{ session_id: string }>('serverDetail.create', { profileId: direct })
     const info = await call<{ hostname: string }>('serverDetail.getInfo', { sessionId: detail.session_id }),
-      metrics = await call<{ cpu: number }>('serverDetail.getMetrics', { sessionId: detail.session_id })
+      metrics = await call<{ cpu: number }>('serverDetail.getSummary', { sessionId: id })
     assert.equal(info.hostname, 'stage3-synthetic')
     assert.equal(metrics.cpu, 20)
+    for (const kind of ['cpu', 'memory', 'disk', 'network'] as const) {
+      const selected = await call<{ kind: string }>('serverDetail.getMetricDetail', { sessionId: id, kind })
+      assert.equal(selected.kind, kind)
+    }
     const files = await call<{ entries: Array<{ name: string }> }>('serverDetail.listFiles', {
       sessionId: detail.session_id,
       path: '/tmp/stage3',
@@ -342,6 +408,37 @@ export async function verifyStage3(window: BrowserWindow, runtime: RuntimeHost, 
       (values) => values.some((v) => v.payload?.request_id === 'paths' && v.payload.candidates?.length === 2),
     )
     step('details-path-completion-passed')
+    const completionMatrix = [
+      { generatorId: 'git-branches', params: {}, expected: 'feature/stage3' },
+      { generatorId: 'git-remotes', params: {}, expected: 'origin' },
+      { generatorId: 'docker-containers', params: { all: false }, expected: 'abc123\tweb' },
+      { generatorId: 'docker-containers', params: { all: true }, expected: 'def456\tworker' },
+      { generatorId: 'kubectl-resources', params: { namespace: 'qa', resource: 'pods' }, expected: 'pod/web' },
+      { generatorId: 'kubectl-contexts', params: {}, expected: 'prod' },
+      { generatorId: 'systemd-service-units', params: {}, expected: 'worker.service' },
+      { generatorId: 'systemd-active-units', params: {}, expected: 'app.service' },
+      { generatorId: 'systemd-failed-units', params: {}, expected: 'broken.service' },
+      { generatorId: 'npm-scripts', params: {}, expected: 'build:qa' },
+      { generatorId: 'git-branches', params: { gitDirectories: ['/other-repo'] }, expected: 'feature/other' },
+      { generatorId: 'git-remotes', params: { gitDirectories: ['/other-repo'] }, expected: 'other-origin' },
+      { generatorId: 'docker-containers', params: { dockerHost: 'tcp://qa.invalid:2375' }, expected: 'qa123\tqa-web' },
+      { generatorId: 'kubectl-resources', params: { kubeconfig: '/tmp/qa-config', resource: 'pods' }, expected: 'pod/config-web' },
+      { generatorId: 'kubectl-contexts', params: { kubeconfig: '/tmp/qa-config' }, expected: 'qa-context' },
+      { generatorId: 'systemd-service-units', params: { systemdUser: true }, expected: 'user-app.service' },
+      { generatorId: 'systemd-active-units', params: { systemdUser: true }, expected: 'user-app.service' },
+      { generatorId: 'systemd-failed-units', params: { systemdUser: true }, expected: 'broken-user.service' },
+    ]
+    for (const [index, testCase] of completionMatrix.entries()) {
+      const requestId = `matrix-${index}`
+      await js('return window.eizhu.session.complete(d)', { id, requestId, generatorId: testCase.generatorId, params: testCase.params, cwd: '/tmp/stage3-project' })
+      await wait(
+        () => js<Array<{ payload?: { request_id?: string; output?: string; exit_code?: number; error?: string } }>>('return window.__stage3.messages'),
+        (values) => values.some((v) => v.payload?.request_id === requestId && v.payload.exit_code === 0 && !v.payload.error && v.payload.output?.split('\n').includes(testCase.expected)),
+      )
+    }
+    step('all-completion-generators-passed')
+    const completionUi = await verifyCompletionUi(window, runtime, id, root, inputs)
+    step('all-completion-ui-passed')
     await call('history.record', { profileId: direct, command: 'echo 合成历史', cwd: '/tmp' })
     assert.equal((await call<unknown[]>('history.list', { profileId: direct })).length, 1)
     await call('localState.write', {
@@ -431,6 +528,27 @@ export async function verifyStage3(window: BrowserWindow, runtime: RuntimeHost, 
       )
     }
     step('fault-injection')
+    const refused = net.createServer()
+    const refusedPort = await listen(refused)
+    await new Promise<void>((resolve) => refused.close(() => resolve()))
+    const refusedSession = await call<{ session_id: string }>('session.create', {
+      request: { profile_id: await newProfile({ port: refusedPort }) },
+    })
+    sessionIds.push(refusedSession.session_id)
+    const refusedMessages = await wait(
+      () =>
+        call<Array<{ type: string; payload: ConnectionStatePayload }>>('session.attach', {
+          id: refusedSession.session_id,
+        }),
+      (rows) =>
+        rows.some((message) => message.type === 'connection_state' && message.payload.status === 'error'),
+    )
+    const failure = refusedMessages.find((message) => message.type === 'connection_state')!.payload
+    assert.equal(failure.stage, 'establishing_ssh')
+    assert.equal(failure.error_code, 'SSH_CONNECTION_REFUSED')
+    assert.ok(!JSON.stringify(failure).includes('synthetic-password'))
+    await call('session.close', { id: refusedSession.session_id })
+    step('connection-diagnostics-passed')
     const mfa = await call<{ session_id: string }>('session.create', {
       request: { profile_id: await newProfile({ password: 'wrong-password' }) },
     })
@@ -547,6 +665,8 @@ export async function verifyStage3(window: BrowserWindow, runtime: RuntimeHost, 
     )
     await call('session.close', { id: denied.session_id })
     step('proxy-rejection-passed')
+    const portMapping = await verifyPortMapping(window, root, tunnelProfile, echoPort)
+    step('port-mapping-ui-passed')
     const busy = await call<{ id: string }>('tunnel.save', {
       config: {
         id: '',
@@ -630,12 +750,16 @@ export async function verifyStage3(window: BrowserWindow, runtime: RuntimeHost, 
       binary: { utf8: true, consumedBytes: 262144, replayedInput: false },
       hostKey: { wrongRejected: true, staleRejected: true, permanent: true },
       completion: true,
+      completionUi,
+      portMapping,
+      completionMatrix: { generators: 10, queries: completionMatrix.length + 1, transport: 'preload/main/utilityProcess/SSH/SFTP', syntheticCommands: true },
       historyPrivacy: true,
       details: true,
       tunnels: ['local', 'remote', 'dynamic'],
       portsReleased: true,
       tunnelReconnect: true,
       faults: {
+        connectionDiagnostics: true,
         hostRejectBeforeAuthentication: true,
         hostCancel: true,
         mfaCancel: true,

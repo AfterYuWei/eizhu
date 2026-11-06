@@ -13,6 +13,7 @@ type Driver = Pick<
   | 'autoInstallOnAppQuit'
   | 'allowDowngrade'
   | 'allowPrerelease'
+  | 'channel'
   | 'disableDifferentialDownload'
   | 'logger'
   | 'on'
@@ -28,6 +29,7 @@ export class Updates {
   constructor(privateOptions: {
     driver: Driver
     feeds: Partial<Record<UpdateChannel, string>>
+    repository?: { owner: string; repo: string }
     supported: boolean
     progress: (progress: UpdateProgress) => void
     install: (action: () => void) => Promise<boolean>
@@ -59,12 +61,16 @@ export class Updates {
   private options: {
     driver: Driver
     feeds: Partial<Record<UpdateChannel, string>>
+    repository?: { owner: string; repo: string }
     supported: boolean
     progress: (progress: UpdateProgress) => void
     install: (action: () => void) => Promise<boolean>
   }
   get available(): boolean {
-    return this.options.supported && Object.keys(this.options.feeds).length > 0
+    return (
+      this.options.supported &&
+      (Boolean(this.options.repository) || Object.keys(this.options.feeds).length > 0)
+    )
   }
   invalidate(): void {
     if (this.busy) fail('UPDATE_BUSY', '请等待更新操作完成')
@@ -80,20 +86,30 @@ export class Updates {
     this.invalidate()
     if (!this.options.supported) fail('UPDATE_UNSUPPORTED', '当前运行方式不支持应用内更新，请手动安装新版本')
     const url = this.options.feeds[channel]
-    if (!url) fail('UPDATE_NOT_CONFIGURED', '此通道尚未配置独立 Electron 更新源，请手动安装')
+    const repository = this.options.repository
+    if (!url && !repository) fail('UPDATE_NOT_CONFIGURED', '此通道尚未配置独立 Electron 更新源，请手动安装')
     this.busy = true
     try {
-      this.options.driver.allowPrerelease = channel === 'test'
-      this.options.driver.setFeedURL({
-        provider: 'generic',
-        url,
-        channel: 'latest',
-        useMultipleRangeRequest: false,
-      })
-      const result = await this.options.driver.checkForUpdates()
+      const driver = this.options.driver
+      // GitHub's custom channel must be explicit even when a stable build opts into test.
+      // Assigning channel enables downgrades in electron-updater, so reset that flag afterwards.
+      driver.channel = url || channel === 'stable' ? 'latest' : 'test'
+      driver.allowDowngrade = false
+      driver.allowPrerelease = channel === 'test'
+      driver.setFeedURL(
+        url
+          ? {
+              provider: 'generic',
+              url,
+              channel: 'latest',
+              useMultipleRangeRequest: false,
+            }
+          : { provider: 'github', ...repository! },
+      )
+      const result = await driver.checkForUpdates()
       if (!result) fail('UPDATE_UNAVAILABLE', '当前安装无法检查更新，请手动安装')
-      if (!result.isUpdateAvailable) return { candidate: null }
       validateUpdateInfo(result.updateInfo, channel)
+      if (!result.isUpdateAvailable) return { candidate: null }
       const notes = result.updateInfo.releaseNotes
       this.candidate = {
         token: randomUUID(),

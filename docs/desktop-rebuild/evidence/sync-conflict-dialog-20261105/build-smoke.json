@@ -1,0 +1,73 @@
+{
+  "platform": "darwin",
+  "arch": "x64",
+  "packaged": false,
+  "keyMode": "restricted-file",
+  "health": {
+    "context": {
+      "runtimeId": "e259187c-7b5e-498b-943b-bc09560c420c",
+      "workspaceId": "offline",
+      "generation": 1
+    },
+    "schema": 4,
+    "workers": 2
+  },
+  "crypto": {
+    "kdf": true,
+    "crypto": true,
+    "ssh2": true
+  },
+  "syncEngine": {
+    "passed": true,
+    "synthetic": true,
+    "realBackend": false,
+    "realDualDevice": false,
+    "checks": [
+      "固定 Rust 包装、条目与墓碑向量；错误密码/身份篡改拒绝；密码轮换保留数据密钥",
+      "注册后两端使用登录缓存的同一 DEK；确认前不上传；默认预览合并离线且保留原库；第二设备应用不回声上传",
+      "冻结上传后继续编辑；旧确认只清理覆盖修订，新编辑保留并在下一批上传",
+      "提交响应丢失、重启恢复先查原请求；确认不存在后逐字节重发相同密文和 requestId",
+      "固定水位分页；双端并发编辑、删除冲突保留；选择时复核远端修订并避免覆盖新变化",
+      "不合法依赖删除保留有效图并持久化冲突；重启保留，后续合法关联修改可恢复",
+      "游标过期快照保留待同步；主密码轮换重新包装同一 DEK，旧密码无法解包",
+      "预览绑定离线及账号本地修订；整体替换携带完整集合、水位和下一 epoch 密文；其他设备核对时保留本地编辑",
+      "超限整体替换明确拒绝且不拆分；远端业务/审计/影子/冲突/游标事务中途失败整体回滚",
+      "合并工作台：逐字段/凭据/删除批量应用；失效选择拒绝；事务失败整体回滚；保留双方副本；关联删除统一校验；主机指纹仅本机且自动同步保持暂停"
+    ],
+    "devices": 2,
+    "fixedCryptoVectors": true,
+    "rememberedUnlock": true,
+    "unknownRequestRecovery": true,
+    "oldAckPreservesNewEdits": true,
+    "noRemoteEcho": true,
+    "dependencyConflicts": true,
+    "atomicCursor": true,
+    "replaceLimit": true
+  },
+  "syncDesktop": {
+    "passed": true,
+    "synthetic": true,
+    "realBackend": false,
+    "realEmail": false,
+    "rendererPasswordForm": true,
+    "previewCancelNoUpload": true,
+    "confirmedOfflineMerge": true,
+    "automaticOutbox": true,
+    "hintsNotConfirmations": true,
+    "singleSseConnection": true,
+    "sseReconnect": true,
+    "pauseReleasesSse": true,
+    "pausePreservesOutbox": true,
+    "lostHttpResponseNotReplayed": true,
+    "requestLookupRecovery": true,
+    "restartUnlockCache": true,
+    "logoutClearsUnlock": true,
+    "offlineOriginalRetained": true,
+    "screenshots": [
+      "sync-initialized-light.png",
+      "sync-unlocked-dark-narrow.png"
+    ]
+  },
+  "synthetic": true,
+  "productionService": false
+}

@@ -1,20 +1,27 @@
 import type { DomainOperations } from './domains.ts'
+import type { AiClient, AiEvent } from './ai.ts'
 import type { FoundationInput, FoundationOperation, FoundationOutput } from './foundation.ts'
 import type { SessionMessage } from './models/sessionMessage.ts'
 import type { WorkspaceStatus } from './foundation.ts'
 import type { SyncStatus } from './models/sync.ts'
 import type { TransferTask } from './models/sftp.ts'
 import type { TunnelStatus } from './models/api.ts'
+import type { SshGlobalEvent } from './ssh.ts'
 export * from './foundation.ts'
+export * from './ai.ts'
 export * from './errors.ts'
 export * from './logging.ts'
 export * from './events.ts'
+export * from './account.ts'
+export * from './sync.ts'
+export * from './sync-protocol.ts'
+export * from './workspace-transition.ts'
 export * from './update.ts'
 export * from './local.ts'
 export * from './ssh.ts'
 export * from './sftp.ts'
-export { archive, isArchiveOperation, backupSettingsSchema, providerConfigSchema, targetSchema, versionSchema, cloudIndexSchema } from './archive.ts'
-export type { ArchiveOperation, CloudIndex, CloudEntry } from './archive.ts'
+export { archive, isArchiveOperation, backupSettingsSchema, backupPreferencesSchema, providerConfigSchema, targetSchema } from './archive.ts'
+export type { ArchiveOperation } from './archive.ts'
 export { reservedOperations } from './domains.ts'
 export type { DomainOperations }
 
@@ -38,17 +45,13 @@ type FoundationClient = {
   }
 }
 export interface DesktopEvents {
+  'eizhu-ai-message': AiEvent
+  'eizhu-account-message': { workspaceGeneration: number; status: import('./account.ts').AccountStatus }
+  'eizhu-account-transition': { requestId: string; phase: 'confirming' | 'pending' | 'idle' }
   'eizhu-update-progress': import('./update.ts').UpdateProgress
   'eizhu-workspace-changed': WorkspaceStatus
-  'eizhu-sync-message': { workspaceGeneration: number; status: SyncStatus }
-  'eizhu-session-message': (
-    | SessionMessage
-    | {
-        type: 'tunnel_status' | 'tunnel_auth_closed' | 'tunnel_auth_request' | 'tunnel_host_key_request'
-        payload: unknown
-        session_id: string
-      }
-  ) & { workspaceGeneration?: number }
+  'eizhu-sync-message': { workspaceGeneration: number; status: SyncStatus; refresh?: boolean }
+  'eizhu-session-message': (SessionMessage | SshGlobalEvent) & { workspaceGeneration?: number }
   'eizhu-sftp-message': {
     type: string
     payload?: Partial<TransferTask> & { task_id?: string; session_id?: string }
@@ -66,6 +69,7 @@ export interface DesktopEvents {
 }
 export type DesktopApi = Omit<DomainClient, 'session'> &
   FoundationClient & {
+    ai: AiClient
     session: Omit<DomainClient['session'], 'subscribe'> & {
       subscribe: (input: { id: string }, callback: (message: SessionMessage) => void | Promise<void>) => Promise<string>
     }

@@ -5,6 +5,7 @@ import { useSyncStore } from '@/store/sync'
 import { SYNC_STATUS_LABELS } from '@/types/sync'
 import { DEFAULT_DESKTOP_SIDEBAR_WIDTH,DESKTOP_SIDEBAR_INSET } from '@/lib/desktopSidebar'
 import { useRef } from 'react'
+import { useAccountDialogStore } from '@/store/accountDialog'
 import { AccountIdentity } from './AccountIdentity'
 import type { SettingsTab } from '@/components/SettingsDialog'
 import { Button } from '@/components/ui/button'
@@ -20,8 +21,8 @@ export function AccountMenu({ onSettings }: { onSettings: (tab: SettingsTab) => 
   const sync = useSyncStore((s) => s.status)
   const { theme, setTheme } = useSettingsStore()
   const cloud = account?.loggedIn === true
-  const name = cloud ? account.user?.email.split('@')[0] || '云端用户' : '本地用户'
-  const openSettings = (tab: SettingsTab) => { openingSettings.current = true; onSettings(tab) }
+  const name = cloud ? account.user.username || account.user.email.split('@')[0] || '云端用户' : '本地用户'
+  const openSettings = (tab: SettingsTab) => { openingSettings.current = true; if (tab === 'account' && (!account?.loggedIn || account.sessionState === 'reauth_required')) useAccountDialogStore.getState().open('login', account?.user?.email); else onSettings(tab) }
   return <DropdownMenu>
     <DropdownMenuTrigger asChild>
       <Button variant="ghost" className="shell-account" aria-label={`${name} · ${cloud ? '云端' : '本地'}，打开账号菜单`}>
@@ -46,7 +47,7 @@ export function AccountMenu({ onSettings }: { onSettings: (tab: SettingsTab) => 
       <DropdownMenuItem onSelect={() => openSettings('sync')}><CloudSync />云同步
         {cloud && sync && <span className="ml-auto text-xs text-muted-foreground">{sync.conflictCount ? `${sync.conflictCount} 个冲突` : SYNC_STATUS_LABELS[sync.status] ?? sync.status}</span>}
       </DropdownMenuItem>
-      <DropdownMenuItem onSelect={() => openSettings('account')}><UserRound />账号<span className="ml-auto text-xs text-muted-foreground">开发中</span></DropdownMenuItem>
+      <DropdownMenuItem onSelect={() => openSettings('account')}><UserRound />账号<span className="ml-auto text-xs text-muted-foreground">{account?.loggedIn ? account.sessionState === 'reauth_required' ? '需登录' : '已登录' : '未登录'}</span></DropdownMenuItem>
       <DropdownMenuSeparator />
       <DropdownMenuItem onSelect={() => openSettings('about')}><Info />关于 eizhu</DropdownMenuItem>
     </DropdownMenuContent>

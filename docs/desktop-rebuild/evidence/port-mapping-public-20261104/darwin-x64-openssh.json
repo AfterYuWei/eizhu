@@ -1,0 +1,307 @@
+{
+  "passed": true,
+  "transport": "installed OpenSSH sshd + production TunnelListener",
+  "gatewayPorts": "clientspecified",
+  "cases": [
+    {
+      "kind": "local",
+      "bind_host": "127.0.0.1",
+      "fixed": false,
+      "publicBind": false,
+      "interfaceProbe": false,
+      "echo": true,
+      "portReleased": true,
+      "idempotentStop": true
+    },
+    {
+      "kind": "local",
+      "bind_host": "127.0.0.1",
+      "fixed": true,
+      "publicBind": false,
+      "interfaceProbe": false,
+      "echo": true,
+      "portReleased": true,
+      "idempotentStop": true
+    },
+    {
+      "kind": "local",
+      "bind_host": "::1",
+      "fixed": false,
+      "publicBind": false,
+      "interfaceProbe": false,
+      "echo": true,
+      "portReleased": true,
+      "idempotentStop": true
+    },
+    {
+      "kind": "local",
+      "bind_host": "::1",
+      "fixed": true,
+      "publicBind": false,
+      "interfaceProbe": false,
+      "echo": true,
+      "portReleased": true,
+      "idempotentStop": true
+    },
+    {
+      "kind": "local",
+      "bind_host": "localhost",
+      "fixed": false,
+      "publicBind": false,
+      "interfaceProbe": false,
+      "echo": true,
+      "portReleased": true,
+      "idempotentStop": true
+    },
+    {
+      "kind": "local",
+      "bind_host": "localhost",
+      "fixed": true,
+      "publicBind": false,
+      "interfaceProbe": false,
+      "echo": true,
+      "portReleased": true,
+      "idempotentStop": true
+    },
+    {
+      "kind": "local",
+      "bind_host": "0.0.0.0",
+      "fixed": false,
+      "publicBind": true,
+      "interfaceProbe": true,
+      "echo": true,
+      "portReleased": true,
+      "idempotentStop": true
+    },
+    {
+      "kind": "local",
+      "bind_host": "0.0.0.0",
+      "fixed": true,
+      "publicBind": true,
+      "interfaceProbe": true,
+      "echo": true,
+      "portReleased": true,
+      "idempotentStop": true
+    },
+    {
+      "kind": "local",
+      "bind_host": "::",
+      "fixed": false,
+      "publicBind": true,
+      "interfaceProbe": true,
+      "echo": true,
+      "portReleased": true,
+      "idempotentStop": true
+    },
+    {
+      "kind": "local",
+      "bind_host": "::",
+      "fixed": true,
+      "publicBind": true,
+      "interfaceProbe": true,
+      "echo": true,
+      "portReleased": true,
+      "idempotentStop": true
+    },
+    {
+      "kind": "remote",
+      "bind_host": "127.0.0.1",
+      "fixed": false,
+      "publicBind": false,
+      "interfaceProbe": false,
+      "echo": true,
+      "portReleased": true,
+      "idempotentStop": true
+    },
+    {
+      "kind": "remote",
+      "bind_host": "127.0.0.1",
+      "fixed": true,
+      "publicBind": false,
+      "interfaceProbe": false,
+      "echo": true,
+      "portReleased": true,
+      "idempotentStop": true
+    },
+    {
+      "kind": "remote",
+      "bind_host": "::1",
+      "fixed": false,
+      "publicBind": false,
+      "interfaceProbe": false,
+      "echo": true,
+      "portReleased": true,
+      "idempotentStop": true
+    },
+    {
+      "kind": "remote",
+      "bind_host": "::1",
+      "fixed": true,
+      "publicBind": false,
+      "interfaceProbe": false,
+      "echo": true,
+      "portReleased": true,
+      "idempotentStop": true
+    },
+    {
+      "kind": "remote",
+      "bind_host": "localhost",
+      "fixed": false,
+      "publicBind": false,
+      "interfaceProbe": false,
+      "echo": true,
+      "portReleased": true,
+      "idempotentStop": true
+    },
+    {
+      "kind": "remote",
+      "bind_host": "localhost",
+      "fixed": true,
+      "publicBind": false,
+      "interfaceProbe": false,
+      "echo": true,
+      "portReleased": true,
+      "idempotentStop": true
+    },
+    {
+      "kind": "remote",
+      "bind_host": "0.0.0.0",
+      "fixed": false,
+      "publicBind": true,
+      "interfaceProbe": true,
+      "echo": true,
+      "portReleased": true,
+      "idempotentStop": true
+    },
+    {
+      "kind": "remote",
+      "bind_host": "0.0.0.0",
+      "fixed": true,
+      "publicBind": true,
+      "interfaceProbe": true,
+      "echo": true,
+      "portReleased": true,
+      "idempotentStop": true
+    },
+    {
+      "kind": "remote",
+      "bind_host": "::",
+      "fixed": false,
+      "publicBind": true,
+      "interfaceProbe": true,
+      "echo": true,
+      "portReleased": true,
+      "idempotentStop": true
+    },
+    {
+      "kind": "remote",
+      "bind_host": "::",
+      "fixed": true,
+      "publicBind": true,
+      "interfaceProbe": true,
+      "echo": true,
+      "portReleased": true,
+      "idempotentStop": true
+    },
+    {
+      "kind": "dynamic",
+      "bind_host": "127.0.0.1",
+      "fixed": false,
+      "publicBind": false,
+      "interfaceProbe": false,
+      "echo": true,
+      "portReleased": true,
+      "idempotentStop": true
+    },
+    {
+      "kind": "dynamic",
+      "bind_host": "127.0.0.1",
+      "fixed": true,
+      "publicBind": false,
+      "interfaceProbe": false,
+      "echo": true,
+      "portReleased": true,
+      "idempotentStop": true
+    },
+    {
+      "kind": "dynamic",
+      "bind_host": "::1",
+      "fixed": false,
+      "publicBind": false,
+      "interfaceProbe": false,
+      "echo": true,
+      "portReleased": true,
+      "idempotentStop": true
+    },
+    {
+      "kind": "dynamic",
+      "bind_host": "::1",
+      "fixed": true,
+      "publicBind": false,
+      "interfaceProbe": false,
+      "echo": true,
+      "portReleased": true,
+      "idempotentStop": true
+    },
+    {
+      "kind": "dynamic",
+      "bind_host": "localhost",
+      "fixed": false,
+      "publicBind": false,
+      "interfaceProbe": false,
+      "echo": true,
+      "portReleased": true,
+      "idempotentStop": true
+    },
+    {
+      "kind": "dynamic",
+      "bind_host": "localhost",
+      "fixed": true,
+      "publicBind": false,
+      "interfaceProbe": false,
+      "echo": true,
+      "portReleased": true,
+      "idempotentStop": true
+    },
+    {
+      "kind": "dynamic",
+      "bind_host": "0.0.0.0",
+      "fixed": false,
+      "publicBind": true,
+      "interfaceProbe": true,
+      "echo": true,
+      "portReleased": true,
+      "idempotentStop": true
+    },
+    {
+      "kind": "dynamic",
+      "bind_host": "0.0.0.0",
+      "fixed": true,
+      "publicBind": true,
+      "interfaceProbe": true,
+      "echo": true,
+      "portReleased": true,
+      "idempotentStop": true
+    },
+    {
+      "kind": "dynamic",
+      "bind_host": "::",
+      "fixed": false,
+      "publicBind": true,
+      "interfaceProbe": true,
+      "echo": true,
+      "portReleased": true,
+      "idempotentStop": true
+    },
+    {
+      "kind": "dynamic",
+      "bind_host": "::",
+      "fixed": true,
+      "publicBind": true,
+      "interfaceProbe": true,
+      "echo": true,
+      "portReleased": true,
+      "idempotentStop": true
+    }
+  ]
+}

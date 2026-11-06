@@ -1,5 +1,7 @@
 import { z } from 'zod'
 import { authPromptSchema } from './ssh.ts'
+// One bounded transfer block: 64 SFTP packets, shared by IPC and file I/O.
+export const SFTP_TRANSFER_CHUNK_BYTES = 2 * 1024 * 1024
 const id = z.string().min(1).max(160)
 export const filePathSchema = z
   .string()
@@ -30,6 +32,7 @@ export const transferTaskSchema = z.strictObject({
   size: uint,
   transferred: uint,
   status: z.enum(['queued', 'transferring', 'completed', 'failed', 'cancelled', 'paused', 'recoverable']),
+  phase: z.enum(['scanning', 'archiving', 'preparing', 'transferring', 'verifying', 'committing']).optional(),
   speed: z.number().finite().nonnegative(),
   started_at: uint,
   finished_at: uint.optional(),
@@ -40,6 +43,10 @@ export const transferTaskSchema = z.strictObject({
   confirmed_offset: uint.optional(),
   source_profile: id.optional(),
   target_profile: id.optional(),
+  items_total: uint.optional(),
+  items_completed: uint.optional(),
+  current_file: path.optional(),
+  conflict_count: uint.optional(),
 })
 export const fileSessionSchema = z.strictObject({
   id,
@@ -136,6 +143,7 @@ export const sftp = {
       destDir: path,
       conflictResolution: resolution,
       directoryMode: z.enum(['preserve', 'archive']),
+      background: z.boolean().optional(),
     }),
     output: z.strictObject({
       task_id: id.optional(),
@@ -143,6 +151,10 @@ export const sftp = {
       tasks: z.array(transferTaskSchema).optional(),
       conflicts: z.array(conflict).optional(),
     }),
+  },
+  'sftp.getTransferConflicts': { input: task, output: z.strictObject({ conflicts: z.array(conflict).max(10000), directoryMode: z.enum(['preserve', 'archive']).optional() }) },
+  'sftp.resolveTransferConflicts': {
+    input: task.extend({ resolution: z.enum(['overwrite', 'rename', 'skip']) }), output: transferTaskSchema,
   },
   'sftp.uploadBegin': {
     input: z.strictObject({
@@ -162,7 +174,7 @@ export const sftp = {
   'sftp.uploadChunk': {
     input: z.strictObject({
       uploadId: id,
-      data: z.instanceof(Uint8Array).refine((v) => v.byteLength > 0 && v.byteLength <= 512 * 1024),
+      data: z.instanceof(Uint8Array).refine((v) => v.byteLength > 0 && v.byteLength <= SFTP_TRANSFER_CHUNK_BYTES),
       sequence: uint,
     }),
     output: done,
@@ -204,8 +216,8 @@ export const sftp = {
   },
   'sftp.exportDownload': { input: task, output: z.string().nullable() },
   'sftp.downloadChunk': {
-    input: task.extend({ offset: uint, maxBytes: uint.min(1).max(512 * 1024) }),
-    output: z.instanceof(Uint8Array).refine((v) => v.byteLength <= 512 * 1024),
+    input: task.extend({ offset: uint, maxBytes: uint.min(1).max(SFTP_TRANSFER_CHUNK_BYTES) }),
+    output: z.instanceof(Uint8Array).refine((v) => v.byteLength <= SFTP_TRANSFER_CHUNK_BYTES),
   },
   'sftp.downloadClose': { input: task, output: done },
   'sftp.readFile': { input: at, output: fileReadSchema },

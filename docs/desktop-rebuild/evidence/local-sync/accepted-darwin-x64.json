@@ -1,0 +1,686 @@
+{
+  "verifiedAt": "2026-10-28T09:48:06.350Z",
+  "sourceBase": "8fd261e8d952cb9cbd80c268c8d2afe608027a1f",
+  "sourceDigest": "2842d3aa0230c1f7d2840c36a633a7c1a4ec4a2fcd76a7ac7404d3c2acd445d4",
+  "sourceState": "uncommitted localhost existing-account recovery changes",
+  "version": "0.5.0-test.346.8fd261e8",
+  "platform": "darwin",
+  "arch": "x64",
+  "target": "http://127.0.0.1:8080/",
+  "productionBackend": false,
+  "testDatabaseIsolation": "confirmed by user",
+  "localAcceptancePassed": true,
+  "main": {
+    "passed": true,
+    "resumed": false,
+    "registrationPerformed": false,
+    "existingAccountRecovered": true,
+    "checks": [
+      "在新隔离目录通过找回邮件恢复已授权的专用测试账号，不重复注册",
+      "账号恢复；服务端已返回邮箱验证状态",
+      "客户端注入过期响应后调用刷新接口；轮换后的旧 refresh token 被服务端拒绝",
+      "密钥包装、设备登记、固定水位快照；确认前不上传，离线合并保留，第二目录拉取成功",
+      "四类条目、分组与凭据关联和敏感正文加密往返；SSE 通知触发另一端增量拉取",
+      "服务端双端并发修改、修订冲突和保留本地选择；旧修订选择被拒绝",
+      "服务端提交后在客户端丢弃响应；进程重启查询原请求恢复，未再次提交",
+      "服务端整体替换与下一 epoch；另一端重取快照并保留替换期间的本地修改",
+      "密钥包装 CAS 与同步密码轮换，业务密文仍可解密",
+      "刷新轮换后丢弃响应要求重新登录，账号空间、本地数据与记住解锁保留",
+      "找回邮件与登录密码重置使另一端会话失效；重新登录后保留本机解锁与条目数据"
+    ],
+    "realBackend": true,
+    "mailVerification": false,
+    "mailPasswordReset": true,
+    "independentDirectories": 2,
+    "realSse": true,
+    "realKeyRotation": true,
+    "logicalCloudItemsAfterCleanup": 0,
+    "clientFaultInjection": [
+      "me401",
+      "lostPushResponse",
+      "lostRefreshResponse"
+    ],
+    "remaining": [
+      "服务端游标保留过期/配额耗尽/限流",
+      "实际 HTTPS/代理断链",
+      "其他目标平台",
+      "真实系统密钥库",
+      "8 小时运行"
+    ],
+    "synthetic": false,
+    "mode": "local",
+    "target": "http://127.0.0.1:8080/",
+    "productionBackend": false,
+    "version": "0.5.0-test.346.8fd261e8",
+    "platform": "darwin",
+    "arch": "x64",
+    "packaged": false,
+    "keyMode": "restricted-file",
+    "startedAt": "2026-10-28T09:17:13.575Z",
+    "verifiedAt": "2026-10-28T09:19:20.298Z",
+    "clients": [
+      {
+        "actor": "device-a",
+        "generation": 4,
+        "events": {
+          "opened": 5,
+          "closed": 5,
+          "hints": 8
+        },
+        "pushCount": 6,
+        "refreshCount": 2,
+        "pushHashes": [
+          "981d1572e33f3544a1663c04652f7f41c92e7ce050698e2eeb87f4068126595b",
+          "cd835ef5056c53937b258f769626d860943c527aaf41945e596b90fcd797de16",
+          "69d9591e54901cf9807d1399455e8fe19837ee0a2071bd89c00da5aee60f0df6",
+          "9581dad71be299c45b31aa5bac7bf85244d4d463cad23257d49ed1c66a94a533",
+          "9d352c86752729d139abf73e5521b37674ea0a23573802de78eb9568f0e346f1",
+          "55f88de761adc943ffaaae86f49c65febaa08930f8d91021a2e69ee75beb098f"
+        ],
+        "responsesSummary": [
+          {
+            "path": "/api/auth/password/forgot",
+            "method": "POST",
+            "status": 200,
+            "count": 2
+          },
+          {
+            "path": "/api/auth/password/reset",
+            "method": "POST",
+            "status": 200,
+            "count": 2
+          },
+          {
+            "path": "/api/auth/setup",
+            "method": "GET",
+            "status": 200,
+            "count": 3
+          },
+          {
+            "path": "/api/auth/login",
+            "method": "POST",
+            "status": 200,
+            "count": 3
+          },
+          {
+            "path": "/api/auth/refresh",
+            "method": "POST",
+            "status": 200,
+            "count": 2
+          },
+          {
+            "path": "/api/auth/me",
+            "method": "GET",
+            "status": 200,
+            "count": 1
+          },
+          {
+            "path": "/api/sync/v2/capabilities",
+            "method": "GET",
+            "status": 200,
+            "count": 23
+          },
+          {
+            "path": "/api/sync/v2/devices",
+            "method": "POST",
+            "status": 200,
+            "count": 21
+          },
+          {
+            "path": "/api/sync/v2/keys",
+            "method": "GET",
+            "status": 404,
+            "count": 1
+          },
+          {
+            "path": "/api/sync/v2/keys",
+            "method": "PUT",
+            "status": 200,
+            "count": 2
+          },
+          {
+            "path": "/api/sync/v2/snapshots",
+            "method": "POST",
+            "status": 200,
+            "count": 2
+          },
+          {
+            "path": "/api/sync/v2/snapshots/{id}",
+            "method": "GET",
+            "status": 200,
+            "count": 2
+          },
+          {
+            "path": "/api/sync/v2/changes",
+            "method": "GET",
+            "status": 200,
+            "count": 24
+          },
+          {
+            "path": "/api/sync/v2/push",
+            "method": "POST",
+            "status": 200,
+            "count": 6
+          },
+          {
+            "path": "/api/sync/v2/requests/{id}",
+            "method": "GET",
+            "status": 200,
+            "count": 1
+          },
+          {
+            "path": "/api/sync/v2/requests/{id}",
+            "method": "GET",
+            "status": 404,
+            "count": 1
+          },
+          {
+            "path": "/api/sync/v2/keys",
+            "method": "GET",
+            "status": 200,
+            "count": 1
+          },
+          {
+            "path": "/api/auth/password/forgot",
+            "method": "POST",
+            "status": 429,
+            "count": 1
+          }
+        ]
+      },
+      {
+        "actor": "device-b",
+        "generation": 4,
+        "events": {
+          "opened": 5,
+          "closed": 5,
+          "hints": 8
+        },
+        "pushCount": 2,
+        "refreshCount": 1,
+        "pushHashes": [
+          "91d524731a536db863dc549f0674db630df22ceccb2f406b7d574e15d1b7183b",
+          "0a671eaee9059c96fc554c7ae2c18f1967253120606fd6535b3bf5ddf4179a36"
+        ],
+        "responsesSummary": [
+          {
+            "path": "/api/auth/setup",
+            "method": "GET",
+            "status": 200,
+            "count": 3
+          },
+          {
+            "path": "/api/auth/login",
+            "method": "POST",
+            "status": 200,
+            "count": 3
+          },
+          {
+            "path": "/api/sync/v2/capabilities",
+            "method": "GET",
+            "status": 200,
+            "count": 26
+          },
+          {
+            "path": "/api/sync/v2/devices",
+            "method": "POST",
+            "status": 200,
+            "count": 25
+          },
+          {
+            "path": "/api/sync/v2/keys",
+            "method": "GET",
+            "status": 200,
+            "count": 3
+          },
+          {
+            "path": "/api/sync/v2/snapshots",
+            "method": "POST",
+            "status": 200,
+            "count": 2
+          },
+          {
+            "path": "/api/sync/v2/snapshots/{id}",
+            "method": "GET",
+            "status": 200,
+            "count": 2
+          },
+          {
+            "path": "/api/sync/v2/changes",
+            "method": "GET",
+            "status": 200,
+            "count": 26
+          },
+          {
+            "path": "/api/sync/v2/push",
+            "method": "POST",
+            "status": 200,
+            "count": 2
+          },
+          {
+            "path": "/api/auth/logout",
+            "method": "POST",
+            "status": 200,
+            "count": 1
+          },
+          {
+            "path": "/api/auth/me",
+            "method": "GET",
+            "status": 401,
+            "count": 1
+          },
+          {
+            "path": "/api/auth/refresh",
+            "method": "POST",
+            "status": 401,
+            "count": 1
+          }
+        ]
+      }
+    ],
+    "rawReportSha256": "2fd2d037d997387cccd27b36afd0e3ce36aad752ce75986982bb83842d600fb5"
+  },
+  "supplemental": {
+    "passed": true,
+    "target": "http://127.0.0.1:8080/",
+    "productionBackend": false,
+    "checks": [
+      "真实后端并发删除/编辑产生墓碑冲突，使用云端选择后两端收敛",
+      "真实依赖冲突保持引用图有效，重启仍保留，先解决关联项后可接受分组删除",
+      "本机客户端断网注入期间本地保存及 outbox 保留，进程重启后网络恢复自动上传并到达另一端",
+      "真实 HTTP SSE 断线后重连，通知唤醒增量拉取，每端最多一个活动流"
+    ],
+    "networkFault": "client transport rejection; not OS network disconnection",
+    "sseFault": "abort local HTTP stream; not production proxy failure",
+    "accountRole": "USER",
+    "logicalCloudItemsAfterCleanup": 0,
+    "clients": [
+      {
+        "actor": "device-a",
+        "generation": 2002,
+        "events": {
+          "opened": 7,
+          "closed": 7,
+          "active": 0,
+          "maxActive": 1
+        }
+      },
+      {
+        "actor": "device-b",
+        "generation": 2002,
+        "events": {
+          "opened": 6,
+          "closed": 6,
+          "active": 0,
+          "maxActive": 1
+        }
+      }
+    ],
+    "verifiedAt": "2026-10-28T09:31:15.894Z"
+  },
+  "consistency": {
+    "passed": true,
+    "target": "http://127.0.0.1:8080/",
+    "productionBackend": false,
+    "checks": [
+      "真实后端旧确认只清理已覆盖修订，确认期间新编辑保留并继续上传",
+      "发送前丢失后重启先查询，服务端确认不存在后按相同请求体及密文重发",
+      "真实增量跨 200 批次分页；第一页后新提交不改变该轮固定 until 水位",
+      "真实快照按 200 条跨页读取；云端水位变化后拒绝旧预览，不上传或覆盖"
+    ],
+    "oldAcknowledgementPreservesNewEdits": true,
+    "notFoundLookupBeforeIdenticalReplay": true,
+    "changesFixedUntilAcrossPages": true,
+    "snapshotPageSize": 200,
+    "snapshotPages": [
+      {
+        "items": 200,
+        "offset": 200,
+        "hasMore": true
+      },
+      {
+        "items": 18,
+        "offset": 218,
+        "hasMore": false
+      }
+    ],
+    "firstChangesPages": [
+      {
+        "after": 18,
+        "until": 219,
+        "cursor": 118,
+        "hasMore": true,
+        "batches": 100,
+        "status": 200
+      },
+      {
+        "after": 118,
+        "until": 219,
+        "cursor": 218,
+        "hasMore": true,
+        "batches": 100,
+        "status": 200
+      }
+    ],
+    "logicalCloudItemsAfterCleanup": 0,
+    "verifiedAt": "2026-10-28T09:44:38.817Z"
+  },
+  "role": {
+    "target": "http://127.0.0.1:8080/",
+    "productionBackend": false,
+    "status": 200,
+    "role": "USER",
+    "emailVerified": true
+  },
+  "productionExistingAccountResetRejected": true,
+  "scriptHashes": {
+    "local-supplement": "a6da011af791f01e0d0f278fe166f612764518ca3698656f6bcfc641a493b6ed",
+    "local-consistency": "177665698ff3b00f728c6bbbc70a4c5d18e57eae0b5b07c73c24124d333abf21"
+  },
+  "synthetic": {
+    "passed": true,
+    "resumed": false,
+    "registrationPerformed": true,
+    "existingAccountRecovered": false,
+    "checks": [
+      "注册、发送验证请求与验证码验证",
+      "客户端注入过期响应后调用刷新接口；轮换后的旧 refresh token 被服务端拒绝",
+      "密钥包装、设备登记、固定水位快照；确认前不上传，离线合并保留，第二目录拉取成功",
+      "四类条目、分组与凭据关联和敏感正文加密往返；SSE 通知触发另一端增量拉取",
+      "服务端双端并发修改、修订冲突和保留本地选择；旧修订选择被拒绝",
+      "服务端提交后在客户端丢弃响应；进程重启查询原请求恢复，未再次提交",
+      "服务端整体替换与下一 epoch；另一端重取快照并保留替换期间的本地修改",
+      "密钥包装 CAS 与同步密码轮换，业务密文仍可解密",
+      "刷新轮换后丢弃响应要求重新登录，账号空间、本地数据与记住解锁保留",
+      "找回邮件与登录密码重置使另一端会话失效；重新登录后保留本机解锁与条目数据"
+    ],
+    "realBackend": false,
+    "mailVerification": false,
+    "mailPasswordReset": false,
+    "independentDirectories": 2,
+    "realSse": false,
+    "realKeyRotation": false,
+    "logicalCloudItemsAfterCleanup": 0,
+    "clientFaultInjection": [
+      "me401",
+      "lostPushResponse",
+      "lostRefreshResponse"
+    ],
+    "remaining": [
+      "服务端游标保留过期/配额耗尽/限流",
+      "实际 HTTPS/代理断链",
+      "其他目标平台",
+      "真实系统密钥库",
+      "8 小时运行"
+    ],
+    "synthetic": true,
+    "mode": "synthetic",
+    "target": "local protocol fixture",
+    "productionBackend": false,
+    "version": "0.5.0-test.346.8fd261e8",
+    "platform": "darwin",
+    "arch": "x64",
+    "packaged": false,
+    "keyMode": "restricted-file",
+    "startedAt": "2026-10-28T09:22:08.708Z",
+    "verifiedAt": "2026-10-28T09:22:12.354Z",
+    "clients": [
+      {
+        "actor": "device-a",
+        "generation": 4,
+        "events": {
+          "opened": 5,
+          "closed": 5,
+          "hints": 8
+        },
+        "pushCount": 6,
+        "refreshCount": 2,
+        "responsesSummary": [
+          {
+            "path": "/api/auth/setup",
+            "method": "GET",
+            "status": 200,
+            "count": 3
+          },
+          {
+            "path": "/api/auth/register",
+            "method": "POST",
+            "status": 200,
+            "count": 1
+          },
+          {
+            "path": "/api/auth/email/send",
+            "method": "POST",
+            "status": 200,
+            "count": 1
+          },
+          {
+            "path": "/api/auth/email/verify",
+            "method": "POST",
+            "status": 200,
+            "count": 1
+          },
+          {
+            "path": "/api/auth/me",
+            "method": "GET",
+            "status": 200,
+            "count": 2
+          },
+          {
+            "path": "/api/auth/refresh",
+            "method": "POST",
+            "status": 200,
+            "count": 2
+          },
+          {
+            "path": "/api/sync/v2/capabilities",
+            "method": "GET",
+            "status": 200,
+            "count": 14
+          },
+          {
+            "path": "/api/sync/v2/devices",
+            "method": "POST",
+            "status": 200,
+            "count": 12
+          },
+          {
+            "path": "/api/sync/v2/keys",
+            "method": "GET",
+            "status": 404,
+            "count": 1
+          },
+          {
+            "path": "/api/sync/v2/keys",
+            "method": "PUT",
+            "status": 200,
+            "count": 2
+          },
+          {
+            "path": "/api/sync/v2/snapshots",
+            "method": "POST",
+            "status": 200,
+            "count": 2
+          },
+          {
+            "path": "/api/sync/v2/snapshots/{id}",
+            "method": "GET",
+            "status": 200,
+            "count": 2
+          },
+          {
+            "path": "/api/sync/v2/changes",
+            "method": "GET",
+            "status": 200,
+            "count": 15
+          },
+          {
+            "path": "/api/sync/v2/push",
+            "method": "POST",
+            "status": 200,
+            "count": 6
+          },
+          {
+            "path": "/api/sync/v2/requests/{id}",
+            "method": "GET",
+            "status": 200,
+            "count": 1
+          },
+          {
+            "path": "/api/sync/v2/requests/{id}",
+            "method": "GET",
+            "status": 404,
+            "count": 1
+          },
+          {
+            "path": "/api/sync/v2/keys",
+            "method": "GET",
+            "status": 200,
+            "count": 1
+          },
+          {
+            "path": "/api/auth/login",
+            "method": "POST",
+            "status": 200,
+            "count": 2
+          },
+          {
+            "path": "/api/auth/password/forgot",
+            "method": "POST",
+            "status": 200,
+            "count": 1
+          },
+          {
+            "path": "/api/auth/password/reset",
+            "method": "POST",
+            "status": 200,
+            "count": 1
+          }
+        ]
+      },
+      {
+        "actor": "device-b",
+        "generation": 4,
+        "events": {
+          "opened": 5,
+          "closed": 5,
+          "hints": 8
+        },
+        "pushCount": 2,
+        "refreshCount": 1,
+        "responsesSummary": [
+          {
+            "path": "/api/auth/setup",
+            "method": "GET",
+            "status": 200,
+            "count": 3
+          },
+          {
+            "path": "/api/auth/login",
+            "method": "POST",
+            "status": 200,
+            "count": 3
+          },
+          {
+            "path": "/api/sync/v2/capabilities",
+            "method": "GET",
+            "status": 200,
+            "count": 16
+          },
+          {
+            "path": "/api/sync/v2/devices",
+            "method": "POST",
+            "status": 200,
+            "count": 15
+          },
+          {
+            "path": "/api/sync/v2/keys",
+            "method": "GET",
+            "status": 200,
+            "count": 3
+          },
+          {
+            "path": "/api/sync/v2/snapshots",
+            "method": "POST",
+            "status": 200,
+            "count": 2
+          },
+          {
+            "path": "/api/sync/v2/snapshots/{id}",
+            "method": "GET",
+            "status": 200,
+            "count": 2
+          },
+          {
+            "path": "/api/sync/v2/changes",
+            "method": "GET",
+            "status": 200,
+            "count": 16
+          },
+          {
+            "path": "/api/sync/v2/push",
+            "method": "POST",
+            "status": 200,
+            "count": 2
+          },
+          {
+            "path": "/api/auth/logout",
+            "method": "POST",
+            "status": 200,
+            "count": 1
+          },
+          {
+            "path": "/api/auth/me",
+            "method": "GET",
+            "status": 401,
+            "count": 1
+          },
+          {
+            "path": "/api/auth/refresh",
+            "method": "POST",
+            "status": 401,
+            "count": 1
+          }
+        ]
+      }
+    ],
+    "rawReportSha256": "a783214156e32cb5f9b142cbbf7aba92ae0f8855ab08735aae35fac35adf9324"
+  },
+  "checks": {
+    "types": true,
+    "lint": true,
+    "baselineVerify": true,
+    "architecture": true,
+    "foundationTests": 116,
+    "webTests": 293,
+    "baselineTests": 10
+  },
+  "artifact": {
+    "path": "artifacts/desktop/eizhu-0.5.0-test.346.8fd261e8-mac-x64.dmg",
+    "bytes": 158151854,
+    "sha256": "c7d61b3fd12476dc4b802be8595ce4c7af5b078720723633c2b7c2cd4582b32f",
+    "signed": false,
+    "notarized": false
+  },
+  "packagedSmoke": {
+    "packaged": true,
+    "keyMode": "restricted-file",
+    "account": true,
+    "syncEngine": true,
+    "syncDesktop": true,
+    "stage2": true,
+    "stage3": true,
+    "stage4": true,
+    "stage5": true,
+    "stage6": true,
+    "synthetic": true,
+    "realBackend": false
+  },
+  "packagedSmokeReportSha256": "bb81e3c38f3d077c1bfd4c8dce76e0062acd547fbb99dc40209d99bd74456f14",
+  "pending": [
+    "本轮使用已有账号，未重跑本机注册成功及首次验证邮件",
+    "生产 HTTPS、代理与部署后复验",
+    "自然游标过期、配额耗尽、同步接口限流策略",
+    "其他目标平台、真实系统密钥库、签名公证及 8 小时运行"
+  ]
+}

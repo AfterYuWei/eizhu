@@ -1,0 +1,41 @@
+{
+  "baseCommit": "67a2ca52a4b47571a857d81724405fbc3c09541d",
+  "settings": {
+    "base": "0.5.0",
+    "version": "0.5.0-test.378.67a2ca52",
+    "channel": "test",
+    "revision": "67a2ca52a4b47571a857d81724405fbc3c09541d",
+    "platform": "darwin",
+    "arch": "x64",
+    "feeds": {},
+    "updateRepository": {
+      "owner": "AfterYuWei",
+      "repo": "eizhu"
+    },
+    "sourceDigest": "a3d824fac09a6b8ed44ad7d0f0fee3110228232016421faf4898a19d4d8c243b"
+  },
+  "artifacts": [
+    {
+      "path": "artifacts/desktop/eizhu-0.5.0-test.378.67a2ca52-mac-x64.dmg",
+      "bytes": 158795026,
+      "sha256": "20ba53386cb96d3d27f593d1dd0aaa9a2ec3e729998d81bf339457fe9cd19264"
+    },
+    {
+      "path": "artifacts/desktop/eizhu-0.5.0-test.378.67a2ca52-mac-x64.dmg.blockmap",
+      "bytes": 166335,
+      "sha256": "d301110bd42a6d15ca2200769ff6d40610197e9060f517c08af4b5280ef9176b"
+    },
+    {
+      "path": "artifacts/desktop/eizhu-0.5.0-test.378.67a2ca52-mac-x64.zip",
+      "bytes": 158067720,
+      "sha256": "c1886afc7dcb721ccf9ab8e7969358386680e429033fc0fec90242ec17cec60d"
+    },
+    {
+      "path": "artifacts/desktop/eizhu-0.5.0-test.378.67a2ca52-mac-x64.zip.blockmap",
+      "bytes": 165142,
+      "sha256": "c6526d8ec7c9b5e8268eb2144326827f06a051b3a6fdf4e394431859d8272b19"
+    }
+  ],
+  "verifiedPackageFiles": 288,
+  "publication": "local-test-candidate-only"
+}

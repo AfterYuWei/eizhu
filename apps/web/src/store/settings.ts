@@ -2,12 +2,13 @@ import { create } from 'zustand'
 import { createJSONStorage,persist } from 'zustand/middleware'
 import { settingsStorage } from '@/lib/settingsStorage'
 import { DEFAULT_DESKTOP_SIDEBAR_WIDTH } from '@/lib/desktopSidebar'
+import { buildChannel } from '@/lib/updater'
 
 type Theme = 'light' | 'dark' | 'system'
-export type UpdateChannel = 'stable' | 'test'
+export type { UpdateChannel } from '@eizhu/contracts'
+import type { UpdateChannel } from '@eizhu/contracts'
 
-const configuredBuildChannel = import.meta.env.VITE_EIZHU_CHANNEL
-const DEFAULT_UPDATE_CHANNEL: UpdateChannel = configuredBuildChannel === 'test' ? 'test' : 'stable'
+const DEFAULT_UPDATE_CHANNEL = buildChannel
 export const DEFAULT_DESKTOP_TERMINAL_FONT_SIZE = 13
 
 interface SettingsStore {
@@ -20,6 +21,9 @@ interface SettingsStore {
   appFontSize: number
   appFontFamily: string
   terminalTheme: string
+  /** 沿用历史偏好键，当前控制命令及其输出右侧的竖条。 */
+  terminalCommandHighlight: boolean
+  terminalLogHighlight: boolean
   // 自动补全设置
   terminalAutocomplete: boolean
   terminalInlineSuggestion: boolean
@@ -37,6 +41,8 @@ interface SettingsStore {
   setAppFontSize: (size: number) => void
   setAppFontFamily: (family: string) => void
   setTerminalTheme: (id: string) => void
+  setTerminalCommandHighlight: (enabled: boolean) => void
+  setTerminalLogHighlight: (enabled: boolean) => void
   setTerminalAutocomplete: (enabled: boolean) => void
   setTerminalInlineSuggestion: (enabled: boolean) => void
   setTerminalPopupMenu: (enabled: boolean) => void
@@ -104,6 +110,8 @@ export const useSettingsStore = create<SettingsStore>()(
       appFontSize: 14,
       appFontFamily: DEFAULT_APP_FONT_FAMILY,
       terminalTheme: 'default',
+      terminalCommandHighlight: true,
+      terminalLogHighlight: false,
       terminalAutocomplete: true,
       terminalInlineSuggestion: false,
       terminalPopupMenu: true,
@@ -136,6 +144,8 @@ export const useSettingsStore = create<SettingsStore>()(
         applyAppFont(get().appFontSize, appFontFamily)
       },
       setTerminalTheme: (terminalTheme) => set({ terminalTheme }),
+      setTerminalCommandHighlight: (terminalCommandHighlight) => set({ terminalCommandHighlight }),
+      setTerminalLogHighlight: (terminalLogHighlight) => set({ terminalLogHighlight }),
       setTerminalAutocomplete: (terminalAutocomplete) => set({ terminalAutocomplete }),
       setTerminalInlineSuggestion: (terminalInlineSuggestion) => set({ terminalInlineSuggestion }),
       setTerminalPopupMenu: (terminalPopupMenu) => set({ terminalPopupMenu }),

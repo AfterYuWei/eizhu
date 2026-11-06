@@ -14,7 +14,7 @@ import { useTerminalLayoutStore, resetTerminalLayout } from '@/store/terminalLay
 afterEach(() => { resetTerminalLayout(); useSessionStore.setState(useSessionStore.getInitialState(), true) })
 it('布局、最大化和合并不卸载终端节点或丢失已有缓冲', async () => {
   ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
-  useSessionStore.setState({ tabs: [{ id: 'a', kind: 'terminal', profileId: 'p', profileName: 'p', status: 'connected', sessionId: 'ssh' }], activeTabId: 'a' })
+  useSessionStore.setState({ tabs: [{ id: 'a', profileId: 'p', profileName: 'p', status: 'connected', sessionId: 'ssh' }], activeTabId: 'a' })
   const host = document.createElement('div'); document.body.append(host); const root = createRoot(host)
   await act(async () => { root.render(<TerminalView />); await vi.dynamicImportSettled() })
   const terminal = host.querySelector<HTMLTextAreaElement>('[aria-label="终端 a"]')!

@@ -20,7 +20,7 @@ export function WorkspaceActions({ terminal }: { terminal: boolean }) {
         <DropdownMenuItem onSelect={() => { pending.current = 'reconnect' }}><RefreshCw />重新连接</DropdownMenuItem>
         <DropdownMenuItem onSelect={() => { pending.current = 'search' }}><Search />查找终端内容</DropdownMenuItem>
         <DropdownMenuItem onSelect={() => { pending.current = 'copy-ssh' }}><Copy />复制 SSH 命令</DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => { pending.current = 'tunnels' }}><Waypoints />SSH 隧道管理</DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => { pending.current = 'tunnels' }}><Waypoints />端口映射</DropdownMenuItem>
         <DropdownMenuSeparator />
       </>}
       <DropdownMenuItem onSelect={() => { pending.current = 'close' }}><Unplug />关闭当前页面</DropdownMenuItem>

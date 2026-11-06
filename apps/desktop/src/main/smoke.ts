@@ -1,25 +1,31 @@
 import { verifyStage3 } from './stage3-smoke.ts'
+import { verifyAiDesktop } from './ai-smoke.ts'
 import { verifyStage5 } from './stage5-smoke.ts'
 import { verifyStage6 } from './stage6-smoke.ts'
 import { verifyStage4 } from './stage4-smoke.ts'
+import { verifyWorkspaceTabs } from './workspace-tabs-smoke.ts'
 import { app, BrowserWindow as TestWindow, screen } from 'electron'
 import type { BrowserWindow } from 'electron'
 import { join } from 'node:path'
 import { writeFile } from 'node:fs/promises'
 import assert from 'node:assert/strict'
+import { verifyAccountFoundation } from './account-foundation-smoke.ts'
+import { verifySyncDesktop } from './sync-smoke.ts'
+import { verifyAccountClosure } from './account-closure-smoke.ts'
 import type { Windows } from './windows.ts'
 import type { RuntimeHost } from './runtime-host.ts'
+import type { AccountFixture } from './account-fixture-server.ts'
 import updater from 'electron-updater'
 
 async function shown(window: BrowserWindow): Promise<void> {
-  if (window.isVisible()) return
-  await new Promise<void>((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error('Renderer bootstrap timed out')), 30000)
-    window.once('show', () => {
-      clearTimeout(timer)
-      resolve()
-    })
-  })
+  // macOS can report a visible window without delivering the one-shot show event to this waiter.
+  // Still require the real native visibility state; renderer readiness is checked immediately below.
+  for (let attempt = 0; attempt < 600; attempt++) {
+    if (window.isDestroyed()) throw new Error('Smoke window closed before readiness')
+    if (window.isVisible()) return
+    await new Promise((resolve) => setTimeout(resolve, 50))
+  }
+  throw new Error('Renderer bootstrap timed out')
 }
 async function prepareCapture(window: BrowserWindow, theme: 'light' | 'dark'): Promise<void> {
   let timer: ReturnType<typeof setTimeout> | undefined
@@ -56,24 +62,53 @@ export async function runSmoke(options: {
   root: string
   keyMode: string
   startedAt: number
-  assets:string
+  assets: string
+  accountFixture?: AccountFixture
 }): Promise<void> {
   const { windows, root } = options,
     window = windows.main
   const step = (name: string) => console.log('EIZHU_SMOKE_STEP', name)
   step('waiting-renderer')
-  try{await shown(window)}catch(error){
-    const state=await window.webContents.executeJavaScript(`({ready:document.readyState,bridge:typeof window.eizhu,body:document.body.innerText.slice(0,200),root:document.querySelector('#root')?.childElementCount})`).catch(()=>({probe:'failed'}))
-    console.error('EIZHU_SMOKE_BOOTSTRAP_STATE',JSON.stringify(state));throw error
+  try {
+    await shown(window)
+  } catch (error) {
+    const state = await window.webContents
+      .executeJavaScript(
+        `({ready:document.readyState,bridge:typeof window.eizhu,body:document.body.innerText.slice(0,200),root:document.querySelector('#root')?.childElementCount})`,
+      )
+      .catch(() => ({ probe: 'failed' }))
+    console.error('EIZHU_SMOKE_BOOTSTRAP_STATE', JSON.stringify(state))
+    throw error
   }
   step('renderer-ready')
+  if (process.argv.includes('--ai-smoke-only')) {
+    const aiDesktop = await verifyAiDesktop(window, options.runtime(), root)
+    await writeFile(
+      join(root, 'ai-smoke.json'),
+      JSON.stringify(
+        { platform: process.platform, arch: process.arch, packaged: app.isPackaged, aiDesktop },
+        null,
+        2,
+      ),
+    )
+    return
+  }
+  if (process.argv.includes('--sftp-smoke')) {
+    const stage4 = await verifyStage4(window, options.runtime(), windows, root, options.assets)
+    assert.equal(stage4.passed, true)
+    const report = { platform: process.platform, arch: process.arch, packaged: app.isPackaged, stage4 }
+    await writeFile(join(root, 'sftp-smoke.json'), JSON.stringify(report, null, 2) + '\n')
+    console.log('EIZHU_SFTP_SMOKE_OK', JSON.stringify(report))
+    return
+  }
   const firstWindowMs = performance.now() - options.startedAt
   const health = await options.runtime().call('runtime.health')
   const crypto = await options.runtime().call('runtime.smoke')
   const renderer = await window.webContents.executeJavaScript(`(async () => ({
     node: typeof process, require: typeof require, bridge: typeof window.eizhu.app.bootstrap,
     health: await window.eizhu.runtime.health(), text: document.body.innerText.includes('新建连接'),
-    reserved: await window.eizhu.account.status().then(() => 'unexpected-success', e => e.code),
+    account: await window.eizhu.account.status(),
+    removedVersionApi: typeof window.eizhu.backup.versions,
     local: await window.eizhu.group.list(),
     arbitraryPath: await window.eizhu.backup.preview({ filePath: '/etc/passwd' }).then(() => 'unexpected-success', e => e.code),
     inputValidation: await window.eizhu.settings.write({ key: 'credential', value: 'synthetic' }).then(() => 'unexpected-success', e => e.code)
@@ -81,13 +116,16 @@ export async function runSmoke(options: {
   assert.equal(renderer.node, 'undefined')
   assert.equal(renderer.require, 'undefined')
   assert.equal(renderer.text, true)
-  assert.equal(renderer.reserved, 'STAGE_NOT_READY')
+  assert.equal(renderer.removedVersionApi, 'undefined')
+  assert.deepEqual(renderer.account, { loggedIn: false, sessionState: 'anonymous', syncEnabled: false })
   assert.equal(renderer.inputValidation, 'BAD_REQUEST')
   assert.deepEqual(renderer.local, [])
   assert.equal(renderer.arbitraryPath, 'FORBIDDEN')
   step('foundation-bridge-passed')
   const stage6 = await verifyStage6(window, root)
   step('stage6-updater-passed')
+  const workspaceTabs = await verifyWorkspaceTabs(window, root)
+  step('workspace-tabs-passed')
   const localBridge = await window.webContents.executeJavaScript(`(async () => {
     const api=window.eizhu;
     const group=await api.group.create({request:{name:'阶段 2 合成分组'}});
@@ -103,19 +141,40 @@ export async function runSmoke(options: {
   for (const key of ['crud', 'computeWorker', 'revealed', 'protectedDelete', 'redacted', 'audit'])
     assert.equal(localBridge[key], true)
   step('local-bridge-passed')
+  const aiDesktop = await verifyAiDesktop(window, options.runtime(), root)
+  step('ai-desktop-passed')
   const stage2 = await options
     .runtime()
     .call<{ passed: boolean }>('runtime.verifyStage2', { fixtures: process.env.EIZHU_SMOKE_FIXTURES })
   assert.equal(stage2.passed, true)
   step('stage2-native-passed')
-  const stage3=await verifyStage3(window,options.runtime(),root)
-  const stage3Storage=await options.runtime().call<{passed:boolean}>('runtime.verifyStage3Storage')
-  assert.equal(stage3Storage.passed,true)
+  const accountFoundation = await verifyAccountFoundation(options.runtime(), options.assets)
+  assert.equal(accountFoundation.passed, true)
+  step('account-foundation-native-passed')
+  const syncEngine = await options
+    .runtime()
+    .call<{ passed: boolean }>('runtime.verifySyncEngine', { fixtures: process.env.EIZHU_SMOKE_FIXTURES })
+  assert.equal(syncEngine.passed, true)
+  step('sync-engine-native-passed')
+  const stage3 = await verifyStage3(window, options.runtime(), root)
+  const stage3Storage = await options.runtime().call<{ passed: boolean }>('runtime.verifyStage3Storage')
+  assert.equal(stage3Storage.passed, true)
   step('stage3-native-passed')
-  const stage4=await verifyStage4(window,options.runtime(),windows,root,options.assets)
+  const stage4 = await verifyStage4(window, options.runtime(), windows, root, options.assets)
   step('stage4-native-passed')
-  const stage5=await verifyStage5(window,options.runtime(),root)
+  const stage5 = await verifyStage5(window, options.runtime(), root)
   step('stage5-native-passed')
+  assert.ok(options.accountFixture)
+  const accountClosure = await verifyAccountClosure(
+    window,
+    windows,
+    options.accountFixture,
+    root,
+    options.assets,
+  )
+  step('account-closure-passed')
+  const syncDesktop = await verifySyncDesktop(window, windows, options.accountFixture, root)
+  step('sync-desktop-passed')
   // An occluded smoke window can suspend animation frames. Keep only this test window drawing.
   // This setting is limited to this synthetic smoke window; normal application throttling is unchanged.
   window.webContents.backgroundThrottling = false
@@ -189,11 +248,32 @@ export async function runSmoke(options: {
   assert.equal(failed, 'RUNTIME_UNAVAILABLE')
   const restored = await window.webContents.executeJavaScript('window.eizhu.runtime.restart()')
   step('runtime-restarted')
-  const recoveredVersions=await window.webContents.executeJavaScript('window.eizhu.backup.versions()') as Array<{id:string}>
-  assert.ok(recoveredVersions.some(v=>v.id===stage5.persistedVersionId))
-  if(stage4.passed){
-    const fileRecovery=await window.webContents.executeJavaScript(`(async()=>{const api=window.eizhu,id=${JSON.stringify(stage4.restoredTaskId)};const task=(await api.sftp.listTransfers({})).find(t=>t.id===id);if(task?.status!=='recoverable')throw new Error('Checkpoint did not recover');const local=await api.sftp.createSession({profileId:'local'});const proof=await api.sftp.uploadCheckpoint({taskId:id});const resumed=await api.sftp.resumeUpload({taskId:id,size:6,lastModified:42,restart:false,prefixHash:proof.prefix_hash});await api.sftp.uploadChunk({uploadId:resumed.upload_id,sequence:resumed.sequence,data:new TextEncoder().encode('def')});const finished=await api.sftp.uploadFinish({uploadId:resumed.upload_id});await api.sftp.closeSession({id:local.session_id});return finished.tasks[0].status==='completed'&&resumed.received===3})()`)
-    assert.equal(fileRecovery,true);step('stage4-checkpoint-restarted')
+  const recoveredBackup = (await window.webContents.executeJavaScript('window.eizhu.backup.status()')) as {
+    last_backup_path: string | null
+  }
+  assert.equal(recoveredBackup.last_backup_path, stage5.persistedPath)
+  if (stage4.passed) {
+    const fileRecovery = await window.webContents.executeJavaScript(`(async()=>{
+      const api=window.eizhu,id=${JSON.stringify(stage4.restoredTaskId)};
+      const task=(await api.sftp.listTransfers({})).find(t=>t.id===id);
+      if(task?.status!=='recoverable')throw new Error('Checkpoint did not recover');
+      const local=await api.sftp.createSession({profileId:'local'});
+      const proof=await api.sftp.uploadCheckpoint({taskId:id});
+      const resumed=await api.sftp.resumeUpload({taskId:id,size:6,lastModified:42,restart:false,prefixHash:proof.prefix_hash});
+      await api.sftp.uploadChunk({uploadId:resumed.upload_id,sequence:resumed.sequence,data:new TextEncoder().encode('def')});
+      await api.sftp.uploadFinish({uploadId:resumed.upload_id});
+      for(let i=0;i<300;i++){
+        const finished=(await api.sftp.listTransfers({})).find(t=>t.id===id);
+        if(finished.status==='failed')throw new Error(finished.error_message);
+        if(finished.status==='completed'){
+          await api.sftp.closeSession({id:local.session_id});return resumed.received===3;
+        }
+        await new Promise(resolve=>setTimeout(resolve,30));
+      }
+      throw new Error('Upload completion timeout');
+    })()`)
+    assert.equal(fileRecovery, true)
+    step('stage4-checkpoint-restarted')
   }
   assert.notEqual(restored.runtimeId, before.runtimeId)
   assert.equal(restored.generation, before.generation + 1)
@@ -244,11 +324,17 @@ export async function runSmoke(options: {
     crypto,
     renderer,
     stage2,
+    accountFoundation,
+    accountClosure,
+    syncEngine,
+    syncDesktop,
     stage3,
+    aiDesktop,
     stage3Storage,
     stage4,
     stage5,
     stage6,
+    workspaceTabs,
     localBridge,
     editor: true,
     editorGeometry,
@@ -262,7 +348,17 @@ export async function runSmoke(options: {
     monaco,
     firstWindowMs,
     processMetrics: app.getAppMetrics().map(({ type, memory, cpu }) => ({ type, memory, cpu })),
-    screenshots: ['home-light.png', 'home-dark.png', 'editor-empty.png'],
+    screenshots: [
+      'home-light.png',
+      'home-dark.png',
+      'editor-empty.png',
+      ...aiDesktop.screenshots,
+      ...workspaceTabs.screenshots,
+      ...accountClosure.screenshots,
+      ...syncDesktop.screenshots,
+      ...stage3.completionUi.screenshots,
+      ...stage3.portMapping.screenshots,
+    ],
     screenshotContrast,
   }
   await writeFile(join(root, 'smoke.json'), JSON.stringify(report, null, 2))

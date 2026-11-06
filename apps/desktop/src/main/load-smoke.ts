@@ -77,7 +77,7 @@ export async function measureDesktopLoad(
           `(async()=>{const start=performance.now();await window.eizhu.window.state();return performance.now()-start})()`,
         )
         latencies.push(elapsed)
-        await call('serverDetail.getMetrics', { sessionId: detailId })
+        await call('serverDetail.getSummary', { sessionId: detailId })
         if (performance.now() - started >= nextLog) {
           const metrics = app.getAppMetrics()
           memory.push({

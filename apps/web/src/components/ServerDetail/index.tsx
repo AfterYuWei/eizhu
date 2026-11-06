@@ -1,16 +1,15 @@
-import React,{ useEffect,useRef,useState } from 'react'
+import { Loading,LoadingBar } from '@/components/ui/loading'
+import { useEffect,useRef,useState } from 'react'
 import {
-File,Folder,HardDrive,Cpu,Loader2,AlertCircle,
+File,Folder,AlertCircle,
 FilePlus,FolderPlus,RefreshCw,Pencil,Trash2,Copy,Eye,EyeOff,
-FolderOpen,FileEdit,Inbox,Crosshair,ChevronDown
+FolderOpen,FileEdit,Inbox,Crosshair
 } from 'lucide-react'
 import { useSessionStore } from '@/store/session'
 import { useSidebarDetailStore } from '@/store/sidebarDetail'
 import { useServerDetailStore } from '@/store/serverDetail'
-import { Tooltip,TooltipContent,TooltipTrigger } from '@/components/ui/tooltip'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
-import { useServerMetrics } from '@/hooks/useServerMetrics'
 import { isDesktopRuntime } from '@/lib/platform'
 import { EditorDialog } from '@/components/Editor/EditorDialog'
 import { SftpContextMenu,type MenuItem } from '@/components/Sftp/SftpContextMenu'
@@ -31,28 +30,6 @@ interface ServerDetailProps {
   active: boolean
 }
 
-interface DetailTooltipProps {
-  children: React.ReactElement
-  content: React.ReactNode
-  side?: 'top' | 'bottom' | 'left' | 'right'
-  triggerClassName?: string
-}
-
-function DetailTooltip({ children, content, side = 'top', triggerClassName }: DetailTooltipProps) {
-  if (!content) return children
-
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild className={triggerClassName}>
-        {children}
-      </TooltipTrigger>
-      <TooltipContent side={side} sideOffset={8} className="max-w-80">
-        {content}
-      </TooltipContent>
-    </Tooltip>
-  )
-}
-
 export function ServerDetail({
   tabId,
   profileId,
@@ -63,13 +40,12 @@ export function ServerDetail({
   active,
 }: ServerDetailProps) {
   const { tabs } = useSessionStore()
-  const { getDetail, saveDetail, toggleFiles, toggleMetrics, toggleInfo, toggleFollowShellCwd } = useSidebarDetailStore()
+  const { getDetail, saveDetail, toggleFollowShellCwd } = useSidebarDetailStore()
   const {
     getStatus, navigateToParent, listFiles, mkdir, createFile, rename, deleteSelected,
     toggleShowHidden, refresh, select, clearSelection, getSelectedNodes
   } = useServerDetailStore()
   const tab = tabs.find((t) => t.id === tabId)
-  const isOff = tab?.status === 'disconnected'
   const serverDetail = getStatus(profileId)
   const bodyRef = useRef<HTMLDivElement>(null)
   const detail = getDetail(tabId)
@@ -81,9 +57,6 @@ export function ServerDetail({
   const [newFolderDialog, setNewFolderDialog] = useState(false)
   const [renameDialog, setRenameDialog] = useState<{ path: string; currentName: string } | null>(null)
   const [deleteConfirm, setDeleteConfirm] = useState<{ entries: FileTreeNode[] } | null>(null)
-
-  // Start 业务方法 polling for real-time metrics
-  useServerMetrics(profileId, active)
 
   // Restore scroll position on mount / when becoming visible again.
   useEffect(() => {
@@ -98,17 +71,14 @@ export function ServerDetail({
 
   // Auto-navigate the file browser when the shell CWD changes and follow is on.
   useEffect(() => {
-    if (!cwd || !detail.followShellCwd) return
-    const connected = serverDetail.status === 'connected'
-    if (!connected) return
-    const currentPath = serverDetail.currentPath || '/'
+    if (!active || !cwd || !detail.followShellCwd || serverDetail.status !== 'connected') return
+    // Read the shared browser path without making manual navigation or a failed
+    // listing trigger another follow request. Only the visible terminal owns it.
+    const currentPath = useServerDetailStore.getState().getStatus(profileId).currentPath || '/'
     if (cwd !== currentPath) {
       listFiles(profileId, cwd)
     }
-    // Store actions are stable; status/path come from the selected profile
-    // detail above and must not turn this synchronization into a request loop.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cwd, detail.followShellCwd])
+  }, [active, cwd, detail.followShellCwd, listFiles, profileId, serverDetail.status, serverDetail.sessionId])
 
   // Manual navigation: any directory change initiated inside the file browser
   // (double-click folder, "..", breadcrumb, context menu) turns off the
@@ -132,71 +102,11 @@ export function ServerDetail({
     if (el && active) saveDetail(tabId, { scrollTop: el.scrollTop })
   }
 
-  const metrics = serverDetail.metrics
-  const info = serverDetail.info
-
   const formatBytes = (bytes: number): string => {
     if (bytes === 0) return '0 B'
-    const k = 1024
-    const sizes = ['B', 'KB', 'MB', 'GB', 'TB']
-    const i = Math.floor(Math.log(bytes) / Math.log(k))
-    return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`
+    const unit = Math.floor(Math.log(bytes) / Math.log(1024))
+    return `${parseFloat((bytes / 1024 ** unit).toFixed(1))} ${['B', 'KB', 'MB', 'GB', 'TB'][unit]}`
   }
-
-  const formatBytesPerSec = (bytesPerSec: number): string => {
-    if (bytesPerSec === 0) return '0 B/s'
-    if (bytesPerSec < 1024) return `${bytesPerSec} B/s`
-    if (bytesPerSec < 1024 * 1024) return `${(bytesPerSec / 1024).toFixed(1)} KB/s`
-    return `${(bytesPerSec / (1024 * 1024)).toFixed(1)} MB/s`
-  }
-
-  const formatRateCompact = (bytesPerSec: number): string => {
-    if (bytesPerSec < 1024) return `${Math.round(bytesPerSec)}B/s`
-    if (bytesPerSec < 1024 * 1024) return `${(bytesPerSec / 1024).toFixed(1)}K/s`
-    return `${(bytesPerSec / (1024 * 1024)).toFixed(1)}M/s`
-  }
-
-  /** Compact uptime: "up 5 days, 2 hours, 39 minutes" → "5d 2h 39m" */
-  const compactUptime = (raw: string): string => {
-    if (!raw) return '—'
-    // Handle "up X days, Y hours, Z minutes" format from `uptime -p`
-    const dayMatch = raw.match(/(\d+)\s*day/)
-    const hourMatch = raw.match(/(\d+)\s*hour/)
-    const minMatch = raw.match(/(\d+)\s*min/)
-    const parts: string[] = []
-    if (dayMatch) parts.push(`${dayMatch[1]}d`)
-    if (hourMatch) parts.push(`${hourMatch[1]}h`)
-    if (minMatch) parts.push(`${minMatch[1]}m`)
-    return parts.length > 0 ? parts.join(' ') : raw
-  }
-
-  /** Parse load_avg_detail: "0.00 0.01 0.00 1/354 308603" → "1/354, 线程308603" */
-  const parseLoadDetail = (detail: string): string => {
-    if (!detail) return ''
-    const parts = detail.split(/\s+/)
-    if (parts.length >= 5) {
-      return `${parts[3]}, 线程${parts[4]}`
-    }
-    return ''
-  }
-
-  const statusText = isOff ? '未连接' : tab?.status === 'connecting' ? '连接中' : '已连接'
-  const connectionDisplay = `${host}:${port}`
-  const platformDisplay = info.os || info.kernel || '—'
-  const runtimeDisplay = info.uptime ? `${statusText} ${compactUptime(info.uptime)}` : statusText
-  const loadDisplay = info.load_avg || '—'
-  const boundedPercent = (value: number) => `${Math.min(100, Math.max(0, value))}%`
-
-  const renderInfoTooltip = (rows: Array<{ label: string; value: string }>) => (
-    <div className="sdetail-tip">
-      {rows.filter((row) => row.value).map((row) => (
-        <div key={row.label} className="sdetail-tip-row">
-          <span className="sdetail-tip-label">{row.label}</span>
-          <span className="sdetail-tip-val">{row.value}</span>
-        </div>
-      ))}
-    </div>
-  )
 
   // Convert FileTreeNode to SftpEntry for dialogs
   const toSftpEntry = (node: FileTreeNode): SftpEntry => ({
@@ -338,7 +248,7 @@ export function ServerDetail({
   // Loading state for the whole component
   const isConnecting = serverDetail.status === 'connecting'
   const isConnected = serverDetail.status === 'connected'
-  const hasError = serverDetail.status === 'disconnected' && serverDetail.error
+  const hasError = !isConnecting && serverDetail.error
 
   return (
     <div className="flex flex-col h-full sdetail-pane" aria-hidden={!active}>
@@ -354,22 +264,11 @@ export function ServerDetail({
 
       {/* File browser header — outside the scroll area */}
       <div className="sdetail-file-hdr">
-        <Button
-          type="button"
-          variant="ghost"
-          className="psec-title sdetail-collapse-hdr sdetail-file-toggle"
-          onClick={() => toggleFiles(tabId)}
-          aria-label={detail.filesCollapsed ? '展开文件管理' : '折叠文件管理'}
-          aria-expanded={!detail.filesCollapsed}
-        >
-          <Folder size={11} className="psec-title-icon" />
-          <span className="psec-title-text">文件管理</span>
-          <ChevronDown
-            size={12}
-            className={`sdetail-collapse-chev${detail.filesCollapsed ? ' collapsed' : ''}`}
-          />
-        </Button>
-        {!detail.filesCollapsed && isConnected && (
+        <h3 className="sdetail-file-title">
+          <Folder size={11} aria-hidden="true" />
+          <span>文件管理</span>
+        </h3>
+        {isConnected && (
           <div className="sdetail-file-actions">
             {/* Follow shell CWD toggle */}
             {tab?.cwd && (
@@ -426,330 +325,81 @@ export function ServerDetail({
       </div>
 
       {/* Current path display - clickable to edit */}
-      {!detail.filesCollapsed && isConnected && (
+      {isConnected && (
         <PathBreadcrumb
           path={serverDetail.currentPath || '/'}
           onNavigate={navigateManually}
         />
       )}
 
+      <div className="sdetail-load-track">
+        {(isConnecting || serverDetail.loading) && <LoadingBar label={isConnecting ? '正在连接服务器文件服务' : '正在读取服务器文件列表'} />}
+      </div>
+
       {/* File browser list — fills remaining space, scrolls independently */}
-      {!detail.filesCollapsed && (
-        <div
-          className="sdetail-file-area"
-          ref={bodyRef}
-          onScroll={handleScroll}
-          onClick={(e) => {
-            // Clear selection when clicking on empty area
-            if (e.target === e.currentTarget || (e.target as HTMLElement).closest('.sdetail-file-empty')) {
-              clearSelection(profileId)
-            }
-          }}
-          onContextMenu={(e) => {
-            if (e.target === e.currentTarget || (e.target as HTMLElement).closest('.sdetail-file-empty')) {
-              e.preventDefault()
-              setCtx({ x: e.clientX, y: e.clientY, entry: null })
-            }
-          }}
-        >
-          <div className="sdetail-file-list">
-            {isConnecting && (
-              <div className="sdetail-file-loading">
-                <Loader2 size={14} className="animate-spin" />
-                <span>正在连接服务器...</span>
-              </div>
-            )}
-            {hasError && (
-              <div className="sdetail-file-error">
-                <AlertCircle size={14} />
-                <span>{serverDetail.error}</span>
-              </div>
-            )}
-            {isConnected && (
-              <>
-                {/* Parent directory entry ".." */}
-                {serverDetail.currentPath !== '/' && serverDetail.currentPath !== '' && (
-                  <div
-                    className="sdetail-file-row"
-                    style={{ cursor: 'pointer' }}
-                    onDoubleClick={(e) => {
-                      e.stopPropagation()
-                      navigateToParentManually()
-                    }}
-                    role="button"
-                  >
-                    <div className="sdetail-file-left">
-                      <Folder size={13} className="sdetail-file-icon dir" />
-                      <span className="sdetail-file-name">..</span>
-                    </div>
-                    <div className="sdetail-file-right">
-                      <span className="sdetail-file-size" />
-                    </div>
+      <div
+        className="sdetail-file-area"
+        aria-busy={isConnecting || serverDetail.loading}
+        ref={bodyRef}
+        onScroll={handleScroll}
+        onClick={(e) => {
+          // Clear selection when clicking on empty area
+          if (e.target === e.currentTarget || (e.target as HTMLElement).closest('.sdetail-file-empty')) {
+            clearSelection(profileId)
+          }
+        }}
+        onContextMenu={(e) => {
+          if (e.target === e.currentTarget || (e.target as HTMLElement).closest('.sdetail-file-empty')) {
+            e.preventDefault()
+            setCtx({ x: e.clientX, y: e.clientY, entry: null })
+          }
+        }}
+      >
+        <div className="sdetail-file-list">
+          {isConnecting && (
+            <Loading />
+          )}
+          {hasError && (
+            <div className="sdetail-file-error">
+              <AlertCircle size={14} />
+              <span>{serverDetail.error}</span>
+            </div>
+          )}
+          {isConnected && (
+            <>
+              {/* Parent directory entry ".." */}
+              {serverDetail.currentPath !== '/' && serverDetail.currentPath !== '' && (
+                <div
+                  className="sdetail-file-row"
+                  style={{ cursor: 'pointer' }}
+                  onDoubleClick={(e) => {
+                    e.stopPropagation()
+                    navigateToParentManually()
+                  }}
+                  role="button"
+                >
+                  <div className="sdetail-file-left">
+                    <Folder size={13} className="sdetail-file-icon dir" />
+                    <span className="sdetail-file-name">..</span>
                   </div>
-                )}
-                {serverDetail.loading && (
-                  <div className="sdetail-file-loading">
-                    <Loader2 size={14} className="animate-spin" />
-                    <span>加载中...</span>
+                  <div className="sdetail-file-right">
+                    <span className="sdetail-file-size" />
                   </div>
-                )}
-                {!serverDetail.loading && serverDetail.files.length === 0 && (
-                  <div className="sdetail-file-empty sdetail-file-loading">
-                    <Inbox size={14} />
-                    <span>空文件夹</span>
-                  </div>
-                )}
-                {!serverDetail.loading && serverDetail.files.map((f) => renderFileRow(f))}
-              </>
-            )}
-          </div>
+                </div>
+              )}
+              {serverDetail.loading && (
+                <Loading />
+              )}
+              {!serverDetail.loading && !hasError && serverDetail.files.length === 0 && (
+                <div className="sdetail-file-empty sdetail-file-loading">
+                  <Inbox size={14} />
+                  <span>空文件夹</span>
+                </div>
+              )}
+              {!serverDetail.loading && serverDetail.files.map((f) => renderFileRow(f))}
+            </>
+          )}
         </div>
-      )}
-
-      {/* Bottom panels — pinned at the bottom, collapsible */}
-      <div className="sdetail-bottom">
-        {/* System Metrics */}
-        <section className="psec sdetail-bottom-sec" data-expanded={!detail.metricsCollapsed}>
-          <button
-            type="button"
-            className="psec-title sdetail-collapse-hdr"
-            onClick={() => toggleMetrics(tabId)}
-            aria-label={detail.metricsCollapsed ? '展开系统指标' : '折叠系统指标'}
-            aria-expanded={!detail.metricsCollapsed}
-          >
-            <span className="sdetail-collapse-main">
-              <Cpu size={11} className="psec-title-icon" />
-              <span className="psec-title-text">系统指标</span>
-              <ChevronDown
-                size={12}
-                className={`sdetail-collapse-chev${detail.metricsCollapsed ? ' collapsed' : ''}`}
-              />
-            </span>
-            {detail.metricsCollapsed && (
-              <span className="sdetail-metric-summary" aria-hidden="true">
-                <span className="sdetail-summary-item">
-                  <span className="sdetail-summary-copy">
-                    <span className="sdetail-summary-label">CPU</span>
-                    <span className="sdetail-summary-value">{isOff ? '—' : `${Math.round(metrics.cpu)}%`}</span>
-                  </span>
-                  <span className="sdetail-summary-track" aria-hidden="true">
-                    <span className="cpu" style={{ width: isOff ? '0%' : boundedPercent(metrics.cpu) }} />
-                  </span>
-                </span>
-                <span className="sdetail-summary-item">
-                  <span className="sdetail-summary-copy">
-                    <span className="sdetail-summary-label">内存</span>
-                    <span className="sdetail-summary-value">{isOff ? '—' : `${Math.round(metrics.mem_percent)}%`}</span>
-                  </span>
-                  <span className="sdetail-summary-track" aria-hidden="true">
-                    <span className="mem" style={{ width: isOff ? '0%' : boundedPercent(metrics.mem_percent) }} />
-                  </span>
-                </span>
-                <span className="sdetail-summary-item">
-                  <span className="sdetail-summary-copy">
-                    <span className="sdetail-summary-label">磁盘</span>
-                    <span className="sdetail-summary-value">{isOff ? '—' : `${Math.round(metrics.disk_percent)}%`}</span>
-                  </span>
-                  <span className="sdetail-summary-track" aria-hidden="true">
-                    <span className="disk" style={{ width: isOff ? '0%' : boundedPercent(metrics.disk_percent) }} />
-                  </span>
-                </span>
-                <span className="sdetail-summary-network">
-                  <span className="sdetail-summary-label">网络</span>
-                  {isOff ? <span className="sdetail-summary-value">—</span> : (
-                    <span className="sdetail-summary-rates">
-                      <span className="is-rx">↓ {formatRateCompact(metrics.net_rx)}</span>
-                      <span className="is-tx">↑ {formatRateCompact(metrics.net_tx)}</span>
-                    </span>
-                  )}
-                </span>
-              </span>
-            )}
-          </button>
-          {!detail.metricsCollapsed && (
-            <div className="psec-body sdetail-metrics-body">
-              <DetailTooltip
-                side="top"
-                content={metrics?.cpu_detail?.length ? (
-                  <div style={{ display: 'grid', gridTemplateColumns: 'auto auto', gap: '2px 12px' }}>
-                    {metrics.cpu_detail.map((v, i) => (
-                      <React.Fragment key={i}>
-                        <span className="opacity-70">Core {i}</span>
-                        <span className="font-mono text-right">{v.toFixed(1)}%</span>
-                      </React.Fragment>
-                    ))}
-                  </div>
-                ) : null}
-              >
-                <div className="metric" style={{ opacity: isOff || !metrics ? 0.4 : 1 }}>
-                  <div className="m-head">
-                    <span className="m-label">CPU</span>
-                    <span className="m-val">{`${metrics.cpu.toFixed(1)}%`}</span>
-                  </div>
-                  <div className="m-bar">
-                    <div className="m-fill cpu" style={{ width: `${metrics.cpu}%` }} />
-                  </div>
-                  <div className="m-sub">
-                    {(() => {
-                      const mhz = metrics.cpu_mhz || info.cpu_mhz
-                      return <span>{mhz ? `${(mhz / 1000).toFixed(2)} GHz` : '—'}</span>
-                    })()}
-                  </div>
-                </div>
-              </DetailTooltip>
-              <DetailTooltip
-                side="top"
-                content={metrics.mem_detail?.length ? (
-                  <div style={{ display: 'grid', gridTemplateColumns: '100px auto auto', gap: '2px 10px' }}>
-                    {metrics.mem_detail.map((p, i) => (
-                      <React.Fragment key={i}>
-                        <span className="opacity-70 truncate">{p.name}</span>
-                        <span className="font-mono text-right">{p.percent.toFixed(1)}%</span>
-                        <span className="font-mono text-right opacity-70">{formatBytes(p.rss)}</span>
-                      </React.Fragment>
-                    ))}
-                  </div>
-                ) : null}
-              >
-                <div className="metric" style={{ opacity: isOff || !metrics ? 0.4 : 1 }}>
-                  <div className="m-head">
-                    <span className="m-label">内存</span>
-                    <span className="m-val">{`${metrics.mem_percent.toFixed(1)}%`}</span>
-                  </div>
-                  <div className="m-bar">
-                    <div className="m-fill mem" style={{ width: `${metrics.mem_percent}%` }} />
-                  </div>
-                  <div className="m-sub">
-                    <span>{`${formatBytes(metrics.mem_used)} / ${formatBytes(metrics.mem_total)}`}</span>
-                  </div>
-                </div>
-              </DetailTooltip>
-              <div className="metric" style={{ opacity: isOff || !metrics ? 0.4 : 1 }}>
-                <div className="m-head">
-                  <span className="m-label">磁盘</span>
-                  <span className="m-val">{`${metrics.disk_percent.toFixed(1)}%`}</span>
-                </div>
-                <div className="m-bar">
-                  <div className="m-fill disk" style={{ width: `${metrics.disk_percent}%` }} />
-                </div>
-                <div className="m-sub">
-                  <span>{`${formatBytes(metrics.disk_used)} / ${formatBytes(metrics.disk_total)}`}</span>
-                </div>
-              </div>
-              <DetailTooltip
-                side="top"
-                content={metrics.net_detail?.length ? (
-                  <div style={{ display: 'grid', gridTemplateColumns: '80px auto auto', gap: '1px 8px', fontSize: '10px' }}>
-                    {metrics.net_detail.map((n, i) => (
-                      <React.Fragment key={i}>
-                        <span className="opacity-70 truncate">{n.name}</span>
-                        <span className="font-mono text-right">↓{formatBytesPerSec(n.rx)}</span>
-                        <span className="font-mono text-right">↑{formatBytesPerSec(n.tx)}</span>
-                      </React.Fragment>
-                    ))}
-                  </div>
-                ) : null}
-              >
-                <div className="metric metric-compact" style={{ opacity: isOff || !metrics ? 0.4 : 1 }}>
-                  <div className="m-head">
-                    <span className="m-label">网络</span>
-                  </div>
-                  <div className="sdetail-network-values">
-                    <span className="is-rx">↓ {formatBytesPerSec(metrics.net_rx)}</span>
-                    <span className="is-tx">↑ {formatBytesPerSec(metrics.net_tx)}</span>
-                  </div>
-                </div>
-              </DetailTooltip>
-            </div>
-          )}
-        </section>
-
-        {/* Server Info */}
-        <section className="psec sdetail-bottom-sec" data-expanded={!detail.infoCollapsed}>
-          <button
-            type="button"
-            className="psec-title sdetail-collapse-hdr"
-            onClick={() => toggleInfo(tabId)}
-            aria-label={detail.infoCollapsed ? '展开服务器信息' : '折叠服务器信息'}
-            aria-expanded={!detail.infoCollapsed}
-          >
-            <span className="sdetail-collapse-main">
-              <HardDrive size={11} className="psec-title-icon" />
-              <span className="psec-title-text">服务器信息</span>
-              <ChevronDown
-                size={12}
-                className={`sdetail-collapse-chev${detail.infoCollapsed ? ' collapsed' : ''}`}
-              />
-            </span>
-            {detail.infoCollapsed && (
-              <span className="sdetail-info-summary" aria-hidden="true">
-                <span>{info.hostname || profileName}</span>
-                <span className="sdetail-info-summary-sep">·</span>
-                <span className="sdetail-info-platform" title={platformDisplay}>{platformDisplay}</span>
-              </span>
-            )}
-          </button>
-          {!detail.infoCollapsed && (
-            <div className="psec-body sdetail-info-body">
-              <div className="info-row">
-                <span className="info-label">主机名</span>
-                <span className="info-val">{info.hostname || profileName}</span>
-              </div>
-              <div className="info-row">
-                <span className="info-label">连接</span>
-                <DetailTooltip
-                  triggerClassName="flex-1 min-w-0"
-                  content={renderInfoTooltip([
-                    { label: '用户', value: username },
-                    { label: '主机', value: host },
-                    { label: '端口', value: String(port) },
-                    { label: '地址', value: `${username}@${host}:${port}` },
-                  ])}
-                >
-                  <span className="info-val">{connectionDisplay}</span>
-                </DetailTooltip>
-              </div>
-              <div className="info-row">
-                <span className="info-label">平台</span>
-                <DetailTooltip
-                  triggerClassName="flex-1 min-w-0"
-                  content={renderInfoTooltip([
-                    { label: '系统', value: info.os || '—' },
-                    { label: '内核', value: info.kernel || '—' },
-                    { label: '架构', value: info.arch || '—' },
-                  ])}
-                >
-                  <span className="info-val">{platformDisplay}</span>
-                </DetailTooltip>
-              </div>
-              <div className="info-row">
-                <span className="info-label">状态</span>
-                <DetailTooltip
-                  triggerClassName="flex-1 min-w-0"
-                  content={renderInfoTooltip([
-                    { label: '连接', value: statusText },
-                    { label: '运行', value: info.uptime || '—' },
-                  ])}
-                >
-                  <span className="info-val">{runtimeDisplay}</span>
-                </DetailTooltip>
-              </div>
-              <div className="info-row">
-                <span className="info-label">负载</span>
-                <DetailTooltip
-                  triggerClassName="flex-1 min-w-0"
-                  content={renderInfoTooltip([
-                    { label: '平均', value: info.load_avg || '—' },
-                    { label: '细节', value: parseLoadDetail(info.load_avg_detail || '') || '—' },
-                    { label: '核心', value: info.cpus ? `${info.cpus} 核` : '—' },
-                  ])}
-                >
-                  <span className="info-val">{loadDisplay}</span>
-                </DetailTooltip>
-              </div>
-            </div>
-          )}
-        </section>
       </div>
 
       {!isDesktopRuntime() && <EditorDialog />}

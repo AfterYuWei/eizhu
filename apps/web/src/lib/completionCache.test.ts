@@ -13,14 +13,14 @@ describe('补全有界 LRU', () => {
     scope = 'account1/profile1/connection1'; vi.advanceTimersByTime(100)
     expect(cache.get('generator', '/a', 100)).toBeNull()
   })
-  it('128 项淘汰最近未读取项，候选最多 200 项', () => {
+  it('128 项淘汰最近未读取项，保留完整候选供后续前缀过滤', () => {
     const cache = createCompletionCache()
     for (let i = 0; i < 128; i++) cache.set(String(i), '/', { output: '' })
     cache.get('0', '/', 10000)
     cache.set('128', '/', { output: '', candidates: Array.from({ length: 300 }, (_, i) => ({ name: String(i), is_dir: false })) })
     expect(cache.get('1', '/', 10000)).toBeNull()
     expect(cache.get('0', '/', 10000)).not.toBeNull()
-    expect(cache.get('128', '/', 10000)?.candidates).toHaveLength(200)
+    expect(cache.get('128', '/', 10000)?.candidates).toHaveLength(300)
   })
   it('按 UTF-8 字节限制 1 MiB 并淘汰旧条目', () => {
     const cache = createCompletionCache()

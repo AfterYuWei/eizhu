@@ -1,3 +1,4 @@
+import { Loading } from '@/components/ui/loading'
 import { ItemSyncBadge } from '@/components/SyncIndicator';
 import { useState,useMemo,useEffect,useRef,type ReactNode } from 'react';
 import { Plus,Edit,Trash2,Server,FolderPlus,FolderEdit,ChevronDown } from 'lucide-react';
@@ -20,10 +21,8 @@ import { AlertDialog,AlertDialogAction,AlertDialogCancel,AlertDialogContent,Aler
 import type { Profile } from '@/types/profile';
 import type { Group } from '@/types/group';
 const UNGROUPED_ID = '__ungrouped__';
-export function Sidebar({ collapsed = false, onToggle, onAddServer }: {
+export function Sidebar({ onAddServer }: {
     visible?: boolean;
-    collapsed?: boolean;
-    onToggle?: () => void;
     onAddServer?: () => void;
 }) {
     const { collapsedGroups, toggleGroup } = useDesktopShellStore();
@@ -107,7 +106,7 @@ export function Sidebar({ collapsed = false, onToggle, onAddServer }: {
         return tab?.profileId;
     }, [tabs, activeTabId]);
     const handleConnect = (profile: Profile) => {
-        const shouldReuseActiveDraft = activeTab?.kind === 'terminal' &&
+        const shouldReuseActiveDraft = activeTab &&
             !activeTab.profileId &&
             !activeTab.sessionId;
         openTab(profile.id, profile.name, profile.host, profile.port, profile.username, shouldReuseActiveDraft ? activeTab.id : undefined);
@@ -218,7 +217,7 @@ export function Sidebar({ collapsed = false, onToggle, onAddServer }: {
     const renderServerRow = (profile: Profile) => {
         const isSelected = profile.id === selectedProfileId;
         const isActive = profile.id === activeProfileId;
-        const tab = tabs.find((t) => t.kind === 'terminal' && t.profileId === profile.id && t.status === 'connected') ?? tabs.find((t) => t.kind === 'terminal' && t.profileId === profile.id);
+        const tab = tabs.find((t) => t.profileId === profile.id && t.status === 'connected') ?? tabs.find((t) => t.profileId === profile.id);
         const status = tab?.status ?? 'disconnected';
         const Icon = resolveServerIcon(profile.icon);
         const meta = profile.port && profile.port !== 22
@@ -286,9 +285,7 @@ export function Sidebar({ collapsed = false, onToggle, onAddServer }: {
     };
     return (<div className="shell-server-list">
       <div className="shell-section-heading">
-        <Button variant="ghost" className="shell-section-toggle" aria-expanded={!collapsed} onClick={onToggle}>
-          <ChevronDown className={collapsed ? 'is-collapsed' : ''} size={12}/><span>服务器分组</span><span className="shell-count">{profiles.length}</span>
-        </Button>
+        <h2 className="shell-section-title"><span>服务器</span><span className="shell-count">{profiles.length}</span></h2>
         <DropdownMenu>
           <DropdownMenuTrigger asChild><ShellIconButton label="新增服务器或分组"><Plus size={15}/></ShellIconButton></DropdownMenuTrigger>
           <DropdownMenuContent data-sidebar-popover align="end">
@@ -297,10 +294,8 @@ export function Sidebar({ collapsed = false, onToggle, onAddServer }: {
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
-          <div className="sidebar-body" hidden={collapsed} inert={collapsed} onContextMenu={handleBlankContextMenu} onClick={() => setSelectedProfileId(null)}>
-            {loading ? (<div className="sidebar-empty">
-                <span>加载中…</span>
-              </div>) : profiles.length === 0 && groups.length === 0 ? (<div className="sidebar-empty">
+          <div className="sidebar-body" onContextMenu={handleBlankContextMenu} onClick={() => setSelectedProfileId(null)}>
+            {loading ? (<Loading />) : profiles.length === 0 && groups.length === 0 ? (<div className="sidebar-empty">
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round">
                   <circle cx="7" cy="7" r="4.5"/>
                   <line x1="10.2" y1="10.2" x2="14" y2="14"/>
@@ -325,7 +320,6 @@ export function Sidebar({ collapsed = false, onToggle, onAddServer }: {
       {/* Profile context menu */}
       {profileMenu && (<SftpContextMenu sidebarPopover x={profileMenu.x} y={profileMenu.y} onClose={() => setProfileMenu(null)} items={[
                 { id: 'connect', label: '连接', icon: <Server size={13}/>, onClick: () => handleConnect(profileMenu.profile) },
-                { id: 'divider-edit', label: '', divider: true },
                 { id: 'edit', label: '编辑', icon: <Edit size={13}/>, onClick: () => handleEditProfile(profileMenu.profile) },
                 { id: 'divider-delete', label: '', divider: true },
                 { id: 'delete', label: '删除', icon: <Trash2 size={13}/>, danger: true, onClick: () => void handleDeleteProfile(profileMenu.profile) },

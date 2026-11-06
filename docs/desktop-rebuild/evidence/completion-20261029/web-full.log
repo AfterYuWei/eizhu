@@ -1,0 +1,16 @@
+
+> test:unit
+> vitest run
+
+
+ RUN  v5.0.5 /Users/yuwei/Desktop/Projects/yuweinfo/XControl/apps/web
+
+
+ Test Files  78 passed (78)
+      Tests  870 passed (870)
+   Start at  23:37:14
+   Duration  19.38s (environment 44%, import 27%, tests 22%, transform 7%)
+
+    Isolate  78 workers spawned · ~1.74s startup each (spawn + environment, per file)
+             at least ~7.31s faster with isolate: false — reuses workers across files instead of one per file
+

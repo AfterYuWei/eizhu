@@ -351,14 +351,46 @@ export const terminalThemes: TerminalTheme[] = [
   },
 ]
 
-/** 根据 id 获取主题，找不到则返回默认主题 */
+/** 获取原始终端配色，命令标识不修改文字颜色。 */
 export function getTerminalTheme(id: string): ITheme {
-  return terminalThemes.find((t) => t.id === id)?.theme ?? terminalThemes[0].theme
+  return getTerminalThemeMeta(id).theme
 }
 
 /** 获取主题元信息（包含背景色与分类） */
 export function getTerminalThemeMeta(id: string): TerminalTheme {
   return terminalThemes.find((t) => t.id === id) ?? terminalThemes[0]
+}
+
+/** Keep semantic accents in the selected palette, with readable contrast on its background. */
+export function getTerminalHighlightColors(id: string) {
+  const meta = getTerminalThemeMeta(id)
+  const theme = meta.theme
+  const rgb = (hex: string) => [1, 3, 5].map((start) => parseInt(hex.slice(start, start + 2), 16))
+  const luminance = (channels: number[]) => channels.reduce((sum, value, index) => {
+    const channel = value / 255
+    return sum + (channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4) * [0.2126, 0.7152, 0.0722][index]
+  }, 0)
+  const background = luminance(rgb(theme.background!))
+  const text = rgb(theme.foreground!)
+  const textLight = luminance(text)
+  const foreground = (Math.max(textLight, background) + 0.05) / (Math.min(textLight, background) + 0.05) >= 4.5
+    ? text : background > 0.179 ? [0, 0, 0] : [255, 255, 255]
+  const readable = (color: string) => {
+    const original = rgb(color)
+    for (let step = 0; step <= 10; step++) {
+      const mixed = original.map((value, index) => Math.round(value + (foreground[index] - value) * step / 10))
+      const light = luminance(mixed)
+      if ((Math.max(light, background) + 0.05) / (Math.min(light, background) + 0.05) >= 4.5 || step === 10)
+        return '#' + mixed.map((value) => value.toString(16).padStart(2, '0')).join('')
+    }
+    return theme.foreground!
+  }
+  return {
+    error: readable(theme.red!),
+    warning: readable(theme.yellow!),
+    info: readable(theme.cyan!),
+    muted: readable(theme.brightBlack!),
+  }
 }
 
 /**

@@ -1,0 +1,60 @@
+
+> test:unit
+> vitest run src/lib/completionContext.audit.test.ts
+
+
+ RUN  v5.0.5 /Users/yuwei/Desktop/Projects/yuweinfo/XControl/apps/web
+
+ ❯ src/lib/completionContext.audit.test.ts (4 tests | 4 failed) 12ms
+   × 查询上下文应随选项变化：git -C /other-repo checkout fe 7ms
+   × 查询上下文应随选项变化：docker -H tcp://fixture.invalid:2375 logs we 2ms
+   × 查询上下文应随选项变化：kubectl --kubeconfig=/tmp/qa-config get pods we 1ms
+   × 查询上下文应随选项变化：systemctl --user start ap 1ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/lib/completionContext.audit.test.ts > 查询上下文应随选项变化：git -C /other-repo checkout fe
+AssertionError: expected { generatorId: 'git-branches', …(3) } to not deeply equal { generatorId: 'git-branches', …(3) }
+
+Compared values have no visual difference.
+
+ ❯ src/lib/completionContext.audit.test.ts:10:57
+      8|   ['systemctl start ap', 'systemctl --user start ap'],
+      9| ]) it(`查询上下文应随选项变化：${overridden}`, () => {
+     10|   expect(getDynamicGenerator(tokenize(overridden))).not.toEqual(getDyn…
+       |                                                         ^
+     11| })
+     12|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  src/lib/completionContext.audit.test.ts > 查询上下文应随选项变化：docker -H tcp://fixture.invalid:2375 logs we
+ FAIL  src/lib/completionContext.audit.test.ts > 查询上下文应随选项变化：kubectl --kubeconfig=/tmp/qa-config get pods we
+ FAIL  src/lib/completionContext.audit.test.ts > 查询上下文应随选项变化：systemctl --user start ap
+AssertionError: expected { …(4) } to not deeply equal { …(4) }
+
+Compared values have no visual difference.
+
+ ❯ src/lib/completionContext.audit.test.ts:10:57
+      8|   ['systemctl start ap', 'systemctl --user start ap'],
+      9| ]) it(`查询上下文应随选项变化：${overridden}`, () => {
+     10|   expect(getDynamicGenerator(tokenize(overridden))).not.toEqual(getDyn…
+       |                                                         ^
+     11| })
+     12|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  4 failed (4)
+   Start at  23:45:10
+   Duration  204ms (transform 40%, import 28%, tests 23%, worker 9%)
+
+npm error Lifecycle script `test:unit` failed with error:
+npm error code 1
+npm error path /Users/yuwei/Desktop/Projects/yuweinfo/XControl/apps/web
+npm error workspace @eizhu/web
+npm error location /Users/yuwei/Desktop/Projects/yuweinfo/XControl/apps/web
+npm error command failed
+npm error command sh -c vitest run src/lib/completionContext.audit.test.ts

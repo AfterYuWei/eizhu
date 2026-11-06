@@ -1,0 +1,19 @@
+{
+  "name": "eizhu-0.5.0-test.375.4e5ae372-mac-x64.dmg",
+  "sha256": "0d437c85b7abf3fd380e9bc27be0ad5aba7d930198c60f67da7467e72f336700",
+  "build": {
+    "base": "0.5.0",
+    "version": "0.5.0-test.375.4e5ae372",
+    "channel": "test",
+    "revision": "4e5ae3722e7fea4947acab655dc9c3f53c04caa5",
+    "platform": "darwin",
+    "arch": "x64",
+    "feeds": {},
+    "updateRepository": {
+      "owner": "AfterYuWei",
+      "repo": "eizhu"
+    },
+    "sourceDigest": "66ada8b18d8fc3231299cac1415ccdad3211e60da05a48275e1219690015f3fc"
+  },
+  "sourceMatches": true
+}

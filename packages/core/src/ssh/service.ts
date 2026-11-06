@@ -1,35 +1,44 @@
-/* eslint-disable no-control-regex -- Remote OSC sequences contain literal terminal control bytes. */
 import { randomUUID,createHash } from 'node:crypto'
-import { StringDecoder } from 'node:string_decoder'
+import { executeAgentCommand, shellQuote } from '../agent/executor.ts'
+import type { AiTarget, AiProposal } from '@eizhu/contracts'
 import { posix } from 'node:path'
 import type { ClientChannel } from 'ssh2'
-import { ssh, fail, failureOf } from '@eizhu/contracts'
+import { ssh, fail, failureOf, DesktopError, isPublicTunnelBind } from '@eizhu/contracts'
 import type { RuntimeContext } from '@eizhu/contracts'
 import type { Session, SessionCreateRequest } from '@eizhu/contracts/models/session'
-import type { SessionMessage, ConnectionLogEntry } from '@eizhu/contracts/models/sessionMessage'
+import type { SessionMessage, ConnectionLogEntry, SessionTarget } from '@eizhu/contracts/models/sessionMessage'
 import type { TunnelConfig, TunnelStatus } from '@eizhu/contracts/models/api'
 import type { WorkerClient } from '../workers/client.ts'
 import { SshConnection, execBounded } from './connection.ts'
 import type { HandshakeHooks } from './connection.ts'
 import type { ConnectionHop } from './plan.ts'
 import { TerminalStream } from './stream.ts'
+import { ShellOutput, shellSetupCommand, loginShell } from './shell.ts'
 import type { BinaryPort } from './stream.ts'
 import { complete, readDirectory } from './completion.ts'
-import { INFO_COMMAND, METRICS_COMMAND, parseInfo, parseMetrics } from './metrics.ts'
+import { INFO_COMMAND, SUMMARY_COMMAND, METRIC_COMMANDS, parseInfo, parseSummary, parseMetricDetail } from './metrics.ts'
 import { TunnelListener } from './tunnel.ts'
 interface TerminalSession {
+  expectedTarget?: SessionCreateRequest['expected_target']
+  target?: SessionTarget
+  system?: string
+  endpoint?: { host: string; port: number; username: string }
   meta: Session
   cols: number
   rows: number
   connection: SshConnection
   stream: TerminalStream
   shell?: ClientChannel
+  shellKind?: ReturnType<typeof loginShell>
+  output?: ShellOutput
+  agentRunning?: boolean
   task?: Promise<void>
   closing?: Promise<void>
   closed: boolean
   retry: number
   timer?: NodeJS.Timeout
   logs: ConnectionLogEntry[]
+  stage: string
   queries: number
   pending: Map<string, SessionMessage>
   reconnecting?: Promise<{ session_id: string; status: string }>
@@ -59,6 +68,53 @@ interface Tunnel {
 }
 type Emit = (name: 'eizhu-session-message', payload: unknown) => void
 export class SshService {
+  agentReady(sessionId: string, binding: object): void {
+    if (!this.agentConnected(sessionId, binding)) fail('AI_SCOPE_CHANGED', 'SSH连接已变化')
+    const s = this.connected(sessionId)
+    if (!s.shell || !s.shellKind || !s.output)
+      fail('SSH_SHELL_FAILED', '当前终端未启用shell集成，请在终端手动执行')
+    if (s.agentRunning || !s.output.atPrompt)
+      fail('AI_BUSY', '当前终端正在运行程序或有未提交输入，请返回空闲提示符后继续')
+  }
+  agentReadContext(sessionId: string, binding: object, startLine: number | undefined, maxLines: number) {
+    if (!this.agentConnected(sessionId, binding)) fail('AI_SCOPE_CHANGED', 'SSH连接已变化')
+    return this.connected(sessionId).stream.context(startLine, maxLines)
+  }
+  async agentTarget(sessionId: string): Promise<{ target: AiTarget; binding: object }> {
+    const s = this.connected(sessionId), binding = s.connection
+    const p = s.endpoint ?? fail('SSH_NOT_CONNECTED', 'SSH 连接信息尚未就绪')
+    if (!this.agentConnected(sessionId, binding)) fail('SSH_NOT_CONNECTED', 'SSH 连接已变化')
+    return { binding, target: { profileId: s.meta.profile_id, sessionId, host: p.host, port: p.port,
+      username: p.username, cwd: s.cwd ?? '', system: s.system ?? '尚未检测' } }
+  }
+  agentConnected(sessionId: string, binding: object): boolean {
+    const s = this.terminals.get(sessionId)
+    return Boolean(s && !s.closed && s.meta.status === 'connected' && s.connection === binding && s.connection.client && !s.connection.controller.signal.aborted)
+  }
+  async agentExecute(sessionId: string, binding: object, p: AiProposal, signal: AbortSignal, output: (stdout: string, stderr: string) => void) {
+    if (!this.agentConnected(sessionId, binding)) fail('AI_PROPOSAL_EXPIRED', 'SSH 连接已变化，命令未执行')
+    const s = this.connected(sessionId)
+    if (!s.shell || !s.shellKind || !s.output) fail('SSH_SHELL_FAILED', '当前终端未启用 shell 集成，请在终端手动执行')
+    if (s.agentRunning || !s.output.atPrompt) fail('AI_BUSY', '当前终端正在运行程序或有未提交输入，请返回空闲提示符后重新生成命令')
+    if (s.shell.writableLength > 65536) fail('QUEUE_FULL', '终端输入过快，请稍后重试')
+    s.agentRunning = true
+    const terminalOutput = s.output
+    terminalOutput.input()
+    try {
+      return await executeAgentCommand(s.shell, s.shellKind, p.command, p.cwd, p.timeoutSeconds,
+        AbortSignal.any([signal, s.connection.controller.signal]), output, (begin) => {
+          terminalOutput.startAgent(begin)
+          const visible = (p.cwd !== s.cwd ? `cd -- ${shellQuote(p.cwd)}\n` : '') + p.command
+          s.stream.output(Buffer.from(visible.replaceAll('\n', '\r\n') + '\r\n'))
+        })
+    } finally {
+      if (s.output === terminalOutput) {
+        const pending = terminalOutput.finishBootstrap()
+        if (pending.length) s.stream.output(pending)
+      }
+      s.agentRunning = false
+    }
+  }
   private compute: WorkerClient
   private database: WorkerClient
   private context: RuntimeContext
@@ -120,11 +176,12 @@ export class SshService {
     extra: Record<string, unknown> = {},
   ): void {
     s.meta.status = status
+    s.stage = stage
     s.logs.push({ at: Date.now(), level: status === 'error' ? 'error' : 'info', stage, message })
     s.logs = s.logs.slice(-60)
     this.event(s, {
       type: 'connection_state',
-      payload: { session_id: s.meta.id, status, stage, message, logs: s.logs, ...extra },
+      payload: { session_id: s.meta.id, target: s.target, status, stage, message, logs: s.logs, ...extra },
     })
   }
   private cancelPrompts(owner: string): void {
@@ -257,20 +314,40 @@ export class SshService {
     if (s.meta.status !== 'connected' || !s.connection.client) fail('SSH_NOT_CONNECTED', 'SSH 会话尚未连接')
     return s
   }
-  private launch(s: TerminalSession): void {
-    s.task = this.connectTerminal(s).catch(async (cause) => {
+  private launch(s: TerminalSession, plan?: ConnectionHop[]): void {
+    s.task = this.connectTerminal(s, plan).catch(async (cause) => {
       if (s.closed) return
       const error = failureOf(cause)
-      this.state(s, 'error', 'failed', error.message, { error: error.message })
+      this.state(s, 'error', error.stage ?? s.stage, error.message, {
+        error: error.message,
+        error_code: error.code,
+      })
       this.event(s, { type: 'error', payload: { code: error.code, message: error.message } })
       this.cancelPrompts(s.meta.id)
       await s.connection.close()
     })
   }
-  private async connectTerminal(s: TerminalSession): Promise<void> {
+  private async connectTerminal(s: TerminalSession, prepared?: ConnectionHop[]): Promise<void> {
+    s.system = undefined
+    s.endpoint = undefined
     const connection = s.connection,
       owner = s.meta.id
-    const plan = await this.plan({ id: s.meta.profile_id })
+    const plan = prepared ?? (await this.plan({ id: s.meta.profile_id }))
+    const target = plan[plan.length - 1].profile
+    if (
+      s.expectedTarget &&
+      (target.host !== s.expectedTarget.host || target.port !== s.expectedTarget.port)
+    )
+      fail('PROFILE_CHANGED', '服务器地址或端口已变化，请从服务器列表重新连接')
+    s.expectedTarget = { host: target.host, port: target.port }
+    const sessionTarget: SessionTarget = {
+      ...s.expectedTarget,
+      username: target.username,
+      profile_id: target.id,
+      profile_name: target.name,
+    }
+    s.target = sessionTarget
+    this.state(s, 'connecting', 'preparing', '已核对本次连接目标，正在连接')
     const client = await connection.connect(
       plan,
       this.hooks(owner, connection, () => {
@@ -301,9 +378,17 @@ export class SshService {
       }),
     )
     if (s.closed || connection.controller.signal.aborted) return
+    this.state(s, 'connecting', 'starting_shell', '服务器已通过认证，正在请求交互式终端')
     const shell = await new Promise<ClientChannel>((resolve, reject) =>
       client.shell({ term: 'xterm-256color', cols: s.cols, rows: s.rows }, (e, c) =>
-        e ? reject(new Error('Shell unavailable')) : resolve(c),
+        e
+          ? reject(
+              new DesktopError({
+                code: 'SSH_SHELL_FAILED',
+                message: '服务器已通过认证，但未能打开交互式终端',
+              }),
+            )
+          : resolve(c),
       ),
     )
     if (s.closed || connection.controller.signal.aborted) {
@@ -311,31 +396,31 @@ export class SshService {
       return
     }
     s.shell = shell
-    this.state(s, 'connected', 'ready', 'SSH 连接成功')
-    const hop = plan[plan.length - 1]
-    this.event(s, {
-      type: 'metadata',
-      payload: { session_id: owner, host: hop.profile.host, username: hop.profile.username, protocol: 'ssh' },
-    })
-    const decoder = new StringDecoder('utf8')
-    let tail = ''
+    const output = new ShellOutput()
+    s.output = output
+    let ready = false,
+      bootstrapTimer: NodeJS.Timeout | undefined
+    const markReady = () => {
+      if (ready || s.closed || s.connection !== connection || s.shell !== shell || connection.controller.signal.aborted) return
+      ready = true
+      clearTimeout(bootstrapTimer)
+      bootstrapTimer = undefined
+      const hop = plan[plan.length - 1]
+      s.endpoint = { host: hop.profile.host, port: hop.profile.port, username: hop.profile.username }
+      this.state(s, 'connected', 'ready', 'SSH 连接成功')
+      this.event(s, {
+        type: 'metadata',
+        payload: { ...sessionTarget, session_id: owner, protocol: 'ssh' },
+      })
+    }
     shell.on('data', (data: Buffer) => {
-      s.stream.output(data)
-      tail = (tail + decoder.write(data)).slice(-8192)
-      const matches = [...tail.matchAll(/\x1b\]7;file:\/\/[^/\x07\x1b]*([^\x07\x1b]*)(?:\x07|\x1b\\)/g)]
-      if (matches.length) {
-        const m = matches[matches.length - 1]
-        try {
-          const path = decodeURIComponent(m[1])
-          if (path.startsWith('/') && path.length <= 32768 && !/[\x00-\x1f]/.test(path)) {
-            s.cwd = path
-            this.event(s, { type: 'cwd', payload: { path } })
-          }
-        } catch {
-          /* Malformed remote OSC is ignored. */
-        }
-        tail = tail.slice(m.index! + m[0].length)
+      const result = output.push(data)
+      if (result.data.length) s.stream.output(result.data)
+      if (result.cwd) {
+        s.cwd = result.cwd
+        this.event(s, { type: 'cwd', payload: { path: result.cwd } })
       }
+      if (result.ready) markReady()
     })
     shell.stderr.on('data', (data: Buffer) => s.stream.output(data))
     let exitCode = 0
@@ -344,12 +429,31 @@ export class SshService {
     })
     shell.once('error', () => undefined)
     shell.once('close', () => {
-      if (s.closed || s.connection !== connection || s.meta.status !== 'connected') return
+      clearTimeout(bootstrapTimer)
+      if (s.closed || s.connection !== connection || s.shell !== shell) return
       s.shell = undefined
       this.state(s, 'disconnected', 'shell_closed', '远端终端已关闭')
       this.event(s, { type: 'exit', payload: { code: exitCode } })
       void connection.close().catch(() => undefined)
     })
+    // Open the interactive channel first so an auxiliary exec does not consume the login banner.
+    // Restricted servers may deny exec; directory tracking is optional in that case.
+    const detected = await execBounded(client, 'printf \'%s\\n\' "$SHELL"', connection.controller.signal, 4096)
+      .then((result) => result.code === 0 ? result.output : '', () => '')
+    s.shellKind = loginShell(detected)
+    const setup = shellSetupCommand(detected)
+    if (s.closed || s.connection !== connection || s.shell !== shell || connection.controller.signal.aborted) return
+    if (!setup) {
+      markReady()
+      return
+    }
+    output.startBootstrap(setup)
+    bootstrapTimer = setTimeout(() => {
+      const pending = output.finishBootstrap()
+      if (pending.length) s.stream.output(pending)
+      markReady()
+    }, 10000)
+    shell.write(setup + '\n')
   }
   private reconnect(id: string): Promise<{ session_id: string; status: string }> {
     const s = this.get(id)
@@ -369,10 +473,13 @@ export class SshService {
     if (s.closed) fail('CANCELLED', '会话已关闭')
     s.connection = new SshConnection()
     s.shell = undefined
+    s.shellKind = undefined
+    s.output = undefined
     s.metadata = undefined
     s.cwd = undefined
     s.cache.clear()
-    this.state(s, 'connecting', 'connecting', '正在重新连接')
+    s.logs = []
+    this.state(s, 'connecting', 'preparing', '正在重新读取服务器配置与认证方式')
     this.launch(s)
     return { session_id: id, status: 'connecting' }
   }
@@ -413,6 +520,8 @@ export class SshService {
     s.stream.bind(port)
     if (s.state) port.postMessage({ type: 'event', message: s.state })
     if (s.meta.status === 'connected' && s.metadata) port.postMessage({ type: 'event', message: s.metadata })
+    if (s.meta.status === 'connected' && s.cwd)
+      port.postMessage({ type: 'event', message: { type: 'cwd', payload: { path: s.cwd } } })
     for (const message of s.pending.values()) port.postMessage({ type: 'event', message })
   }
   private async decide(requestId: string, fingerprint: string, decision: string) {
@@ -458,10 +567,11 @@ export class SshService {
       case 'session.create': {
         if (this.terminals.size >= 128) fail('QUEUE_FULL', 'SSH 会话过多')
         const { request } = input as { request: SessionCreateRequest }
-        await this.database.call('profile.get', { id: request.profile_id })
+        const plan = await this.plan({ id: request.profile_id })
         const id = randomUUID(),
           connection = new SshConnection()
         const s: TerminalSession = {
+          expectedTarget: request.expected_target,
           meta: {
             id,
             profile_id: request.profile_id,
@@ -474,6 +584,7 @@ export class SshService {
           closed: false,
           retry: 0,
           logs: [],
+          stage: 'preparing',
           queries: 0,
           pending: new Map(),
           cache: new Map(),
@@ -483,15 +594,20 @@ export class SshService {
           }),
         }
         this.terminals.set(id, s)
-        this.state(s, 'connecting', 'connecting', '正在连接')
-        this.launch(s)
+        this.state(s, 'connecting', 'preparing', '正在读取服务器配置与认证方式')
+        this.launch(s, plan)
         return { session_id: id, status: 'connecting' }
       }
       case 'session.list':
         return [...this.terminals.values()].filter((s) => !s.closed).map((s) => s.meta)
       case 'session.attach': {
         const s = this.get((input as { id: string }).id)
-        return [...(s.state ? [s.state] : []), ...(s.metadata ? [s.metadata] : []), ...s.pending.values()]
+        return [
+          ...(s.state ? [s.state] : []),
+          ...(s.metadata ? [s.metadata] : []),
+          ...(s.meta.status === 'connected' && s.cwd ? [{ type: 'cwd', payload: { path: s.cwd } }] : []),
+          ...s.pending.values(),
+        ]
       }
       case 'session.close':
         return this.closeSession((input as { id: string }).id)
@@ -502,6 +618,7 @@ export class SshService {
           s = this.connected(d.id)
         if (!s.shell) fail('SSH_NOT_CONNECTED', '终端未就绪')
         if (s.shell.writableLength > 65536) fail('QUEUE_FULL', '终端输入过快，请稍后重试')
+        s.output?.input()
         s.shell.write(d.data)
         return
       }
@@ -669,7 +786,8 @@ export class SshService {
         this.details.delete((input as { sessionId: string }).sessionId)
         return
       case 'serverDetail.getInfo':
-      case 'serverDetail.getMetrics':
+      case 'serverDetail.getSummary':
+      case 'serverDetail.getMetricDetail':
       case 'serverDetail.listFiles': {
         const d = input as { sessionId: string; path?: string; showHidden?: boolean },
           s = this.connected(d.sessionId)
@@ -698,13 +816,21 @@ export class SshService {
                 })),
             }
           }
+          const kind = operation === 'serverDetail.getMetricDetail' ? ssh[operation].input.parse(input).kind : null
+          const connection = s.connection
           const result = await execBounded(
-            s.connection.client!,
-            operation === 'serverDetail.getInfo' ? INFO_COMMAND : METRICS_COMMAND,
-            s.connection.controller.signal,
+            connection.client!,
+            operation === 'serverDetail.getInfo' ? INFO_COMMAND : kind ? METRIC_COMMANDS[kind] : SUMMARY_COMMAND,
+            connection.controller.signal,
           )
+          if (s.closed || s.connection !== connection || s.meta.status !== 'connected') fail('SSH_NOT_CONNECTED', '服务器连接已变化')
           if (result.code !== 0) fail('SSH_EXEC_FAILED', '服务器查询失败')
-          return operation === 'serverDetail.getInfo' ? parseInfo(result.output) : parseMetrics(result.output)
+          if (operation === 'serverDetail.getInfo') {
+            const info = parseInfo(result.output)
+            s.system = JSON.stringify(info).slice(0, 4096)
+            return info
+          }
+          return kind ? parseMetricDetail(kind, result.output) : parseSummary(result.output)
         } finally {
           s.queries--
         }
@@ -727,8 +853,10 @@ export class SshService {
         this.tunnels.delete(id)
         return result
       }
-      case 'tunnel.start':
-        return this.startTunnel((input as { id: string }).id)
+      case 'tunnel.start': {
+        const { id, confirmedConfig } = ssh[operation].input.parse(input)
+        return this.startTunnel(id, confirmedConfig)
+      }
       case 'tunnel.stop':
         return this.stopTunnel((input as { id: string }).id)
       default:
@@ -752,12 +880,16 @@ export class SshService {
     Object.assign(t.state, changes, { revision: t.state.revision + 1 })
     this.global('tunnel_status', t.config.id, t.state)
   }
-  private async startTunnel(id: string) {
+  private async startTunnel(id: string, confirmedConfig?: TunnelConfig) {
     const existing = this.tunnels.get(id)
     if (existing && !existing.closed && ['running', 'connecting'].includes(existing.state.status))
       return existing.state
     const configs = await this.database.call<TunnelConfig[]>('tunnel.list'),
       config = configs.find((c) => c.id === id) ?? fail('NOT_FOUND', '隧道不存在')
+    if (confirmedConfig && (['id', 'name', 'profile_id', 'kind', 'bind_host', 'bind_port', 'target_host', 'target_port'] as const).some((field) => confirmedConfig[field] !== config[field]))
+      fail('TUNNEL_CONFIG_CHANGED', '映射配置已变化，请重新核对后启动')
+    if (isPublicTunnelBind(config.bind_host) && !confirmedConfig)
+      fail('TUNNEL_PUBLIC_CONFIRM_REQUIRED', '对外监听需要再次确认后才能启动')
     if (existing) await this.stopTunnel(id)
     const t: Tunnel = {
       config,

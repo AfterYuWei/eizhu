@@ -1,9 +1,14 @@
 import { bridge, desktopBootstrap } from './bridge'
-import type { UpdateCandidate, UpdateProgress } from '@eizhu/contracts'
-import type { UpdateChannel } from '@/store/settings'
+import type { UpdateCandidate, UpdateProgress, UpdateChannel } from '@eizhu/contracts'
 export type { UpdateChannel }
 export const buildChannel: UpdateChannel =
-  import.meta.env.VITE_EIZHU_CHANNEL === 'test' || import.meta.env.DEV ? 'test' : 'stable'
+  import.meta.env.VITE_EIZHU_CHANNEL === 'test' ||
+  (!import.meta.env.VITE_EIZHU_CHANNEL && import.meta.env.DEV)
+    ? 'test'
+    : 'stable'
+export function releasePage(channel: UpdateChannel): string {
+  return `https://github.com/AfterYuWei/eizhu/releases${channel === 'stable' ? '/latest' : ''}`
+}
 export function isTestBuild(): boolean {
   return buildChannel === 'test'
 }

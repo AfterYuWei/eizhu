@@ -5,13 +5,16 @@ import type { BrowserWindow } from 'electron'
 import { spawn, execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
-import { existsSync } from 'node:fs'
+import { existsSync, createReadStream } from 'node:fs'
 import { mkdir, writeFile, readFile, stat, readdir, realpath, chmod } from 'node:fs/promises'
 import { join } from 'node:path'
+import { createHash } from 'node:crypto'
 import { gunzipSync } from 'node:zlib'
-import { displayPath } from '@eizhu/core/sftp/endpoint'
+import { displayPath, nativePath } from '@eizhu/core/sftp/endpoint'
 import type { RuntimeHost } from './runtime-host.ts'
 import type { Windows } from './windows.ts'
+import { verifyEditorLayout } from './editor-layout-smoke.ts'
+import { SFTP_TRANSFER_CHUNK_BYTES } from '@eizhu/contracts'
 
 function legacyFiles(sftp: SFTPWrapper) {
   const files = new Map<string, Buffer>([['/legacy.txt', Buffer.from('原文件必须保留')]])
@@ -170,14 +173,14 @@ export async function verifyStage4(
     }
     throw new Error('Stage4 wait timeout')
   }
-  const completed = async (id: string) =>
+  const completed = async (id: string, timeout = 15000) =>
     wait(async () => {
       const t = (
         await call<Array<{ id: string; status: string; error_message?: string }>>('sftp.listTransfers', {})
       ).find((t) => t.id === id)
       if (t?.status === 'failed') throw new Error(t.error_message)
       return t?.status === 'completed' ? true : undefined
-    })
+    }, timeout)
   try {
     const profile = await call<{ id: string }>('profile.create', {
       request: {
@@ -333,16 +336,69 @@ export async function verifyStage4(
       `window.eizhu.sftp.uploadChunk({uploadId:${JSON.stringify(resumed.upload_id)},sequence:1,data:new TextEncoder().encode('def')})`,
     )
     await call('sftp.uploadFinish', { uploadId: resumed.upload_id })
+    await completed(upload.tasks[0].id)
     assert.equal(await readFile(join(remote, 'dest', 'upload.txt'), 'utf8'), 'abcdef')
+    const largeBytes = Number(process.env.EIZHU_SMOKE_SFTP_LARGE_BYTES ?? 32 * 1024 * 1024 + 17)
+    assert.ok(Number.isSafeInteger(largeBytes) && largeBytes >= 32 * 1024 * 1024 && largeBytes <= 8 * 1024 ** 3)
+    const largeStarted = Date.now()
+    const large = await call<{ upload_id: string; tasks: Array<{ id: string }> }>('sftp.uploadBegin', {
+      sessionId, name: 'large-upload.bin', destDir: dest, overwrite: false,
+      size: largeBytes, lastModified: 42,
+    })
+    await window.webContents.executeJavaScript(`(async()=>{
+      const data=new Uint8Array(${SFTP_TRANSFER_CHUNK_BYTES}).fill(73);
+      for(let offset=0,sequence=0;offset<${largeBytes};sequence++){
+        const chunk=data.subarray(0,Math.min(data.length,${largeBytes}-offset));
+        await window.eizhu.sftp.uploadChunk({uploadId:${JSON.stringify(large.upload_id)},sequence,data:chunk});
+        offset+=chunk.length;
+      }
+    })()`)
+    const finishStarted = Date.now()
+    await call('sftp.uploadFinish', { uploadId: large.upload_id })
+    await completed(large.tasks[0].id, 120000)
+    const finalizeMs = Date.now() - finishStarted
+    const largePath = join(remote, 'dest', 'large-upload.bin')
+    assert.equal((await stat(largePath)).size, largeBytes)
+    const actualHash = createHash('sha256')
+    for await (const block of createReadStream(largePath)) actualHash.update(block)
+    const expectedHash = createHash('sha256')
+    const expectedBlock = Buffer.alloc(SFTP_TRANSFER_CHUNK_BYTES, 73)
+    for (let offset = 0; offset < largeBytes; offset += expectedBlock.length)
+      expectedHash.update(expectedBlock.subarray(0, Math.min(expectedBlock.length, largeBytes - offset)))
+    assert.equal(actualHash.digest('hex'), expectedHash.digest('hex'))
+    const largeUploadMs = Date.now() - largeStarted
+    step(`large-upload-${largeBytes}-committed`)
+    const largeTransfers: Array<{ direction: string; bytes: number; elapsedMs: number; sha256: boolean }> = []
+    for (const direction of ['download', 'upload'] as const) {
+      const started = Date.now()
+      const copied = await call<{ tasks: Array<{ id: string }> }>('sftp.transfer', {
+        sourceSessionId: direction === 'download' ? sessionId : localId,
+        targetSessionId: direction === 'download' ? localId : sessionId,
+        paths: [direction === 'download' ? displayPath(largePath) : localPath + '/large-upload.bin'],
+        destDir: direction === 'download' ? localPath : dest + '/renamed',
+        conflictResolution: 'ask', directoryMode: 'preserve', background: true,
+      })
+      await completed(copied.tasks[0].id, 120000)
+      const elapsedMs = Date.now() - started
+      const copiedPath = direction === 'download' ? join(local, 'large-upload.bin') : join(remote, 'dest', 'renamed', 'large-upload.bin')
+      const digest = createHash('sha256')
+      for await (const block of createReadStream(copiedPath)) digest.update(block)
+      const reference = createHash('sha256')
+      for (let offset = 0; offset < largeBytes; offset += expectedBlock.length)
+        reference.update(expectedBlock.subarray(0, Math.min(expectedBlock.length, largeBytes - offset)))
+      assert.equal(digest.digest('hex'), reference.digest('hex'))
+      largeTransfers.push({ direction, bytes: largeBytes, elapsedMs, sha256: true })
+      step(`large-${direction}-${largeBytes}-committed`)
+    }
     const download = await call<{ tasks: Array<{ id: string }> }>('sftp.download', {
       sessionId,
       paths: [source + '/large.bin'],
     })
     await completed(download.tasks[0].id)
     const staged = await runtime.call<{ path: string }>('sftp.downloadPath', { taskId: download.tasks[0].id })
-    assert.equal((await readFile(staged.path)).length, 2 * 1024 * 1024 + 17)
+    assert.equal((await readFile(nativePath(staged.path))).length, 2 * 1024 * 1024 + 17)
     const pulled = await window.webContents.executeJavaScript(
-      `(async()=>{let offset=0;while(true){const b=await window.eizhu.sftp.downloadChunk({taskId:${JSON.stringify(download.tasks[0].id)},offset,maxBytes:524288});if(!b.length)break;offset+=b.length}return offset})()`,
+      `(async()=>{let offset=0;while(true){const b=await window.eizhu.sftp.downloadChunk({taskId:${JSON.stringify(download.tasks[0].id)},offset,maxBytes:${SFTP_TRANSFER_CHUNK_BYTES}});if(!b.length)break;offset+=b.length}return offset})()`,
     )
     assert.equal(pulled, 2 * 1024 * 1024 + 17)
     const transfer = await call<{ tasks: Array<{ id: string }> }>('sftp.transfer', {
@@ -352,6 +408,7 @@ export async function verifyStage4(
       destDir: localPath,
       conflictResolution: 'ask',
       directoryMode: 'preserve',
+      background: true,
     })
     await completed(transfer.tasks[0].id)
     assert.equal(await readFile(join(local, 'source', '配置.json'), 'utf8'), '安全保存\r\n')
@@ -364,6 +421,21 @@ export async function verifyStage4(
       directoryMode: 'preserve',
     })
     assert.ok(conflict.conflicts.length >= 2)
+    const waiting = await call<{ tasks: Array<{ id: string }> }>('sftp.transfer', {
+      sourceSessionId: sessionId, targetSessionId: localId, paths: [source], destDir: localPath,
+      conflictResolution: 'ask', directoryMode: 'preserve', background: true,
+    })
+    const waitingId = waiting.tasks[0].id
+    await wait(async () => {
+      const tasks = await call<Array<{ id: string; status: string; conflict_count?: number }>>('sftp.listTransfers', {})
+      const task = tasks.find((item) => item.id === waitingId)
+      return task?.status === 'paused' && task.conflict_count ? true : undefined
+    })
+    const waitingConflicts = await call<{ conflicts: unknown[] }>('sftp.getTransferConflicts', { taskId: waitingId })
+    assert.ok(waitingConflicts.conflicts.length >= 2)
+    await call('sftp.resolveTransferConflicts', { taskId: waitingId, resolution: 'skip' })
+    await completed(waitingId)
+    step('background-directory-conflicts')
     const tar = await call<{ tasks: Array<{ id: string }> }>('sftp.transfer', {
       sourceSessionId: sessionId,
       targetSessionId: localId,
@@ -371,6 +443,7 @@ export async function verifyStage4(
       destDir: localPath,
       conflictResolution: 'ask',
       directoryMode: 'archive',
+      background: true,
     })
     await completed(tar.tasks[0].id)
     assert.ok(gunzipSync(await readFile(join(local, 'source.tar.gz'))).includes(Buffer.from('安全保存')))
@@ -383,8 +456,9 @@ export async function verifyStage4(
     const zip = await call<{ tasks: Array<{ id: string }> }>('sftp.download', { sessionId, paths: [source] })
     await completed(zip.tasks[0].id)
     const zipPath = await runtime.call<{ path: string }>('sftp.downloadPath', { taskId: zip.tasks[0].id })
-    assert.equal((await readFile(zipPath.path)).readUInt32LE(0), 0x04034b50)
-    if (existsSync('/usr/bin/unzip')) await promisify(execFile)('/usr/bin/unzip', ['-t', zipPath.path])
+    const zipNativePath = nativePath(zipPath.path)
+    assert.equal((await readFile(zipNativePath)).readUInt32LE(0), 0x04034b50)
+    if (existsSync('/usr/bin/unzip')) await promisify(execFile)('/usr/bin/unzip', ['-t', zipNativePath])
     step('streaming-relay-archives')
     await call('editor.open', { sessionId, sessionType: 'sftp', path: file })
     await wait(async () =>
@@ -463,6 +537,7 @@ export async function verifyStage4(
     await editor.webContents.executeJavaScript(
       `Promise.race([document.fonts.ready.then(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))),new Promise(resolve=>setTimeout(resolve,250))])`,
     )
+    const editorLayout = await verifyEditorLayout(editor, window, root)
     await writeFile(join(root, 'stage4-editor.png'), (await editor.webContents.capturePage()).toPNG())
     windows.closeEditor(true)
     step('editor-ownership-and-dirty-close')
@@ -498,14 +573,28 @@ export async function verifyStage4(
       `Promise.race([document.fonts.ready.then(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))),new Promise(resolve=>setTimeout(resolve,250))])`,
     )
     await writeFile(join(root, 'stage4-sftp.png'), (await window.webContents.capturePage()).toPNG())
-    await window.webContents.executeJavaScript(
-      `document.querySelector('button[aria-label="关闭 SFTP"]').click()`,
-    )
-    await wait(async () =>
-      (await window.webContents.executeJavaScript(`!document.querySelector('.sftp-root')`))
-        ? true
-        : undefined,
-    )
+    const fileSessions = await call<Array<{ id: string; profile_id: string }>>('sftp.listSessions')
+    const uiSession = fileSessions.find((session) => session.profile_id === profileId && session.id !== sessionId)
+    assert.ok(uiSession, 'SFTP 页面拥有自己的内部服务器连接')
+    const inFlight = await call<{ upload_id: string; tasks: Array<{ id: string }> }>('sftp.uploadBegin', {
+      sessionId: uiSession.id, name: 'navigation-inflight.txt', destDir: remote, size: 6, overwrite: false, lastModified: 42,
+    })
+    await window.webContents.executeJavaScript(`window.__stage4Sftp=document.querySelector('.sftp-root');document.querySelector('.shell-primary-nav [aria-controls="workspace-vault"]').click()`)
+    await wait(async () => (await window.webContents.executeJavaScript(`document.querySelector('#workspace-sftp').hidden`)) ? true : undefined)
+    await window.webContents.executeJavaScript(`document.dispatchEvent(new KeyboardEvent('keydown',{key:'w',ctrlKey:true,shiftKey:true,bubbles:true,cancelable:true}));document.querySelectorAll('.shell-primary-nav > button')[1].click()`)
+    await wait(async () => (await window.webContents.executeJavaScript(`!document.querySelector('#workspace-sftp').hidden`)) ? true : undefined)
+    assert.equal(await window.webContents.executeJavaScript(`document.querySelector('.sftp-root')===window.__stage4Sftp&&document.querySelectorAll('.sftp-root').length===1&&!document.querySelector('#workspace-sftp').hidden`), true)
+    assert.equal(await window.webContents.executeJavaScript(`document.querySelectorAll('.shell-workspace-tabs .shell-tab-list [role="tab"]').length`), 0)
+    const reopenedSessions = await call<Array<{ id: string }>>('sftp.listSessions')
+    assert.deepEqual(reopenedSessions.map((session) => session.id).sort(), fileSessions.map((session) => session.id).sort())
+    await window.webContents.executeJavaScript(`window.eizhu.sftp.uploadChunk({uploadId:${JSON.stringify(inFlight.upload_id)},sequence:0,data:new TextEncoder().encode('123456')})`)
+    await call('sftp.uploadFinish', { uploadId: inFlight.upload_id })
+    await completed(inFlight.tasks[0].id)
+    assert.equal(await readFile(join(remote, 'navigation-inflight.txt'), 'utf8'), '123456')
+    // 普通导航保持连接；烟测结束时通过内部断开按钮释放合成服务器。
+    await window.webContents.executeJavaScript(`document.querySelectorAll('.sftp-ptab .shell-tab-close').forEach(button=>button.click());document.querySelector('.shell-tab-add').click();delete window.__stage4Sftp`)
+    await wait(async () => (await window.webContents.executeJavaScript(`document.querySelector('#workspace-sftp').hidden`)) ? true : undefined)
+    await window.webContents.executeJavaScript(`document.querySelector('.shell-tab-close').click()`)
     step('sftp-ui-captured')
     const bytes = await readFile(join(root, 'workspaces', 'offline', 'workspace.sqlite'))
     assert.equal(bytes.includes(Buffer.from('upload.txt')), false)
@@ -534,6 +623,8 @@ export async function verifyStage4(
       subsystem: 'OpenSSH sftp-server',
       hostKeyConfirmation: true,
       streaming: true,
+      largeUpload: { bytes: largeBytes, elapsedMs: largeUploadMs, finalizeMs, sha256: true },
+      largeTransfers,
       resume: true,
       relay: true,
       tarGz: true,
@@ -542,9 +633,13 @@ export async function verifyStage4(
       safeSave: true,
       unsupportedAtomicReplacePreservesOriginal: true,
       editorOwnership: true,
+      editorLayout,
       dirtyCloseCancelled: true,
       staleWindowCloseRejected: true,
       encryptedCheckpoints: true,
+      singletonPage: true,
+      navigationRetainsConnections: true,
+      navigationRetainsTransfer: true,
     }
   } finally {
     if (windows.editor) windows.closeEditor(true)

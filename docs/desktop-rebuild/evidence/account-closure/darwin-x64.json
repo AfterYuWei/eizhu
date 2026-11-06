@@ -1,0 +1,138 @@
+{
+  "verifiedAt": "2026-10-27T13:32:26.110Z",
+  "sourceBase": "8cfa5e14baca437b274b89e5a7ceb89785dff9d2",
+  "sourceState": "uncommitted batch 2 workspace changes",
+  "platform": "darwin",
+  "arch": "x64",
+  "version": "0.5.0-test.339.8cfa5e14",
+  "channel": "test",
+  "artifact": {
+    "path": "artifacts/desktop/eizhu-0.5.0-test.339.8cfa5e14-mac-x64.dmg",
+    "bytes": 158144875,
+    "sha256": "28c6f3601e7d3daa729a5c301f65d8a9d9e87956bde2acb5f80ad233bea59af7",
+    "signed": false,
+    "notarized": false
+  },
+  "smokeReportSha256": "5a765d9b4075829cadafe3c682ca85f23ed99f69c137fbddcb7edaaa36ffc15d",
+  "packaged": true,
+  "electron": "44.9.0",
+  "node": "24.22.0",
+  "schema": {
+    "global": 2,
+    "business": 3
+  },
+  "accountFoundation": {
+    "passed": true,
+    "checks": [
+      "旧库密钥错误：拒绝初始化，原全局 schema 与密文保留",
+      "全局 v1→v2、业务 v2→v3：设置、实体、原 outbox 密文保留；一致性副本可读取",
+      "会话与解锁缓存加密；公开状态不包含令牌/密钥；过期保留账号身份",
+      "重启恢复活动账号；A/B/离线分别存储并派生密钥，未自动导入离线数据",
+      "跨账号搬移密文不能解密；退出清除本账号会话和缓存，保留业务库及其他账号",
+      "刷新令牌 CAS 拒绝旧结果；活动空间切换与退出清理在同一 SQLite 事务，中途失败整体回滚",
+      "业务迁移中途失败整体回滚；修复阻断后可重试"
+    ],
+    "runtime": {
+      "restoredAccountIdentity": true,
+      "explicitAccountIsolation": true,
+      "failedTargetRollback": true,
+      "nativeProcessTree": true
+    }
+  },
+  "accountClosure": {
+    "passed": true,
+    "synthetic": true,
+    "realBackend": false,
+    "realEmail": false,
+    "setupGate": true,
+    "restrictedGate": true,
+    "editorCancellation": true,
+    "editorLockedDuringTransition": true,
+    "editorUnlockedOnAuthFailure": true,
+    "rendererTransition": true,
+    "register": true,
+    "emailVerification": true,
+    "passwordReset": true,
+    "concurrentRefresh": true,
+    "lostRefreshRequiresLogin": true,
+    "lostAuthenticationNotReplayed": true,
+    "localLogoutOnRemoteFailure": true,
+    "offlineRestart": true,
+    "accountIsolation": true,
+    "publicTokenRedaction": true,
+    "syncRemainsReserved": true,
+    "screenshots": [
+      "account-login-light.png",
+      "account-signed-in-dark.png",
+      "account-signed-in-narrow.png"
+    ]
+  },
+  "checks": {
+    "types": true,
+    "lint": true,
+    "architecture": true,
+    "fixedBaseline": true,
+    "foundationTests": 109,
+    "webTests": 290,
+    "baselineTests": 10
+  },
+  "isolation": {
+    "rendererNode": "undefined",
+    "rendererRequire": "undefined",
+    "initialAccount": {
+      "loggedIn": false,
+      "sessionState": "anonymous",
+      "syncEnabled": false
+    },
+    "syncPublicOperation": "STAGE_NOT_READY"
+  },
+  "regression": {
+    "stage2": true,
+    "stage3": true,
+    "stage3Storage": true,
+    "stage4": true,
+    "stage5": true,
+    "stage6": true,
+    "workspaceTabs": true
+  },
+  "nativeCrypto": {
+    "kdf": true,
+    "crypto": true,
+    "ssh2": true
+  },
+  "runtimeRecovery": {
+    "failed": "RUNTIME_UNAVAILABLE",
+    "generation": 11,
+    "retainedEditorMemory": true,
+    "persistedSettings": true
+  },
+  "screenshots": [
+    {
+      "path": "account-login-light.png",
+      "sha256": "5987e0c26967297eb4d207f84c7631f4569cf51dfd71d84ef9933104c2a3d2e6"
+    },
+    {
+      "path": "account-signed-in-dark.png",
+      "sha256": "15c80ca9da41729febc255cd87030b6dac02ae04c78fbedecc0a0ce65cdd5fdb"
+    },
+    {
+      "path": "account-signed-in-narrow.png",
+      "sha256": "eacd25c6390c5530ef8425ae94a39bbcc81cab172eb566fdf6d7b30585d57d74"
+    }
+  ],
+  "setupProbe": {
+    "url": "https://eizhu.yuweinfo.com/api/auth/setup",
+    "required": false,
+    "readOnly": true
+  },
+  "remaining": [
+    "真实后端账号与邮件投递",
+    "部署受限模式与 HTTPS/代理故障验证",
+    "同步密码学、首次接入与调度引擎",
+    "真实双端同步",
+    "Windows x64 / macOS arm64 / Linux x64",
+    "真实系统密钥库",
+    "签名公证",
+    "8小时稳定性"
+  ]
+}

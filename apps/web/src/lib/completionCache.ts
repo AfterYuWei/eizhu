@@ -21,7 +21,8 @@ export function createCompletionCache(scope: () => string = () => ''): Completio
     },
     set(generator, cwd, input) {
       const key = keyOf(generator, cwd)
-      const data: CompletionData = { output: input.output.split('\n').slice(0, 200).join('\n'), ...(input.candidates ? { candidates: input.candidates.slice(0, 200) } : {}) }
+      // Filter by the current prefix before limiting display rows. The byte budget bounds raw results.
+      const data: CompletionData = { output: input.output, ...(input.candidates ? { candidates: input.candidates } : {}) }
       const size = new TextEncoder().encode(key + JSON.stringify(data)).byteLength
       remove(key)
       if (size > 1024 * 1024) return

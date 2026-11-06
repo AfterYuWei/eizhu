@@ -1,0 +1,71 @@
+{
+  "date": "2026-11-04",
+  "platform": "darwin",
+  "arch": "x64",
+  "packaged": false,
+  "portMapping": {
+    "passed": true,
+    "syntheticSsh": true,
+    "modes": [
+      "local",
+      "remote",
+      "dynamic"
+    ],
+    "rendererToTcp": true,
+    "singletonTab": true,
+    "independentLifecycle": true,
+    "actualPortClipboard": true,
+    "formValidation": true,
+    "saveOnly": true,
+    "delete": true,
+    "responsive": true,
+    "publicConfirmation": true,
+    "publicUnconfirmedRejected": true,
+    "stalePublicConfirmationRejected": true,
+    "publicRestartRequiresConfirmation": true,
+    "independentModeDrafts": true,
+    "remotePublicListener": true,
+    "selectableTarget": true,
+    "nativeFormFont": true,
+    "reactiveFlowPreview": true,
+    "reducedMotion": true,
+    "screenshots": [
+      "port-mapping-light.png",
+      "port-mapping-dark.png",
+      "port-mapping-large-narrow.png",
+      "port-mapping-form.png",
+      "port-mapping-form-dark.png",
+      "port-mapping-dynamic-flow.png",
+      "port-mapping-public-form.png",
+      "port-mapping-remote-listener.png",
+      "port-mapping-form-large-narrow.png",
+      "port-mapping-form-narrow-flow.png",
+      "port-mapping-public-confirm.png"
+    ]
+  },
+  "desktopRegression": {
+    "stage2": true,
+    "stage3": true,
+    "stage4": true,
+    "stage5": true,
+    "stage6": true,
+    "accountClosure": true,
+    "syncDesktop": true,
+    "workspaceTabs": true
+  },
+  "targetedWebAndApiTests": 19,
+  "webTests": {
+    "files": 84,
+    "passed": 941
+  },
+  "typecheck": "passed",
+  "lint": "passed",
+  "baselineVerify": "passed",
+  "diffCheck": "passed",
+  "newInstallationArtifact": "not_run_ui_only",
+  "pendingPlatforms": [
+    "win32-x64",
+    "darwin-arm64",
+    "linux-x64"
+  ]
+}

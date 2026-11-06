@@ -1,0 +1,65 @@
+{
+  "browser": "Installed Microsoft Edge (headless Web)",
+  "platforms": 11,
+  "sizes": [
+    14,
+    16,
+    24
+  ],
+  "themes": {
+    "light": {
+      "icons": 33,
+      "clipped": 0,
+      "color": "rgb(10, 10, 10)",
+      "brands": [
+        "openai",
+        "anthropic",
+        "deepseek",
+        "qwen",
+        "siliconflow",
+        "moonshot",
+        "zhipu",
+        "volcengine",
+        "gemini",
+        "openrouter",
+        "ollama"
+      ],
+      "special": {
+        "endpoint-first": "siliconflow",
+        "name-fallback": "zhipu",
+        "generic": "custom"
+      }
+    },
+    "dark": {
+      "icons": 33,
+      "clipped": 0,
+      "color": "rgb(237, 237, 237)",
+      "brands": [
+        "openai",
+        "anthropic",
+        "deepseek",
+        "qwen",
+        "siliconflow",
+        "moonshot",
+        "zhipu",
+        "volcengine",
+        "gemini",
+        "openrouter",
+        "ollama"
+      ],
+      "special": {
+        "endpoint-first": "siliconflow",
+        "name-fallback": "zhipu",
+        "generic": "custom"
+      }
+    }
+  },
+  "settings": {
+    "presetBrandIcons": 11,
+    "selectedSiliconflow": true,
+    "textLabelsUnchanged": true
+  },
+  "runtimeErrors": 0,
+  "externalRequests": 0,
+  "licenseServed": true
+}

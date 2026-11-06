@@ -1,0 +1,58 @@
+{
+  "date": "2026-11-05",
+  "sourceCommit": "04286b30",
+  "scope": [
+    "高级设置中的上下文预设及自定义输入",
+    "按供应商加密保留模型目录并支持模型切换"
+  ],
+  "check": true,
+  "lint": true,
+  "focused": {
+    "providerSettings": 25,
+    "domainAndContract": 46
+  },
+  "foundation": {
+    "passed": 254,
+    "skipped": 2,
+    "reason": "未安装Fish"
+  },
+  "web": {
+    "files": 87,
+    "passed": 977
+  },
+  "baselineTests": 10,
+  "baselineVerify": true,
+  "architectureVerify": true,
+  "desktopBuild": true,
+  "electronAiSmoke": true,
+  "finalDmgSmoke": true,
+  "verifiedPackageFiles": 286,
+  "packageVersion": "0.5.0-test.388.04286b30",
+  "cases": {
+    "contextHiddenByDefault": true,
+    "presetAndCustomContext": true,
+    "customContextRestored": true,
+    "cachedModelsAfterReopenAndProviderSwitch": true,
+    "modelSwitchHandsOffConversation": true,
+    "customModelAlongsideCatalog": true,
+    "cacheDoesNotInterruptAgent": true,
+    "staleDiscoveryDoesNotOverwriteChangedConnection": true,
+    "catalogAndContextEncryptedAndRestored": true
+  },
+  "environment": {
+    "platform": "macOS x64",
+    "model": "loopback-synthetic",
+    "ssh": "loopback-synthetic",
+    "sftp": "installed-openssh-subsystem"
+  },
+  "retainedScreenshots": [
+    "ai-settings-context-light.png",
+    "ai-settings-context-dark.png",
+    "ai-settings-context-narrow.png"
+  ],
+  "limitations": [
+    "本轮未使用真实供应商密钥；其他平台、签名/公证未验。",
+    "当前开发窗口未主动重启，需重启开发版加载新的业务契约。",
+    "未下载测试二进制，未修改admin，未推送或发布。"
+  ]
+}

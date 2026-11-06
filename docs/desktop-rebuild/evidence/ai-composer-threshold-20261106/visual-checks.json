@@ -1,0 +1,224 @@
+{
+  "browser": "Installed Microsoft Edge (static Web preview)",
+  "productionComponent": "AiInspector",
+  "contentThreshold": 420,
+  "sidebarThreshold": 464,
+  "layouts": [
+    {
+      "dark": false,
+      "sidebar": 320,
+      "content": 276,
+      "compact": true,
+      "buttonWidths": [
+        28,
+        28
+      ],
+      "sameRow": true,
+      "overflow": false,
+      "model": "DeepSeek-V4.1",
+      "modelClipped": false,
+      "modelWidth": 85.953125,
+      "accessibleAgent": "选择Agent：DeepSeek",
+      "accessibleMode": "执行模式：执行前确认",
+      "title": "DeepSeek-V4.1"
+    },
+    {
+      "dark": false,
+      "sidebar": 400,
+      "content": 356,
+      "compact": true,
+      "buttonWidths": [
+        28,
+        28
+      ],
+      "sameRow": true,
+      "overflow": false,
+      "model": "DeepSeek-V4.1",
+      "modelClipped": false,
+      "modelWidth": 85.953125,
+      "accessibleAgent": "选择Agent：DeepSeek",
+      "accessibleMode": "执行模式：执行前确认",
+      "title": "DeepSeek-V4.1"
+    },
+    {
+      "dark": false,
+      "sidebar": 464,
+      "content": 420,
+      "compact": true,
+      "buttonWidths": [
+        28,
+        28
+      ],
+      "sameRow": true,
+      "overflow": false,
+      "model": "DeepSeek-V4.1",
+      "modelClipped": false,
+      "modelWidth": 85.953125,
+      "accessibleAgent": "选择Agent：DeepSeek",
+      "accessibleMode": "执行模式：执行前确认",
+      "title": "DeepSeek-V4.1"
+    },
+    {
+      "dark": false,
+      "sidebar": 465,
+      "content": 421,
+      "compact": false,
+      "buttonWidths": [
+        72,
+        105.640625
+      ],
+      "sameRow": true,
+      "overflow": false,
+      "model": "DeepSeek-V4.1",
+      "modelClipped": false,
+      "modelWidth": 85.953125,
+      "accessibleAgent": "选择Agent：DeepSeek",
+      "accessibleMode": "执行模式：执行前确认",
+      "title": "DeepSeek-V4.1"
+    },
+    {
+      "dark": false,
+      "sidebar": 560,
+      "content": 516,
+      "compact": false,
+      "buttonWidths": [
+        72,
+        105.640625
+      ],
+      "sameRow": true,
+      "overflow": false,
+      "model": "DeepSeek-V4.1",
+      "modelClipped": false,
+      "modelWidth": 85.953125,
+      "accessibleAgent": "选择Agent：DeepSeek",
+      "accessibleMode": "执行模式：执行前确认",
+      "title": "DeepSeek-V4.1"
+    },
+    {
+      "dark": true,
+      "sidebar": 320,
+      "content": 276,
+      "compact": true,
+      "buttonWidths": [
+        28,
+        28
+      ],
+      "sameRow": true,
+      "overflow": false,
+      "model": "DeepSeek-V4.1",
+      "modelClipped": false,
+      "modelWidth": 85.953125,
+      "accessibleAgent": "选择Agent：DeepSeek",
+      "accessibleMode": "执行模式：执行前确认",
+      "title": "DeepSeek-V4.1"
+    },
+    {
+      "dark": true,
+      "sidebar": 400,
+      "content": 356,
+      "compact": true,
+      "buttonWidths": [
+        28,
+        28
+      ],
+      "sameRow": true,
+      "overflow": false,
+      "model": "DeepSeek-V4.1",
+      "modelClipped": false,
+      "modelWidth": 85.953125,
+      "accessibleAgent": "选择Agent：DeepSeek",
+      "accessibleMode": "执行模式：执行前确认",
+      "title": "DeepSeek-V4.1"
+    },
+    {
+      "dark": true,
+      "sidebar": 464,
+      "content": 420,
+      "compact": true,
+      "buttonWidths": [
+        28,
+        28
+      ],
+      "sameRow": true,
+      "overflow": false,
+      "model": "DeepSeek-V4.1",
+      "modelClipped": false,
+      "modelWidth": 85.953125,
+      "accessibleAgent": "选择Agent：DeepSeek",
+      "accessibleMode": "执行模式：执行前确认",
+      "title": "DeepSeek-V4.1"
+    },
+    {
+      "dark": true,
+      "sidebar": 465,
+      "content": 421,
+      "compact": false,
+      "buttonWidths": [
+        72,
+        105.640625
+      ],
+      "sameRow": true,
+      "overflow": false,
+      "model": "DeepSeek-V4.1",
+      "modelClipped": false,
+      "modelWidth": 85.953125,
+      "accessibleAgent": "选择Agent：DeepSeek",
+      "accessibleMode": "执行模式：执行前确认",
+      "title": "DeepSeek-V4.1"
+    },
+    {
+      "dark": true,
+      "sidebar": 560,
+      "content": 516,
+      "compact": false,
+      "buttonWidths": [
+        72,
+        105.640625
+      ],
+      "sameRow": true,
+      "overflow": false,
+      "model": "DeepSeek-V4.1",
+      "modelClipped": false,
+      "modelWidth": 85.953125,
+      "accessibleAgent": "选择Agent：DeepSeek",
+      "accessibleMode": "执行模式：执行前确认",
+      "title": "DeepSeek-V4.1"
+    }
+  ],
+  "longModel": {
+    "sidebar": 560,
+    "content": 516,
+    "compact": false,
+    "buttonWidths": [
+      72,
+      105.640625
+    ],
+    "sameRow": true,
+    "overflow": false,
+    "model": "DeepSeek-V4.1-2026-1106-Reasoning",
+    "modelClipped": false,
+    "modelWidth": 217.734375,
+    "accessibleAgent": "选择Agent：DeepSeek",
+    "accessibleMode": "执行模式：执行前确认",
+    "title": "DeepSeek-V4.1-2026-1106-Reasoning"
+  },
+  "longerModelAt400": {
+    "sidebar": 400,
+    "content": 356,
+    "compact": true,
+    "buttonWidths": [
+      28,
+      28
+    ],
+    "sameRow": true,
+    "overflow": false,
+    "model": "claude-sonnet-4-5-20250929",
+    "modelClipped": false,
+    "modelWidth": 173.28125,
+    "accessibleAgent": "选择Agent：DeepSeek",
+    "accessibleMode": "执行模式：执行前确认",
+    "title": "claude-sonnet-4-5-20250929"
+  },
+  "runtimeErrors": 0,
+  "externalRequests": 0
+}

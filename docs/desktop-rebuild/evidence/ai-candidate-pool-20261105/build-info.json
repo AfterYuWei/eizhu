@@ -1,0 +1,14 @@
+{
+  "base": "0.5.0",
+  "version": "0.5.0-test.391.beb3a5d7",
+  "channel": "test",
+  "revision": "beb3a5d72e9e307e901f5bf375243d2cff33480e",
+  "platform": "darwin",
+  "arch": "x64",
+  "feeds": {},
+  "updateRepository": {
+    "owner": "AfterYuWei",
+    "repo": "eizhu"
+  },
+  "sourceDigest": "6172b135b8873fe8e06cd0b2b720a36ce609628e812d22164e0a9955fed24ef7"
+}

@@ -1,4 +1,3 @@
-import { Button } from '@/components/ui/button';
 import { registerTerminalActions } from '@/lib/terminalActions';
 import { TerminalFind } from './TerminalFind';
 import { ConnectionPicker } from './ConnectionPicker';
@@ -6,6 +5,7 @@ import { useCallback,useEffect,useMemo,useRef,useState,type CSSProperties } from
 import { useTerminal } from '@/hooks/useTerminal';
 import { useSessionChannel } from '@/hooks/useSessionChannel';
 import { useSessionStore } from '@/store/session';
+import { useWorkspaceViewStore } from '@/store/workspaceView';
 import { useProfileStore } from '@/store/profile';
 import { useHistoryStore } from '@/store/history';
 import { DEFAULT_DESKTOP_TERMINAL_FONT_SIZE,useSettingsStore,useResolvedTheme,} from '@/store/settings';
@@ -23,7 +23,6 @@ interface TerminalPaneProps {
         id: string;
         profileId: string;
         profileName: string;
-        manualConnect?: boolean;
         sessionId: string | null;
         status: 'connecting' | 'connected' | 'disconnected' | 'error' | 'reconnecting';
         host?: string;
@@ -42,9 +41,9 @@ interface TerminalPaneProps {
 export function TerminalPane({ tab, isActive, isVisible = isActive }: TerminalPaneProps) {
     const containerRef = useRef<HTMLDivElement>(null);
     const pickerInputRef = useRef<HTMLInputElement>(null);
-    const { updateTabStatus, updateTabCwd, updateTabLatency, markTabError, markTabReconnecting, clearTabError, closeTab, clearTabHostKeyPrompt, } = useSessionStore();
+    const { updateTabStatus, updateTabTarget, updateTabCwd, updateTabLatency, markTabError, markTabReconnecting, clearTabError, closeTab, clearTabHostKeyPrompt, } = useSessionStore();
     const { profiles, updateDetectedIcon } = useProfileStore();
-    const { fontSize, fontFamily, fontFamilyCN, terminalTheme, terminalPopupMenu, setFontSize, } = useSettingsStore();
+    const { fontSize, fontFamily, fontFamilyCN, terminalTheme, terminalCommandHighlight, terminalLogHighlight, terminalPopupMenu, setFontSize, } = useSettingsStore();
     const effectiveFontSize = fontSize;
     // 默认字体大小（用于显示相对变化）
     const DEFAULT_FONT_SIZE = DEFAULT_DESKTOP_TERMINAL_FONT_SIZE;
@@ -53,6 +52,7 @@ export function TerminalPane({ tab, isActive, isVisible = isActive }: TerminalPa
     const effectiveTerminalTheme = resolveTerminalThemeId(terminalTheme, resolvedAppTheme);
     const [showDialog, setShowDialog] = useState(false);
     const [connectionError, setConnectionError] = useState('');
+    const [connectionErrorCode, setConnectionErrorCode] = useState('');
     const [findOpen, setFindOpen] = useState(false);
     const [dialogStatus, setDialogStatus] = useState<'connecting' | 'connected' | 'error' | 'reconnecting' | 'hostkey'>('connecting');
     const [localStage, setLocalStage] = useState('submitting');
@@ -82,6 +82,9 @@ export function TerminalPane({ tab, isActive, isVisible = isActive }: TerminalPa
     const handleOutputDataRef = useRef<(data: string) => void>(() => { });
     const isReconnectingRef = useRef(false);
     const reconnectRequestPendingRef = useRef(false);
+    const connectionCancelledRef = useRef(false);
+    const cancellationPendingRef = useRef(false);
+    const connectionAttemptRef = useRef(0);
     const cwd = useSessionStore((state) => state.tabs.find((item) => item.id === tab.id)?.cwd);
     const cwdRef = useRef(cwd);
     useEffect(() => {
@@ -92,6 +95,7 @@ export function TerminalPane({ tab, isActive, isVisible = isActive }: TerminalPa
         setShowDialog(true);
         setDialogStatus('connecting');
         setConnectionError('');
+        setConnectionErrorCode('');
         setLocalStage('submitting');
         setBackendStage('');
         setBackendLogs([]);
@@ -144,8 +148,10 @@ export function TerminalPane({ tab, isActive, isVisible = isActive }: TerminalPa
         fontFamily,
         fontFamilyCN,
         terminalTheme: effectiveTerminalTheme,
+        commandMarkers: terminalCommandHighlight,
+        logHighlight: terminalLogHighlight,
         onData: (data) => {
-            if (useSessionStore.getState().activeTabId !== tab.id || !tab.sessionId)
+            if (useWorkspaceViewStore.getState().activePage !== 'terminal' || useSessionStore.getState().activeTabId !== tab.id || !tab.sessionId)
                 return;
             if (tab.sessionId && tab.status === 'connected' && channelStatusRef.current === 'connected') {
                 const consumed = handleDataRef.current(data);
@@ -161,8 +167,10 @@ export function TerminalPane({ tab, isActive, isVisible = isActive }: TerminalPa
         reconnectRequestPendingRef.current = false;
     }, []);
     const reconnectNow = useCallback(async () => {
-        if (reconnectRequestPendingRef.current)
+        if (reconnectRequestPendingRef.current || cancellationPendingRef.current)
             return;
+        const attempt = ++connectionAttemptRef.current;
+        connectionCancelledRef.current = false;
         reconnectRequestPendingRef.current = true;
         isReconnectingRef.current = true;
         beginLocalConnection('正在恢复远程会话');
@@ -172,16 +180,29 @@ export function TerminalPane({ tab, isActive, isVisible = isActive }: TerminalPa
                 .find((candidate) => candidate.id === tab.id)?.sessionId;
             const response = currentSessionId
                 ? await sessionApi.reconnect(currentSessionId)
-                : await sessionApi.create({ profile_id: tab.profileId, cols, rows });
+                : await sessionApi.create({ profile_id: tab.profileId, cols, rows,
+                    ...(tab.host !== undefined && tab.port !== undefined
+                        ? { expected_target: { host: tab.host, port: tab.port } } : {}),
+                });
+            if (attempt !== connectionAttemptRef.current) {
+                try {
+                    await sessionApi.close(response.session_id);
+                } catch (cause) {
+                    console.error('Failed to release a cancelled session:', cause);
+                }
+                return;
+            }
             updateTabStatus(tab.id, 'connecting', response.session_id);
             reconnectRequestPendingRef.current = false;
         }
         catch (cause) {
+            if (attempt !== connectionAttemptRef.current) return;
             resetReconnectState();
             const error = cause as SessionApiError;
             const message = error?.error?.message || '无法恢复远程会话';
-            markTabError(tab.id, tab.errorReason || 'unknown', message);
+            markTabError(tab.id, error?.error?.code || tab.errorReason || 'unknown', message);
             setConnectionError(message);
+            setConnectionErrorCode(error?.error?.code || '');
             setDialogStatus('error');
         }
     }, [
@@ -192,9 +213,12 @@ export function TerminalPane({ tab, isActive, isVisible = isActive }: TerminalPa
         tab.errorReason,
         tab.id,
         tab.profileId,
+        tab.host,
+        tab.port,
         updateTabStatus,
     ]);
     useEffect(() => registerTerminalActions(tab.id, {
+        selection: () => getTerminal()?.getSelection() ?? '',
         focus: () => { if (tab.profileId)
             getTerminal()?.focus();
         else
@@ -221,31 +245,57 @@ export function TerminalPane({ tab, isActive, isVisible = isActive }: TerminalPa
         },
     }), [tab.id, tab.profileId, tab.status, getTerminal, reconnectNow]);
     const currentHostKeyFingerprint = hostKeyPrompt.current;
-    const handleCancel = useCallback(() => {
+    const handleCancel = useCallback(async () => {
+        if (cancellationPendingRef.current) return;
+        cancellationPendingRef.current = true;
+        connectionCancelledRef.current = true;
+        connectionAttemptRef.current++;
         resetReconnectState();
-        closeTab(tab.id);
-    }, [closeTab, resetReconnectState, tab.id]);
+        setAuthRequest(undefined);
+        setHostKeyPrompt({});
+        setShowDialog(false);
+        try {
+            await closeTab(tab.id);
+        } catch (cause) {
+            const error = cause as SessionApiError;
+            const code = error?.error?.code || 'cancel_failed';
+            const message = error?.error?.message || '取消连接失败，请重试';
+            markTabError(tab.id, code, message);
+            setConnectionError(message);
+            setConnectionErrorCode(code);
+            setDialogStatus('error');
+            setShowDialog(true);
+        } finally {
+            cancellationPendingRef.current = false;
+        }
+    }, [closeTab, markTabError, resetReconnectState, tab.id]);
     const decideHostKey = useCallback(async (decision: 'trust_once' | 'trust_permanently' | 'reject') => {
         if (!tab.sessionId || !currentHostKeyFingerprint)
             return;
         try {
             await sessionApi.decideHostKey(hostKeyPrompt.requestId ?? tab.sessionId, currentHostKeyFingerprint, decision);
+            if (connectionCancelledRef.current) return;
             clearTabHostKeyPrompt(tab.id);
             setHostKeyPrompt({});
             if (decision === 'reject') {
-                handleCancel();
+                await handleCancel();
                 return;
             }
             setDialogStatus('connecting');
             setConnectionError('');
         }
         catch (err) {
+            if (connectionCancelledRef.current) return;
             const apiErr = err as SessionApiError;
             setConnectionError(apiErr?.error?.message || '无法继续连接到服务器');
+            setConnectionErrorCode(apiErr?.error?.code || '');
             setDialogStatus('error');
         }
     }, [clearTabHostKeyPrompt, currentHostKeyFingerprint, handleCancel, hostKeyPrompt.requestId, tab.id, tab.sessionId]);
     const handleSessionMessage = useCallback((msg: SessionMessage) => {
+        if (connectionCancelledRef.current) return;
+        const current = useSessionStore.getState().tabs.find((item) => item.id === tab.id);
+        if (!current || current.sessionId !== tab.sessionId || current.profileId !== tab.profileId) return;
         switch (msg.type) {
             case 'output':
                 if (msg.data) {
@@ -255,13 +305,17 @@ export function TerminalPane({ tab, isActive, isVisible = isActive }: TerminalPa
                 break;
             case 'connection_state': {
                 const payload = msg.payload as ConnectionStatePayload;
+                if (payload.session_id !== tab.sessionId) return;
+                if (payload.target) updateTabTarget(tab.id, payload.session_id, payload.target);
                 if (payload?.stage)
                     setBackendStage(payload.stage);
                 if (payload?.logs)
                     setBackendLogs(payload.logs);
                 if (payload?.error)
                     setConnectionError(payload.error);
-                if (payload?.waiting_for_host_key || payload?.stage === 'hostkey_confirm') {
+                if (payload?.error_code)
+                    setConnectionErrorCode(payload.error_code);
+                if (payload?.status !== 'error' && (payload?.waiting_for_host_key || payload?.stage === 'hostkey_confirm')) {
                     setHostKeyPrompt({
                         requestId: payload.host_key_request_id,
                         current: payload.host_key_fingerprint,
@@ -271,25 +325,41 @@ export function TerminalPane({ tab, isActive, isVisible = isActive }: TerminalPa
                     setShowDialog(true);
                     setConnectionError('');
                 }
+                else if (payload?.status === 'error') {
+                    if (payload.error_code === 'PROFILE_CHANGED') void useProfileStore.getState().fetchProfiles();
+                    hasSpecificError.current = true;
+                    resetReconnectState();
+                    setDialogStatus('error');
+                    setShowDialog(true);
+                    updateTabStatus(tab.id, 'disconnected');
+                }
                 else if (payload?.status === 'reconnecting') {
                     isReconnectingRef.current = true;
                     markTabReconnecting(tab.id, payload.retry_attempt || 1, payload.next_retry_at || Date.now());
                     setDialogStatus('reconnecting');
                     setShowDialog(true);
                 }
-                else if (payload?.status === 'connecting' && !isReconnectingRef.current) {
+                else if (payload?.status === 'connecting') {
                     setDialogStatus('connecting');
+                    if (payload.stage === 'preparing') {
+                        if (isReconnectingRef.current) setLocalLogs([]);
+                        setConnectionError('');
+                        setConnectionErrorCode('');
+                    }
                 }
                 break;
             }
             case 'metadata': {
                 const meta = msg.payload as MetaPayload;
+                if (meta.session_id !== tab.sessionId || meta.profile_id !== tab.profileId) return;
+                updateTabTarget(tab.id, meta.session_id, meta);
                 updateTabStatus(tab.id, 'connected', meta.session_id);
                 resetReconnectState();
                 clearTabError(tab.id);
                 clearTabHostKeyPrompt(tab.id);
                 hasSpecificError.current = false;
                 setConnectionError('');
+                setConnectionErrorCode('');
                 setBackendStage('ready');
                 setDialogStatus('connected');
                 setTimeout(() => setShowDialog(false), 500);
@@ -358,7 +428,9 @@ export function TerminalPane({ tab, isActive, isVisible = isActive }: TerminalPa
                 const payload = msg.payload as ErrorPayload;
                 hasSpecificError.current = true;
                 setConnectionError(payload.message);
+                setConnectionErrorCode(payload.code);
                 setDialogStatus('error');
+                setShowDialog(true);
                 updateTabStatus(tab.id, 'disconnected');
                 break;
             }
@@ -370,10 +442,12 @@ export function TerminalPane({ tab, isActive, isVisible = isActive }: TerminalPa
         markTabReconnecting,
         tab.id,
         tab.profileId,
+        tab.sessionId,
         resetReconnectState,
         updateTabCwd,
         updateDetectedIcon,
         updateTabStatus,
+        updateTabTarget,
         write,
         writeln,
     ]);
@@ -392,6 +466,7 @@ export function TerminalPane({ tab, isActive, isVisible = isActive }: TerminalPa
             }, 50);
         },
         onClose: () => {
+            if (connectionCancelledRef.current) return;
             if (channelStatusRef.current === 'connected' && !hasSpecificError.current && !isReconnectingRef.current) {
                 hasSpecificError.current = true;
                 setConnectionError('连接已断开');
@@ -402,6 +477,7 @@ export function TerminalPane({ tab, isActive, isVisible = isActive }: TerminalPa
             }
         },
         onError: () => {
+            if (connectionCancelledRef.current) return;
             if (!hasSpecificError.current) {
                 setConnectionError('无法连接到服务器');
             }
@@ -467,8 +543,9 @@ export function TerminalPane({ tab, isActive, isVisible = isActive }: TerminalPa
             setShowDialog(true);
             setDialogStatus('error');
             setConnectionError(tab.errorMessage || '无法连接到服务器');
+            setConnectionErrorCode(tab.errorReason || '');
         }
-    }, [tab.errorMessage, tab.status]);
+    }, [tab.errorMessage, tab.errorReason, tab.status]);
     useEffect(() => {
         if (channelStatus === 'disconnected' && tab.status === 'connecting' && tab.sessionId && !hasSpecificError.current) {
             setConnectionError('无法连接到服务器');
@@ -500,7 +577,7 @@ export function TerminalPane({ tab, isActive, isVisible = isActive }: TerminalPa
                 clearTimeout(observerTimer);
         };
     }, [fit, isVisible]);
-    useEffect(() => { if (isActive && tab.profileId && tab.sessionId)
+    useEffect(() => { if (isActive && tab.profileId && tab.sessionId && !document.activeElement?.closest('[role="tablist"]'))
         getTerminal()?.focus(); }, [isActive, getTerminal, tab.profileId, tab.sessionId]);
     useEffect(() => {
         return () => {
@@ -515,9 +592,6 @@ export function TerminalPane({ tab, isActive, isVisible = isActive }: TerminalPa
             background: 'var(--term-bg)',
         } as CSSProperties}>
       {!tab.profileId && <ConnectionPicker tabId={tab.id} isActive={isActive} inputRef={pickerInputRef}/>}
-      {tab.manualConnect && tab.profileId && !tab.sessionId && <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-background p-4 text-sm">
-        <p>已恢复布局 · {tab.profileName}</p><Button onClick={() => void reconnectNow()}>连接服务器</Button>
-      </div>}
       {findOpen && <TerminalFind getTerminal={getTerminal} onClose={() => { setFindOpen(false); getTerminal()?.focus(); }}/>}
       <div ref={containerRef} className="term-host relative min-h-0 flex-1">
         {false}
@@ -534,7 +608,7 @@ export function TerminalPane({ tab, isActive, isVisible = isActive }: TerminalPa
                 right: 12,
                 padding: '6px 12px',
                 background: 'var(--bg-panel)',
-                border: '1px solid var(--border)',
+                border: 0,
                 borderRadius: 6,
                 boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
                 fontFamily: 'ui-sans-serif, system-ui',
@@ -552,14 +626,19 @@ export function TerminalPane({ tab, isActive, isVisible = isActive }: TerminalPa
           </span>
         </div>)}
 
-      <ConnectionDialog key={showDialog ? `${tab.id}-${dialogStatus}-${tab.sessionId ?? 'pending'}` : 'closed'} open={showDialog} onOpenChange={setShowDialog} profileName={tab.profileName} host={tab.host || '未知'} port={tab.port || 22} username={tab.username || 'root'} icon={profileIcon} status={dialogStatus} currentStage={effectiveStage} logs={connectionLogs} errorMessage={connectionError} onCancel={handleCancel} reconnectAttempt={tab.reconnectAttempt} nextRetryAt={tab.nextRetryAt} onReconnectNow={reconnectNow} hostKeyFingerprint={hostKeyPrompt.current || tab.hostKeyFingerprint} knownHostKeyFingerprint={hostKeyPrompt.known || tab.knownHostKeyFingerprint} onHostKeyDecision={decideHostKey}/>
+      <ConnectionDialog open={showDialog} onOpenChange={(open) => {
+            if (!open && dialogStatus !== 'connected') void handleCancel();
+            else setShowDialog(open);
+        }} profileName={tab.profileName} host={tab.host || '未知'} port={tab.port || 22} username={tab.username || 'root'} icon={profileIcon} status={dialogStatus} currentStage={effectiveStage} logs={connectionLogs} errorMessage={connectionError} errorCode={connectionErrorCode} onCancel={handleCancel} reconnectAttempt={tab.reconnectAttempt} nextRetryAt={tab.nextRetryAt} onReconnectNow={reconnectNow} hostKeyFingerprint={hostKeyPrompt.current || tab.hostKeyFingerprint} knownHostKeyFingerprint={hostKeyPrompt.known || tab.knownHostKeyFingerprint} onHostKeyDecision={decideHostKey}/>
       <AuthPromptDialog request={authRequest} onCancel={handleCancel} onSubmit={(responses) => {
             if (!authRequest)
                 return;
             void sessionApi.respondAuth(authRequest.request_id, responses).then(() => {
+                if (connectionCancelledRef.current) return;
                 setAuthRequest(undefined);
                 setShowDialog(true);
             }).catch((error: SessionApiError) => {
+                if (connectionCancelledRef.current) return;
                 setConnectionError(error?.error?.message || '提交认证信息失败');
                 setDialogStatus('error');
                 setAuthRequest(undefined);

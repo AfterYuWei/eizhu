@@ -1,0 +1,39 @@
+{
+  "sourceCommit": "4d4808e589204e5a4b2a3387a37c3d770973dab3",
+  "check": true,
+  "lint": true,
+  "baselineVerify": true,
+  "architectureVerify": true,
+  "foundation": {
+    "passed": 259,
+    "skipped": 2,
+    "skipReason": "Fish not installed"
+  },
+  "web": {
+    "files": 87,
+    "passed": 987
+  },
+  "fixedBaselineTests": 10,
+  "focusedInspectorTests": 18,
+  "electronAiSmoke": true,
+  "uiWidths": [
+    320,
+    560
+  ],
+  "themes": [
+    "light",
+    "dark"
+  ],
+  "productionCodeScope": "renderer and shared UI icons; runtime/preload/core unchanged",
+  "packagedSmoke": "not-run-this-ui-followup",
+  "testServices": "loopback-synthetic model/SSH and installed OpenSSH SFTP; synthetic CLI protocol peers",
+  "downloads": false,
+  "dependenciesAdded": false,
+  "pushed": false,
+  "unrelatedChanges": "terminal and DESIGN.md worktree edits preserved and excluded from this validation checkout",
+  "cleanup": {
+    "temporaryWorktreeRemoved": true,
+    "isolatedTestProcesses": 0,
+    "packagedAppCreated": false
+  }
+}

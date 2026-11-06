@@ -1,5 +1,9 @@
 import { parentPort, workerData } from 'node:worker_threads'
-import { randomBytes } from 'node:crypto'
+import { randomBytes, randomUUID } from 'node:crypto'
+import Database from 'better-sqlite3'
+import { z } from 'zod'
+import { AgentRepository, storedAiConfigSchema } from '../agent/repository.ts'
+import { aiSettingsSchema, aiConversationSchema } from '@eizhu/contracts'
 import { join } from 'node:path'
 import { readFileSync } from 'node:fs'
 import assert from 'node:assert/strict'
@@ -89,9 +93,99 @@ parentPort!.on('message', async (message) =>
         Date.now = originalNow
         execute('tunnel.delete', { id: tunnel.id })
         store.local.execute('profile.delete', { id: profile.id })
+        const aiDb = new Database(':memory:')
+        let agent: AgentRepository | undefined
+        try {
+          aiDb.exec('CREATE TABLE local_state(key TEXT PRIMARY KEY, data BLOB NOT NULL)')
+          aiDb.prepare('INSERT INTO local_state VALUES (?,?)').run('ai:config', Buffer.from('old-ai-only'))
+          aiDb
+            .prepare('INSERT INTO local_state VALUES (?,?)')
+            .run('other-setting', Buffer.from('keep-other-setting'))
+          agent = new AgentRepository(aiDb, key, 'offline')
+          assert.equal(storedAiConfigSchema.parse(agent.execute({ kind: 'config.read' })).enabled, false)
+          assert.equal(
+            z
+              .object({ n: z.number() })
+              .parse(aiDb.prepare("SELECT count(*) n FROM local_state WHERE key GLOB 'ai:*'").get()).n,
+            0,
+          )
+          const config = {
+            enabled: false,
+            providers: [
+              {
+                id: 'p',
+                name: 'fixture',
+                protocol: 'responses',
+                endpoint: 'https://fixture.invalid/v1',
+                model: 'fixture',
+                contextWindow: 96000,
+                models: [
+                  { id: 'fixture', name: 'fixture' },
+                  { id: 'ai-v2-discovered-model', name: 'ai-v2-model-label' },
+                ],
+                apiKey: 'ai-v2-storage-secret',
+              },
+            ],
+            clis: [],
+            defaultBackend: { kind: 'custom', providerId: 'p', model: 'fixture' },
+          }
+          agent.execute({ kind: 'config.write', value: config })
+          const conversation = aiConversationSchema.parse({
+            id: randomUUID(),
+            title: 'ai-v2-storage-message',
+            updatedAt: 1,
+            backend: config.defaultBackend,
+            permission: 'confirm',
+            revision: 0,
+            targets: [],
+            messages: [],
+            jobs: [],
+            summary: '',
+            status: 'idle',
+            error: '',
+          })
+          agent.execute({ kind: 'save', value: { format: 3, conversation, wire: [], outputs: {} } })
+          assert.equal((agent.execute({ kind: 'list' }) as unknown[]).length, 1)
+          const rows = z
+            .array(z.object({ data: z.instanceof(Buffer) }))
+            .parse(aiDb.prepare('SELECT data FROM local_state').all())
+          assert.ok(
+            rows.every(
+              (r) =>
+                !r.data.includes(Buffer.from('ai-v2-storage-secret')) &&
+                !r.data.includes(Buffer.from('ai-v2-storage-message')) &&
+                !r.data.includes(Buffer.from('ai-v2-discovered-model')) &&
+                !r.data.includes(Buffer.from('ai-v2-model-label')),
+            ),
+          )
+          agent.close()
+          agent = new AgentRepository(aiDb, key, 'offline')
+          const restored = storedAiConfigSchema.parse(agent.execute({ kind: 'config.read' }))
+          assert.equal(restored.providers[0].apiKey, 'ai-v2-storage-secret')
+          assert.equal(restored.providers[0].contextWindow, 96000)
+          assert.deepEqual(restored.providers[0].models, config.providers[0].models)
+          assert.equal(restored.enabled, false)
+          assert.equal((agent.execute({ kind: 'list' }) as unknown[]).length, 1)
+          assert.ok(aiDb.prepare("SELECT data FROM local_state WHERE key='other-setting'").get())
+          assert.ok(
+            !JSON.stringify(
+              aiSettingsSchema.parse({
+                ...restored,
+                providers: restored.providers.map(({ apiKey, ...p }) => ({
+                  ...p,
+                  hasApiKey: Boolean(apiKey),
+                })),
+              }),
+            ).includes('ai-v2-storage-secret'),
+          )
+        } finally {
+          agent?.close()
+          aiDb.close()
+        }
         return {
           passed: true,
           retention: '500/30d',
+          aiStorageMigrationAndEncryption: true,
           disabled: true,
           encrypted: true,
           persisted: true,

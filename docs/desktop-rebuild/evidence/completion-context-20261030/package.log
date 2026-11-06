@@ -1,0 +1,106 @@
+
+> desktop:smoke:package
+> node scripts/smoke-package.mjs artifacts/desktop/eizhu-0.5.0-test.355.1ea30fc0-mac-x64.dmg
+
+正在检查“Protective Master Boot Record（MBR：0）”的校验和…
+Protective Master Boot Record（MBR：0）：已验证CRC32 $CFBC28B7
+正在检查“GPT Header（Primary GPT Header：1）”的校验和…
+    GPT Header（Primary GPT Header：1）：已验证CRC32 $FE6AAC0C
+正在检查“GPT Partition Data（Primary GPT Table：2）”的校验和…
+GPT Partition Data（Primary GPT Table：已验证CRC32 $A31A970F
+正在检查“（Apple_Free：3）”的校验和…
+                      （Apple_Free：3）：已验证CRC32 $00000000
+正在检查“disk image（Apple_HFS：4）”的校验和…
+             disk image（Apple_HFS：4）：已验证CRC32 $ACC48975
+正在检查“（Apple_Free：5）”的校验和…
+                      （Apple_Free：5）：已验证CRC32 $00000000
+正在检查“GPT Partition Data（Backup GPT Table：6）”的校验和…
+GPT Partition Data（Backup GPT Table：：已验证CRC32 $A31A970F
+正在检查“GPT Header（Backup GPT Header：7）”的校验和…
+     GPT Header（Backup GPT Header：7）：已验证CRC32 $9E17E3D9
+已验证CRC32 $1D6D62AA
+/dev/disk5          	GUID_partition_scheme          	
+/dev/disk5s1        	Apple_HFS                      	/private/var/folders/6s/4k01y34s1gv53tkfyndzyldw0000gn/T/eizhu-package-L7Dyeq/volume
+"disk5" ejected.
+[41964:1030/002042.908311:WARNING:electron/shell/common/api/electron_api_native_image.cc:229] Argument must be a file path or a NativeImage
+EIZHU_SMOKE_STEP waiting-renderer
+EIZHU_SMOKE_APP_READY 1 true
+EIZHU_SMOKE_STEP renderer-ready
+EIZHU_SMOKE_STEP foundation-bridge-passed
+EIZHU_SMOKE_STEP stage6-updater-passed
+[41964:1030/002045.785212:INFO:CONSOLE:9838] "task queue exceeded allotted deadline by 25ms", source: eizhu://app/assets/index-CXN6XBQL.js (9838)
+[41964:1030/002048.712874:INFO:CONSOLE:9838] "task queue exceeded allotted deadline by 2404ms", source: eizhu://app/assets/index-CXN6XBQL.js (9838)
+[41964:1030/002048.929029:INFO:CONSOLE:9838] "task queue exceeded allotted deadline by 36ms", source: eizhu://app/assets/index-CXN6XBQL.js (9838)
+[41964:1030/002049.032241:INFO:CONSOLE:9838] "task queue exceeded allotted deadline by 23ms", source: eizhu://app/assets/index-CXN6XBQL.js (9838)
+EIZHU_SMOKE_STEP workspace-tabs-passed
+EIZHU_SMOKE_STEP local-bridge-passed
+EIZHU_SMOKE_STEP stage2-native-passed
+EIZHU_SMOKE_STEP account-foundation-native-passed
+EIZHU_SMOKE_STEP sync-engine-native-passed
+EIZHU_STAGE3_STEP peers-listening
+EIZHU_STAGE3_STEP host-key-and-utf8-passed
+EIZHU_STAGE3_STEP binary-completion-passed
+EIZHU_STAGE3_STEP details-path-completion-passed
+EIZHU_STAGE3_STEP all-completion-generators-passed
+EIZHU_SMOKE_APP_READY 1 true
+EIZHU_STAGE3_STEP all-completion-ui-passed
+EIZHU_STAGE3_STEP route-key
+EIZHU_STAGE3_STEP route-keyboard-interactive
+EIZHU_STAGE3_STEP route-http
+EIZHU_STAGE3_STEP route-socks5
+EIZHU_STAGE3_STEP route-jump
+EIZHU_STAGE3_STEP tunnel-local
+EIZHU_STAGE3_STEP tunnel-dynamic
+EIZHU_STAGE3_STEP tunnel-remote
+EIZHU_STAGE3_STEP fault-injection
+EIZHU_STAGE3_STEP connection-diagnostics-passed
+EIZHU_STAGE3_STEP mfa-cancel-passed
+EIZHU_STAGE3_STEP host-reject-cancel-passed
+EIZHU_STAGE3_STEP handshake-stop-passed
+EIZHU_STAGE3_STEP proxy-rejection-passed
+EIZHU_STAGE3_STEP port-occupied-passed
+EIZHU_LOAD_PROGRESS 10 3000
+EIZHU_STAGE3_STEP cleanup
+EIZHU_SMOKE_STEP stage3-native-passed
+EIZHU_STAGE4_STEP openssh-connected
+EIZHU_STAGE4_STEP safe-save-and-file-operations
+EIZHU_STAGE4_STEP large-upload-33554449-committed
+EIZHU_STAGE4_STEP background-directory-conflicts
+EIZHU_STAGE4_STEP streaming-relay-archives
+[41964:1030/002128.985613:WARNING:electron/shell/common/api/electron_api_native_image.cc:229] Argument must be a file path or a NativeImage
+EIZHU_STAGE4_STEP editor-ownership-and-dirty-close
+EIZHU_STAGE4_STEP sftp-ui-captured
+EIZHU_SMOKE_STEP stage4-native-passed
+EIZHU_STAGE5_STEP password-ready
+EIZHU_STAGE5_STEP dedup-passed
+EIZHU_STAGE5_STEP submit-latest
+EIZHU_STAGE5_STEP submit-latest
+EIZHU_STAGE5_STEP submit-latest
+EIZHU_STAGE5_STEP submit-latest
+EIZHU_STAGE5_STEP submit-latest
+EIZHU_SMOKE_STEP stage5-native-passed
+EIZHU_ACCOUNT_STEP setup-and-restricted-gates
+[41964:1030/002207.164158:WARNING:electron/shell/common/api/electron_api_native_image.cc:229] Argument must be a file path or a NativeImage
+EIZHU_ACCOUNT_STEP editor-cancel-before-authentication
+EIZHU_ACCOUNT_STEP register-verify-and-isolated-space
+EIZHU_ACCOUNT_STEP refresh-rotation-lost-response-and-offline-restart
+EIZHU_ACCOUNT_STEP password-reset-local-logout-and-account-isolation
+EIZHU_SMOKE_STEP account-closure-passed
+EIZHU_SYNC_STEP unlock-ready
+EIZHU_SYNC_STEP bootstrap-and-sse-ready
+EIZHU_SYNC_STEP pause-sync
+EIZHU_SYNC_STEP resume-sync
+EIZHU_SYNC_STEP sse-pause-resume-passed
+EIZHU_SYNC_STEP unknown-request-recovered
+EIZHU_SMOKE_STEP sync-desktop-passed
+EIZHU_SMOKE_STEP light-capture-ready
+EIZHU_SMOKE_STEP light-captured
+EIZHU_SMOKE_STEP dark-captured
+[41964:1030/002218.664014:WARNING:electron/shell/common/api/electron_api_native_image.cc:229] Argument must be a file path or a NativeImage
+EIZHU_SMOKE_STEP editor-ready
+EIZHU_SMOKE_STEP runtime-restarted
+EIZHU_SMOKE_STEP stage4-checkpoint-restarted
+EIZHU_SMOKE_STEP local-persistence-passed
+EIZHU_SMOKE_STEP monaco-passed
+EIZHU_SMOKE_OK {"platform":"darwin","arch":"x64","versions":{"node":"24.22.0","acorn":"8.18.0","ada":"4.0.0","amaro":"1.1.11","ares":"1.34.8","brotli":"1.2.0","cldr":"48.0","icu":"78.2","llhttp":"9.4.3","merve":"1.2.2","modules":"149","napi":"10","nbytes":"0.1.4","ncrypto":"0.0.1","nghttp2":"1.70.0","nghttp3":"","ngtcp2":"","openssl":"0.0.0","simdjson":"4.6.11","simdutf":"7.7.0","sqlite":"3.53.4","tz":"2026d","undici":"7.29.1","unicode":"17.0","uv":"1.52.1","uvwasi":"0.0.23","v8":"15.2.124.43-electron.0","zlib":"1.3.2.1-motley","zstd":"1.6.0","electron":"44.9.0","chrome":"152.0.7977.167"},"packaged":true,"dataRoot":"/var/folders/6s/4k01y34s1gv53tkfyndzyldw0000gn/T/eizhu-desktop-smoke-oCstLG/profile","keyMode":"restricted-file","health":{"context":{"runtimeId":"2399b7f9-220d-454e-944c-72879493a5e5","workspaceId":"offline","generation":1},"schema":3,"workers":2},"crypto":{"kdf":true,"crypto":true,"ssh2":true},"renderer":{"node":"undefined","require":"undefined","bridge":"function","health":{"context":{"runtimeId":"2399b7f9-220d-454e-944c-72879493a5e5","workspaceId":"offline","generation":1},"schema":3,"workers":2},"text":true,"account":{"loggedIn":false,"sessionState":"anonymous","syncEnabled":false},"reserved":"STAGE_NOT_READY","local":[],"arbitraryPath":"FORBIDDEN","inputValidation":"BAD_REQUEST"},"stage2":{"passed":true,"checks":["本地 CRUD、查询、默认名称、引用保护、用户名联动、循环拒绝与脱敏列表","真实 SQLite 中途失败：业务、审计、outbox、安全快照与预览消费整体回滚","七个固定旧备份：两种格式、三种凭据模式、历史 Go 密文及精确 payload 字节","十个固定反例：生产预览/导入错误码及完整数据保留","生产导出往返、加密前 hash、中文/emoji/首尾空白密码及 50 MiB 上限","skip/overwrite/regenerate、分组/凭据/跳板 ID 重映射、merge/replace、过期/编辑失效与安全快照恢复","ED25519/RSA2048/RSA4096 OpenSSH 加密私钥、注释与错误口令拒绝","SQLite 无明文凭据、正确密钥重启持久化、错误密钥拒绝并保留原数据"],"fixedBackups":7,"invalidCases":10,"nativeDatabase":true,"keyAlgorithms":3},"accountFoundation":{"passed":true,"checks":["旧库密钥错误：拒绝初始化，原全局 schema 与密文保留","全局 v1→v2、业务 v2→v3：设置、实体、原 outbox 密文保留；一致性副本可读取","会话与解锁缓存加密；公开状态不包含令牌/密钥；过期保留账号身份","重启恢复活动账号；A/B/离线分别存储并派生密钥，未自动导入离线数据","跨账号搬移密文不能解密；退出清除本账号会话和缓存，保留业务库及其他账号","刷新令牌 CAS 拒绝旧结果；活动空间切换与退出清理在同一 SQLite 事务，中途失败整体回滚","业务迁移中途失败整体回滚；修复阻断后可重试"],"runtime":{"restoredAccountIdentity":true,"explicitAccountIsolation":true,"failedTargetRollback":true,"nativeProcessTree":true}},"accountClosure":{"passed":true,"synthetic":true,"realBackend":false,"realEmail":false,"setupGate":true,"restrictedGate":true,"editorCancellation":true,"editorLockedDuringTransition":true,"editorUnlockedOnAuthFailure":true,"rendererTransition":true,"register":true,"emailVerification":true,"passwordReset":true,"profileEditing":true,"concurrentRefresh":true,"lostRefreshRequiresLogin":true,"lostAuthenticationNotReplayed":true,"localLogoutOnRemoteFailure":true,"offlineRestart":true,"accountIsolation":true,"publicTokenRedaction":true,"syncRequiresConfirmation":true,"screenshots":["account-login-light.png","account-register-email.png","account-register-code.png","account-register-password-dark.png","account-profile-light.png","account-password-change-dark.png","account-signed-in-dark.png","account-signed-in-narrow.png"]},"syncEngine":{"passed":true,"synthetic":true,"realBackend":false,"realDualDevice":false,"checks":["固定 Rust 包装、条目与墓碑向量；错误密码/身份篡改拒绝；密码轮换保留数据密钥","注册后两端使用登录缓存的同一 DEK；确认前不上传；默认预览合并离线且保留原库；第二设备应用不回声上传","冻结上传后继续编辑；旧确认只清理覆盖修订，新编辑保留并在下一批上传","提交响应丢失、重启恢复先查原请求；确认不存在后逐字节重发相同密文和 requestId","固定水位分页；双端并发编辑、删除冲突保留；选择时复核远端修订并避免覆盖新变化","不合法依赖删除保留有效图并持久化冲突；重启保留，后续合法关联修改可恢复","游标过期快照保留待同步；主密码轮换重新包装同一 DEK，旧密码无法解包","预览绑定离线及账号本地修订；整体替换携带完整集合、水位和下一 epoch 密文；其他设备核对时保留本地编辑","超限整体替换明确拒绝且不拆分；远端业务/审计/影子/冲突/游标事务中途失败整体回滚"],"devices":2,"fixedCryptoVectors":true,"rememberedUnlock":true,"unknownRequestRecovery":true,"oldAckPreservesNewEdits":true,"noRemoteEcho":true,"dependencyConflicts":true,"atomicCursor":true,"replaceLimit":true},"syncDesktop":{"passed":true,"synthetic":true,"realBackend":false,"realEmail":false,"rendererPasswordForm":true,"previewCancelNoUpload":true,"confirmedOfflineMerge":true,"automaticOutbox":true,"hintsNotConfirmations":true,"singleSseConnection":true,"sseReconnect":true,"pauseReleasesSse":true,"pausePreservesOutbox":true,"lostHttpResponseNotReplayed":true,"requestLookupRecovery":true,"restartUnlockCache":true,"logoutClearsUnlock":true,"offlineOriginalRetained":true,"screenshots":["sync-initialized-light.png","sync-unlocked-dark-narrow.png"]},"stage3":{"load":{"passed":true,"synthetic":true,"requestedMs":3000,"elapsedMs":3053.996242999994,"sshConnections":20,"activeBinaryTerminals":4,"localTransferTasksPerBatch":5,"transferBatches":62,"bytesVerifiedPerBatch":10485760,"rounds":125,"ipcSamples":125,"ipcP50Ms":0.30000000074505806,"ipcP95Ms":0.3999999985098839,"ipcMaxMs":0.5,"memory":[{"elapsedMs":9.696104999995441,"workingSetKiB":827232,"processes":5}],"fullAcceptance":false,"pending":["真实远端五路网络传输","完整备份与编辑器混合负载","P95 交互 100ms","8 小时稳定性"]},"passed":true,"authentication":["password","encrypted-private-key","keyboard-interactive"],"routes":["direct","http-connect","socks5","jump"],"binary":{"utf8":true,"consumedBytes":262144,"replayedInput":false},"hostKey":{"wrongRejected":true,"staleRejected":true,"permanent":true},"completion":true,"completionUi":{"passed":true,"cases":71,"commandPrefixes":27,"commandFamilies":5,"dynamicSelections":13,"fileCommands":25,"screenshots":["server-detail-follow-cwd.png","completion-docker-light.png","completion-context-host.png","completion-kubectl-dark.png","completion-npm-narrow.png","completion-path-narrow.png","completion-cascade-narrow.png"],"syntheticRemote":true,"serverDetailFollowCwd":true,"nativeIme":false},"completionMatrix":{"generators":10,"queries":19,"transport":"preload/main/utilityProcess/SSH/SFTP","syntheticCommands":true},"historyPrivacy":true,"details":true,"tunnels":["local","remote","dynamic"],"portsReleased":true,"tunnelReconnect":true,"faults":{"connectionDiagnostics":true,"hostRejectBeforeAuthentication":true,"hostCancel":true,"mfaCancel":true,"handshakeStop":true,"proxyRejected":true,"portOccupied":true,"halfPacketStop":true,"tunnelLimit32":true},"agent":"待目标平台 Agent 实测"},"stage3Storage":{"passed":true,"retention":"500/30d","disabled":true,"encrypted":true,"persisted":true,"excludedFromBackup":true,"tunnelReferenceProtected":true},"stage4":{"passed":true,"unavailable":false,"restoredTaskId":"d2a29d2b-9952-45c1-b72d-1f7b73581059","subsystem":"OpenSSH sftp-server","hostKeyConfirmation":true,"streaming":true,"largeUpload":{"bytes":33554449,"elapsedMs":469,"finalizeMs":34,"sha256":true},"resume":true,"relay":true,"tarGz":true,"zip":true,"archiveTools":{"tar":true,"unzip":true},"safeSave":true,"unsupportedAtomicReplacePreservesOriginal":true,"editorOwnership":true,"editorLayout":{"passed":true,"themes":{"light":{"height":64,"draggable":true,"actionsFit":true,"nativeInset":105,"genericBar":false,"themed":true},"dark":{"height":64,"draggable":true,"actionsFit":true,"nativeInset":105,"genericBar":false,"themed":true}},"narrow":{"height":78.796875,"draggable":true,"actionsFit":true,"nativeInset":101,"genericBar":false,"themed":true},"unsavedContentRetained":true,"screenshots":["editor-light.png","editor-dark.png","editor-dark-narrow-large-font.png"]},"dirtyCloseCancelled":true,"staleWindowCloseRejected":true,"encryptedCheckpoints":true,"singletonPage":true,"navigationRetainsConnections":true,"navigationRetainsTransfer":true},"stage5":{"passed":true,"localVersions":true,"dedup":true,"encryptedStorage":true,"webdav":true,"s3SigV4":true,"independentTargets":true,"conditionalIndex":true,"unknownResultManualRecovery":true,"cloudPreview":true,"stalePreviewRejected":true,"passwordRotation":true,"changeScheduler":true,"shutdownBarrier":true,"oauthPkceCallback":true,"officialDeferred":true,"persistedVersionId":"771aa34d-4563-4e6f-95e4-335235870f98"},"stage6":{"passed":true,"ipcValidation":true,"uiUnconfiguredFeedback":true,"realUpdaterMetadata":true,"sha512MismatchRejected":true,"noRecheckDuringDownload":true,"cacheIsolated":true,"realSignedUpgrade":false,"transport":"electron-updater shared HTTP downloader through NsisUpdater"},"workspaceTabs":{"passed":true,"synthetic":true,"keyboard":true,"mountedContentRetained":true,"singletonTools":true,"toolShortcutIsolation":true,"closeFocus":true,"vaultLayout":{"passed":true,"synthetic":true,"lazyReveal":true,"guardedEditing":true,"save":true,"protectedDelete":true,"unreferencedDelete":true,"sensitiveClipboard":true,"geometry":{"gap":28,"round":12,"toolbarLine":"0px","fits":true,"controlsEnabled":true},"screenshots":["vault-layout-light.png","vault-layout-dark.png","vault-layout-large-narrow.png"]},"wide":{"headerHeight":48,"overflow":true,"buttonsFit":true,"noDrag":true,"oldListRemoved":true},"narrow":{"headerHeight":48,"overflow":true,"buttonsFit":true,"noDrag":true,"oldListRemoved":true},"enlarged":{"headerHeight":48,"overflow":true,"buttonsFit":true,"noDrag":true,"oldListRemoved":true},"screenshots":["vault-layout-light.png","vault-layout-dark.png","vault-layout-large-narrow.png","workspace-vault-light.png","workspace-vault-dark.png","workspace-tabs-light.png","workspace-tabs-dark-narrow.png","workspace-tabs-large-collapsed.png"]},"localBridge":{"crud":true,"computeWorker":true,"revealed":true,"protectedDelete":true,"redacted":true,"audit":true,"profileId":"1591cad5-15f3-4643-b3f0-4ba804169a82","vaultId":"aa7f28ec-a198-400c-8c40-a7cbc07583f6","groupId":"319780bf-7f01-4e2e-8bd4-8b4d4925d154"},"editor":true,"editorGeometry":{"requested":[1280,800],"actual":[1280,800],"workArea":[1920,985],"frame":[0,0]},"recovery":{"failed":"RUNTIME_UNAVAILABLE","generation":16,"retainedEditorMemory":true,"persistedSettings":true},"updaterModule":true,"monaco":{"typescript":true,"json":true,"model":true},"firstWindowMs":862.526213,"processMetrics":[{"type":"Browser","memory":{"workingSetSize":296956,"peakWorkingSetSize":343736},"cpu":{"cumulativeCPUUsage":7.046741,"percentCPUUsage":0.47381702956594357,"idleWakeupsPerSecond":31}},{"type":"GPU","memory":{"workingSetSize":98624,"peakWorkingSetSize":114652},"cpu":{"cumulativeCPUUsage":20.003619,"percentCPUUsage":0.5042882157920489,"idleWakeupsPerSecond":36}},{"type":"Utility","memory":{"workingSetSize":32332,"peakWorkingSetSize":32332},"cpu":{"cumulativeCPUUsage":0.243346,"percentCPUUsage":0.012948586729833159,"idleWakeupsPerSecond":0}},{"type":"Tab","memory":{"workingSetSize":422772,"peakWorkingSetSize":515084},"cpu":{"cumulativeCPUUsage":16.015811,"percentCPUUsage":0.4508938345417984,"idleWakeupsPerSecond":16}},{"type":"Tab","memory":{"workingSetSize":185548,"peakWorkingSetSize":185548},"cpu":{"cumulativeCPUUsage":0.752257,"percentCPUUsage":0,"idleWakeupsPerSecond":0}},{"type":"Utility","memory":{"workingSetSize":144984,"peakWorkingSetSize":144984},"cpu":{"cumulativeCPUUsage":0.564096,"percentCPUUsage":0,"idleWakeupsPerSecond":0}},{"type":"Tab","memory":{"workingSetSize":272260,"peakWorkingSetSize":274152},"cpu":{"cumulativeCPUUsage":1.515679,"percentCPUUsage":0,"idleWakeupsPerSecond":0}}],"screenshots":["home-light.png","home-dark.png","editor-empty.png","vault-layout-light.png","vault-layout-dark.png","vault-layout-large-narrow.png","workspace-vault-light.png","workspace-vault-dark.png","workspace-tabs-light.png","workspace-tabs-dark-narrow.png","workspace-tabs-large-collapsed.png","account-login-light.png","account-register-email.png","account-register-code.png","account-register-password-dark.png","account-profile-light.png","account-password-change-dark.png","account-signed-in-dark.png","account-signed-in-narrow.png","sync-initialized-light.png","sync-unlocked-dark-narrow.png","server-detail-follow-cwd.png","completion-docker-light.png","completion-context-host.png","completion-kubectl-dark.png","completion-npm-narrow.png","completion-path-narrow.png","completion-cascade-narrow.png"],"screenshotContrast":{"light":244,"dark":24}}
+烟测通过：darwin/x64；证据 artifacts/smoke/darwin-x64.json

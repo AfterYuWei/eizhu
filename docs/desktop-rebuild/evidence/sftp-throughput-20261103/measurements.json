@@ -1,0 +1,141 @@
+{
+  "date": "2026-11-03",
+  "platform": "darwin",
+  "arch": "x64",
+  "node": "24.22.0",
+  "electron": "44.9.0",
+  "localNic": "en0: 1000baseT full-duplex",
+  "localElectron": {
+    "before": {
+      "packaged": false,
+      "largeUpload": {
+        "bytes": 33554449,
+        "elapsedMs": 762,
+        "finalizeMs": 38,
+        "sha256": true
+      },
+      "largeTransfers": [
+        {
+          "direction": "download",
+          "bytes": 33554449,
+          "elapsedMs": 579,
+          "sha256": true
+        },
+        {
+          "direction": "upload",
+          "bytes": 33554449,
+          "elapsedMs": 408,
+          "sha256": true
+        }
+      ],
+      "passed": true,
+      "resume": true,
+      "safeSave": true,
+      "encryptedCheckpoints": true
+    },
+    "after": {
+      "packaged": false,
+      "largeUpload": {
+        "bytes": 33554449,
+        "elapsedMs": 672,
+        "finalizeMs": 34,
+        "sha256": true
+      },
+      "largeTransfers": [
+        {
+          "direction": "download",
+          "bytes": 33554449,
+          "elapsedMs": 252,
+          "sha256": true
+        },
+        {
+          "direction": "upload",
+          "bytes": 33554449,
+          "elapsedMs": 212,
+          "sha256": true
+        }
+      ],
+      "passed": true,
+      "resume": true,
+      "safeSave": true,
+      "encryptedCheckpoints": true
+    }
+  },
+  "packaged": {
+    "packaged": true,
+    "largeUpload": {
+      "bytes": 134217745,
+      "elapsedMs": 1927,
+      "finalizeMs": 35,
+      "sha256": true
+    },
+    "largeTransfers": [
+      {
+        "direction": "download",
+        "bytes": 134217745,
+        "elapsedMs": 768,
+        "sha256": true
+      },
+      {
+        "direction": "upload",
+        "bytes": 134217745,
+        "elapsedMs": 701,
+        "sha256": true
+      }
+    ],
+    "passed": true,
+    "resume": true,
+    "safeSave": true,
+    "encryptedCheckpoints": true
+  },
+  "syntheticLatency": {
+    "synthetic": true,
+    "measurements": [
+      {
+        "blockBytes": 524288,
+        "bytes": 33554449,
+        "responseDelayMs": 40,
+        "sha256": true,
+        "uploadMiBs": 5.745908049967811,
+        "downloadMiBs": 5.8070365838890075
+      },
+      {
+        "blockBytes": 2097152,
+        "bytes": 33554449,
+        "responseDelayMs": 40,
+        "sha256": true,
+        "uploadMiBs": 21.073764826134894,
+        "downloadMiBs": 20.34622336429856
+      }
+    ]
+  },
+  "build": {
+    "base": "0.5.0",
+    "version": "0.5.0-test.367.6728b5c5",
+    "channel": "test",
+    "revision": "6728b5c57333241d270fc63bdf43bd29647e7509",
+    "platform": "darwin",
+    "arch": "x64",
+    "feeds": {},
+    "updateRepository": {
+      "owner": "AfterYuWei",
+      "repo": "eizhu"
+    },
+    "sourceDigest": "4695674fc5a8e44589b26c84b3ff1915b9314107f3f9687920f33f42efdbda55"
+  },
+  "validation": {
+    "coreSftpAndSsh": {
+      "passed": 35
+    },
+    "webSftp": {
+      "passed": 41
+    },
+    "allSsh": {
+      "passed": 52,
+      "skipped": 1
+    },
+    "typecheck": true,
+    "lint": true,
+    "baselineVerify": true
+  }
+}

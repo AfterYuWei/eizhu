@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import {
+  ai, isAiOperation,
   archive,
   isArchiveOperation,
   contextSchema,
@@ -18,23 +19,39 @@ import {
   failureOf,
   eventSchemas,
   isDesktopEvent,
+  acceptBootstrapUpdate,
+  acceptWorkspaceTransition,
+  account,
+  isAccountOperation,
+  sync, isSyncOperation,
 } from '@eizhu/contracts'
 import type { Bootstrap, DesktopApi, DesktopEvents, RuntimeContext } from '@eizhu/contracts'
 
 let context: RuntimeContext
 let currentBootstrap: Bootstrap
+let pendingBootstrap: Bootstrap | undefined
 const initial = ipcRenderer.invoke('eizhu:bootstrap').then((value: unknown) => {
   const result = foundation['app.bootstrap'].output.parse(value)
-  context = result.context
   currentBootstrap = result
+  if (pendingBootstrap) {
+    try { currentBootstrap = acceptBootstrapUpdate(currentBootstrap, pendingBootstrap) } catch { /* Keep the newest valid context. */ }
+    pendingBootstrap = undefined
+  }
+  context = currentBootstrap.context
   return result
 })
 const listeners = new Map<string, Set<(payload: unknown) => void>>()
 ipcRenderer.on('eizhu:context', (_event, value) => {
   const parsed = foundation['app.bootstrap'].output.safeParse(value)
   if (parsed.success) {
-    currentBootstrap = parsed.data
-    context = parsed.data.context
+    if (!currentBootstrap) {
+      if (!pendingBootstrap || parsed.data.context.generation > pendingBootstrap.context.generation) pendingBootstrap = parsed.data
+      return
+    }
+    try {
+      currentBootstrap = acceptBootstrapUpdate(currentBootstrap, parsed.data)
+      context = currentBootstrap.context
+    } catch { /* A delayed context must not restore an old workspace. */ }
   }
 })
 ipcRenderer.on('eizhu:event', (_event, envelope) => {
@@ -59,18 +76,29 @@ ipcRenderer.on('eizhu:event', (_event, envelope) => {
 
 async function call(operation: string, input?: unknown): Promise<unknown> {
   await initial
-  if (!isFoundationOperation(operation) && !isLocalOperation(operation) && !isSshOperation(operation)&&!isSftpOperation(operation)&&!isArchiveOperation(operation))
-    throw new DesktopError({ code: 'STAGE_NOT_READY', message: (operation.startsWith('account.') || operation.startsWith('sync.') || operation === 'backup.previewLegacyAccount') ? '官方账号、同步和官方备份待开发，后端部署后再接入' : '该业务能力将在后续实施阶段开放' })
+  if (!isFoundationOperation(operation) && !isLocalOperation(operation) && !isSshOperation(operation)&&!isSftpOperation(operation)&&!isArchiveOperation(operation)&&!isAccountOperation(operation)&&!isSyncOperation(operation)&&!isAiOperation(operation))
+    throw new DesktopError({ code: 'STAGE_NOT_READY', message: (operation.startsWith('account.') || operation.startsWith('sync.')) ? '官方备份未接入' : '该业务能力将在后续实施阶段开放' })
   const sentContext = context
   if (isFoundationOperation(operation)) input = foundation[operation].input.parse(input)
   else if (isLocalOperation(operation)) input = local[operation].input.parse(input)
   else if (isSshOperation(operation)) input = ssh[operation].input.parse(input)
   else if(isSftpOperation(operation))input=sftp[operation].input.parse(input)
   else if(isArchiveOperation(operation)) input=archive[operation].input.parse(input)
+  else if(isAccountOperation(operation)) input=account[operation].input.parse(input)
+  else if(isSyncOperation(operation)) input=sync[operation].input.parse(input)
+  else if(isAiOperation(operation)) input=ai[operation].input.parse(input)
   const id = crypto.randomUUID()
   const response = await ipcRenderer.invoke('eizhu:request', { id, context: sentContext, operation, input })
   if (response.id !== id) throw new DesktopError({ code: 'STALE_RESPONSE', message: '响应标识不匹配' })
   if (response.error) throw new DesktopError(response.error)
+  if (response.transition !== undefined) {
+    if (!sameContext(response.context, sentContext))
+      throw new DesktopError({ code: 'STALE_RESPONSE', message: '切换响应的原上下文不匹配' })
+    const transition = acceptWorkspaceTransition(operation, sentContext, context, response.transition)
+    currentBootstrap = acceptBootstrapUpdate(currentBootstrap, transition.bootstrap)
+    context = currentBootstrap.context
+    return transition.account.loggedIn ? transition.account : undefined
+  }
   if (operation === 'runtime.restart') {
     const restored = foundation['runtime.restart'].output.parse(response.value)
     if (!sameContext(restored, context))
@@ -87,7 +115,7 @@ async function call(operation: string, input?: unknown): Promise<unknown> {
       ? local[operation].output.parse(response.value)
       : isSshOperation(operation)
         ? ssh[operation].output.parse(response.value)
-        : isSftpOperation(operation)?sftp[operation].output.parse(response.value):isArchiveOperation(operation)?archive[operation].output.parse(response.value):response.value
+        : isSftpOperation(operation)?sftp[operation].output.parse(response.value):isArchiveOperation(operation)?archive[operation].output.parse(response.value):isAccountOperation(operation)?account[operation].output.parse(response.value):isSyncOperation(operation)?sync[operation].output.parse(response.value):isAiOperation(operation)?ai[operation].output.parse(response.value):response.value
 }
 const api: Record<string, Record<string, unknown>> = Object.create(null)
 for (const operation of new Set([
@@ -96,6 +124,9 @@ for (const operation of new Set([
   ...Object.keys(ssh),
   ...Object.keys(sftp),
   ...Object.keys(archive),
+  ...Object.keys(account),
+  ...Object.keys(sync),
+  ...Object.keys(ai),
   ...reservedOperations,
 ])) {
   const [domain, method] = operation.split('.')

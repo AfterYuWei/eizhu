@@ -1,0 +1,217 @@
+
+> test:unit
+> vitest run src/lib/completionContext.test.ts
+
+
+ RUN  v5.0.5 /Users/yuwei/Desktop/Projects/yuweinfo/XControl/apps/web
+
+ ❯ src/lib/completionContext.test.ts (8 tests | 8 failed) 16ms
+   × 上下文传到受限 IPC：git -C /other-repo checkout fe 9ms
+   × 上下文传到受限 IPC：docker -H tcp://fixture.invalid:2375 logs we 1ms
+   × 上下文传到受限 IPC：kubectl --kubeconfig=/tmp/qa-config get pods we 1ms
+   × 上下文传到受限 IPC：systemctl --user start ap 1ms
+   × Git 保留连续 -C 的顺序，文件参数也在指定仓库内补全 1ms
+   × 上下文只消费已识别选项，保留引用、等号形式和最后指定的值 0ms
+   × 未指定命名空间时交由所选 kubeconfig 决定，不覆盖成 default 1ms
+   × 普通文件参数不携带无关 CLI 上下文，缓存键仍按实际参数隔离 1ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 8 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/lib/completionContext.test.ts > 上下文传到受限 IPC：git -C /other-repo checkout fe
+AssertionError: expected { generatorId: 'git-branches', …(3) } to match object { generatorId: 'git-branches', …(1) }
+(2 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+    "generatorId": "git-branches",
+-   "params": {
+-     "gitDirectories": [
+-       "/other-repo",
+-     ],
+-   },
++   "params": {},
+  }
+
+ ❯ src/lib/completionContext.test.ts:13:23
+     11|   it(`上下文传到受限 IPC：${input}`, () => {
+     12|     const generator = getDynamicGenerator(tokenize(input))!
+     13|     expect(generator).toMatchObject({ generatorId, params })
+       |                       ^
+     14|     expect(() => ssh['session.complete'].input.parse({ id: 's', reques…
+     15|   })
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/8]⎯
+
+ FAIL  src/lib/completionContext.test.ts > 上下文传到受限 IPC：docker -H tcp://fixture.invalid:2375 logs we
+AssertionError: expected { …(4) } to match object { …(2) }
+(3 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+    "generatorId": "docker-containers",
+    "params": {
+-     "dockerHost": "tcp://fixture.invalid:2375",
++     "all": true,
+    },
+  }
+
+ ❯ src/lib/completionContext.test.ts:13:23
+     11|   it(`上下文传到受限 IPC：${input}`, () => {
+     12|     const generator = getDynamicGenerator(tokenize(input))!
+     13|     expect(generator).toMatchObject({ generatorId, params })
+       |                       ^
+     14|     expect(() => ssh['session.complete'].input.parse({ id: 's', reques…
+     15|   })
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/8]⎯
+
+ FAIL  src/lib/completionContext.test.ts > 上下文传到受限 IPC：kubectl --kubeconfig=/tmp/qa-config get pods we
+AssertionError: expected { …(4) } to match object { …(2) }
+(4 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+    "generatorId": "kubectl-resources",
+    "params": {
+-     "kubeconfig": "/tmp/qa-config",
++     "namespace": "default",
++     "resource": "pods",
+    },
+  }
+
+ ❯ src/lib/completionContext.test.ts:13:23
+     11|   it(`上下文传到受限 IPC：${input}`, () => {
+     12|     const generator = getDynamicGenerator(tokenize(input))!
+     13|     expect(generator).toMatchObject({ generatorId, params })
+       |                       ^
+     14|     expect(() => ssh['session.complete'].input.parse({ id: 's', reques…
+     15|   })
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/8]⎯
+
+ FAIL  src/lib/completionContext.test.ts > 上下文传到受限 IPC：systemctl --user start ap
+AssertionError: expected { …(4) } to match object { …(2) }
+(2 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+    "generatorId": "systemd-service-units",
+-   "params": {
+-     "systemdUser": true,
+-   },
++   "params": {},
+  }
+
+ ❯ src/lib/completionContext.test.ts:13:23
+     11|   it(`上下文传到受限 IPC：${input}`, () => {
+     12|     const generator = getDynamicGenerator(tokenize(input))!
+     13|     expect(generator).toMatchObject({ generatorId, params })
+       |                       ^
+     14|     expect(() => ssh['session.complete'].input.parse({ id: 's', reques…
+     15|   })
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/8]⎯
+
+ FAIL  src/lib/completionContext.test.ts > Git 保留连续 -C 的顺序，文件参数也在指定仓库内补全
+AssertionError: expected { generatorId: 'git-branches', …(3) } to match object { Object (params) }
+(3 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "params": {
+-     "gitDirectories": [
+-       "/srv/项目 files",
+-       "sub",
+-     ],
+-   },
++   "params": {},
+  }
+
+ ❯ src/lib/completionContext.test.ts:19:86
+     17|
+     18| it('Git 保留连续 -C 的顺序，文件参数也在指定仓库内补全', () => {
+     19|   expect(getDynamicGenerator(tokenize('git -C "/srv/项目 files" -C sub c…
+       |                                                                                      ^
+     20|   expect(getDynamicGenerator(tokenize('git -C /srv/repo add src/fi')))…
+     21|   expect(getDynamicGenerator(tokenize('git -C /srv/repo -C child/'))).…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/8]⎯
+
+ FAIL  src/lib/completionContext.test.ts > 上下文只消费已识别选项，保留引用、等号形式和最后指定的值
+AssertionError: expected { …(4) } to match object { Object (params) }
+(4 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+    "params": {
+-     "dockerHost": "unix:///qa socket",
++     "all": true,
+    },
+  }
+
+ ❯ src/lib/completionContext.test.ts:25:97
+     23|
+     24| it('上下文只消费已识别选项，保留引用、等号形式和最后指定的值', () => {
+     25|   expect(getDynamicGenerator(tokenize('docker -H=unix:///one -H "unix:…
+       |                                                                                                 ^
+     26|   expect(getDynamicGenerator(tokenize('kubectl --kubeconfig="qa dir/co…
+     27|   expect(getDynamicGenerator(tokenize('systemctl start --user ap'))).t…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/8]⎯
+
+ FAIL  src/lib/completionContext.test.ts > 未指定命名空间时交由所选 kubeconfig 决定，不覆盖成 default
+AssertionError: expected { resource: 'pods', …(1) } to not have property "namespace"
+
+- Expected:
+undefined
+
++ Received:
+"default"
+
+ ❯ src/lib/completionContext.test.ts:32:104
+     30|
+     31| it('未指定命名空间时交由所选 kubeconfig 决定，不覆盖成 default', () => {
+     32|   expect(getDynamicGenerator(tokenize('kubectl --kubeconfig=/tmp/qa-co…
+       |                                                                                                        ^
+     33|   expect(getDynamicGenerator(tokenize('kubectl --kubeconfig=/tmp/qa-co…
+     34| })
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/8]⎯
+
+ FAIL  src/lib/completionContext.test.ts > 普通文件参数不携带无关 CLI 上下文，缓存键仍按实际参数隔离
+AssertionError: expected '{"generatorId":"systemd-service-units…' not to be '{"generatorId":"systemd-service-units…' // Object.is equality
+ ❯ src/lib/completionContext.test.ts:40:37
+     38|   const plain = getDynamicGenerator(tokenize('systemctl start ap'))
+     39|   const user = getDynamicGenerator(tokenize('systemctl --user start ap…
+     40|   expect(JSON.stringify(plain)).not.toBe(JSON.stringify(user))
+       |                                     ^
+     41| })
+     42|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/8]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  8 failed (8)
+   Start at  00:06:00
+   Duration  349ms (import 65%, transform 24%, tests 9%, worker 2%)
+
+npm error Lifecycle script `test:unit` failed with error:
+npm error code 1
+npm error path /Users/yuwei/Desktop/Projects/yuweinfo/XControl/apps/web
+npm error workspace @eizhu/web
+npm error location /Users/yuwei/Desktop/Projects/yuweinfo/XControl/apps/web
+npm error command failed
+npm error command sh -c vitest run src/lib/completionContext.test.ts

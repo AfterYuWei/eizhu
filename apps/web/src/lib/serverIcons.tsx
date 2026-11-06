@@ -15,11 +15,25 @@ MemoryStick,
 Layers,
 Gauge,
 ServerCog,
+Blocks,
+Bot,
+Hand,
+ShieldAlert,
 type LucideProps,
 } from 'lucide-react'
+import type { AiBackend, AiProvider } from '@eizhu/contracts'
 import { createElement,forwardRef,type ComponentType } from 'react'
 import {
 siAlmalinux,
+siAlibabacloud,
+siAnthropic,
+siClaudecode,
+siDeepseek,
+siGooglegemini,
+siMoonshotai,
+siOllama,
+siOpenrouter,
+siQwen,
 siAlpinelinux,
 siArchlinux,
 siCentos,
@@ -59,18 +73,41 @@ siUmbrel,
 siUnraid,
 siVoidlinux,
 siYunohost,
-type SimpleIcon,
 } from 'simple-icons'
 
 import amazonLinuxIcon from '@/assets/server-icons/amazon-linux.png'
 import casaOsIcon from '@/assets/server-icons/casaos.svg'
 import fnOsLogo from '@/assets/server-icons/fnos.png'
 import oracleLinuxIcon from '@/assets/server-icons/oracle-linux.png'
+import { aiProviderMarks } from '@/assets/ai-provider-icons'
 import { DEFAULT_SERVER_ICON } from '@/lib/serverIconKeys'
 
 type ServerIconComponent = ComponentType<LucideProps>
 
-function simpleIcon(icon: SimpleIcon): ServerIconComponent {
+export { CircleHelp as HelpIcon, Check as AiModeCheckIcon, Trash2 as AiDeleteIcon } from 'lucide-react'
+
+export const AiIcon = forwardRef<SVGSVGElement, LucideProps>(({ size = 24, color = 'currentColor', ...props }, ref) => (
+  <svg
+    aria-hidden="true"
+    {...props}
+    ref={ref}
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill={color}
+    stroke="none"
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <path d="M10 6C10 12 8 14 2 14C8 14 10 16 10 22C10 16 12 14 18 14C12 14 10 12 10 6ZM19 2C19 4.25 18.25 5 16 5C18.25 5 19 5.75 19 8C19 5.75 19.75 5 22 5C19.75 5 19 4.25 19 2Z" />
+  </svg>
+))
+AiIcon.displayName = 'AiIcon'
+
+function simpleIcon(icon: {
+  title: string
+  path: string | readonly { d: string; fillOpacity?: number }[]
+  fillRule?: LucideProps['fillRule']
+}): ServerIconComponent {
   const Component = forwardRef<SVGSVGElement, LucideProps>(({ size = 24, color = 'currentColor', ...props }, ref) => (
     <svg
       {...props}
@@ -79,14 +116,66 @@ function simpleIcon(icon: SimpleIcon): ServerIconComponent {
       height={size}
       viewBox="0 0 24 24"
       fill={color}
+      fillRule={icon.fillRule}
       stroke="none"
       xmlns="http://www.w3.org/2000/svg"
     >
-      <path d={icon.path} />
+      {typeof icon.path === 'string' ? (
+        <path d={icon.path} />
+      ) : (
+        icon.path.map((path, index) => <path key={index} {...path} />)
+      )}
     </svg>
   ))
   Component.displayName = `${icon.title}ServerIcon`
   return Component
+}
+
+export const AI_PERMISSION_ICONS = { observer: Bot, confirm: Hand, auto: ShieldAlert }
+
+const AI_PROVIDER_ICONS = [
+  { match: /deepseek/i, key: 'deepseek', Icon: simpleIcon(siDeepseek) },
+  { match: /anthropic|claude/i, key: 'anthropic', Icon: simpleIcon(siAnthropic) },
+  { match: /dashscope|qwen|通义|百炼/i, key: 'qwen', Icon: simpleIcon(siQwen) },
+  { match: /aliyun|阿里云/i, key: 'aliyun', Icon: simpleIcon(siAlibabacloud) },
+  { match: /gemini|generativelanguage\.googleapis/i, key: 'gemini', Icon: simpleIcon(siGooglegemini) },
+  { match: /moonshot|kimi/i, key: 'moonshot', Icon: simpleIcon(siMoonshotai) },
+  { match: /openrouter/i, key: 'openrouter', Icon: simpleIcon(siOpenrouter) },
+  { match: /ollama/i, key: 'ollama', Icon: simpleIcon(siOllama) },
+  {
+    match: /siliconflow|siliconcloud|硅基/i,
+    key: 'siliconflow',
+    Icon: simpleIcon(aiProviderMarks.siliconflow),
+  },
+  { match: /bigmodel|zhipu|z\.ai|智谱|\bglm\b/i, key: 'zhipu', Icon: simpleIcon(aiProviderMarks.zhipu) },
+  {
+    match: /volces|volcengine|doubao|火山|豆包/i,
+    key: 'volcengine',
+    Icon: simpleIcon(aiProviderMarks.volcengine),
+  },
+  { match: /openai/i, key: 'openai', Icon: simpleIcon(aiProviderMarks.openai) },
+]
+const ClaudeCodeIcon = simpleIcon(siClaudecode)
+
+/** Provider marks are bundled locally and inherit the interface foreground. */
+export function AiAgentIcon({
+  kind,
+  provider,
+  ...props
+}: LucideProps & {
+  kind?: AiBackend['kind']
+  provider?: Pick<AiProvider, 'name' | 'endpoint'>
+}) {
+  if (kind === 'official') return <AiIcon {...props} data-ai-brand="eizhu" />
+  if (kind === 'codex') return <Terminal {...props} data-ai-brand="codex" />
+  if (kind === 'claude') return <ClaudeCodeIcon {...props} data-ai-brand="claude-code" />
+  const brand =
+    kind === 'deepseek'
+      ? AI_PROVIDER_ICONS.find((entry) => entry.key === 'deepseek')
+      : (AI_PROVIDER_ICONS.find((entry) => entry.match.test(provider?.endpoint ?? '')) ??
+        AI_PROVIDER_ICONS.find((entry) => entry.match.test(provider?.name ?? '')))
+  const attributes = { ...props, 'aria-hidden': true, 'data-ai-brand': brand?.key ?? 'custom' }
+  return createElement(brand?.Icon ?? Blocks, attributes)
 }
 
 function officialImageIcon(

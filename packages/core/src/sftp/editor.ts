@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { posix } from 'node:path'
-import { fail } from '@eizhu/contracts'
+import { fail, SFTP_TRANSFER_CHUNK_BYTES } from '@eizhu/contracts'
 import type { SftpFileWriteRequest } from '@eizhu/contracts/models/sftp'
 import { FileEndpoint } from './endpoint.ts'
 const LIMIT = 10 * 1024 * 1024
@@ -9,13 +9,15 @@ export async function fileHash(
   endpoint: FileEndpoint,
   path: string,
   limit = Number.MAX_SAFE_INTEGER,
+  signal?: AbortSignal,
 ): Promise<string> {
   const h = await endpoint.open(path),
     digest = createHash('sha256')
   let offset = 0
   try {
     while (offset < limit) {
-      const bytes = await h.read(offset, Math.min(512 * 1024, limit - offset))
+      signal?.throwIfAborted()
+      const bytes = await h.read(offset, Math.min(SFTP_TRANSFER_CHUNK_BYTES, limit - offset))
       if (!bytes.length) break
       digest.update(bytes)
       offset += bytes.length
@@ -35,7 +37,7 @@ export async function readText(endpoint: FileEndpoint, path: string) {
   let size = 0
   try {
     while (true) {
-      const b = await handle.read(size, Math.min(512 * 1024, LIMIT + 1 - size))
+      const b = await handle.read(size, Math.min(SFTP_TRANSFER_CHUNK_BYTES, LIMIT + 1 - size))
       if (!b.length) break
       size += b.length
       if (size > LIMIT) fail('FILE_TOO_LARGE', '文件超过 10 MiB')
@@ -131,8 +133,8 @@ export async function writeText(endpoint: FileEndpoint, path: string, request: S
   try {
     const handle = await endpoint.open(temporary, true, true)
     try {
-      for (let offset = 0; offset < bytes.length; offset += 512 * 1024)
-        await handle.write(offset, bytes.subarray(offset, offset + 512 * 1024))
+      for (let offset = 0; offset < bytes.length; offset += SFTP_TRANSFER_CHUNK_BYTES)
+        await handle.write(offset, bytes.subarray(offset, offset + SFTP_TRANSFER_CHUNK_BYTES))
       await handle.sync()
     } finally {
       await handle.close()

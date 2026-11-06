@@ -15,11 +15,16 @@ vi.mock('@/api/group', () => ({
 }))
 
 import { useProfileStore } from './profile'
+import { setWorkspaceGeneration } from '@/lib/workspaceScope'
+import type { Profile } from '@/types/profile'
+
+const profile: Profile = { id: 'a', name: '服务器 A', host: 'a.example.test', port: 22, username: 'user', auth_type: 'password', proxy: { type: 'direct' }, sort_order: 0, tags: [], options: '{}', note: '', created_at: '', updated_at: '' }
 
 beforeEach(() => {
   mocks.listProfiles.mockReset()
   mocks.listGroups.mockReset()
   mocks.updateProfile.mockReset()
+  setWorkspaceGeneration(1)
   useProfileStore.setState({
     profiles: [],
     groups: [],
@@ -27,6 +32,40 @@ beforeEach(() => {
     searchQuery: '',
     loading: false,
     error: null,
+  })
+})
+
+describe('profile save and refresh ordering', () => {
+  it('保存提交后立即使用返回的配置，迟到的旧列表不能回写旧地址', async () => {
+    let resolveOld!: (profiles: Profile[]) => void
+    mocks.listProfiles.mockReturnValueOnce(new Promise<Profile[]>((resolve) => { resolveOld = resolve }))
+    useProfileStore.setState({ profiles: [profile] })
+    const oldRead = useProfileStore.getState().fetchProfiles()
+    const saved = { ...profile, host: 'new-a.example.test', port: 2222 }
+    mocks.updateProfile.mockResolvedValue(saved)
+    let resolveNew!: (profiles: Profile[]) => void
+    mocks.listProfiles.mockReturnValueOnce(new Promise<Profile[]>((resolve) => { resolveNew = resolve }))
+    await useProfileStore.getState().updateProfile('a', { host: saved.host, port: saved.port })
+    expect(useProfileStore.getState().profiles).toEqual([saved])
+    resolveOld([profile])
+    await oldRead
+    expect(useProfileStore.getState().profiles).toEqual([saved])
+    resolveNew([saved])
+    await Promise.resolve()
+    expect(useProfileStore.getState().profiles).toEqual([saved])
+  })
+
+  it('同步刷新与切换账号后，旧空间的服务器列表不会替换当前列表', async () => {
+    let resolveOld!: (profiles: Profile[]) => void
+    mocks.listProfiles.mockReturnValueOnce(new Promise<Profile[]>((resolve) => { resolveOld = resolve }))
+    mocks.listGroups.mockResolvedValue([])
+    const oldRead = useProfileStore.getState().refreshAll()
+    setWorkspaceGeneration(2)
+    const other = { ...profile, id: 'b', name: '服务器 B' }
+    useProfileStore.getState().applySnapshot([other], [])
+    resolveOld([profile])
+    await oldRead
+    expect(useProfileStore.getState().profiles).toEqual([other])
   })
 })
 

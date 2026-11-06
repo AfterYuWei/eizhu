@@ -47,7 +47,7 @@ export function PaneActions({
   onCopyPath,
 }: PaneActionsProps) {
   return (
-    <div className="sftp-actions">
+    <div className="sftp-actions" role="group" aria-label="文件操作">
       <ActionBtn icon={<FilePlus size={13} />} label="新建文件" onClick={onNewFile} />
       <ActionBtn icon={<FolderPlus size={13} />} label="新建文件夹" onClick={onNewFolder} />
       <ActionBtn icon={<RefreshCw size={13} />} label="刷新" onClick={onRefresh} />

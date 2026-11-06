@@ -14,7 +14,6 @@
   align-items: center;
   gap: 9px;
   padding: 0 14px;
-  border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
 .pal-inp-wrap svg {
@@ -26,6 +25,7 @@
   height: 44px;
   background: transparent;
   border: none;
+  box-shadow: none;
   color: var(--fg);
   font: 400 var(--sans-size) / 1 var(--sans);
   outline: none;
@@ -85,7 +85,6 @@
   padding: 2px 5px;
   background: var(--bg-elevated);
   border-radius: 3px;
-  border: 1px solid var(--border);
 }
 .pal-item .dot {
   width: 5px;

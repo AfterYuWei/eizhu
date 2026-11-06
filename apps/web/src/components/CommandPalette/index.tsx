@@ -1,6 +1,7 @@
 import { useState,useRef,useEffect,useMemo } from 'react'
 import { Search,Server,Command,KeyRound } from 'lucide-react'
 import { useProfileStore } from '@/store/profile'
+import { useWorkspaceViewStore } from '@/store/workspaceView'
 import { useSessionStore } from '@/store/session'
 import { useVaultStore } from '@/store/vault'
 import { vaultApi } from '@/api/vault'
@@ -29,10 +30,10 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
         id: profile.id, type: 'server' as const, label: profile.name,
         detail: `${profile.username}@${profile.host}:${profile.port}`, shortcut: '', run: () => {
           const store = useSessionStore.getState()
-          const existing = store.tabs.find((t) => t.kind === 'terminal' && t.profileId === profile.id)
+          const existing = store.tabs.find((t) => t.profileId === profile.id)
           if (existing) store.setActiveTab(existing.id)
           else {
-            const draft = store.tabs.find((t) => t.id === store.activeTabId && t.kind === 'terminal' && !t.profileId && !t.sessionId)
+            const draft = store.tabs.find((t) => t.id === store.activeTabId && !t.profileId && !t.sessionId)
             void store.openTab(profile.id, profile.name, profile.host, profile.port, profile.username, draft?.id)
           }
         },
@@ -40,12 +41,12 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
       ...vaults.map((item) => ({ id: item.id, type: 'vault' as const, label: item.name,
         detail: item.type === 'private_key' ? '私钥' : `密码 · ${item.username || '未设置用户名'}`, shortcut: '', run: () => {
           useVaultStore.setState({ filterType: 'all', searchQuery: item.name, focusedItemId: item.id })
-          useSessionStore.getState().openVaultTab()
+          useWorkspaceViewStore.getState().openVault()
           void useVaultStore.getState().fetchList()
         },
       })),
-      ...desktopActions.filter((a) => a.id !== 'palette' && a.label.toLowerCase().includes(needle)).map((a) => ({
-        id: a.id, type: 'action' as const, label: a.label, detail: '', shortcut: `Ctrl/Cmd+Shift+${a.key.toUpperCase()}`, run: () => runDesktopAction(a.id),
+      ...desktopActions.filter((a) => a.id !== 'palette' && `${a.label} ${'keywords' in a ? a.keywords : ''}`.toLowerCase().includes(needle)).map((a) => ({
+        id: a.id, type: 'action' as const, label: a.label, detail: '', shortcut: a.key ? `Ctrl/Cmd+Shift+${a.key.toUpperCase()}` : '', run: () => runDesktopAction(a.id),
       })),
     ]
   }, [profiles, query, vaults])
@@ -87,8 +88,14 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
         e.preventDefault()
         if (executing.current) return
         const active = useSessionStore.getState().tabs.find((tab) => tab.id === useSessionStore.getState().activeTabId)
-        if (active?.kind === 'terminal' && active.profileId) focusActiveTerminal()
-        else if (returnFocus.current?.isConnected) returnFocus.current.focus()
+        if (useWorkspaceViewStore.getState().activePage === 'terminal' && active?.profileId) focusActiveTerminal()
+        else if (returnFocus.current?.isConnected) {
+          const target = returnFocus.current
+          // Restore keyboard focus without reopening the trigger's tooltip.
+          target.setAttribute('data-tooltip-focus-restore', '')
+          target.focus()
+          target.removeAttribute('data-tooltip-focus-restore')
+        }
       }}>
       <DialogTitle className="sr-only">搜索服务器、密钥或命令</DialogTitle>
       <div className="pal-inp-wrap"><Search size={17} /><Input ref={inputRef} className="pal-inp focus-visible:ring-0" placeholder="搜索服务器、密钥或命令…" value={query}
@@ -113,7 +120,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
               className={`pal-item ${index === selected ? 'sel' : ''}`} role="option" aria-selected={index === selected}
               onMouseEnter={() => setSelectedKey(`${item.type}:${item.id}`)} onClick={() => execute(index)}>
               <span className="pal-item-icon">{type === 'server' ? <Server size={15} /> : type === 'vault' ? <KeyRound size={15} /> : <Command size={15} />}</span>
-              <span className="pal-item-label">{item.label}{item.detail && <small>{item.detail}</small>}</span><span className="pal-item-kbd">{item.shortcut}</span>
+              <span className="pal-item-label">{item.label}{item.detail && <small>{item.detail}</small>}</span>{item.shortcut && <span className="pal-item-kbd">{item.shortcut}</span>}
             </Button>)}
           </div>
         })}

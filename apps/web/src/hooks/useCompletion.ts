@@ -94,6 +94,7 @@ export function useCompletion({ getTerminal, sendInput, sendComplete, getCwd, en
   const getCwdRef = useRef(getCwd)
   const enabledRef = useRef(enabled)
   const inTuiRef = useRef(false)
+  const outputTailRef = useRef('')
   const pendingRequestRef = useRef<string | null>(null)
   const requestMetaRef = useRef(new Map<string, RequestMeta>())
   /** 展开子目录的 in-flight 请求（key: requestId） */
@@ -110,8 +111,20 @@ export function useCompletion({ getTerminal, sendInput, sendComplete, getCwd, en
   useEffect(() => { enabledRef.current = enabled }, [enabled])
 
   const closePopup = useCallback(() => {
+    popupRef.current = EMPTY_POPUP
     setPopup((current) => (current.open ? EMPTY_POPUP : current))
   }, [])
+
+  const dismissPopup = useCallback(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    debounceRef.current = null
+    pendingRequestRef.current = null
+    requestMetaRef.current.clear()
+    expandMetaRef.current.clear()
+    closePopup()
+  }, [closePopup])
+
+  useEffect(() => { if (!enabled) dismissPopup() }, [enabled, dismissPopup])
 
   /** 构造 cd 场景的第一列：历史命令（H 图标 + 频次）在前，目录在后 */
   const buildCdRootColumn = useCallback((dirs: Suggestion[], currentToken: string): Suggestion[] => {
@@ -130,7 +143,7 @@ export function useCompletion({ getTerminal, sendInput, sendComplete, getCwd, en
 
   const recompute = useCallback(() => {
     const buffer = bufferRef.current
-    if (buffer.stale || !enabledRef.current || inTuiRef.current) {
+    if (buffer.stale || buffer.cursor !== buffer.text.length || !enabledRef.current || inTuiRef.current) {
       closePopup()
       return
     }
@@ -213,23 +226,25 @@ export function useCompletion({ getTerminal, sendInput, sendComplete, getCwd, en
     const suggestion = col.suggestions[col.selectedIndex]
     const buffer = bufferRef.current
 
-    // 历史命令：显示为完整命令（cd /path），应用时把当前路径 token 替换为
-    // 历史命令的路径部分，复用统一的 token 替换逻辑。
-    const isHistory = suggestion.type === 'history' && suggestion.fullCommand
-    const applyName = isHistory
-      ? suggestion.fullCommand!.replace(/^cd\s+/, '')
-      : suggestion.name
-
-    const currentToken = tokenize(buffer.text).currentToken
-    const insertPlan = buildCompletionInsertPlan(currentToken, applyName)
-    let insertText = insertPlan.insertText
-    if (!insertText) {
-      closePopup()
+    if (buffer.stale || buffer.cursor !== buffer.text.length) { dismissPopup(); return }
+    // 历史记录已是经过验证的完整 Shell 命令，保留原有引号并替换整行。
+    if (suggestion.type === 'history' && suggestion.fullCommand) {
+      sendInputRef.current('\x15' + suggestion.fullCommand)
+      bufferRef.current = { text: suggestion.fullCommand, cursor: suggestion.fullCommand.length, stale: false }
+      dismissPopup()
       return
     }
-    // 子命令/选项后追加空格（目录不追加，便于继续输入下一级）
-    if (suggestion.type === 'subcommand' || suggestion.type === 'option') {
+
+    const currentToken = tokenize(buffer.text).currentToken
+    const insertPlan = buildCompletionInsertPlan(currentToken, suggestion.name)
+    let insertText = insertPlan.insertText
+    // 完整子命令仍可确认追加空格，未闭合引号内保留原有 token 边界。
+    if (insertPlan.canAppendSeparator && (suggestion.type === 'subcommand' || suggestion.type === 'option')) {
       insertText += ' '
+    }
+    if (!insertText) {
+      dismissPopup()
+      return
     }
     sendInputRef.current(insertText)
     bufferRef.current.text = buffer.text.slice(0, buffer.cursor) + insertText + buffer.text.slice(buffer.cursor)
@@ -239,12 +254,12 @@ export function useCompletion({ getTerminal, sendInput, sendComplete, getCwd, en
     // 下一级，实现"层层深入"；文件(isDir:false)是末级，填入后关闭面板；
     // 历史命令或普通候选同样应用后关闭。
     if (currentPopup.cascade && suggestion.type === 'directory' && suggestion.isDir) {
-      closePopup()
+      dismissPopup()
       scheduleRecompute()
     } else {
-      closePopup()
+      dismissPopup()
     }
-  }, [closePopup, scheduleRecompute])
+  }, [dismissPopup, scheduleRecompute])
 
   /** 展开当前选中的目录项，向右弹出一列子目录。返回是否真的发起了展开。 */
   const expandDirectory = useCallback((): boolean => {
@@ -275,7 +290,7 @@ export function useCompletion({ getTerminal, sendInput, sendComplete, getCwd, en
 
     const cached = cache.get(key, cwd, 3000)
     if (cached) {
-      appendColumn(parseCompletionData(cached, dirPath, 'directory-list'))
+      appendColumn(parseCompletionData(cached, dirPath, 'directory-list', true))
       return true
     }
 
@@ -319,27 +334,23 @@ export function useCompletion({ getTerminal, sendInput, sendComplete, getCwd, en
 
   /** 当前列未选中任何项时，自动选中第一个可展开目录项。返回是否选中成功。 */
   const selectFirstDirectory = useCallback((): boolean => {
-    let didSelect = false
-    setPopup((current) => {
-      if (!current.open) return current
-      const colIndex = current.activeColumn
-      const col = current.columns[colIndex]
-      if (!col || col.selectedIndex !== -1) return current
-      const firstDir = col.suggestions.findIndex((s) => s.type === 'directory' && s.isDir)
-      if (firstDir < 0) return current
-      didSelect = true
-      const nextCols = current.columns.slice()
-      nextCols[colIndex] = { ...col, selectedIndex: firstDir }
-      return { ...current, columns: nextCols }
-    })
-    return didSelect
+    const current = popupRef.current
+    const colIndex = current.activeColumn
+    const col = current.columns[colIndex]
+    if (!current.open || !col || col.selectedIndex !== -1) return false
+    const firstDir = col.suggestions.findIndex((s) => s.type === 'directory' && s.isDir)
+    if (firstDir < 0) return false
+    const nextCols = current.columns.slice()
+    nextCols[colIndex] = { ...col, selectedIndex: firstDir }
+    setPopup({ ...current, columns: nextCols })
+    return true
   }, [])
 
   /** 悬停选中某项（鼠标），并级联模式下若已展开过则更替换列 */
   const hoverSelect = useCallback((columnIndex: number, itemIndex: number) => {
     setPopup((current) => {
       if (!current.open || columnIndex >= current.columns.length) return current
-      const nextCols = current.columns.slice()
+      const nextCols = current.columns.slice(0, columnIndex + 1)
       nextCols[columnIndex] = { ...nextCols[columnIndex], selectedIndex: itemIndex }
       return { ...current, activeColumn: columnIndex, columns: nextCols }
     })
@@ -384,21 +395,20 @@ export function useCompletion({ getTerminal, sendInput, sendComplete, getCwd, en
         inTuiRef.current = true
       }
       bufferRef.current = { text: '', cursor: 0, stale: false }
+      dismissPopup()
       return false
     }
 
     if (data === '\x1b') {
-      if (popupRef.current.open) {
-        closePopup()
-        return true
-      }
-      return false
+      const wasOpen = popupRef.current.open
+      dismissPopup()
+      return wasOpen
     }
 
     if (data === '\x03') {
       bufferRef.current = { text: '', cursor: 0, stale: false }
       inTuiRef.current = false
-      closePopup()
+      dismissPopup()
       return false
     }
 
@@ -420,7 +430,7 @@ export function useCompletion({ getTerminal, sendInput, sendComplete, getCwd, en
       } else {
         const before = buffer.text.slice(0, buffer.cursor)
         const after = buffer.text.slice(buffer.cursor)
-        const newBefore = before.replace(/\s*\S+\s*$/, '')
+        const newBefore = before.replace(/\S+\s*$/, '')
         bufferRef.current.text = newBefore + after
         bufferRef.current.cursor = newBefore.length
       }
@@ -433,8 +443,10 @@ export function useCompletion({ getTerminal, sendInput, sendComplete, getCwd, en
       if (buffer.stale) {
         Object.assign(bufferRef.current, resyncFromTerminal(getTerminal))
       } else if (buffer.cursor > 0) {
-        bufferRef.current.text = buffer.text.slice(0, buffer.cursor - 1) + buffer.text.slice(buffer.cursor)
-        bufferRef.current.cursor = buffer.cursor - 1
+        const before = buffer.text.slice(0, buffer.cursor)
+        const width = [...before].at(-1)!.length
+        bufferRef.current.text = before.slice(0, -width) + buffer.text.slice(buffer.cursor)
+        bufferRef.current.cursor = buffer.cursor - width
       }
       scheduleRecompute()
       return false
@@ -465,6 +477,7 @@ export function useCompletion({ getTerminal, sendInput, sendComplete, getCwd, en
           return true
         }
         moveCursorInBuffer(bufferRef.current, -1)
+        dismissPopup()
         return false
       }
       // 非级联/面板关闭：保持原光标移动追踪（移动后关闭面板）。
@@ -480,9 +493,15 @@ export function useCompletion({ getTerminal, sendInput, sendComplete, getCwd, en
     }
 
     if (data === '\t') {
-      closePopup()
+      dismissPopup()
       bufferRef.current.stale = true
       return false // Tab remains a remote shell control key.
+    }
+
+    if (data.includes('\r') || data.includes('\n')) {
+      bufferRef.current.stale = true
+      dismissPopup()
+      return false
     }
 
     if (data.length > 0 && data.charCodeAt(0) >= 0x20) {
@@ -499,17 +518,21 @@ export function useCompletion({ getTerminal, sendInput, sendComplete, getCwd, en
     bufferRef.current.stale = true
     closePopup()
     return false
-  }, [applySelection, closePopup, collapseColumn, expandDirectory, getTerminal, navigateColumn, scheduleRecompute, selectFirstDirectory, profileId, tabId])
+  }, [applySelection, closePopup, dismissPopup, collapseColumn, expandDirectory, getTerminal, navigateColumn, scheduleRecompute, selectFirstDirectory, profileId, tabId])
 
   const handleOutputData = useCallback((data: string) => {
-    const state = detectTuiSequence(data)
+    const combined = outputTailRef.current + data
+    const state = detectTuiSequence(combined)
+    // Only retain a possible incomplete control sequence, never an already applied mode switch.
+    const lastEscape = combined.lastIndexOf('\x1b')
+    outputTailRef.current = lastEscape >= 0 && combined.length - lastEscape < 8 ? combined.slice(lastEscape) : ''
     if (state === 'enter') {
       inTuiRef.current = true
-      closePopup()
+      dismissPopup()
     } else if (state === 'exit') {
       inTuiRef.current = false
     }
-  }, [closePopup])
+  }, [dismissPopup])
 
   const handleCompleteResponse = useCallback((payload: CompleteResponsePayload) => {
     // 优先匹配展开子目录的请求
@@ -518,12 +541,14 @@ export function useCompletion({ getTerminal, sendInput, sendComplete, getCwd, en
       expandMetaRef.current.delete(payload.request_id)
       if (payload.error || payload.exit_code !== 0 || Date.now() - expandMeta.startedAt >= 4000 || expandMeta.input !== bufferRef.current.text || expandMeta.cwd !== getCwdRef.current() || expandMeta.scope !== scopeRef.current) return
       cache.set(expandMeta.key, expandMeta.cwd, payload)
-      const dirs = parseCompletionData(payload, expandMeta.dirPath, 'directory-list')
+      const dirs = rankCompletionCandidates(parseCompletionData(payload, expandMeta.dirPath, 'directory-list', true))
       if (dirs.length === 0) return
       setPopup((current) => {
         if (!current.open) return current
         const parentDepth = expandMeta.parentDepth
         if (parentDepth >= current.columns.length) return current
+        const parent = current.columns[parentDepth]
+        if (parent.suggestions[parent.selectedIndex]?.name !== expandMeta.dirPath) return current
         const nextCols = current.columns.slice(0, parentDepth + 1)
         // 展开子菜单时自动选中第一项
         nextCols.push({ suggestions: dirs, selectedIndex: 0 })
@@ -557,11 +582,12 @@ export function useCompletion({ getTerminal, sendInput, sendComplete, getCwd, en
     requestMetaRef.current.clear()
     expandMetaRef.current.clear()
     inTuiRef.current = false
-    closePopup()
+    outputTailRef.current = ''
+    dismissPopup()
     cache.clear()
-  }, [closePopup, cache])
+  }, [dismissPopup, cache])
 
-  useEffect(() => { reset() }, [connectionKey, profileId, reset])
+  useEffect(() => { reset() }, [connectionKey, profileId, tabId, reset])
 
   useEffect(() => {
     return () => {

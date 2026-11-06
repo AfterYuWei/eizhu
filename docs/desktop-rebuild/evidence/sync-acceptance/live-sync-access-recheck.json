@@ -1,0 +1,147 @@
+{
+  "observedAt": "2026-10-28T07:14:15.292Z",
+  "target": "https://eizhu.yuweinfo.com/",
+  "sourceBase": "526c5c998d4bdfdb3bc5d44ba0ff34b5f651a0c0",
+  "sourceDigest": "561044a232b12c389868f2a3cfe3445f0e59461910de301ac553e811b161f7c9",
+  "version": "0.5.0-test.344.526c5c99",
+  "platform": "darwin",
+  "arch": "x64",
+  "checkedAfterOperatorChange": true,
+  "result": "still blocked at sync authorization",
+  "freshLogin": true,
+  "passwordRecoveryAndResetPassed": true,
+  "refreshedToken": true,
+  "emailVerified": true,
+  "tokenRole": "USER",
+  "userRole": "USER",
+  "authorizationPresent": true,
+  "capabilities": {
+    "status": 403,
+    "code": "ACCESS_DENIED"
+  },
+  "cloudWrites": {
+    "devices": 0,
+    "keys": 0,
+    "push": 0
+  },
+  "failure": {
+    "passed": false,
+    "synthetic": false,
+    "mode": "live",
+    "version": "0.5.0-test.344.526c5c99",
+    "platform": "darwin",
+    "arch": "x64",
+    "phase": "initial-preview",
+    "failedAt": "2026-10-28T07:09:57.398Z",
+    "error": {
+      "code": "ACCOUNT_ACCESS_DENIED",
+      "message": "账号服务暂未开放此操作，请联系管理员"
+    },
+    "clients": [
+      {
+        "actor": "device-a",
+        "generation": 3,
+        "events": {
+          "opened": 0,
+          "closed": 0,
+          "hints": 0
+        },
+        "pushCount": 0,
+        "refreshCount": 1,
+        "pushHashes": [],
+        "responses": [
+          {
+            "path": "/api/auth/logout",
+            "method": "POST",
+            "status": 401
+          },
+          {
+            "path": "/api/auth/password/forgot",
+            "method": "POST",
+            "status": 200
+          },
+          {
+            "path": "/api/auth/password/reset",
+            "method": "POST",
+            "status": 200
+          },
+          {
+            "path": "/api/auth/setup",
+            "method": "GET",
+            "status": 200
+          },
+          {
+            "path": "/api/auth/login",
+            "method": "POST",
+            "status": 200
+          },
+          {
+            "path": "/api/auth/refresh",
+            "method": "POST",
+            "status": 200
+          },
+          {
+            "path": "/api/auth/me",
+            "method": "GET",
+            "status": 200
+          },
+          {
+            "path": "/api/sync/v2/capabilities",
+            "method": "GET",
+            "status": 403
+          }
+        ]
+      },
+      {
+        "actor": "device-b",
+        "generation": 1,
+        "events": {
+          "opened": 0,
+          "closed": 0,
+          "hints": 0
+        },
+        "pushCount": 0,
+        "refreshCount": 0,
+        "pushHashes": [],
+        "responses": []
+      }
+    ]
+  },
+  "diagnostic": {
+    "observedAt": "2026-10-28T07:11:36.944Z",
+    "requests": [
+      {
+        "path": "/api/auth/me",
+        "status": 200,
+        "emailVerified": true,
+        "verificationRequired": true,
+        "role": "USER"
+      },
+      {
+        "path": "/api/sync/v2/capabilities",
+        "method": "GET",
+        "authorizationPresent": true,
+        "status": 403,
+        "code": "ACCESS_DENIED",
+        "restrictedModeHint": false,
+        "permissionHint": true,
+        "emailHint": false,
+        "tokenHint": false
+      }
+    ]
+  },
+  "authorities": [
+    {
+      "tokenAuthorityClaims": {
+        "role": "USER"
+      }
+    },
+    {
+      "status": 200,
+      "role": "USER",
+      "emailVerified": true
+    }
+  ],
+  "backendConfigurationChanged": false,
+  "pending": "核对普通 USER 的 /api/sync/v2/** 授权规则或相应服务端 403 日志；具体原因未确认。"
+}

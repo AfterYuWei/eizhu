@@ -1,0 +1,46 @@
+▶ all completion generators over real SSH/SFTP with isolated CLI fixtures
+  ✔ git-branches{} (24.209965ms)
+  ✔ git-remotes{} (17.071156ms)
+  ✔ docker-containers{} (584.016847ms)
+  ✔ docker-containers{"all":true} (13.050807ms)
+  ✔ kubectl-resources{"namespace":"qa ' team","resource":"pods"} (567.120659ms)
+  ✔ kubectl-contexts{} (13.90023ms)
+  ✔ systemd-service-units{} (700.900088ms)
+  ✔ systemd-active-units{} (14.099222ms)
+  ✔ systemd-failed-units{} (13.960062ms)
+  ✔ npm-scripts{} (68.544955ms)
+  ✖ relative, absolute, home, dot, parent and Unicode path operands (20.738304ms)
+  ✔ directory failures, cancellation, timeout and output bounds (10285.148353ms)
+  ✔ shell operands remain literal and npm discovery does not execute scripts (13.39409ms)
+  ✔ nonzero CLI status and exec output limit are preserved (82.419255ms)
+✖ all completion generators over real SSH/SFTP with isolated CLI fixtures (12527.182554ms)
+ℹ tests 15
+ℹ suites 0
+ℹ pass 13
+ℹ fail 2
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 12814.699663
+
+✖ failing tests:
+
+test at packages/core/src/ssh/completion.integration.test.ts:108:13
+✖ relative, absolute, home, dot, parent and Unicode path operands (20.738304ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  '.' !== '/home'
+  
+      at TestContext.<anonymous> (file:///Users/yuwei/Desktop/Projects/yuweinfo/XControl/packages/core/src/ssh/completion.integration.test.ts:115:16)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async TestContext.<anonymous> (file:///Users/yuwei/Desktop/Projects/yuweinfo/XControl/packages/core/src/ssh/completion.integration.test.ts:108:5)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '.',
+    expected: '/home',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }

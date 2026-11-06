@@ -1,3 +1,11 @@
+import { SyncService } from '../sync/service.ts'
+import { AgentService } from '../agent/service.ts'
+import type { AgentExternal } from '../agent/service.ts'
+import type { AiTransport } from '../agent/model.ts'
+import { z } from 'zod'
+import { ai, isAiOperation } from '@eizhu/contracts'
+import type { EventStream } from '../sync/service.ts'
+import { sync, isSyncOperation } from '@eizhu/contracts'
 import { ArchiveService } from '../archive/service.ts'
 import type { Transport } from '../archive/network.ts'
 import { archive, isArchiveOperation } from '@eizhu/contracts'
@@ -6,8 +14,11 @@ import { SftpService } from '../sftp/service.ts'
 import { sftp,isSftpOperation } from '@eizhu/contracts'
 import type { BinaryPort } from '../ssh/stream.ts'
 import { ssh, isSshOperation } from '@eizhu/contracts'
-import { foundation, fail, sameContext, local, isLocalOperation } from '@eizhu/contracts'
-import type { RpcRequest, RuntimeContext } from '@eizhu/contracts'
+import { foundation, fail, sameContext, local, isLocalOperation, offlineWorkspace, account, isAccountOperation } from '@eizhu/contracts'
+import type { RpcRequest, RuntimeContext, WorkspaceIdentity } from '@eizhu/contracts'
+import { validateWorkspace } from '../account/workspace.ts'
+import { AccountService } from '../account/service.ts'
+import { workerAccountStorage, accountStorage } from '../account/storage.ts'
 import { WorkerClient } from '../workers/client.ts'
 import { ResourceScope } from './scope.ts'
 import { Client } from 'ssh2'
@@ -17,36 +28,59 @@ import type { FileIdentity } from '../local/backup.ts'
 import { join } from 'node:path'
 
 export class RuntimeService {
+  private agent!: AgentService
+  private agentExternal?: AgentExternal
+  private agentTransport: AiTransport
+  private emitAgent: (conversation: import('@eizhu/contracts').AiConversation, message?: import('@eizhu/contracts').AiConversation['messages'][number]) => void
   private scope = new ResourceScope()
   private database: WorkerClient
   private compute: WorkerClient
   private filePreviews = new Map<string, { token: string; hash: string }>()
-  private restoreTokens = new Set<string>()
-  private rememberToken(token: string): void {
-    if (this.restoreTokens.size >= 4) this.restoreTokens.delete(this.restoreTokens.values().next().value!)
-    this.restoreTokens.add(token)
-  }
   private archive: ArchiveService
   private ssh: SshService
   private sftp:SftpService
-  private verification: { root: string; path: string; path3: string }
+  private verification: { root: string; path: string; path3: string; account: string; sync: string }
+  private workspace: WorkspaceIdentity = offlineWorkspace
+  private initialized = false
+  private sync!: SyncService
+  private stream?: EventStream
+  private emitSync: (status: import('@eizhu/contracts').SyncStatus, refresh:boolean) => void
+  private account!: AccountService
+  private emitAccount: (status: import('@eizhu/contracts').AccountStatus) => void
+  private accountTransport: Transport
   readonly context: RuntimeContext
   constructor(
     context: RuntimeContext,
     root: string,
-    paths: { database: string; compute: string; verification: string; verification3: string },
+    paths: { database: string; compute: string; verification: string; verification3: string; verificationAccount: string; verificationSync: string },
     key: Uint8Array,
-    emit: (name: 'eizhu-session-message'|'eizhu-sftp-message', payload: unknown) => void = () => undefined,
+    emit: (name: 'eizhu-session-message'|'eizhu-sftp-message'|'eizhu-account-message'|'eizhu-sync-message'|'eizhu-ai-message', payload: unknown) => void = () => undefined,
     localHome?:string,
     transport:Transport=async()=>fail('CLOUD_UNAVAILABLE','云存储网络不可用'),
+    workspace?: WorkspaceIdentity,
+    accountTransport: Transport = async () => fail('ACCOUNT_UNAVAILABLE', '账号网络不可用'),
+    stream?: EventStream,
+    agentTransport: AiTransport = async () => fail('AI_UNAVAILABLE', 'AI 网络不可用'),
+    agentExternal?: AgentExternal,
   ) {
+    this.agentExternal = agentExternal
+    this.agentTransport = agentTransport
+    this.emitAgent = (conversation, message) => emit('eizhu-ai-message', message
+      ? { workspaceGeneration: this.context.generation, conversationId: conversation.id, message }
+      : { workspaceGeneration: this.context.generation, conversation })
     this.context = context
+    this.accountTransport = accountTransport
+    this.stream = stream
+    this.emitSync = (status, refresh) => emit('eizhu-sync-message', { workspaceGeneration:this.context.generation, status, refresh })
+    this.emitAccount = (status) => {emit('eizhu-account-message', { workspaceGeneration: this.context.generation, status });this.sync?.credentialsChanged()}
     this.verification = {
       root: join(root, 'stage2-integration'),
       path: paths.verification,
       path3: paths.verification3,
+      account: paths.verificationAccount,
+      sync: paths.verificationSync,
     }
-    this.database = new WorkerClient(paths.database, { root, key }, 64)
+    this.database = new WorkerClient(paths.database, { root, key, workspace }, 64)
     this.compute = new WorkerClient(paths.compute, undefined, 8)
     this.scope.own(() => this.database.close())
     this.scope.own(() => this.compute.close())
@@ -54,25 +88,69 @@ export class RuntimeService {
     this.scope.own(() => this.ssh.close())
     this.sftp=new SftpService(this.ssh,this.database,context,root,emit,localHome)
     this.scope.own(()=>this.sftp.close())
-    this.archive=new ArchiveService(this.database,this.compute,transport,token=>this.rememberToken(token))
+    this.archive=new ArchiveService(this.database,this.compute,transport)
     this.scope.own(()=>this.archive.close())
   }
+  async initialize(): Promise<WorkspaceIdentity> {
+    if (this.initialized) fail('RUNTIME_INIT_FAILED', '业务进程已经初始化')
+    this.workspace = validateWorkspace(await this.database.call('workspace.identity'))
+    this.context.workspaceId = this.workspace.id
+    this.account = new AccountService(workerAccountStorage(this.database), this.accountTransport, this.workspace, this.emitAccount, this.compute)
+    this.scope.own(() => this.account.close())
+    this.sync = new SyncService(this.database,this.compute,this.account,this.workspace,this.context,this.emitSync,this.stream)
+    this.scope.own(()=>this.sync.close())
+    this.agent = new AgentService(input => this.database.call('ai.storage', input), this.ssh, this.agentTransport,
+      async () => `Bearer ${(await this.account.syncToken()).token}`, this.context, this.emitAgent, this.sftp, this.agentExternal)
+    this.scope.own(() => this.agent.close())
+    this.initialized = true
+    return this.workspace
+  }
+  startBackground(): void { this.account.start();this.sync.start() }
   async execute(request: RpcRequest): Promise<unknown> {
+    if (!this.initialized) fail('RUNTIME_INIT_FAILED', '业务进程尚未初始化')
     if (!sameContext(request.context, this.context)) fail('WORKSPACE_CHANGED', '数据空间已变化，请重试')
     if (this.scope.controller.signal.aborted) fail('RUNTIME_CLOSED', '业务进程正在关闭')
+    if (request.operation === 'account.setSyncEnabled') {const d=account[request.operation].input.parse(request.input);const status=await this.sync.setEnabled(d.enabled);this.emitAccount(status);return status}
+    if (isSyncOperation(request.operation)) {
+      const result = sync[request.operation].output.parse(await this.sync.execute(request.operation, request.input))
+      if (request.operation === 'sync.bootstrap') this.emitAccount(await this.database.call('account.storage.status'))
+      return result
+    }
+    if (isAccountOperation(request.operation)) return account[request.operation].output.parse(await this.account.execute(request.operation, request.input))
     if(isArchiveOperation(request.operation)) return archive[request.operation].output.parse(await this.archive.execute(request.operation,request.input))
-    if (isSshOperation(request.operation))
+    if (isSshOperation(request.operation)) {
+      if (request.operation === 'session.close' || request.operation === 'session.reconnect')
+        await this.agent.invalidateSession(ssh[request.operation].input.parse(request.input).id)
       return ssh[request.operation].output.parse(await this.ssh.execute(request.operation, request.input))
+    }
     if(isSftpOperation(request.operation))return sftp[request.operation].output.parse(await this.sftp.execute(request.operation,request.input))
     if(request.operation==='sftp.authorizeEditor'){const d=request.input as {sessionId:string;path:string};return this.sftp.authorizeEditor(d.sessionId,d.path)}
     if(request.operation==='sftp.downloadPath')return this.sftp.downloadPath((request.input as {taskId:string}).taskId)
     switch (request.operation) {
+      case 'ai.dispatch': {
+        const d = z.strictObject({ owner: z.int().positive(), operation: z.string().refine(isAiOperation), input: z.unknown() }).parse(request.input)
+        if (!isAiOperation(d.operation)) fail('BAD_REQUEST', 'AI 操作无效')
+        return ai[d.operation].output.parse(await this.agent.execute(d.operation, d.input, d.owner))
+      }
+      case 'account.authenticate': {
+        const d = request.input as { operation: string; input: unknown }
+        if (!d || (d.operation !== 'account.login' && d.operation !== 'account.register')) fail('BAD_REQUEST', '账号操作无效')
+        return this.account.authenticate(d.operation, d.input)
+      }
+      case 'account.prepareLogout': return this.account.prepareLogout()
+      case 'account.commitTransition': {
+        const d = accountStorage['account.storage.commit'].parse(request.input)
+        if (d.target.id !== this.workspace.id) fail('WORKSPACE_CHANGED', '目标空间尚未打开')
+        await this.database.call('account.storage.commit', d)
+        return this.account.execute('account.status', undefined)
+      }
       case 'runtime.beforeQuit': return this.archive.beforeQuit()
+      case 'backup.setDirectory': return this.archive.selectDirectory((request.input as { directory: string }).directory)
       case 'runtime.health':
         await this.database.call('health')
-        return { context: this.context, schema: 2, workers: 2 }
+        return { context: this.context, schema: 4, workers: 2 }
       case 'workspace.status':
-        return { id: this.context.workspaceId, generation: this.context.generation, userId: 0 }
+        return { id: this.context.workspaceId, generation: this.context.generation, userId: this.workspace.userId }
       case 'settings.read':
         return this.database.call('settings.read')
       case 'settings.write':
@@ -88,6 +166,14 @@ export class RuntimeService {
         }
       }
       default:
+        if (request.operation === 'runtime.verifySyncEngine') {
+          const verifier=new WorkerClient(this.verification.sync,{root:join(this.verification.root,'sync-engine'),fixtures:(request.input as {fixtures:string}).fixtures},1)
+          try{return await verifier.call('verify')}finally{await verifier.close()}
+        }
+        if (request.operation === 'runtime.verifyAccountFoundation') {
+          const verifier = new WorkerClient(this.verification.account, { root: join(this.verification.root, 'account-foundation') }, 1)
+          try { return await verifier.call('verify') } finally { await verifier.close() }
+        }
         if (request.operation === 'runtime.verifyStage3Storage') {
           const verifier = new WorkerClient(
             this.verification.path3,
@@ -126,17 +212,15 @@ export class RuntimeService {
           })
         if (request.operation === 'backup.granted') {
           const d = request.input as { operation: keyof typeof local; input: unknown; identity: FileIdentity }
-          return this.executeLocal(d.operation, d.input, d.identity)
+          const result = await this.executeLocal(d.operation, d.input, d.identity);if(d.operation==='backup.import')this.sync.wake();return result
         }
         if (request.operation === 'backup.releaseSource') {
           const { path } = request.input as { path: string }
-          const preview = this.filePreviews.get(path)
-          if (preview) this.restoreTokens.delete(preview.token)
           this.filePreviews.delete(path)
           return
         }
-        if (isLocalOperation(request.operation)) return this.executeLocal(request.operation, request.input)
-        return fail('STAGE_NOT_READY', '该业务能力待开发；官方账号、同步和官方备份在后端部署后再接入')
+        if (isLocalOperation(request.operation)) {const result=await this.executeLocal(request.operation, request.input);if(/\.(create|update|delete)$/.test(request.operation)||request.operation==='backup.import')this.sync.wake();return result}
+        return fail('STAGE_NOT_READY', '该业务能力尚未开放；官方备份不在本轮账号同步范围')
     }
   }
   private async executeLocal(
@@ -176,8 +260,7 @@ export class RuntimeService {
           )
         return this.database.call(operation, data)
       }
-      case 'backup.preview':
-      case 'backup.prepareRestore': {
+      case 'backup.preview': {
         // Paths here are substituted by main from a window/context-bound native picker grant.
         const data = local[operation].input.parse(input),
           parsed = await this.compute.call<Awaited<ReturnType<typeof decodeBackup>>>(
@@ -189,28 +272,20 @@ export class RuntimeService {
           token: string
           stats: unknown
           conflicts: unknown
-          changes: unknown
           credentialMode: string
           exportedAt: string
-          source: unknown
         }>('backup.prepare', {
           ...parsed,
-          source: { kind: 'file', name: data.filePath.split(/[\\/]/).pop() },
           payload: parsed.payload as Payload,
         })
         if (this.filePreviews.size >= 4) this.filePreviews.delete(this.filePreviews.keys().next().value!)
         this.filePreviews.set(data.filePath, { token: result.token, hash: parsed.hash })
-        this.rememberToken(result.token)
-        if (operation === 'backup.preview')
-          return {
-            credential_mode: result.credentialMode,
-            exported_at: result.exportedAt,
-            stats: result.stats,
-            conflicts: result.conflicts,
-          }
-        const { conflicts, ...preview } = result
-        void conflicts
-        return preview
+        return {
+          credential_mode: result.credentialMode,
+          exported_at: result.exportedAt,
+          stats: result.stats,
+          conflicts: result.conflicts,
+        }
       }
       case 'backup.import': {
         const data = local[operation].input.parse(input),
@@ -227,23 +302,7 @@ export class RuntimeService {
           strategy: data.strategy,
         })
         this.filePreviews.clear()
-        this.restoreTokens.clear()
         return result
-      }
-      case 'backup.applyRestore': {
-        const data = local[operation].input.parse(input)
-        if (!this.restoreTokens.has(data.token)) fail('PREVIEW_EXPIRED', '预览所属运行实例已失效，请重新预览')
-        await this.database.call(operation, data)
-        this.restoreTokens.clear()
-        this.filePreviews.clear()
-        return
-      }
-      case 'backup.previewSafety': {
-        const result = await this.database.call<{ token: string; conflicts: unknown }>(operation, input)
-        this.rememberToken(result.token)
-        const { conflicts, ...preview } = result
-        void conflicts
-        return preview
       }
       default:
         return this.database.call(operation, input)

@@ -1,0 +1,42 @@
+{
+  "sourceFile": "apps/web/src/components/Agent/ai.css",
+  "sourceSha256": "6dceeb1435e156e22c4e217d45f0bf4e1d15227e968a53cc14b9a6791ca0fcb0",
+  "contentThreshold": 420,
+  "sidebarThresholdWithCurrentSpacing": 464,
+  "check": true,
+  "lint": true,
+  "focusedInspectorTests": 30,
+  "web": {
+    "files": 87,
+    "passed": 1005
+  },
+  "baselineVerify": true,
+  "fixedBaselineTests": 10,
+  "architectureVerify": true,
+  "webBuild": true,
+  "visual": {
+    "component": "AiInspector",
+    "mockedSettingsAndSshSession": true,
+    "widths": [
+      320,
+      400,
+      464,
+      465,
+      560
+    ],
+    "themes": [
+      "light",
+      "dark"
+    ],
+    "modelNamesUnclipped": true,
+    "noOverflow": true
+  },
+  "cleanup": {
+    "ownedPreviewProcesses": 0,
+    "temporaryProfilesRemoved": true
+  },
+  "electronSmoke": "not-run-renderer-only",
+  "toolDownloads": false,
+  "pushed": false,
+  "unrelatedChangesPreserved": true
+}

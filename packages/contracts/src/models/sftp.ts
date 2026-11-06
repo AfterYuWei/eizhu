@@ -28,6 +28,8 @@ export interface TransferTask {
   size: number
   transferred: number
   status: TransferStatus
+  /** 当前执行步骤；字节传完后仍需关闭、检查和提交。 */
+  phase?: 'scanning' | 'archiving' | 'preparing' | 'transferring' | 'verifying' | 'committing'
   /** bytes/sec */
   speed: number
   started_at: number // Unix milliseconds
@@ -39,6 +41,11 @@ export interface TransferTask {
   confirmed_offset?: number
   source_profile?: string
   target_profile?: string
+  /** Includes files and empty directories; completed items have been committed. */
+  items_total?: number
+  items_completed?: number
+  current_file?: string
+  conflict_count?: number
 }
 
 /** A connected SFTP target server. */

@@ -1,0 +1,21 @@
+.loading-bar {
+  height: 2px;
+  width: 100%;
+  flex: none;
+  overflow: hidden;
+  background: var(--edge-soft);
+}
+.loading-bar > span {
+  display: block;
+  width: 35%;
+  height: 100%;
+  background: var(--fg-3);
+  animation: loading-bar-progress 1.3s ease-in-out infinite alternate;
+}
+@keyframes loading-bar-progress {
+  from { transform: translateX(0); }
+  to { transform: translateX(186%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .loading-bar > span { animation: none; }
+}

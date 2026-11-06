@@ -11,13 +11,14 @@ const desktop = resolve(root, 'apps/desktop')
 const web = resolve(root, 'apps/web')
 const internal = { '@eizhu/contracts': resolve(root, 'packages/contracts/src/index.ts') }
 const external = ['electron', 'better-sqlite3', 'argon2', 'electron-updater', 'ssh2']
-const { version, channel, feeds } = buildSettings()
+const { version, channel, feeds, updateRepository } = buildSettings()
 export default defineConfig({
   main: {
     define: {
       __EIZHU_VERSION__: JSON.stringify(version),
       __EIZHU_CHANNEL__: JSON.stringify(channel),
       __EIZHU_UPDATE_FEEDS__: JSON.stringify(feeds),
+      __EIZHU_UPDATE_REPOSITORY__: JSON.stringify(updateRepository),
     },
     resolve: { alias: internal },
     build: {
@@ -27,11 +28,15 @@ export default defineConfig({
         external,
         input: {
           index: resolve(desktop, 'src/main/index.ts'),
+          'sync-acceptance': resolve(desktop, 'src/main/sync-acceptance.ts'),
           runtime: resolve(desktop, 'src/runtime/index.ts'),
+          'ai-mcp': resolve(desktop, 'src/runtime/ai-mcp.ts'),
           database: resolve(root, 'packages/core/src/database/worker.ts'),
           compute: resolve(root, 'packages/core/src/workers/compute.ts'),
           stage2: resolve(root, 'packages/core/src/database/stage2-smoke.ts'),
           stage3: resolve(root, 'packages/core/src/database/stage3-smoke.ts'),
+          'sync-engine': resolve(root, 'packages/core/src/database/sync-smoke.ts'),
+          'account-foundation': resolve(root, 'packages/core/src/database/account-foundation-smoke.ts'),
         },
         output: { format: 'cjs', entryFileNames: '[name].cjs', chunkFileNames: 'chunks/[name]-[hash].cjs' },
       },
@@ -56,6 +61,7 @@ export default defineConfig({
     define: {
       'import.meta.env.VITE_EIZHU_VERSION': JSON.stringify(version),
       'import.meta.env.VITE_EIZHU_CHANNEL': JSON.stringify(channel),
+      'import.meta.env.VITE_EIZHU_MERGE_MOCK': JSON.stringify(process.env.EIZHU_DEV_MOCK === '1' ? '1' : '0'),
     },
     build: {
       outDir: resolve(desktop, 'out/renderer'),

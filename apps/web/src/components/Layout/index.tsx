@@ -1,14 +1,17 @@
+import { Loading } from '@/components/ui/loading'
 import { lazy,Suspense,useCallback,useEffect,useRef,useState,type CSSProperties } from 'react'
-import { FolderUp,KeyRound,PanelLeft,PanelLeftClose,PanelRight,Plus,Search,SquareTerminal } from 'lucide-react'
-import { TunnelDialog,TunnelPrompts } from '@/components/Terminal/TunnelDialog'
+import { FolderOpen,FolderUp,KeyRound,PanelLeft,PanelLeftClose,PanelRight,Plus,Search,SquareTerminal,Waypoints,X } from 'lucide-react'
+import { AiIcon } from '@/lib/serverIcons'
+import { TunnelPrompts } from '@/components/Terminal/TunnelPrompts'
 import type { SettingsTab } from '@/components/SettingsDialog'
 import { workspaceGeneration } from '@/lib/workspaceScope'
 import { registerDesktopAction,runDesktopAction,shortcutAction } from '@/lib/desktopActions'
+import { snippetTarget,type SnippetTarget } from '@/lib/snippetInsertion'
 import { DEFAULT_DESKTOP_SIDEBAR_WIDTH,MIN_DESKTOP_SIDEBAR_WIDTH,MAX_DESKTOP_SIDEBAR_WIDTH,DESKTOP_SIDEBAR_INSET } from '@/lib/desktopSidebar'
 import { Sidebar } from '@/components/Sidebar'
-import { TerminalView } from '@/components/Terminal'
 import { TerminalSplitMenu } from '@/components/Terminal/SplitControls'
 import { CommandPalette } from '@/components/CommandPalette'
+import { SnippetQuickPicker } from '@/components/Snippets/SnippetQuickPicker'
 import { Toaster } from '@/components/ui/sonner'
 import { Button } from '@/components/ui/button'
 import { ProfileForm } from '@/components/ProfileForm'
@@ -17,6 +20,7 @@ import { useSessionStore } from '@/store/session'
 import { useSidebarDetailStore } from '@/store/sidebarDetail'
 import { useTerminalLayoutStore } from '@/store/terminalLayout'
 import { useSettingsStore,useResolvedTheme } from '@/store/settings'
+import { getTerminalThemeMeta,resolveTerminalThemeId } from '@/lib/terminalThemes'
 import { useDesktopShellStore } from '@/store/desktopShell'
 import { useSplitSidebar } from '@/hooks/useSplitSidebar'
 import { useSidebarPreview } from '@/hooks/useSidebarPreview'
@@ -24,18 +28,24 @@ import { useWindowControls } from '@/hooks/useWindowControls'
 import { WindowControls } from '@/components/WindowControls'
 import { ShellIconButton,ShellResizeHandle } from './ShellControls'
 import { SidebarResizeHandle } from './SidebarResizeHandle'
+import { useAccountDialogStore } from '@/store/accountDialog'
+import { useAccountStore } from '@/store/account'
 import { AccountMenu } from './AccountMenu'
-import { OpenItems } from './OpenItems'
-import { ConnectionHome } from './ConnectionHome'
+import { WorkspaceTabs } from './WorkspaceTabs'
+import { WorkspaceContent } from './WorkspaceContent'
+import { useWorkspaceViewStore } from '@/store/workspaceView'
 import { ServerInspector } from './ServerInspector'
+import { ServerStatusBar } from './ServerStatusBar'
+import { AiInspector } from '@/components/Agent/AiInspector'
 import { WorkspaceActions } from './WorkspaceActions'
 
 const SettingsPage = lazy(() => import('@/components/SettingsDialog').then((m) => ({ default: m.SettingsPage })))
 const SnippetDialog = lazy(() => import('@/components/Snippets/SnippetDialog').then((m) => ({ default: m.SnippetDialog })))
 
 export function Layout() {
-  const { tabs, activeTabId, openVaultTab } = useSessionStore()
-  const { sidebarWidth, setSidebarWidth } = useSettingsStore()
+  const { tabs, activeTabId } = useSessionStore()
+  const { activePage, openSftp, openVault, openPortMapping } = useWorkspaceViewStore()
+  const { sidebarWidth, setSidebarWidth, terminalTheme } = useSettingsStore()
   const theme = useResolvedTheme()
   const splitActive = useTerminalLayoutStore((s) => s.tree?.type === 'split')
   const { collapsed: sidebarHidden, toggle: toggleSidebarVisibility, collapse: collapseSidebar, expand: expandSidebar } = useSplitSidebar(splitActive)
@@ -54,21 +64,21 @@ export function Layout() {
     if (sidebarHidden) setSidebarWidth(DEFAULT_DESKTOP_SIDEBAR_WIDTH)
     toggleSidebarVisibility()
   }, [sidebarHidden, setSidebarWidth, toggleSidebarVisibility])
-  const { serverRatio, serversCollapsed, openedCollapsed, toggleServers, toggleOpened, setServerRatio, inspectorWidth } = useDesktopShellStore()
+  const inspectorWidth = useDesktopShellStore((s) => s.inspectorWidth)
   const [paletteOpen, setPaletteOpen] = useState(false)
-  const [tunnelsOpen, setTunnelsOpen] = useState(false)
   const [snippetsOpen, setSnippetsOpen] = useState(false)
+  const [snippetQuick, setSnippetQuick] = useState<{ target: SnippetTarget | null } | null>(null)
   const [profileFormOpen, setProfileFormOpen] = useState(false)
-  const [settingsTab, setSettingsTab] = useState<SettingsTab>('appearance')
-  const [settingsOpen, setSettingsOpen] = useState(false)
-  const [inspectorOpen, setInspectorOpen] = useState(false)
+  const settingsPage = useDesktopShellStore((s) => s.settingsPage)
+  const settingsTab = settingsPage ?? 'appearance'
+  const settingsOpen = settingsPage !== null
+  const [rightSidebar, setRightSidebar] = useState<'choose' | 'ai' | 'sftp' | null>(null)
+  const setInspectorWidth = useDesktopShellStore(s => s.setInspectorWidth)
   const [workspaceWidth, setWorkspaceWidth] = useState(window.innerWidth)
-  const [listsHeight, setListsHeight] = useState(400)
   const workspace = useRef<HTMLDivElement>(null)
   const sessionView = useRef<HTMLDivElement>(null)
   const settingsReturnFocus = useRef<HTMLElement | null>(null)
   const wasSettingsOpen = useRef(false)
-  const lists = useRef<HTMLDivElement>(null)
   const knownTabs = useRef(new Set<string>())
   const focusAfterResizeCollapse = useRef(false)
   const sidebar = useRef<HTMLElement>(null)
@@ -80,18 +90,16 @@ export function Layout() {
   const visibleSidebarWidth = Math.max(MIN_DESKTOP_SIDEBAR_WIDTH, Math.min(MAX_DESKTOP_SIDEBAR_WIDTH, sidebarWidth))
   const { fetchProfiles, fetchGroups } = useProfileStore()
   const activeTab = tabs.find((tab) => tab.id === activeTabId)
-  const terminal = activeTab?.kind === 'terminal' && Boolean(activeTab.profileId)
-  const pageName = activeTab?.kind === 'vault' ? '密钥管理' : activeTab?.kind === 'sftp' ? 'SFTP 文件' : activeTab?.profileName
-  const status = !terminal ? '' : activeTab.status === 'connected'
-    ? activeTab.latency != null ? `${activeTab.latency}ms` : '已连接'
-    : activeTab.status === 'connecting' ? '连接中…'
-    : activeTab.status === 'reconnecting' ? `重连中${activeTab.reconnectAttempt ? ` (${activeTab.reconnectAttempt})` : ''}` : '已断开'
+  const terminal = activePage === 'terminal' && Boolean(activeTab?.profileId)
+  const rightSidebarVisible = rightSidebar !== null && !settingsOpen && terminal
+  const sidebarOverlay = workspaceWidth < inspectorWidth + 480 + 8
+  const terminalThemeId = resolveTerminalThemeId(terminalTheme, theme)
+  const terminalPalette = getTerminalThemeMeta(terminalThemeId)
 
   const openSettings = useCallback((tab: SettingsTab) => {
     const focused = document.activeElement
     if (focused instanceof HTMLElement && !focused.closest('.settings-page')) settingsReturnFocus.current = focused
-    setSettingsTab(tab)
-    setSettingsOpen(true)
+    useDesktopShellStore.getState().setSettingsPage(tab)
   }, [])
 
   useEffect(() => {
@@ -116,12 +124,10 @@ export function Layout() {
   useEffect(() => {
     const measure = () => {
       if (workspace.current) setWorkspaceWidth(workspace.current.clientWidth)
-      if (lists.current) setListsHeight(lists.current.clientHeight)
     }
     measure()
     const observer = new ResizeObserver(measure)
     if (workspace.current) observer.observe(workspace.current)
-    if (lists.current) observer.observe(lists.current)
     return () => observer.disconnect()
   }, [])
   useEffect(() => {
@@ -131,16 +137,16 @@ export function Layout() {
   }, [tabs])
   useEffect(() => {
     const unregister = [
-      registerDesktopAction('tunnels', () => setTunnelsOpen(true)),
       registerDesktopAction('palette', () => setPaletteOpen((v) => !v)),
       registerDesktopAction('sync-settings', () => openSettings('sync')),
-      registerDesktopAction('account-settings', () => openSettings('account')),
+      registerDesktopAction('account-settings', () => { const account = useAccountStore.getState().status; if (!account?.loggedIn || account.sessionState === 'reauth_required') useAccountDialogStore.getState().open('login', account?.user?.email); else openSettings('account') }),
       registerDesktopAction('snippets', () => setSnippetsOpen(true)),
+      registerDesktopAction('snippet-quick', () => setSnippetQuick({ target: snippetTarget() })),
       registerDesktopAction('sidebar', toggleSidebar),
     ]
     const handler = (event: KeyboardEvent) => {
       const action = shortcutAction(event)
-      if (!action || event.defaultPrevented || (document.querySelector('[role="dialog"]') && action !== 'palette')) return
+      if (!action || event.defaultPrevented || (document.querySelector('[role="dialog"]') && (action !== 'palette' || document.querySelector('.snippet-quick-picker')))) return
       event.preventDefault()
       event.stopPropagation()
       if (settingsOpen && action !== 'sync-settings' && action !== 'account-settings') return
@@ -150,7 +156,7 @@ export function Layout() {
     return () => { unregister.forEach((fn) => fn()); document.removeEventListener('keydown', handler, true) }
   }, [toggleSidebar, openSettings, settingsOpen])
 
-  const topControls = <div className="shell-top-controls" data-eizhu-drag-region={desktop || undefined}>
+  const topControls = <div className="shell-top-controls">
     <ShellIconButton label={`${sidebarHidden ? '展开' : '折叠'}侧栏 (Ctrl/Cmd+Shift+B)`} showTooltip={!sidebarHidden} aria-expanded={sidebarInteractive} aria-controls="desktop-main-sidebar" data-sidebar-preview-trigger={sidebarHidden || undefined}
       onPointerEnter={(event) => { if (!suppressSidebarHover.current) preview.enter(event) }}
       onPointerLeave={(event) => { suppressSidebarHover.current = false; preview.leave(event) }}
@@ -160,23 +166,27 @@ export function Layout() {
     <ShellIconButton label="搜索服务器、密钥或命令 (Ctrl/Cmd+Shift+K)" onClick={() => setPaletteOpen(true)}><Search size={16} /></ShellIconButton>
   </div>
 
-  return <div className={`eizhu-app desktop-shell ${mac ? 'is-mac' : ''} ${sidebarHidden ? 'sidebar-is-hidden' : ''}`} style={{ '--shell-sidebar-default-width': `${DEFAULT_DESKTOP_SIDEBAR_WIDTH}px`, '--shell-sidebar-inset': `${DESKTOP_SIDEBAR_INSET}px` } as CSSProperties} role="application" aria-label="eizhu">
+  return <div className={`eizhu-app desktop-shell ${mac ? 'is-mac' : ''} ${sidebarHidden ? 'sidebar-is-hidden' : ''} ${terminal ? 'has-terminal' : ''}`} style={{
+    '--shell-sidebar-default-width': `${DEFAULT_DESKTOP_SIDEBAR_WIDTH}px`,
+    '--shell-sidebar-inset': `${DESKTOP_SIDEBAR_INSET}px`,
+    '--shell-terminal-bg': terminalPalette.theme.background,
+    '--shell-terminal-fg': terminalPalette.category === 'dark' ? '#FFFFFF' : '#171717',
+  } as CSSProperties} role="application" aria-label="eizhu">
     <div className="shell-session-view" ref={sessionView} inert={settingsOpen} aria-hidden={settingsOpen || undefined}>
       <div ref={sidebarSpace} className={`shell-sidebar-space ${sidebarHidden ? 'is-collapsed' : ''} ${sidebarButtonMotion ? 'is-button-motion' : ''}`} style={{ width: sidebarHidden ? 0 : visibleSidebarWidth }}>
       <aside ref={sidebar} id="desktop-main-sidebar" className={`eizhu-sidebar shell-sidebar ${sidebarHidden && !preview.present ? 'collapsed' : ''} ${preview.present ? 'is-preview' : ''} ${preview.open ? 'is-preview-open' : ''} ${preview.instantCollapse ? 'is-preview-resting' : ''}`} style={{ width: preview.present ? DEFAULT_DESKTOP_SIDEBAR_WIDTH : visibleSidebarWidth }} aria-label="主导航" aria-hidden={!sidebarInteractive} inert={!sidebarInteractive} onPointerEnter={preview.enter} onPointerLeave={preview.leave}>
         <div className="shell-sidebar-top" data-eizhu-drag-region={desktop || undefined}>{!sidebarHidden && topControls}</div>
         <nav className="shell-primary-nav" aria-label="功能导航">
-          <Button variant="ghost" className={!tabs.length || activeTab?.kind === 'terminal' && !activeTab.profileId ? 'is-active' : ''} onClick={() => runDesktopAction('new')}><Plus size={16} /><span>新建连接</span><kbd>{mac ? '⇧⌘T' : 'Ctrl+Shift+T'}</kbd></Button>
-          <Button variant="ghost" className={activeTab?.kind === 'sftp' ? 'is-active' : ''} onClick={() => runDesktopAction('sftp')}><FolderUp size={16} /><span>SFTP 文件</span></Button>
-          <Button variant="ghost" className={activeTab?.kind === 'vault' ? 'is-active' : ''} onClick={() => openVaultTab()}><KeyRound size={16} /><span>密钥管理</span></Button>
+          <Button variant="ghost" className={activePage === 'terminal' && (!tabs.length || !activeTab?.profileId) ? 'is-active' : ''} onClick={() => runDesktopAction('new')}><Plus size={16} /><span>新建连接</span><kbd>{mac ? '⇧⌘T' : 'Ctrl+Shift+T'}</kbd></Button>
+          <Button variant="ghost" className={activePage === 'sftp' ? 'is-active' : ''} aria-current={activePage === 'sftp' ? 'page' : undefined} aria-controls="workspace-sftp" onClick={() => void openSftp()}><FolderUp size={16} /><span>SFTP 文件</span></Button>
+          <Button variant="ghost" className={activePage === 'port-mapping' ? 'is-active' : ''} aria-current={activePage === 'port-mapping' ? 'page' : undefined} aria-controls="workspace-port-mapping" onClick={openPortMapping}><Waypoints size={16} /><span>端口映射</span></Button>
+          <Button variant="ghost" className={activePage === 'vault' ? 'is-active' : ''} aria-current={activePage === 'vault' ? 'page' : undefined} aria-controls="workspace-vault" onClick={openVault}><KeyRound size={16} /><span>密钥管理</span></Button>
           <Button variant="ghost" onClick={() => runDesktopAction('snippets')}><SquareTerminal size={16} /><span>命令片段</span></Button>
         </nav>
-        <div className="shell-lists" ref={lists}>
-          <section className="shell-servers" aria-label="服务器分组" style={{ flex: serversCollapsed ? '0 0 auto' : `${openedCollapsed ? 1 : serverRatio} 1 0` }}>
-            <Sidebar visible={sidebarInteractive && !settingsOpen} collapsed={serversCollapsed} onToggle={toggleServers} onAddServer={() => setProfileFormOpen(true)} />
+        <div className="shell-lists">
+          <section className="shell-servers" aria-label="服务器">
+            <Sidebar visible={sidebarInteractive && !settingsOpen} onAddServer={() => setProfileFormOpen(true)} />
           </section>
-          {!serversCollapsed && !openedCollapsed && <ShellResizeHandle label="调整服务器和已打开区域比例" orientation="horizontal" value={serverRatio} min={0.2} max={0.8} step={0.05} pixelsPerUnit={listsHeight} onChange={setServerRatio} />}
-          <div className="shell-open-section" style={{ flex: openedCollapsed ? '0 0 auto' : `${serversCollapsed ? 1 : 1 - serverRatio} 1 0` }}><OpenItems collapsed={openedCollapsed} onToggle={toggleOpened} /></div>
         </div>
         <div className="shell-sidebar-footer"><AccountMenu onSettings={openSettings} /></div>
       </aside>
@@ -187,32 +197,42 @@ export function Layout() {
         collapseSidebar()
       }} />
       {sidebarHidden && <div className="shell-fixed-top-controls">{topControls}</div>}
+      <div className="shell-workspace-area" ref={workspace}>
       <main className="shell-workspace">
         <header className="shell-workspace-header" data-eizhu-drag-region={desktop || undefined}>
           {sidebarHidden && <div className="shell-top-controls-slot" aria-hidden="true" />}
-          <div className="shell-page-heading" data-eizhu-drag-region={desktop || undefined}>
-            {pageName && <span className="shell-page-name" title={pageName}>{pageName}</span>}
-            {terminal && <span className="shell-page-status" role="status" title={activeTab?.errorMessage || status}><span className={`shell-connection-dot is-${activeTab?.status}`} />{status}</span>}
-          </div>
+          <WorkspaceTabs />
           <div className="shell-workspace-actions" data-eizhu-drag-region={desktop || undefined}>
             <TerminalSplitMenu iconOnly />
-            {terminal && <ShellIconButton label="服务器详情" aria-pressed={inspectorOpen} onClick={() => setInspectorOpen((v) => !v)}><PanelRight size={16} /></ShellIconButton>}
-            {activeTab && <WorkspaceActions terminal={terminal} />}
+            {terminal && <ShellIconButton label="右侧栏" aria-expanded={rightSidebarVisible} aria-controls="desktop-right-sidebar" aria-pressed={rightSidebarVisible} onClick={() => setRightSidebar(value => value === null ? 'choose' : null)}><PanelRight size={16} /></ShellIconButton>}
+            {activePage === 'terminal' && activeTab && <WorkspaceActions terminal={terminal} />}
           </div>
           {showControls && <div className="shell-window-controls-space" aria-hidden="true" />}
         </header>
-        <div className="shell-workspace-body" ref={workspace}>
-          <div className="cnt-wrap shell-workspace-content">{tabs.length ? <TerminalView /> : <ConnectionHome onAddServer={() => setProfileFormOpen(true)} />}</div>
-          <ServerInspector open={inspectorOpen && !settingsOpen} overlay={workspaceWidth < inspectorWidth + 480} onClose={() => setInspectorOpen(false)} />
+        <div className="shell-workspace-body">
+          <div className="cnt-wrap shell-workspace-content"><WorkspaceContent onAddServer={() => setProfileFormOpen(true)} /></div>
         </div>
+        {terminal && activeTab && !settingsOpen && <ServerStatusBar key={`${workspaceGeneration()}:${activeTab.id}:${activeTab.sessionId}:${activeTab.status}`} tab={activeTab} />}
       </main>
+      <div id="desktop-right-sidebar" className="shell-right-sidebar" hidden={!rightSidebarVisible}>
+        <aside className={`shell-inspector shell-inspector-picker ${sidebarOverlay ? 'is-overlay' : ''}`} style={{ width: inspectorWidth }} hidden={!rightSidebarVisible || rightSidebar !== 'choose'} inert={!rightSidebarVisible || rightSidebar !== 'choose'} aria-label="选择侧栏内容">
+          <ShellResizeHandle label="调整右侧栏宽度" value={inspectorWidth} min={320} max={560} onChange={setInspectorWidth} reverse />
+          <div className="shell-inspector-heading"><span>侧栏</span><ShellIconButton label="关闭右侧栏" onClick={() => setRightSidebar(null)}><X size={15} /></ShellIconButton></div>
+          <div className="shell-inspector-choices"><p>从这里开始</p><Button variant="ghost" onClick={() => setRightSidebar('ai')}><AiIcon size={18} /><span>AI</span></Button><Button variant="ghost" onClick={() => setRightSidebar('sftp')}><FolderOpen size={18} /><span>SFTP</span></Button></div>
+        </aside>
+        <AiInspector key={workspaceGeneration()} open={rightSidebarVisible && rightSidebar === 'ai'} overlay={sidebarOverlay} onClose={() => setRightSidebar(null)} onChoose={() => setRightSidebar('choose')} />
+        <ServerInspector open={rightSidebarVisible && rightSidebar === 'sftp'} overlay={sidebarOverlay} onClose={() => setRightSidebar(null)} onChoose={() => setRightSidebar('choose')} />
+      </div>
+      </div>
     </div>
     {showControls && <WindowControls className="shell-window-controls" maximized={maximized} onMinimize={minimize} onToggleMaximize={toggleMaximize} onClose={close} />}
-    <TunnelDialog open={tunnelsOpen} onOpenChange={setTunnelsOpen} /><TunnelPrompts />
+    <TunnelPrompts key={workspaceGeneration()} />
     <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
     <ProfileForm open={profileFormOpen} onOpenChange={setProfileFormOpen} />
     {snippetsOpen && <Suspense fallback={null}><SnippetDialog key={workspaceGeneration()} open onOpenChange={setSnippetsOpen} /></Suspense>}
-    {settingsOpen && <Suspense fallback={<div className="settings-page settings-page-loading" role="status">正在打开设置…</div>}><SettingsPage key={settingsTab} initialTab={settingsTab} onBack={() => setSettingsOpen(false)} /></Suspense>}
+    {snippetQuick && <SnippetQuickPicker key={workspaceGeneration()} target={snippetQuick.target}
+      onClose={() => setSnippetQuick(null)} onManage={() => { setSnippetQuick(null); setSnippetsOpen(true) }} />}
+    {settingsOpen && <Suspense fallback={<div className="settings-page settings-page-loading"><Loading /></div>}><SettingsPage key={settingsTab} initialTab={settingsTab} onBack={() => useDesktopShellStore.getState().setSettingsPage(null)} onTabChange={tab => useDesktopShellStore.getState().setSettingsPage(tab)} /></Suspense>}
     <Toaster theme={theme} />
   </div>
 }

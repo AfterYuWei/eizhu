@@ -1,0 +1,96 @@
+{
+  "date": "2026-11-04",
+  "platform": "darwin",
+  "arch": "x64",
+  "packaged": false,
+  "visualChange": {
+    "layout": "equilateral_triangle",
+    "nodeCards": "removed",
+    "sshLockCard": "removed",
+    "visualInspection": "passed",
+    "labelPlacement": "below_icons",
+    "addressPlacement": "below_icons",
+    "diagonalAngleDegrees": 60,
+    "diagonalAlignedWithNodeCenters": true,
+    "dialogMaxWidthPx": 960,
+    "previewPaddingPx": 18,
+    "previewSectionGapPx": 16,
+    "nodeSpacingSvgUnits": 240,
+    "labelAddressBaselineGapSvgUnits": 28
+  },
+  "portMapping": {
+    "passed": true,
+    "syntheticSsh": true,
+    "modes": [
+      "local",
+      "remote",
+      "dynamic"
+    ],
+    "rendererToTcp": true,
+    "singletonTab": true,
+    "independentLifecycle": true,
+    "actualPortClipboard": true,
+    "formValidation": true,
+    "saveOnly": true,
+    "delete": true,
+    "responsive": true,
+    "publicConfirmation": true,
+    "publicUnconfirmedRejected": true,
+    "stalePublicConfirmationRejected": true,
+    "publicRestartRequiresConfirmation": true,
+    "independentModeDrafts": true,
+    "remotePublicListener": true,
+    "selectableTarget": true,
+    "nativeFormFont": true,
+    "reactiveFlowPreview": true,
+    "reducedMotion": true,
+    "triangleGeometry": [
+      {
+        "kind": "local",
+        "sideRatio": 1.0000141061264762,
+        "directionError": 1.1006639789649085e-05
+      },
+      {
+        "kind": "remote",
+        "sideRatio": 1.0000141061264762,
+        "directionError": 1.1006639789649085e-05
+      }
+    ],
+    "screenshots": [
+      "port-mapping-light.png",
+      "port-mapping-dark.png",
+      "port-mapping-large-narrow.png",
+      "port-mapping-form.png",
+      "port-mapping-flow-detail.png",
+      "port-mapping-form-dark.png",
+      "port-mapping-dynamic-flow.png",
+      "port-mapping-public-form.png",
+      "port-mapping-remote-listener.png",
+      "port-mapping-form-large-narrow.png",
+      "port-mapping-form-narrow-flow.png",
+      "port-mapping-public-confirm.png"
+    ]
+  },
+  "desktopRegression": {
+    "stage2": true,
+    "stage3": true,
+    "stage4": true,
+    "stage5": true,
+    "stage6": true,
+    "accountClosure": true,
+    "syncDesktop": true,
+    "workspaceTabs": true
+  },
+  "targetedWebAndApiTests": 19,
+  "typecheck": "passed",
+  "lint": "passed",
+  "baselineVerify": "passed",
+  "diffCheck": "passed",
+  "pendingPlatforms": [
+    "win32-x64",
+    "darwin-arm64",
+    "linux-x64"
+  ],
+  "newInstallationArtifact": "not_run_ui_only",
+  "smokeEvidenceBasis": "current_run"
+}

@@ -1,0 +1,90 @@
+{
+  "date": "2026-10-30",
+  "timezone": "Asia/Shanghai",
+  "source": {
+    "base": "0.5.0",
+    "version": "0.5.0-test.355.1ea30fc0",
+    "channel": "test",
+    "revision": "1ea30fc013021eb6fe350e052a1eea4a60c3ed0f",
+    "platform": "darwin",
+    "arch": "x64",
+    "feeds": {},
+    "updateRepository": {
+      "owner": "AfterYuWei",
+      "repo": "eizhu"
+    },
+    "sourceDigest": "bbaccc4d13202279a6301fbcc88899ea456ef2e5c500f78c1bd8e61ed6921b66"
+  },
+  "results": {
+    "contextRegression": {
+      "passed": 8,
+      "failed": 0
+    },
+    "web": {
+      "passed": 883,
+      "failed": 0
+    },
+    "foundation": {
+      "passed": 154,
+      "failed": 0,
+      "skipped": 1
+    },
+    "compatibility": {
+      "passed": 10,
+      "failed": 0
+    },
+    "sshIntegration": {
+      "passed": 19,
+      "failed": 0,
+      "subsetOf": "foundation"
+    },
+    "originalFindings": {
+      "CTX-01": "fixed",
+      "CTX-02": "fixed",
+      "CTX-03": "fixed",
+      "CTX-04": "fixed"
+    }
+  },
+  "installer": {
+    "artifact": "artifacts/desktop/eizhu-0.5.0-test.355.1ea30fc0-mac-x64.dmg",
+    "sha256": "83b4bb3de81f204ad647a7180caa5eb47c9b7de8f85c065da76269111b5a44ae",
+    "signed": false,
+    "packaged": true,
+    "platform": "darwin",
+    "arch": "x64",
+    "completionMatrix": {
+      "generators": 10,
+      "queries": 19,
+      "transport": "preload/main/utilityProcess/SSH/SFTP",
+      "syntheticCommands": true
+    },
+    "completionUi": {
+      "passed": true,
+      "cases": 71,
+      "commandPrefixes": 27,
+      "commandFamilies": 5,
+      "dynamicSelections": 13,
+      "fileCommands": 25,
+      "screenshots": [
+        "server-detail-follow-cwd.png",
+        "completion-docker-light.png",
+        "completion-context-host.png",
+        "completion-kubectl-dark.png",
+        "completion-npm-narrow.png",
+        "completion-path-narrow.png",
+        "completion-cascade-narrow.png"
+      ],
+      "syntheticRemote": true,
+      "serverDetailFollowCwd": true,
+      "nativeIme": false
+    }
+  },
+  "limits": {
+    "realGit": true,
+    "realDocker": false,
+    "realKubernetes": false,
+    "realSystemd": false,
+    "realFish": false,
+    "otherPlatforms": false
+  }
+}

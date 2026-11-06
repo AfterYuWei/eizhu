@@ -1,0 +1,8 @@
+
+> check
+> tsc -p tsconfig.node.json --noEmit && npm run check --workspace @eizhu/web
+
+
+> check
+> tsc -b
+

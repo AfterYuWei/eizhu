@@ -37,10 +37,16 @@ export interface ErrorPayload {
   message: string
 }
 
-export interface MetaPayload {
-  session_id: string
+export interface SessionTarget {
+  profile_id: string
+  profile_name: string
   host: string
+  port: number
   username: string
+}
+
+export interface MetaPayload extends SessionTarget {
+  session_id: string
   protocol: string
 }
 
@@ -68,10 +74,12 @@ export interface ConnectionLogEntry {
 
 export interface ConnectionStatePayload {
   session_id: string
+  target?: SessionTarget
   status: string
   stage: string
   message: string
   error?: string
+  error_code?: string
   host_key_request_id?: string
   waiting_for_host_key?: boolean
   host_key_fingerprint?: string

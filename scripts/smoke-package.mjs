@@ -11,7 +11,9 @@ function run(command, args, cwd) {
         child.kill()
         reject(new Error('Package operation timeout'))
       },
-      180000 + Number(process.argv.findLast((arg) => arg.startsWith('--duration='))?.split('=')[1] ?? 3000),
+      // Keep the package supervisor later than smoke-desktop's own deadline so its
+      // timeout can terminate the application and report the failure cleanly.
+      360_000 + Number(process.argv.findLast((arg) => arg.startsWith('--duration='))?.split('=')[1] ?? 3000),
     )
     child.on('error', (error) => {
       clearTimeout(timer)

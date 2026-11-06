@@ -1,0 +1,29 @@
+{
+  "sourceSha256": {
+    "apps/web/src/lib/serverIcons.tsx": "c6ddafff7b3ba317ee2ac43bdf0ce1783ddda3b1d660b29d6457e8d9c92140e1",
+    "apps/web/src/components/SettingsDialog/AiPanel.tsx": "d61f17e3e84e710d5a1d97d8937159ef1719d30dfab2baa056b03ab5ecec5588",
+    "apps/web/src/assets/ai-provider-icons/index.ts": "ec9eb291b71a5e4696a28f21818773f5ee01b3fd31986ec830cbff9264b8b64c",
+    "apps/web/src/assets/ai-provider-icons/SOURCES.md": "7976aa4c10f41897c6d4b0abfae3d4e9146a1e2f77b9bc5002a1fb6c6c008d68",
+    "apps/web/public/licenses/lobe-icons.txt": "add9d7531d1b21646317a8958e38fc727506fa39d24bdecb44154d943c82753a"
+  },
+  "check": true,
+  "lint": true,
+  "focusedAiTests": 54,
+  "web": {
+    "files": 87,
+    "passed": 1005
+  },
+  "baselineVerify": true,
+  "fixedBaselineTests": 10,
+  "architectureVerify": true,
+  "webBuild": true,
+  "bundledLicenseVerified": true,
+  "browserVisual": true,
+  "cleanup": {
+    "ownedPreviewProcesses": 0,
+    "temporaryProfilesRemoved": true
+  },
+  "electronSmoke": "not-run-renderer-only",
+  "downloads": "SVG source and license only; no tool binaries",
+  "unrelatedChangesPreserved": true
+}

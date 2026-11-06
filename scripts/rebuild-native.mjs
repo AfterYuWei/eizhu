@@ -5,6 +5,9 @@ import { writeFile } from 'node:fs/promises'
 import { execFile, spawn } from 'node:child_process'
 import { promisify } from 'node:util'
 import { nativeToolchainEnvironment } from './native-toolchain.mjs'
+import { patchInstalledSsh2 } from './patch-ssh2-keygen.mjs'
+
+await patchInstalledSsh2()
 
 const root = fileURLToPath(new URL('../', import.meta.url))
 const require = createRequire(new URL('../package.json', import.meta.url))

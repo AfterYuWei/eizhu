@@ -1,0 +1,58 @@
+{
+  "date": "2026-11-05",
+  "sourceCommit": "beb3a5d7",
+  "scope": [
+    "手动维护模型候选池、选择探测结果加入及删除",
+    "上下文单个可编辑组合输入框"
+  ],
+  "check": true,
+  "lint": true,
+  "focused": {
+    "providerSettings": 24,
+    "domainAndContract": 47
+  },
+  "foundation": {
+    "passed": 255,
+    "skipped": 2,
+    "reason": "未安装Fish"
+  },
+  "web": {
+    "files": 87,
+    "passed": 976
+  },
+  "baselineTests": 10,
+  "baselineVerify": true,
+  "architectureVerify": true,
+  "desktopBuild": true,
+  "electronAiSmoke": true,
+  "finalDmgSmoke": true,
+  "packageVersion": "0.5.0-test.391.beb3a5d7",
+  "verifiedPackageFiles": 286,
+  "cases": {
+    "discoveredModelsRequireExplicitAddition": true,
+    "manualModelsUseSamePool": true,
+    "duplicateModelsRejected": true,
+    "selectedModelMustBelongToPool": true,
+    "deletionSavedAndRestored": true,
+    "discoveryDoesNotOverwritePool": true,
+    "oneEditableContextInput": true,
+    "keyboardAndPresetSelection": true,
+    "encryptedStateRestored": true
+  },
+  "environment": {
+    "platform": "macOS x64",
+    "model": "loopback-synthetic",
+    "ssh": "loopback-synthetic",
+    "sftp": "installed-openssh-subsystem"
+  },
+  "retainedScreenshots": [
+    "ai-settings-candidate-pool.png",
+    "ai-settings-context-narrow.png"
+  ],
+  "limitations": [
+    "未调用用户真实供应商；签名/公证和其他平台未验。",
+    "AI定向烟测收尾重载仍有既有异步业务进程不可用日志；业务断言与进程退出状态通过，本轮未改进程生命周期。",
+    "当前开发窗口未主动重启，需重启make dev加载新业务契约。",
+    "未下载测试二进制、未修改admin、未推送或发布。"
+  ]
+}

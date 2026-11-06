@@ -7,6 +7,22 @@ import { gunzipSync } from 'node:zlib'
 import { FileEndpoint, displayPath } from './endpoint.ts'
 import { readText, writeText } from './editor.ts'
 import { archive, collect } from './archive.ts'
+
+test('目录扫描复用列表元数据，不逐个重新查询文件，并去除重复的父子选择', async () => {
+  const stat = { size: 3, mtime: 1, mode: 0o100600, dir: false, link: false, identity: 'file' }
+  let statCalls = 0
+  const endpoint = {
+    guard: async () => undefined,
+    stat: async () => { statCalls++; return { ...stat, mode: 0o040700, dir: true } },
+    listStats: async () => Array.from({ length: 200 }, (_, i) => ({ path: `/project/${i}`, stat })),
+  } as unknown as FileEndpoint
+  const rows = await collect(endpoint, ['/project', '/project/1', '/project'])
+  assert.equal(rows.length, 201)
+  assert.equal(statCalls, 1)
+  const controller = new AbortController()
+  controller.abort()
+  await assert.rejects(collect(endpoint, ['/project'], controller.signal), { name: 'AbortError' })
+})
 const code = (expected: string) => (e: unknown) => (e as { error: { code: string } }).error.code === expected
 test('本机文件领域不能读取、列出或重命名应用私有目录及其别名', async () => {
   const root = await mkdtemp(join(tmpdir(), 'eizhu-private-')),

@@ -1,0 +1,195 @@
+
+> test:unit
+> vitest run src/hooks/useCompletion.interaction.test.tsx
+
+
+ RUN  v5.0.5 /Users/yuwei/Desktop/Projects/yuweinfo/XControl/apps/web
+
+ ❯ src/hooks/useCompletion.interaction.test.tsx (22 tests | 9 failed) 84ms
+   ❯ 键盘、鼠标和异步竞态 (12)
+     × Esc 取消尚未触发的防抖，且迟到响应不能重开菜单 14ms
+     × 关闭补全开关立即关闭菜单，保留远端键盘输入 3ms
+     × 完整子命令仍追加分隔空格，未闭合引号内不追加 3ms
+     × 光标离开行尾后不以整行末尾 token 补全而破坏中间文本 2ms
+     × 级联右键选首目录会消费按键；旧父目录响应不能接到新父目录下 2ms
+     × 超过 200 项的动态结果仍可通过新前缀找到后面的候选 7ms
+     × Ctrl+W、退格、Ctrl+U 和 Ctrl+C 更新输入缓冲 1ms
+     × TUI 控制序列跨分块或同包进入后退出仍正确恢复补全 1ms
+     × 历史完整命令原样替换行，保留其已有引号与空格 2ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 9 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/hooks/useCompletion.interaction.test.tsx > 键盘、鼠标和异步竞态 > Esc 取消尚未触发的防抖，且迟到响应不能重开菜单
+AssertionError: expected true to be false // Object.is equality
+
+- Expected
++ Received
+
+- false
++ true
+
+ ❯ src/hooks/useCompletion.interaction.test.tsx:93:34
+     91|     await h.data('docker lo', 0)
+     92|     await h.data('\x1b')
+     93|     expect(h.value().popup.open).toBe(false)
+       |                                  ^
+     94|     await h.data('gs ')
+     95|     const id = h.sendComplete.mock.calls.at(-1)![0]
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/9]⎯
+
+ FAIL  src/hooks/useCompletion.interaction.test.tsx > 键盘、鼠标和异步竞态 > 关闭补全开关立即关闭菜单，保留远端键盘输入
+AssertionError: expected true to be false // Object.is equality
+
+- Expected
++ Received
+
+- false
++ true
+
+ ❯ src/hooks/useCompletion.interaction.test.tsx:105:34
+    103|     h.options.enabled = false
+    104|     await h.render()
+    105|     expect(h.value().popup.open).toBe(false)
+       |                                  ^
+    106|     expect(await h.data('\x1b[B')).toBe(false)
+    107|   })
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/9]⎯
+
+ FAIL  src/hooks/useCompletion.interaction.test.tsx > 键盘、鼠标和异步竞态 > 完整子命令仍追加分隔空格，未闭合引号内不追加
+AssertionError: expected last "vi.fn()" call to have been called with [ ' ' ]
+
+- Expected:
+[
+  " ",
+]
+
++ Received:
+undefined
+
+ ❯ src/hooks/useCompletion.interaction.test.tsx:113:25
+    111|     await h.choose('logs')
+    112|     await h.data('\r')
+    113|     expect(h.sendInput).toHaveBeenLastCalledWith(' ')
+       |                         ^
+    114|     await h.data('\x03')
+    115|     await h.data('docker "lo')
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/9]⎯
+
+ FAIL  src/hooks/useCompletion.interaction.test.tsx > 键盘、鼠标和异步竞态 > 光标离开行尾后不以整行末尾 token 补全而破坏中间文本
+AssertionError: expected true to be false // Object.is equality
+
+- Expected
++ Received
+
+- false
++ true
+
+ ❯ src/hooks/useCompletion.interaction.test.tsx:124:34
+    122|     await h.data('docker lo')
+    123|     await h.data('\x1b[D')
+    124|     expect(h.value().popup.open).toBe(false)
+       |                                  ^
+    125|     expect(await h.data('\r')).toBe(false)
+    126|     expect(h.sendInput).not.toHaveBeenCalled()
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/9]⎯
+
+ FAIL  src/hooks/useCompletion.interaction.test.tsx > 键盘、鼠标和异步竞态 > 级联右键选首目录会消费按键；旧父目录响应不能接到新父目录下
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ src/hooks/useCompletion.interaction.test.tsx:132:36
+    130|     await h.data('cd ')
+    131|     await h.respond({ output: '', candidates: [{ name: 'A', is_dir: tr…
+    132|     expect(await h.data('\x1b[C')).toBe(true)
+       |                                    ^
+    133|     expect(await h.data('\x1b[C')).toBe(true)
+    134|     const requestA = h.sendComplete.mock.calls.at(-1)![0]
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/9]⎯
+
+ FAIL  src/hooks/useCompletion.interaction.test.tsx > 键盘、鼠标和异步竞态 > 超过 200 项的动态结果仍可通过新前缀找到后面的候选
+TypeError: Cannot read properties of undefined (reading 'suggestions')
+ ❯ src/hooks/useCompletion.interaction.test.tsx:163:38
+    161|     expect(h.value().popup.columns[0].suggestions).toHaveLength(200)
+    162|     await h.data('script-249')
+    163|     expect(h.value().popup.columns[0].suggestions.map((s) => s.name)).…
+       |                                      ^
+    164|   })
+    165|   it('动态错误、过期响应不影响静态候选及 Tab 透传', async () => {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/9]⎯
+
+ FAIL  src/hooks/useCompletion.interaction.test.tsx > 键盘、鼠标和异步竞态 > Ctrl+W、退格、Ctrl+U 和 Ctrl+C 更新输入缓冲
+AssertionError: expected [ 'npm' ] to include 'install'
+ ❯ src/hooks/useCompletion.interaction.test.tsx:177:71
+    175|     await h.data('npm invalid')
+    176|     await h.data('\x17')
+    177|     expect(h.value().popup.columns[0].suggestions.map((s) => s.name)).…
+       |                                                                       ^
+    178|     await h.data('ruX')
+    179|     await h.data('\x7f')
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/9]⎯
+
+ FAIL  src/hooks/useCompletion.interaction.test.tsx > 键盘、鼠标和异步竞态 > TUI 控制序列跨分块或同包进入后退出仍正确恢复补全
+AssertionError: expected true to be false // Object.is equality
+
+- Expected
++ Received
+
+- false
++ true
+
+ ❯ src/hooks/useCompletion.interaction.test.tsx:206:34
+    204|     await act(async () => { h.value().handleOutputData('\x1b[?10'); h.…
+    205|     await h.data('npm ')
+    206|     expect(h.value().popup.open).toBe(false)
+       |                                  ^
+    207|     await act(async () => h.value().handleOutputData('\x1b[?1049h\x1b[…
+    208|     await h.data('npm ')
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/9]⎯
+
+ FAIL  src/hooks/useCompletion.interaction.test.tsx > 键盘、鼠标和异步竞态 > 历史完整命令原样替换行，保留其已有引号与空格
+AssertionError: expected last "vi.fn()" call to have been called with [ '\u0015ls "/srv/My Folder"' ]
+
+- Expected
++ Received
+
+  [
+-   "ls \"/srv/My Folder\"",
++   "ls\\ \\\"/srv/My\\ Folder\\\"",
+  ]
+
+ ❯ src/hooks/useCompletion.interaction.test.tsx:218:25
+    216|     await h.choose('ls "/srv/My Folder"')
+    217|     await h.data('\r')
+    218|     expect(h.sendInput).toHaveBeenLastCalledWith('\x15ls "/srv/My Fold…
+       |                         ^
+    219|   })
+    220| })
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/9]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  9 failed | 13 passed (22)
+   Start at  23:25:11
+   Duration  972ms (environment 78%, tests 10%, transform 6%, import 6%, worker 1%)
+
+npm error Lifecycle script `test:unit` failed with error:
+npm error code 1
+npm error path /Users/yuwei/Desktop/Projects/yuweinfo/XControl/apps/web
+npm error workspace @eizhu/web
+npm error location /Users/yuwei/Desktop/Projects/yuweinfo/XControl/apps/web
+npm error command failed
+npm error command sh -c vitest run src/hooks/useCompletion.interaction.test.tsx

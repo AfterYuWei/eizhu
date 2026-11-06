@@ -1,0 +1,68 @@
+{
+  "date": "2026-11-04",
+  "platform": "darwin",
+  "arch": "x64",
+  "packaged": false,
+  "versions": {
+    "node": "24.22.0",
+    "electron": "44.9.0",
+    "chrome": "152.0.7977.167"
+  },
+  "portMapping": {
+    "passed": true,
+    "syntheticSsh": true,
+    "modes": [
+      "local",
+      "remote",
+      "dynamic"
+    ],
+    "rendererToTcp": true,
+    "singletonTab": true,
+    "independentLifecycle": true,
+    "actualPortClipboard": true,
+    "formValidation": true,
+    "saveOnly": true,
+    "delete": true,
+    "responsive": true,
+    "screenshots": [
+      "port-mapping-light.png",
+      "port-mapping-dark.png",
+      "port-mapping-large-narrow.png",
+      "port-mapping-form.png"
+    ]
+  },
+  "sharedSshRegression": {
+    "tunnels": [
+      "local",
+      "remote",
+      "dynamic"
+    ],
+    "portsReleased": true,
+    "tunnelReconnect": true,
+    "faults": {
+      "connectionDiagnostics": true,
+      "hostRejectBeforeAuthentication": true,
+      "hostCancel": true,
+      "mfaCancel": true,
+      "handshakeStop": true,
+      "proxyRejected": true,
+      "portOccupied": true,
+      "halfPacketStop": true,
+      "tunnelLimit32": true
+    }
+  },
+  "desktopRegression": {
+    "stage2": true,
+    "stage3": true,
+    "stage4": true,
+    "stage5": true,
+    "stage6": true,
+    "accountFoundation": true,
+    "accountClosure": true,
+    "syncEngine": true,
+    "syncDesktop": true,
+    "workspaceTabs": true,
+    "aiDesktop": true
+  },
+  "runtimeRecovery": true
+}

@@ -1,14 +1,20 @@
 import { z } from 'zod'
+import { aiEventSchema } from './ai.ts'
 import { sftpEventSchema,transferTaskSchema } from './sftp.ts'
 import { sshGlobalEventSchema, tunnelStatusSchema } from './ssh.ts'
 import { editorOpenSchema, workspaceSchema, foundation } from './foundation.ts'
 import type { DesktopEvents } from './index.ts'
 import { updateProgressSchema } from './update.ts'
+import { syncMessageSchema } from './sync.ts'
+import { accountMessageSchema } from './account.ts'
 /** Reserved event types cannot be emitted until their business stage supplies a payload schema. */
 export const eventSchemas = {
+  'eizhu-ai-message': aiEventSchema,
   'eizhu-update-progress': updateProgressSchema,
   'eizhu-workspace-changed': workspaceSchema,
-  'eizhu-sync-message': z.never(),
+  'eizhu-account-message': accountMessageSchema,
+  'eizhu-account-transition': z.strictObject({ requestId: z.uuid(), phase: z.enum(['confirming', 'pending', 'idle']) }),
+  'eizhu-sync-message': syncMessageSchema,
   'eizhu-session-message': sshGlobalEventSchema,
   'eizhu-sftp-message': sftpEventSchema,
   'eizhu-transfer-message': transferTaskSchema,

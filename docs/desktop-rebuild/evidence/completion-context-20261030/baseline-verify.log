@@ -1,0 +1,17 @@
+
+> baseline:verify
+> node scripts/verify-desktop-baseline.mjs --check-source
+
+{
+  "sourceCommit": "d8a20e0f77ab04af4a4a729f94884a68c4022a5f",
+  "cases": 39,
+  "commands": 183,
+  "events": 7,
+  "assets": 37,
+  "backupFiles": 7,
+  "rejectedBackupFiles": 10,
+  "syncItems": 2,
+  "browserScreenshots": 10,
+  "nativeEvidence": "pending",
+  "userApprovalAtCapture": "pending"
+}

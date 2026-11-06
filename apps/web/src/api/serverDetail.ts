@@ -9,11 +9,10 @@ export type { ServerSessionResponse } from '@eizhu/contracts/models/api'
 
 export type { ServerInfo } from '@eizhu/contracts/models/api'
 
-export type { NetIfStat } from '@eizhu/contracts/models/api'
 
-export type { ProcMem } from '@eizhu/contracts/models/api'
 
-export type { ServerMetrics } from '@eizhu/contracts/models/api'
+export type { ServerMetricsSummary, ServerMetricKind, ServerMetricDetail } from '@eizhu/contracts'
+import type { ServerMetricKind } from '@eizhu/contracts'
 
 // Re-export unified types from sftp (backend returns SftpEntry format)
 export type { SftpEntry, SftpListResponse }
@@ -38,5 +37,7 @@ export const serverDetailApi = {
 
   delete: (sessionId: string, paths: string[]) => sftpApi.delete(sessionId, paths),
 
-  getMetrics: (sessionId: string) => bridge().serverDetail.getMetrics({ sessionId }),
+  getSummary: (sessionId: string) => bridge().serverDetail.getSummary({ sessionId }),
+
+  getMetricDetail: (sessionId: string, kind: ServerMetricKind) => bridge().serverDetail.getMetricDetail({ sessionId, kind }),
 }

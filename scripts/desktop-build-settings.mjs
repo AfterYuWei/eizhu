@@ -2,6 +2,8 @@ import { readFileSync, readdirSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 
+export const updateRepository = { owner: 'AfterYuWei', repo: 'eizhu' }
+
 function sourceDigest() {
   const hash = createHash('sha256')
   const root = new URL('../', import.meta.url)
@@ -40,6 +42,9 @@ function sourceDigest() {
     'package-lock.json',
     'scripts/build-desktop.mjs',
     'scripts/desktop-build-settings.mjs',
+    'scripts/package-desktop.mjs',
+    'scripts/rebuild-native.mjs',
+    'scripts/patch-ssh2-keygen.mjs',
   ])
     visit(name)
   return hash.digest('hex')
@@ -78,5 +83,15 @@ export function buildSettings(env = process.env, platform = process.platform, ar
       )
     feeds[selected] = new URL(`${platform}-${arch}/`, url).href
   }
-  return { base, version, channel, revision, platform, arch, feeds, sourceDigest: sourceDigest() }
+  return {
+    base,
+    version,
+    channel,
+    revision,
+    platform,
+    arch,
+    feeds,
+    updateRepository,
+    sourceDigest: sourceDigest(),
+  }
 }

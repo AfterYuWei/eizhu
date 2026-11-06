@@ -136,7 +136,7 @@ const gitSpec: Spec = {
   options: [
     { name: '--version', description: '显示版本' },
     { name: '--help', description: '显示帮助' },
-    { name: '-C', description: '切换工作目录', args: fileArg(true) },
+    { name: '-C', repeatable: true, description: '切换工作目录', args: fileArg(true) },
   ],
   subcommands: [
     { name: 'add', description: '添加文件到暂存区', options: [{ name: '-A' }, { name: '-u' }, { name: '-p' }], args: fileArg() },

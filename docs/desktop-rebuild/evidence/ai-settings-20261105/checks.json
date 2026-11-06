@@ -1,0 +1,20 @@
+{
+  "typecheck": true,
+  "lint": true,
+  "foundation": {
+    "passed": 224,
+    "skipped": 2,
+    "failed": 0,
+    "skipReason": "Fish未安装"
+  },
+  "frontend": {
+    "files": 87,
+    "passed": 955,
+    "failed": 0
+  },
+  "fixedBaselineTests": 10,
+  "fixedCompatibility": true,
+  "architecture": true,
+  "productionContacted": false,
+  "downloadedTestBinaries": false
+}

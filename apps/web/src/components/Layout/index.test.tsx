@@ -5,16 +5,20 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
 const { windowControls, settings } = vi.hoisted(() => ({
   windowControls: { desktop: false, mac: false, showControls: false, maximized: false, minimize: vi.fn(), toggleMaximize: vi.fn(), close: vi.fn() },
-  settings: { sidebarWidth: 300, setSidebarWidth: vi.fn(), theme: 'light', systemRevision: 0 },
+  settings: { sidebarWidth: 300, setSidebarWidth: vi.fn(), theme: 'light', terminalTheme: 'default', systemRevision: 0 },
 }))
 
 vi.mock('@/components/Sidebar', () => ({ Sidebar: ({ visible }: { visible: boolean }) => <div data-sidebar-visible={String(visible)} /> }))
+vi.mock('@/components/Vault/VaultView', () => ({ VaultView: () => <input aria-label="密钥管理状态" /> }))
 vi.mock('@/components/Terminal', () => ({ TerminalView: () => <main>终端工作区</main> }))
+vi.mock('@/hooks/useServerMetrics', () => ({ useServerMetrics: vi.fn(() => ({ summary: null, summaryError: null, inspection: null, inspectionError: null })) }))
 vi.mock('@/components/Terminal/SplitControls', () => ({ TerminalSplitMenu: () => null }))
-vi.mock('@/components/Terminal/TunnelDialog', () => ({ TunnelDialog: () => null, TunnelPrompts: () => null }))
+vi.mock('@/components/Terminal/TunnelPrompts', () => ({ TunnelPrompts: () => null }))
 vi.mock('@/components/ProfileForm', () => ({ ProfileForm: () => null }))
 vi.mock('./ServerInspector', () => ({ ServerInspector: ({ open }: { open: boolean }) => <div data-inspector-open={String(open)} /> }))
 vi.mock('@/components/CommandPalette', () => ({ CommandPalette: () => null }))
+vi.mock('@/components/Snippets/SnippetDialog', () => ({ SnippetDialog: () => <div role="dialog" aria-label="片段管理" /> }))
+vi.mock('@/components/Snippets/SnippetQuickPicker', () => ({ SnippetQuickPicker: ({ target, onManage }: { target: { tabId: string } | null; onManage: () => void }) => <div role="dialog" className="snippet-quick-picker" aria-label="快速调用片段" data-target={target?.tabId}><button onClick={onManage}>管理片段</button></div> }))
 vi.mock('@/components/ThemeToggle', () => ({ ThemeToggle: () => null }))
 vi.mock('@/components/SyncIndicator', () => ({ SyncIndicator: () => null }))
 vi.mock('@/components/ui/sonner', () => ({ Toaster: () => null }))
@@ -30,6 +34,7 @@ import { Layout } from './index'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useDesktopShellStore } from '@/store/desktopShell'
 import { executeDesktopAction } from '@/lib/desktopActions'
+import { resetWorkspaceView, useWorkspaceViewStore } from '@/store/workspaceView'
 import { useSessionStore } from '@/store/session'
 import { useProfileStore } from '@/store/profile'
 import { resetTerminalLayout, useTerminalLayoutStore } from '@/store/terminalLayout'
@@ -38,18 +43,19 @@ import { SIDEBAR_COLLAPSE_DELAY_MS, SIDEBAR_PREVIEW_ANIMATION_MS, SIDEBAR_PREVIE
 let host: HTMLDivElement
 let root: Root
 
-beforeEach(() => {
+beforeEach(async () => {
+  await resetWorkspaceView()
   ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
   vi.stubGlobal('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} })
   Object.assign(windowControls, { desktop: false, mac: false, showControls: false, maximized: false })
   settings.sidebarWidth = 300
   vi.clearAllMocks()
   settings.setSidebarWidth.mockImplementation((width: number) => { settings.sidebarWidth = width })
-  useDesktopShellStore.setState({ serverRatio: 0.6, serversCollapsed: false, openedCollapsed: false })
+  useDesktopShellStore.setState({ settingsPage: null })
   resetTerminalLayout()
   useSessionStore.setState(useSessionStore.getInitialState(), true)
   useProfileStore.setState({ fetchProfiles: async () => {}, fetchGroups: async () => {} })
-  useSessionStore.setState({ tabs: [{ id: 'a', kind: 'terminal', profileId: 'p', profileName: '服务器', status: 'disconnected', sessionId: null }], activeTabId: 'a' })
+  useSessionStore.setState({ tabs: [{ id: 'a', profileId: 'p', profileName: '服务器', status: 'disconnected', sessionId: null }], activeTabId: 'a' })
   host = document.createElement('div')
   document.body.append(host)
   root = createRoot(host)
@@ -68,6 +74,23 @@ afterEach(async () => {
 function sidebar() { return host.querySelector<HTMLElement>('.eizhu-sidebar')! }
 function toggle() { return host.querySelector<HTMLButtonElement>('.shell-top-controls button')! }
 async function render() { await act(async () => root.render(<TooltipProvider><Layout /></TooltipProvider>)) }
+
+it('侧栏打开片段管理，快捷键打开独立快选器并固定调用时的终端', async () => {
+  await render()
+  await act(async () => host.querySelectorAll<HTMLButtonElement>('.shell-primary-nav > button')[4].click())
+  expect(document.querySelector('[aria-label="片段管理"]')).not.toBeNull()
+  expect(document.querySelector('[aria-label="快速调用片段"]')).toBeNull()
+  await act(async () => root.render(null))
+  useSessionStore.getState().updateTabStatus('a', 'connected', 'session-a')
+  await render()
+  await act(async () => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'S', ctrlKey: true, shiftKey: true, bubbles: true, cancelable: true })))
+  expect(document.querySelector('[aria-label="快速调用片段"]')?.getAttribute('data-target')).toBe('a')
+  await act(async () => useSessionStore.getState().openDraftTab())
+  expect(document.querySelector('[aria-label="快速调用片段"]')?.getAttribute('data-target')).toBe('a')
+  await act(async () => document.querySelector<HTMLButtonElement>('[aria-label="快速调用片段"] button')!.click())
+  expect(document.querySelector('[aria-label="快速调用片段"]')).toBeNull()
+  expect(document.querySelector('[aria-label="片段管理"]')).not.toBeNull()
+})
 
 async function pointer(handle: HTMLElement, type: string, clientX: number) {
   const event = new Event(type, { bubbles: true, cancelable: true })
@@ -99,7 +122,7 @@ it('悬停临时展开可操作导航，离开后淡出且保留原宽度和收�
   vi.useFakeTimers()
   settings.sidebarWidth = 420
   await render()
-  const terminal = host.querySelector('.shell-workspace-content > main')!
+  const terminal = host.querySelector('.shell-workspace-content main')!
   await act(async () => executeDesktopAction('sidebar'))
   await hover(toggle())
   // Entering the newly appeared sidebar must not cancel its entrance frame.
@@ -111,10 +134,11 @@ it('悬停临时展开可操作导航，离开后淡出且保留原宽度和收�
   expect(host.querySelector('.desktop-shell.sidebar-is-hidden')).not.toBeNull()
   expect(host.querySelector('.shell-top-controls-slot button')).toBeNull()
   expect(host.querySelector('.shell-fixed-top-controls')?.closest('[inert]')).toBeNull()
-  expect(host.querySelector('.shell-workspace-content > main')).toBe(terminal)
-  await act(async () => host.querySelectorAll<HTMLButtonElement>('.shell-primary-nav > button')[2].click())
-  expect(useSessionStore.getState().tabs.some((tab) => tab.kind === 'vault')).toBe(true)
-  host.querySelectorAll<HTMLButtonElement>('.shell-primary-nav > button')[2].focus()
+  expect(host.querySelector('.shell-workspace-content main')).toBe(terminal)
+  await act(async () => host.querySelector<HTMLButtonElement>('[aria-controls="workspace-vault"]')!.click())
+  expect(useWorkspaceViewStore.getState().activePage).toBe('vault')
+  expect(useSessionStore.getState().tabs).toHaveLength(1)
+  host.querySelector<HTMLButtonElement>('[aria-controls="workspace-vault"]')!.focus()
   await hover(sidebar(), 'pointerout')
   await act(async () => vi.advanceTimersByTime(SIDEBAR_PREVIEW_CLOSE_DELAY_MS))
   expect(sidebar().classList.contains('is-preview')).toBe(true)
@@ -220,7 +244,7 @@ it('移入侧栏弹出菜单保持预览，菜单关闭且鼠标已离开时再�
 it('阈值停顿后收起，向右拉回默认宽度并等鼠标追上边缘再调整，终端保持挂载', async () => {
   vi.useFakeTimers()
   await render()
-  const terminal = host.querySelector('.shell-workspace-content > main')!
+  const terminal = host.querySelector('.shell-workspace-content main')!
   const handle = host.querySelector<HTMLElement>('[aria-label="调整侧栏宽度"]')!
   handle.setPointerCapture = vi.fn()
   handle.hasPointerCapture = vi.fn(() => true)
@@ -272,7 +296,7 @@ it('阈值停顿后收起，向右拉回默认宽度并等鼠标追上边缘再�
   await act(async () => toggle().click())
   expect(sidebar().style.width).toBe('300px')
   expect(sidebar().classList.contains('collapsed')).toBe(false)
-  expect(host.querySelector('.shell-workspace-content > main')).toBe(terminal)
+  expect(host.querySelector('.shell-workspace-content main')).toBe(terminal)
 })
 
 it('手动展开重置旧宽度，分屏自动恢复保留较宽侧栏', async () => {
@@ -290,7 +314,7 @@ it('手动展开重置旧宽度，分屏自动恢复保留较宽侧栏', async (
 it('点击展开和收起均推动占位，拖拽能从动画当前宽度接手且终端不重建', async () => {
   settings.sidebarWidth = 420
   await render()
-  const terminal = host.querySelector('.shell-workspace-content > main')!
+  const terminal = host.querySelector('.shell-workspace-content main')!
   const space = host.querySelector<HTMLElement>('.shell-sidebar-space')!
   await act(async () => toggle().click())
   expect(space.classList.contains('is-button-motion')).toBe(true)
@@ -310,7 +334,7 @@ it('点击展开和收起均推动占位，拖拽能从动画当前宽度接手�
   await pointer(handle, 'pointermove', 300)
   await render()
   expect(space.style.width).toBe('296px')
-  expect(host.querySelector('.shell-workspace-content > main')).toBe(terminal)
+  expect(host.querySelector('.shell-workspace-content main')).toBe(terminal)
   await pointer(handle, 'pointerup', 300)
 })
 
@@ -387,16 +411,62 @@ it('恢复已有分屏布局时收起侧栏，仍能手动展开', async () => {
   expect(sidebar().classList.contains('collapsed')).toBe(false)
 })
 
-it('侧栏保留图标加文字，工作区操作仅图标，详情默认关闭', async () => {
+it('右侧栏只有一个入口，先选择 AI 或 SFTP，切换时保留终端节点', async () => {
   await render()
   const nav = host.querySelector('nav[aria-label="功能导航"]')!
-  expect([...nav.querySelectorAll('button')].map((b) => b.querySelector('span')?.textContent)).toEqual(['新建连接', 'SFTP 文件', '密钥管理', '命令片段'])
-  const inspector = host.querySelector<HTMLButtonElement>('[aria-label="服务器详情"]')!
+  expect([...nav.querySelectorAll('button')].map((b) => b.querySelector('span')?.textContent)).toEqual(['新建连接', 'SFTP 文件', '端口映射', '密钥管理', '命令片段'])
+  const inspector = host.querySelector<HTMLButtonElement>('.shell-workspace-actions [aria-label="右侧栏"]')!
   expect(inspector.textContent).toBe('')
+  expect(host.querySelector('.shell-workspace-actions [aria-label="服务器详情"]')).toBeNull()
+  expect(host.querySelector('.shell-workspace-actions [aria-label="AI 助手"]')).toBeNull()
+  const terminal = host.querySelector('.shell-workspace-content main')!
+  const summary = host.querySelector('.server-status-bar')!
+  expect(summary.textContent).toContain('CPU—内存—硬盘—网络—')
   expect(host.querySelector('[data-inspector-open="false"]')).not.toBeNull()
   await act(async () => inspector.click())
+  const picker = host.querySelector<HTMLElement>('.shell-inspector-picker')!
+  expect(picker.hidden).toBe(false)
+  expect(inspector.getAttribute('aria-expanded')).toBe('true')
+  expect(picker.textContent).toContain('从这里开始')
+  await act(async () => [...picker.querySelectorAll('button')].find(b => b.textContent === 'AI')!.click())
+  const ai = host.querySelector<HTMLElement>('.ai-inspector')!
+  expect(ai.hidden).toBe(false)
+  expect(host.querySelector('[data-inspector-open="false"]')).not.toBeNull()
+  expect(host.querySelector('.shell-workspace')!.contains(ai)).toBe(false)
+  await act(async () => ai.querySelector<HTMLButtonElement>('[aria-label="切换侧栏内容"]')!.click())
+  expect(ai.hidden).toBe(true)
+  expect(picker.hidden).toBe(false)
+  await act(async () => [...picker.querySelectorAll('button')].find(b => b.textContent === 'SFTP')!.click())
   expect(host.querySelector('[data-inspector-open="true"]')).not.toBeNull()
+  expect(picker.hidden).toBe(true)
+  expect(ai.hidden).toBe(true)
+  expect(host.querySelector('.shell-workspace-content main')).toBe(terminal)
+  expect(host.querySelector('.server-status-bar')).toBe(summary)
+  await act(async () => inspector.click())
+  expect(inspector.getAttribute('aria-expanded')).toBe('false')
+  expect(host.querySelector('#desktop-right-sidebar')!.hasAttribute('hidden')).toBe(true)
   expect(host.querySelector('.statusbar')).toBeNull()
+  expect(host.querySelector('.server-status-bar')).toBe(summary)
+})
+
+it('底部摘要跟随当前终端，工具页面与设置隐藏摘要并保留终端节点', async () => {
+  await render()
+  const terminal = host.querySelector('.shell-workspace-content main')!
+  expect(host.querySelector('.server-status-bar')?.getAttribute('aria-label')).toBe('服务器 服务器状态')
+  await act(async () => useSessionStore.setState({ tabs: [
+    ...useSessionStore.getState().tabs,
+    { id: 'b', profileId: 'other', profileName: '另一台', sessionId: null, status: 'disconnected' },
+  ], activeTabId: 'b' }))
+  expect(host.querySelector('.server-status-bar')?.getAttribute('aria-label')).toBe('另一台 服务器状态')
+  await act(async () => useWorkspaceViewStore.getState().openVault())
+  expect(host.querySelector('.server-status-bar')).toBeNull()
+  await act(async () => useSessionStore.getState().setActiveTab('a'))
+  expect(host.querySelector('.server-status-bar')).not.toBeNull()
+  await act(async () => useDesktopShellStore.getState().setSettingsPage('appearance'))
+  expect(host.querySelector('.server-status-bar')).toBeNull()
+  await act(async () => useDesktopShellStore.getState().setSettingsPage(null))
+  expect(host.querySelector('.server-status-bar')).not.toBeNull()
+  expect(host.querySelector('.shell-workspace-content main')).toBe(terminal)
 })
 
 it('关闭最后一个页面后显示连接首页', async () => {
@@ -410,19 +480,19 @@ it('关闭最后一个页面后显示连接首页', async () => {
 it('设置整页覆盖时保留终端节点、阻止后台快捷键，返回后恢复焦点', async () => {
   await import('@/components/SettingsDialog')
   await render()
-  const terminal = host.querySelector('.shell-workspace-content > main')!
+  const terminal = host.querySelector('.shell-workspace-content main')!
   const account = host.querySelector<HTMLButtonElement>('.shell-account')!
   account.focus()
-  await act(async () => executeDesktopAction('account-settings'))
+  await act(async () => executeDesktopAction('sync-settings'))
   expect(host.querySelector('.settings-page')).not.toBeNull()
   expect(host.querySelector('.shell-session-view')?.hasAttribute('inert')).toBe(true)
   expect(host.querySelector('[role="dialog"]')).toBeNull()
-  expect(host.querySelector('.settings-page-heading')?.textContent).toBe('账号')
+  expect(host.querySelector('.settings-page-heading')?.textContent).toBe('云同步')
   await act(async () => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'W', ctrlKey: true, shiftKey: true, bubbles: true, cancelable: true })))
   expect(useSessionStore.getState().tabs).toHaveLength(1)
   await act(async () => host.querySelector<HTMLButtonElement>('.settings-page-back')!.click())
   expect(host.querySelector('.settings-page')).toBeNull()
-  expect(host.querySelector('.shell-workspace-content > main')).toBe(terminal)
+  expect(host.querySelector('.shell-workspace-content main')).toBe(terminal)
   expect(host.querySelector('.shell-session-view')?.hasAttribute('inert')).toBe(false)
   expect(document.activeElement).toBe(account)
 })
@@ -462,4 +532,13 @@ it('Windows 窗口控制位于窗口层而非圆角工作区，按钮独立响�
   expect(controls.querySelector('[aria-label="还原"]')).not.toBeNull()
   await act(async () => toggle().click())
   expect(host.querySelector('.shell-window-controls')).toBe(controls)
+})
+
+it('账号空间更换重挂载后保留设置分类', async () => {
+  await import('@/components/SettingsDialog')
+  await render()
+  await act(async () => executeDesktopAction('sync-settings'))
+  expect(host.querySelector('.settings-page-heading')?.textContent).toBe('云同步')
+  await act(async () => root.render(<TooltipProvider><Layout key="next-workspace" /></TooltipProvider>))
+  expect(host.querySelector('.settings-page-heading')?.textContent).toBe('云同步')
 })

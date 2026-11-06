@@ -1,0 +1,25 @@
+{
+  "sourceFile": "apps/web/src/components/Agent/ai.css",
+  "sourceSha256": "5f40698d83962dc94ef6a453ae9f89a53108136ccf057f687e44f8fe8176ddc6",
+  "check": true,
+  "lint": true,
+  "focusedInspectorTests": 30,
+  "web": {
+    "files": 87,
+    "passed": 1005
+  },
+  "baselineVerify": true,
+  "fixedBaselineTests": 10,
+  "architectureVerify": true,
+  "webBuild": true,
+  "browserVisualStates": 12,
+  "geometryUnchanged": true,
+  "cleanup": {
+    "ownedPreviewProcesses": 0,
+    "temporaryProfilesRemoved": true
+  },
+  "electronSmoke": "not-run-renderer-only",
+  "toolDownloads": false,
+  "pushed": false,
+  "unrelatedChangesPreserved": true
+}

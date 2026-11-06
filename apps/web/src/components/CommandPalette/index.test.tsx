@@ -1,9 +1,12 @@
 // @vitest-environment jsdom
-import { act } from 'react'
+import { act, useState } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { beforeEach, afterEach, expect, it, vi } from 'vitest'
 import { CommandPalette } from './index'
+import { ShellIconButton } from '@/components/Layout/ShellControls'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import { useProfileStore } from '@/store/profile'
+import { resetWorkspaceView, useWorkspaceViewStore } from '@/store/workspaceView'
 import { useSessionStore } from '@/store/session'
 import { useVaultStore } from '@/store/vault'
 import { vaultApi } from '@/api/vault'
@@ -18,7 +21,8 @@ let host: HTMLDivElement
 let root: Root
 const close = vi.fn()
 
-beforeEach(() => {
+beforeEach(async () => {
+  await resetWorkspaceView()
   ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
   vi.resetAllMocks()
   useProfileStore.setState({ profiles: [profile] })
@@ -28,7 +32,7 @@ beforeEach(() => {
   setWorkspaceGeneration(1)
   host = document.createElement('div'); document.body.append(host); root = createRoot(host)
 })
-afterEach(async () => { await act(async () => root.unmount()); host.remove(); vi.restoreAllMocks() })
+afterEach(async () => { await act(async () => root.unmount()); host.remove(); vi.useRealTimers(); vi.unstubAllGlobals(); vi.restoreAllMocks() })
 async function render() { await act(async () => root.render(<CommandPalette open onClose={close} />)) }
 async function query(value: string) {
   const input = document.querySelector<HTMLInputElement>('[role="combobox"]')!
@@ -38,9 +42,46 @@ async function query(value: string) {
   })
 }
 
+it.each(['Escape', '外部点击'])('%s 关闭面板恢复入口焦点时不弹出提示，之后键盘聚焦和鼠标悬停仍显示提示', async (dismiss) => {
+  vi.useFakeTimers()
+  vi.stubGlobal('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} })
+  function SearchEntry() {
+    const [open, setOpen] = useState(false)
+    return <TooltipProvider>
+      <ShellIconButton label="搜索入口" onClick={() => setOpen(true)}>⌕</ShellIconButton>
+      <CommandPalette open={open} onClose={() => setOpen(false)} />
+    </TooltipProvider>
+  }
+  await act(async () => root.render(<SearchEntry />))
+  const entry = host.querySelector<HTMLButtonElement>('button[aria-label="搜索入口"]')!
+  await act(async () => { entry.focus(); entry.click() })
+  expect(document.activeElement?.getAttribute('role')).toBe('combobox')
+  await act(async () => vi.advanceTimersByTime(1))
+  if (dismiss === 'Escape') {
+    await act(async () => document.activeElement!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })))
+  } else {
+    const outside = new Event('pointerdown', { bubbles: true, cancelable: true })
+    Object.assign(outside, { button: 0, pointerType: 'mouse' })
+    await act(async () => { document.body.dispatchEvent(outside); document.body.click() })
+  }
+  await act(async () => vi.advanceTimersByTime(500))
+  expect(document.querySelector('[role="dialog"]')).toBeNull()
+  expect(document.activeElement).toBe(entry)
+  expect(document.querySelector('[role="tooltip"]')).toBeNull()
+
+  await act(async () => { entry.blur(); entry.focus() })
+  expect(document.querySelector('[role="tooltip"]')?.textContent).toBe('搜索入口')
+  await act(async () => entry.blur())
+  const move = new Event('pointermove', { bubbles: true })
+  Object.assign(move, { pointerType: 'mouse' })
+  await act(async () => entry.dispatchEvent(move))
+  await act(async () => vi.advanceTimersByTime(400))
+  expect(document.querySelector('[role="tooltip"]')?.textContent).toBe('搜索入口')
+})
+
 it('统一显示服务器、密钥、命令，选择服务器复用已有会话', async () => {
   const open = vi.fn()
-  useSessionStore.setState({ tabs: [{ id: 'existing', kind: 'terminal', profileId: 'p', profileName: profile.name, status: 'disconnected', sessionId: null }], activeTabId: null, openTab: open })
+  useSessionStore.setState({ tabs: [{ id: 'existing', profileId: 'p', profileName: profile.name, status: 'disconnected', sessionId: null }], activeTabId: null, openTab: open })
   await render()
   expect(document.querySelector('[role="group"][aria-label="服务器"]')).not.toBeNull()
   expect(document.querySelector('[role="group"][aria-label="密钥"]')).not.toBeNull()
@@ -51,12 +92,24 @@ it('统一显示服务器、密钥、命令，选择服务器复用已有会话'
   expect(close).toHaveBeenCalledOnce()
 })
 
+it('片段管理与快速调用分开，快捷键仅显示在快选入口', async () => {
+  await render()
+  await query('命令片段')
+  const actions = [...document.querySelectorAll('[role="group"][aria-label="操作命令"] button')]
+  const manage = actions.find((item) => item.textContent === '片段管理')!
+  const quick = actions.find((item) => item.textContent?.startsWith('快速调用片段'))!
+  expect(manage).toBeDefined()
+  expect(manage.querySelector('.pal-item-kbd')).toBeNull()
+  expect(quick.querySelector('.pal-item-kbd')?.textContent).toBe('Ctrl/Cmd+Shift+S')
+})
+
 it('密钥搜索定位确切条目，并清除此前的类型筛选', async () => {
   useVaultStore.setState({ filterType: 'password' })
   await render()
   await act(async () => (document.querySelector('[role="group"][aria-label="密钥"] button') as HTMLButtonElement).click())
   expect(useVaultStore.getState()).toMatchObject({ filterType: 'all', searchQuery: vault.name, focusedItemId: vault.id })
-  expect(useSessionStore.getState().tabs[0].kind).toBe('vault')
+  expect(useWorkspaceViewStore.getState().activePage).toBe('vault')
+  expect(useSessionStore.getState().tabs).toHaveLength(0)
 })
 
 it('快速换词与工作区切换后忽略旧密钥响应', async () => {

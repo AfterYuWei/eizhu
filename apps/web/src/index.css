@@ -101,7 +101,6 @@
   --popover-foreground: var(--fg);
   --sidebar-w: 240px;
   --tabbar-h: 40px;
-  --statusbar-h: 24px;
   color-scheme: light;
 
   /* A+C boundary system — chromeless tonal planes with one active light seam. */
@@ -134,11 +133,9 @@
     transparent 100%
   );
   --shadow-workspace:
-    inset 0 1px 0 var(--edge-highlight),
     0 1px 2px rgba(20, 24, 31, 0.07),
     0 14px 30px -26px rgba(20, 24, 31, 0.30);
   --shadow-overlay:
-    inset 0 1px 0 var(--edge-highlight),
     0 1px 2px rgba(20, 24, 31, 0.13),
     0 18px 46px -18px rgba(20, 24, 31, 0.30),
     0 46px 100px -40px rgba(20, 24, 31, 0.46);
@@ -149,20 +146,14 @@
   --term-border: var(--surface-border);
   --term-shadow: var(--shadow-workspace);
 
-  /* Hairline shadow system — DESIGN.md 三层阴影规范
-     Level 0 (flat): 1px hairline only
-     Level 1 (whisper): border + micro-shadow
-     Level 2 (floating): layered shadow + inset hairline */
+  /* 层级使用柔和外阴影，不叠加描边或内阴影。 */
   --shadow-surface:
-    0 1px 2px rgba(0, 0, 0, 0.08),
-    0 0 0 1px rgba(0, 0, 0, 0.10);
+    0 1px 2px rgba(0, 0, 0, 0.08);
   --shadow-surface-hover:
-    0 2px 5px rgba(0, 0, 0, 0.10),
-    0 0 0 1px rgba(0, 0, 0, 0.13);
+    0 2px 5px rgba(0, 0, 0, 0.10);
   --shadow-floating:
     0 2px 5px rgba(0, 0, 0, 0.10),
-    0 12px 28px -12px rgba(0, 0, 0, 0.20),
-    0 0 0 1px rgba(0, 0, 0, 0.12);
+    0 12px 28px -12px rgba(0, 0, 0, 0.20);
   --shadow-modal: var(--shadow-overlay);
   --dialog-bg: var(--surface-overlay);
   --dialog-border: var(--edge-panel-strong);
@@ -261,11 +252,9 @@
     transparent 100%
   );
   --shadow-workspace:
-    inset 0 1px 0 var(--edge-highlight),
     0 1px 2px rgba(0, 0, 0, 0.68),
     0 18px 42px -30px rgba(0, 0, 0, 0.96);
   --shadow-overlay:
-    inset 0 1px 0 rgba(255, 255, 255, 0.065),
     0 1px 2px rgba(0, 0, 0, 0.78),
     0 20px 52px -18px rgba(0, 0, 0, 0.88),
     0 50px 112px -42px rgba(0, 0, 0, 1);
@@ -275,26 +264,21 @@
   --term-border: var(--surface-border);
   --term-shadow: var(--shadow-workspace);
 
-  /* Dark surfaces use neutral graphite boundaries. Avoid bright white
-     highlight rings, which read as a halo around dialogs. */
+  /* 深色表面同样只使用柔和外阴影，不增加轮廓光圈。 */
   --shadow-surface:
-    0 1px 1px rgba(0, 0, 0, 0.4),
-    0 0 0 1px rgba(52, 53, 60, 0.72);
+    0 1px 1px rgba(0, 0, 0, 0.4);
   --shadow-surface-hover:
-    0 2px 5px rgba(0, 0, 0, 0.48),
-    0 0 0 1px rgba(60, 62, 70, 0.78);
+    0 2px 5px rgba(0, 0, 0, 0.48);
   --shadow-floating:
     0 3px 8px rgba(0, 0, 0, 0.54),
-    0 18px 40px -20px rgba(0, 0, 0, 0.92),
-    0 0 0 1px rgba(52, 53, 60, 0.84);
+    0 18px 40px -20px rgba(0, 0, 0, 0.92);
   --shadow-modal: var(--shadow-overlay);
   --dialog-bg: var(--surface-overlay);
   --dialog-border: var(--edge-panel-strong);
   --dialog-overlay: rgba(0, 0, 0, 0.58);
   --btn-primary-border: color-mix(in srgb, var(--accent-hi) 84%, white 16%);
   --btn-primary-shadow:
-    0 1px 1px rgba(0, 0, 0, 0.36),
-    0 0 0 1px rgba(255, 255, 255, 0.02);
+    0 1px 1px rgba(0, 0, 0, 0.36);
   --btn-outline-bg: color-mix(in srgb, var(--bg-panel) 94%, var(--bg-elevated) 6%);
   --btn-outline-border: color-mix(in srgb, var(--border) 82%, white 18%);
   --btn-outline-hover-bg: color-mix(in srgb, var(--bg-elevated) 94%, white 6%);
@@ -360,8 +344,6 @@
   .eizhu-sidebar *,
   .tabbar,
   .tabbar *,
-  .statusbar,
-  .statusbar *,
   .pal,
   .pal *,
   .expand-btn,
@@ -394,9 +376,9 @@
 @import "./styles/app-shell.css";
 @import "./styles/tabbar.css";
 @import "./styles/terminal.css";
-@import "./styles/statusbar.css";
 @import "./styles/profile-form.css";
 @import "./styles/server-detail.css";
+@import "./styles/server-status.css";
 @import "./styles/command-palette.css";
 @import "./styles/sftp.css";
 @import "./styles/sftp-editor.css";
@@ -405,19 +387,11 @@
 @import "./styles/vault.css";
 @import "./styles/desktop-shell.css";
 @import "./styles/settings-page.css";
-/* 账号中心 */
-.account-panel { display: flex; flex-direction: column; gap: 14px; }
-.account-hero { margin-bottom: 0; }
-.account-card { display: flex; flex-direction: column; gap: 14px; }
-.account-welcome { display: flex; align-items: center; gap: 12px; padding: 8px 2px; }
-.account-welcome > span { display: grid; place-items: center; width: 46px; height: 46px; border-radius: var(--r-lg); color: var(--accent); background: var(--accent-bg); }
-.account-welcome h3 { margin: 0; font-size: 15px; }.account-welcome p { margin: 4px 0 0; color: var(--fg-4); line-height: 1.5; }
-.account-form-card { display: flex; flex-direction: column; gap: 14px; max-width: 480px; }
-.account-form-field { display: grid; gap: 7px; }.account-mode-link { align-self: flex-start; border: 0; padding: 2px 0; color: var(--link); background: transparent; font-size: 12px; }
+@import "./styles/backup-page.css";
+@import "./styles/account.css";
+@import "./styles/sync-conflicts.css";
+.account-form-field { display: grid; gap: 7px; }
 .account-error { padding: 9px 11px; border-radius: var(--r-sm); color: var(--red); background: var(--red-bg); font-size: 12px; }
-.account-usage > div { display: flex; justify-content: space-between; color: var(--fg-3); font-size: 12px; }
-.account-usage i { display: block; height: 6px; margin-top: 8px; overflow: hidden; border-radius: var(--r-pill); background: var(--bg-elevated); }.account-usage em { display: block; height: 100%; border-radius: inherit; background: var(--accent); }
-.m-account-card { width: 100%; display: flex; align-items: center; gap: 12px; padding: 14px 16px; border: 0; color: inherit; text-align: left; }
 
 /* Electron native title-bar drag regions retain the existing desktop hit areas. */
 [data-eizhu-drag-region] { -webkit-app-region: drag; }

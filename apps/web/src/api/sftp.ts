@@ -1,5 +1,5 @@
 import { workspaceGeneration } from '@/lib/workspaceScope'
-import { normalizeCommandError } from '@eizhu/contracts'
+import { normalizeCommandError, SFTP_TRANSFER_CHUNK_BYTES } from '@eizhu/contracts'
 import { bridge } from '@/lib/bridge'
 import type {
   TransferTask,
@@ -12,7 +12,7 @@ import type {
   SftpMoveResponse,
 } from '@/types/sftp'
 
-const IPC_CHUNK_BYTES = 512 * 1024
+const IPC_CHUNK_BYTES = SFTP_TRANSFER_CHUNK_BYTES
 
 /** Node.js SFTP session info. */
 export type { SftpSessionInfo } from '@eizhu/contracts/models/api'
@@ -59,8 +59,7 @@ export const sftpApi = {
 
   // --- Transfers ---
 
-  /** Cross-session transfer: tries direct server-to-server copy first, falls
-   *  back to backend relay if direct is not possible.
+  /** Cross-session transfer streams through the business process with bounded memory.
    *  If conflictResolution is "ask" (default) and the target has existing
    *  files, resolves with a `conflicts` array instead of starting a transfer.
    *  Pass "overwrite" | "rename" | "skip" to proceed without prompting. */
@@ -70,7 +69,8 @@ export const sftpApi = {
     paths: string[],
     destDir: string,
     conflictResolution: ConflictResolution = 'ask',
-    directoryMode: DirectoryTransferMode = 'archive',
+    directoryMode: DirectoryTransferMode = 'preserve',
+    background = false,
   ): Promise<SftpTransferResponse> => {
     return bridge().sftp.transfer({
       sourceSessionId,
@@ -79,6 +79,7 @@ export const sftpApi = {
       destDir,
       conflictResolution,
       directoryMode,
+      ...(background ? { background: true } : {}),
     })
   },
 
@@ -155,6 +156,8 @@ export const sftpApi = {
   },
 
   pauseTransfer: (taskId: string) => bridge().sftp.pauseTransfer({ taskId }),
+  getTransferConflicts: (taskId: string) => bridge().sftp.getTransferConflicts({ taskId }),
+  resolveTransferConflicts: (taskId: string, resolution: Exclude<ConflictResolution, 'ask'>) => bridge().sftp.resolveTransferConflicts({ taskId, resolution }),
   resumeTransfer: (taskId: string) => bridge().sftp.resumeTransfer({ taskId }),
   retryTransfer: (taskId: string, restart = false) => bridge().sftp.retryTransfer({ taskId, restart }),
 
@@ -266,11 +269,15 @@ async function sendUpload(
       }
     }
     if (buffered > 0) await sendChunk(buffer.subarray(0, buffered))
+    // This accepts background finalization. Events/listTransfers own the final
+    // completed/failed outcome, including close, conflict check, and rename.
     return await bridge().sftp.uploadFinish({ uploadId })
   } catch (cause) {
     if (generation === workspaceGeneration() && begin.tasks[0]) {
       try {
-        await sftpApi.pauseTransfer(begin.tasks[0].id)
+        const task = (await sftpApi.listTransfers()).find((task) => task.id === begin.tasks[0].id)
+        if (task && ['queued', 'transferring'].includes(task.status))
+          await sftpApi.pauseTransfer(task.id)
       } catch {
         /* Keep the original error and durable checkpoint. */
       }

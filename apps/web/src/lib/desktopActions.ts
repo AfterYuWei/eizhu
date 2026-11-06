@@ -1,5 +1,6 @@
 import { useTerminalLayoutStore } from '@/store/terminalLayout'
 import { toast } from 'sonner'
+import { useWorkspaceViewStore } from '@/store/workspaceView'
 import { useSessionStore } from '@/store/session'
 import { useProfileStore } from '@/store/profile'
 import { writeClipboardText } from './clipboard'
@@ -8,7 +9,7 @@ import { workspaceGeneration } from './workspaceScope'
 import type { Profile } from '@/types/profile'
 
 export const desktopActions = [
-  { id: 'tunnels', label: 'SSH 隧道管理', key: 'l' },
+  { id: 'tunnels', label: '端口映射', key: 'l', keywords: 'SSH 隧道 本地转发 远端转发 SOCKS5' },
   { id: 'split-right', label: '向右分屏', key: 'h' },
   { id: 'split-down', label: '向下分屏', key: 'j' },
   { id: 'focus-next', label: '聚焦下一个窗格', key: 'n' },
@@ -24,7 +25,8 @@ export const desktopActions = [
   { id: 'reconnect', label: '重连当前终端', key: 'r' },
   { id: 'sftp', label: '打开 SFTP 文件管理', key: 'e' },
   { id: 'copy-ssh', label: '复制 SSH 命令', key: 'c' },
-  { id: 'snippets', label: '命令片段', key: 's' },
+  { id: 'snippets', label: '片段管理', key: undefined, keywords: '命令片段' },
+  { id: 'snippet-quick', label: '快速调用片段', key: 's', keywords: '命令片段' },
   { id: 'search', label: '查找终端内容', key: 'f' },
 ] as const
 export type DesktopActionId = typeof desktopActions[number]['id']
@@ -39,8 +41,9 @@ export function shortcutAction(event: Pick<KeyboardEvent, 'key' | 'ctrlKey' | 'm
   return desktopActions.find((a) => a.key === event.key.toLowerCase())?.id
 }
 function activeTerminal() {
+  if (useWorkspaceViewStore.getState().activePage !== 'terminal') return
   const store = useSessionStore.getState()
-  return store.tabs.find((tab) => tab.id === store.activeTabId && tab.kind === 'terminal' && tab.profileId)
+  return store.tabs.find((tab) => tab.id === store.activeTabId && tab.profileId)
 }
 export function sshCommand(profile: Pick<Profile, 'host' | 'port' | 'username' | 'proxy' | 'options'>) {
   const quote = (s: string) => `'${s.replace(/'/g, "'\\''")}'`
@@ -59,6 +62,8 @@ export async function executeDesktopAction(id: DesktopActionId, tabId?: string):
   const generation = workspaceGeneration()
   pending.add(key)
   try {
+    const terminalPage = useWorkspaceViewStore.getState().activePage === 'terminal'
+    if (!terminalPage && ['split-right', 'split-down', 'focus-next', 'focus-previous', 'maximize-pane', 'merge-panes', 'reconnect', 'search', 'copy-ssh'].includes(id)) return
     const custom = handlers.get(id)
     if (custom) await custom()
     else if (id === 'split-right' || id === 'split-down') useTerminalLayoutStore.getState().split(id === 'split-right' ? 'horizontal' : 'vertical')
@@ -66,8 +71,12 @@ export async function executeDesktopAction(id: DesktopActionId, tabId?: string):
     else if (id === 'maximize-pane') useTerminalLayoutStore.getState().maximize()
     else if (id === 'merge-panes') useTerminalLayoutStore.getState().merge()
     else if (id === 'new') useSessionStore.getState().openDraftTab()
-    else if (id === 'close') { const active = tabId ?? useSessionStore.getState().activeTabId; if (active) useSessionStore.getState().closeTab(active) }
-    else if (id === 'sftp') { const tab = activeTerminal(); useSessionStore.getState().openSftpTab(tab?.profileId, tab?.cwd) }
+    else if (id === 'tunnels') useWorkspaceViewStore.getState().openPortMapping()
+    else if (id === 'close') {
+      if (!tabId && useWorkspaceViewStore.getState().activePage === 'port-mapping') useWorkspaceViewStore.getState().closePortMapping()
+      else { const active = tabId ?? (terminalPage ? useSessionStore.getState().activeTabId : null); if (active) await useSessionStore.getState().closeTab(active) }
+    }
+    else if (id === 'sftp') { const tab = activeTerminal(); await useWorkspaceViewStore.getState().openSftp(tab?.profileId, tab?.cwd) }
     else {
       const tab = activeTerminal()
       if (!tab) throw new Error('请先选择一个终端连接')
@@ -95,4 +104,4 @@ export async function executeDesktopAction(id: DesktopActionId, tabId?: string):
 export function runDesktopAction(id: DesktopActionId, tabId?: string) {
   void executeDesktopAction(id, tabId).catch((e) => toast.error(e instanceof Error ? e.message : String(e)))
 }
-export function focusActiveTerminal() { terminalActions(useSessionStore.getState().activeTabId)?.focus() }
+export function focusActiveTerminal() { if (useWorkspaceViewStore.getState().activePage !== 'terminal') return; terminalActions(useSessionStore.getState().activeTabId)?.focus() }

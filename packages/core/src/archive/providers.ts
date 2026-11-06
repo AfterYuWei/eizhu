@@ -1,7 +1,6 @@
 import { createHash, createHmac, randomUUID } from 'node:crypto'
 import { z } from 'zod'
-import { cloudIndexSchema, fail } from '@eizhu/contracts'
-import type { CloudIndex } from '@eizhu/contracts'
+import { fail } from '@eizhu/contracts'
 import type { Provider } from './repository.ts'
 import { jsonBody, successful } from './network.ts'
 import type { HttpResponse, Transport } from './network.ts'
@@ -248,7 +247,7 @@ export class CloudProvider {
       }),
     )
   }
-  async remove(name: string): Promise<void> {
+  private async remove(name: string): Promise<void> {
     let result: HttpResponse
     if (this.row.config.type === 'webdav' || this.row.config.type === 's3')
       result = await this.direct('DELETE', name)
@@ -258,29 +257,6 @@ export class CloudProvider {
       result = await this.oauthRequest('DELETE', `https://www.googleapis.com/drive/v3/files/${id}`)
     } else result = await this.oauthRequest('DELETE', this.graphPath(name))
     if (result.status !== 404) successful(result)
-  }
-  async index(): Promise<{ index: CloudIndex; etag: string | null; exists: boolean }> {
-    const response = await this.get('index.json')
-    if (response.status === 404)
-      return {
-        index: {
-          format: 'eizhu-sync-index',
-          version: 1,
-          device_id: this.namespace,
-          latest_version: 0,
-          versions: [],
-          updated_at: new Date(0).toISOString(),
-        },
-        etag: null,
-        exists: false,
-      }
-    successful(response)
-    if (response.body.byteLength > 4 * 1024 * 1024) fail('CLOUD_DATA_INVALID', '云端索引过大')
-    const parsed = cloudIndexSchema.safeParse(jsonBody(response))
-    if (!parsed.success) fail('CLOUD_DATA_INVALID', '云端索引无效，原对象已保留')
-    if (parsed.data.device_id !== this.namespace)
-      fail('BACKUP_CONFLICT', '云端索引属于其他设备空间，已停止写入')
-    return { index: parsed.data, exists: true, etag: response.headers.etag || null }
   }
   async test(): Promise<void> {
     const name = `probe-${randomUUID()}.tmp`,

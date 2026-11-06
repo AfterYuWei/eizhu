@@ -1,0 +1,55 @@
+{
+  "sourceCommit": "82517ec4d4eceda6170d80b8c456cfe017a579c7",
+  "version": "0.5.0-test.393.82517ec4",
+  "check": true,
+  "lint": true,
+  "diffCheck": true,
+  "foundation": {
+    "passed": 259,
+    "skipped": 2,
+    "skipReason": "Fish not installed"
+  },
+  "web": {
+    "files": 87,
+    "passed": 982
+  },
+  "fixedBaselineTests": 10,
+  "focused": {
+    "coreAndCli": 49,
+    "settingsAndComposer": 37
+  },
+  "baselineVerify": true,
+  "architectureVerify": true,
+  "electronAiSmoke": true,
+  "packagedDmgSmoke": true,
+  "verifiedPackageFiles": 285,
+  "artifactCopySha256Verified": true,
+  "scope": {
+    "platform": "darwin",
+    "arch": "x64",
+    "model": "loopback-synthetic",
+    "ssh": "loopback-synthetic",
+    "sftp": "installed-openssh-subsystem",
+    "cliProtocol": "synthetic-stdio-MCP",
+    "cliAvailability": "installed-program-read-only-version-help"
+  },
+  "pending": [
+    "real model and CLI authentication/execution regression",
+    "real remote PTY regression",
+    "other platforms",
+    "signing and notarization"
+  ],
+  "warnings": [
+    "Packaged smoke emitted existing native-image argument warnings and task-queue deadline notices; all required assertions and exit status passed."
+  ],
+  "downloads": false,
+  "productionDeployment": false,
+  "pushed": false,
+  "cleanup": {
+    "temporaryWorktreeRemoved": true,
+    "projectArtifactAppAbsent": true,
+    "temporaryAppProcesses": 0,
+    "temporaryAppLaunchServicesEntries": 0,
+    "installedAppRetained": true
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "sourceCommit": "c01c85ddde30379895bd396b75d90895cb7ef168",
+  "check": true,
+  "lint": true,
+  "baselineVerify": true,
+  "architectureVerify": true,
+  "foundation": {
+    "passed": 259,
+    "skipped": 2,
+    "skipReason": "Fish not installed"
+  },
+  "web": {
+    "files": 87,
+    "passed": 987
+  },
+  "fixedBaselineTests": 10,
+  "focusedInspectorTests": 18,
+  "electronAiSmoke": true,
+  "iconOnlyWidth": 320,
+  "textWidth": 560,
+  "themes": [
+    "light",
+    "dark"
+  ],
+  "keyboardTooltips": true,
+  "singleToolbarRow": true,
+  "testServices": "loopback-synthetic model/SSH and installed OpenSSH SFTP",
+  "productionCodeScope": "renderer-only; runtime/preload/core unchanged",
+  "packagedSmoke": "not-run-this-ui-followup",
+  "downloads": false,
+  "pushed": false,
+  "unrelatedChangesPreserved": true,
+  "cleanup": {
+    "temporaryWorktreeRemoved": true,
+    "isolatedTestProcesses": 0,
+    "packagedAppCreated": false
+  }
+}

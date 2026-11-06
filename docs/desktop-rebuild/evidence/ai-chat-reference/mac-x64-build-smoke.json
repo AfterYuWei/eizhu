@@ -1,0 +1,62 @@
+{
+  "date": "2026-11-02",
+  "platform": "darwin",
+  "arch": "x64",
+  "packaged": false,
+  "version": "0.5.0-test.359.69cd5913",
+  "sourceDigest": "b2422690c6d54c3e7af69447737fe4084e3b3fcf66a30e6fdeca10cbffe84e17",
+  "aiDesktop": {
+    "passed": true,
+    "model": "loopback-synthetic",
+    "ssh": "loopback-synthetic",
+    "approvalRequired": true,
+    "duplicateRejected": true,
+    "outputAndExitCode": true,
+    "encryptedStorage": true,
+    "historyDeletion": true,
+    "quotaAndAuthErrors": true,
+    "incompleteStreamRejected": true,
+    "unsupportedToolsRejected": true,
+    "codeBlockCopyOnly": true,
+    "borderlessAiContent": true,
+    "sharedSidebar": {
+      "gap": 8,
+      "topAligned": true,
+      "heightAligned": true,
+      "radius": 16,
+      "independent": true
+    },
+    "screenshots": [
+      "right-sidebar-picker.png",
+      "ai-chat-approval.png",
+      "ai-chat-light.png",
+      "ai-chat-dark.png",
+      "ai-chat-start.png",
+      "ai-chat-narrow.png"
+    ]
+  },
+  "verification": {
+    "typecheck": true,
+    "lint": true,
+    "webTestsPassed": 901,
+    "newMarkdownAndCopyTests": 3,
+    "baselineVerify": true
+  },
+  "desktopRegression": {
+    "stage2": true,
+    "stage3": true,
+    "stage4": true,
+    "stage5": true,
+    "stage6": true,
+    "workspaceTabs": true,
+    "accountFoundation": true,
+    "accountClosure": true,
+    "syncEngine": true,
+    "syncDesktop": true
+  },
+  "pending": [
+    "新版 UI 未重新生成安装包",
+    "真实模型和远端 SSH 验收",
+    "Windows / Linux / macOS arm64 界面实测"
+  ]
+}

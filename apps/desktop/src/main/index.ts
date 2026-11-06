@@ -20,7 +20,9 @@ import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { lstatSync, readdirSync, realpathSync, mkdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
+import { randomUUID } from 'node:crypto'
 import {
+  ai, isAiOperation,
   archive,
   isArchiveOperation,
   foundation,
@@ -36,10 +38,18 @@ import {
   fail,
   failureOf,
   redactLogText,
+  account,
+  isAccountOperation,
+  offlineWorkspace,
+  workspaceTransitionSchema,
 } from '@eizhu/contracts'
-import type { Bootstrap, PlatformCapabilities, RuntimeContext } from '@eizhu/contracts'
+import type { AccountStatus, Bootstrap, PlatformCapabilities, RuntimeContext, WorkspaceIdentity, WorkspaceTransitionResult } from '@eizhu/contracts'
+import {sync,isSyncOperation} from '@eizhu/contracts'
+import type { AccountFixture } from './account-fixture-server.ts'
 import { loadDeviceKey } from '@eizhu/core/runtime/device-key'
 import { RuntimeHost } from './runtime-host.ts'
+import { replaceWorkspaceRuntime } from './workspace-runtime.ts'
+import { closeAccountNetwork } from './account-network.ts'
 import { Windows } from './windows.ts'
 import { assetPath, isTrustedPage } from './security.ts'
 import { DocumentGrants, saveAtomically,exportFileAtomically } from './documents.ts'
@@ -49,8 +59,10 @@ import { Updates } from './updates.ts'
 declare const __EIZHU_VERSION__: string
 declare const __EIZHU_CHANNEL__: string
 declare const __EIZHU_UPDATE_FEEDS__: Partial<Record<'stable' | 'test', string>>
+declare const __EIZHU_UPDATE_REPOSITORY__: { owner: string; repo: string }
 
 const smoke = process.argv.includes('--smoke-test')
+const devUrl = !app.isPackaged ? process.env.ELECTRON_RENDERER_URL : undefined
 const smokeRoot = process.argv.find((value) => value.startsWith('--smoke-root='))?.slice(13)
 if (smoke && !smokeRoot) throw new Error('Smoke test requires an isolated --smoke-root')
 if (
@@ -77,7 +89,6 @@ protocol.registerSchemesAsPrivileged([
     privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true },
   },
 ])
-const devUrl = !app.isPackaged ? process.env.ELECTRON_RENDERER_URL : undefined
 let runtime: RuntimeHost
 let windows: Windows
 let settings: Bootstrap['settings'] = {}
@@ -86,6 +97,9 @@ let deviceKey: Buffer | undefined
 let shuttingDown = false
 let healthy = false
 let restarting: Promise<RuntimeContext> | undefined
+let accountChanging: Promise<unknown> | undefined
+let confirmingAccount = false
+let accountFixture: AccountFixture | undefined
 let updates: Updates
 const documents = new DocumentGrants()
 const sensitiveClipboard = new SensitiveClipboard(clipboard)
@@ -112,40 +126,89 @@ async function restartRuntime(): Promise<RuntimeContext> {
     healthy = false
     documents.revoke()
     editorGrants.clear();editorBorrowed.clear();deferredFileCloses.clear()
-    await runtime.close()
-    const candidate = new RuntimeHost(
-      dataRoot,
-      __dirname,
-      runtime.context.generation + 1,
-      runtimeFailed,
-      deviceKey!,
-    )
-    let nextSettings: Bootstrap['settings']
-    try {
-      await candidate.start()
-      nextSettings = await candidate.call('settings.read')
-    } catch (cause) {
-      await candidate.close()
-      throw cause
-    }
-    runtime = candidate
-    attachRuntimeEvents(runtime)
-    settings = nextSettings
-    healthy = true
-    for (const window of [windows.main, windows.editor]) {
-      if (window && !window.isDestroyed()) window.webContents.send('eizhu:context', bootstrap(window))
-    }
-    windows.broadcast('eizhu-workspace-changed', {
-      id: runtime.context.workspaceId,
-      generation: runtime.context.generation,
-      userId: 0,
-    })
-    windows.broadcast('eizhu-runtime-state', { status: 'ready' })
+    await replaceWorkspaceRuntime(runtime, runtime.workspace,
+      (workspace, generation) => new RuntimeHost(dataRoot, __dirname, generation, runtimeFailed, deviceKey!, workspace, accountFixture?.transport,accountFixture?.events),
+      async (host) => {
+        const nextSettings = await host.call<Bootstrap['settings']>('settings.read')
+        const accountStatus = await host.call<AccountStatus>('account.status')
+        runtime = host
+        attachRuntimeEvents(runtime)
+        settings = nextSettings
+        healthy = true
+        for (const window of [windows.main, windows.editor]) {
+          if (window && !window.isDestroyed()) window.webContents.send('eizhu:context', bootstrap(window))
+        }
+        windows.broadcast('eizhu-workspace-changed', {
+          id: runtime.context.workspaceId, generation: runtime.context.generation, userId: runtime.workspace.userId,
+        })
+        windows.broadcast('eizhu-account-message', { workspaceGeneration: host.context.generation, status: accountStatus })
+        windows.broadcast('eizhu-runtime-state', { status: 'ready' })
+      })
     return runtime.context
   })().finally(() => {
     restarting = undefined
   })
   return restarting
+}
+
+async function changeAccount(operation: 'account.login' | 'account.register' | 'account.logout', input: unknown): Promise<unknown> {
+  if (accountChanging || restarting || shuttingDown || !healthy) fail('ACCOUNT_BUSY', '请等待当前账号操作完成')
+  const previous = runtime, fromContext = { ...runtime.context }
+  const transitionId = randomUUID()
+  const work = async (): Promise<AccountStatus | WorkspaceTransitionResult | undefined> => {
+    confirmingAccount = true
+    if (windows.editor && !windows.editor.isDestroyed()) windows.emit(windows.editor, 'eizhu-account-transition', { requestId: transitionId, phase: 'confirming' })
+    try {
+      if (!await windows.confirmTransition()) fail('CANCELLED', '已取消账号切换，当前空间保持不变')
+    } finally { confirmingAccount = false }
+    if (windows.editor && !windows.editor.isDestroyed()) windows.emit(windows.editor, 'eizhu-account-transition', { requestId: transitionId, phase: 'pending' })
+    if (runtime !== previous || !healthy) fail('WORKSPACE_CHANGED', '账号操作所属空间已变化')
+    let target: WorkspaceIdentity
+    if (operation === 'account.logout') {
+      if (previous.workspace.id === 'offline') return
+      await previous.call('account.prepareLogout')
+      target = offlineWorkspace
+    } else {
+      const authenticated = await previous.call<{ workspace: WorkspaceIdentity; account: AccountStatus }>('account.authenticate', { operation, input })
+      target = authenticated.workspace
+      if (target.id === previous.workspace.id) {
+        const status = account[operation].output.parse(authenticated.account)
+        if (!status.loggedIn || status.user.id !== previous.workspace.userId) fail('ACCOUNT_PROTOCOL', '账号响应身份不匹配')
+        return status
+      }
+    }
+    if (runtime !== previous || !healthy) fail('WORKSPACE_CHANGED', '账号操作所属空间已变化')
+    await previous.call('runtime.beforeQuit')
+    healthy = false
+    updates.invalidate()
+    documents.revoke()
+    editorGrants.clear(); editorBorrowed.clear(); deferredFileCloses.clear()
+    let status: AccountStatus | undefined
+    await replaceWorkspaceRuntime(previous, target,
+      (workspace, generation) => new RuntimeHost(dataRoot, __dirname, generation, runtimeFailed, deviceKey!, workspace, accountFixture?.transport,accountFixture?.events),
+      async (host) => {
+        const nextSettings = await host.call<Bootstrap['settings']>('settings.read')
+        status = await host.call<AccountStatus>('account.commitTransition', {
+          target: host.workspace,
+          ...(operation === 'account.logout' && host.workspace.id === 'offline' ? { logoutSource: previous.workspace } : {}),
+        })
+        runtime = host; settings = nextSettings; healthy = true
+        attachRuntimeEvents(runtime)
+        // Close the old editor only after a confirmed account switch succeeds; rollback preserves its buffers.
+        if (host.workspace.id === target.id && host.workspace.id !== previous.workspace.id) windows.editor?.destroy()
+        for (const window of [windows.main, windows.editor])
+          if (window && !window.isDestroyed()) window.webContents.send('eizhu:context', bootstrap(window))
+        windows.broadcast('eizhu-workspace-changed', { id: host.workspace.id, generation: host.context.generation, userId: host.workspace.userId })
+        windows.broadcast('eizhu-account-message', { workspaceGeneration: host.context.generation, status: status! })
+        windows.broadcast('eizhu-runtime-state', { status: 'ready' })
+      })
+    return workspaceTransitionSchema.parse({ fromContext, bootstrap: bootstrap(windows.main), account: status })
+  }
+  accountChanging = Promise.resolve().then(work)
+  try { return await accountChanging } finally {
+    accountChanging = undefined; confirmingAccount = false
+    if (windows.editor && !windows.editor.isDestroyed()) windows.emit(windows.editor, 'eizhu-account-transition', { requestId: transitionId, phase: 'idle' })
+  }
 }
 
 function capabilities(): PlatformCapabilities {
@@ -182,7 +245,7 @@ function authenticate(event: Electron.IpcMainInvokeEvent): BrowserWindow {
 function bootstrap(window: BrowserWindow): Bootstrap {
   return {
     context: runtime.context,
-    workspace: { id: 'offline', generation: runtime.context.generation, userId: 0 },
+    workspace: { id: runtime.workspace.id, generation: runtime.context.generation, userId: runtime.workspace.userId },
     platform: capabilities(),
     window: windows.kind(window),
     version: __EIZHU_VERSION__,
@@ -194,9 +257,12 @@ async function quit(install?: () => void): Promise<void> {
   shuttingDown = true
   try {
     await restarting?.catch(() => undefined)
+    await accountChanging?.catch(() => undefined)
     if(healthy)await runtime.call('runtime.beforeQuit')
     healthy = false
     await runtime?.close()
+    await closeAccountNetwork()
+    await accountFixture?.close()
     await sensitiveClipboard.close()
     if (install) install()
     else {
@@ -224,6 +290,24 @@ async function load(window: BrowserWindow): Promise<void> {
   else await window.loadURL('eizhu://app/index.html' + suffix)
 }
 async function execute(window: BrowserWindow, operation: string, input: unknown): Promise<unknown> {
+  if (isAiOperation(operation)) {
+    if (window !== windows.main) fail('FORBIDDEN', '仅主窗口可使用 AI 助手')
+    if (!healthy || restarting || shuttingDown) fail('RUNTIME_UNAVAILABLE', '业务进程尚未就绪')
+    return ai[operation].output.parse(await runtime.call('ai.dispatch', { owner: window.id, operation, input: ai[operation].input.parse(input) }))
+  }
+  if (isSyncOperation(operation)) {
+    if(window!==windows.main)fail('FORBIDDEN','仅主窗口可管理账号同步')
+    if(!healthy)fail('RUNTIME_UNAVAILABLE','业务进程不可用，请先恢复')
+    return sync[operation].output.parse(await runtime.call(operation,sync[operation].input.parse(input)))
+  }
+  if (isAccountOperation(operation)) {
+    if (window !== windows.main) fail('FORBIDDEN', '仅主窗口可管理账号')
+    if (!healthy) fail('RUNTIME_UNAVAILABLE', '业务进程不可用，请先恢复')
+    const data = account[operation].input.parse(input)
+    if (operation === 'account.login' || operation === 'account.register' || operation === 'account.logout')
+      return changeAccount(operation, data)
+    return account[operation].output.parse(await runtime.call(operation, data))
+  }
   if(isArchiveOperation(operation)){
     if(window!==windows.main)fail('FORBIDDEN','仅主窗口可管理备份')
     if(!healthy)fail('RUNTIME_UNAVAILABLE','业务进程不可用，请先恢复')
@@ -289,6 +373,14 @@ async function execute(window: BrowserWindow, operation: string, input: unknown)
     }
     let result: unknown
     switch (operation) {
+      case 'backup.selectDirectory': {
+        const picked = await dialog.showOpenDialog(window, { properties: ['openDirectory', 'createDirectory'] })
+        ensureOwner()
+        if (picked.canceled || !picked.filePaths[0]) return null
+        const directory = await runtime.call('backup.setDirectory', { directory: picked.filePaths[0] })
+        ensureOwner()
+        return local[operation].output.parse(directory)
+      }
       case 'backup.pickFile': {
         const picked = await dialog.showOpenDialog(window, {
           properties: ['openFile'],
@@ -357,7 +449,6 @@ async function execute(window: BrowserWindow, operation: string, input: unknown)
         return picked.filePath
       }
       case 'backup.preview':
-      case 'backup.prepareRestore':
       case 'backup.import': {
         const d = local[operation].input.parse(value),
           grant = documents.get(window.id, runtime.context, d.filePath, 'backup')
@@ -373,7 +464,7 @@ async function execute(window: BrowserWindow, operation: string, input: unknown)
     }
     return local[operation].output.parse(result)
   }
-  if (!isFoundationOperation(operation)) return fail('STAGE_NOT_READY', (operation.startsWith('account.') || operation.startsWith('sync.') || operation === 'backup.previewLegacyAccount') ? '官方账号、同步和官方备份待开发，后端部署后再接入' : '该业务能力将在后续实施阶段开放')
+  if (!isFoundationOperation(operation)) return fail('STAGE_NOT_READY', (operation.startsWith('account.') || operation.startsWith('sync.')) ? '官方备份未接入' : '该业务能力将在后续实施阶段开放')
   const value = foundation[operation].input.parse(input)
   switch (operation) {
     case 'update.check':
@@ -397,6 +488,7 @@ async function execute(window: BrowserWindow, operation: string, input: unknown)
       return runtime.call(operation)
     case 'runtime.restart':
       if (window !== windows.main) fail('FORBIDDEN', '仅主窗口可恢复业务进程')
+      if (accountChanging) fail('ACCOUNT_BUSY', '请等待账号切换完成')
       return restartRuntime()
     case 'settings.write': {
       if (window !== windows.main && window !== windows.editor) fail('FORBIDDEN', '窗口未授权')
@@ -579,7 +671,11 @@ async function start(): Promise<void> {
   })
   keyMode = key.mode
   deviceKey = key.key
-  runtime = new RuntimeHost(dataRoot, __dirname, 1, runtimeFailed, deviceKey)
+  if (smoke) {
+    const { createAccountFixture } = await import('./account-fixture-server.ts')
+    accountFixture = await createAccountFixture()
+  }
+  runtime = new RuntimeHost(dataRoot, __dirname, 1, runtimeFailed, deviceKey, undefined, accountFixture?.transport,accountFixture?.events)
   await runtime.start()
   healthy = true
   settings = await runtime.call('settings.read')
@@ -587,6 +683,7 @@ async function start(): Promise<void> {
   updates = new Updates({
     driver: updater.autoUpdater,
     feeds: smoke ? {} : __EIZHU_UPDATE_FEEDS__,
+    repository: smoke ? undefined : __EIZHU_UPDATE_REPOSITORY__,
     supported: app.isPackaged && (process.platform !== 'linux' || Boolean(process.env.APPIMAGE)),
     progress: (progress) => windows.emit(windows.main, 'eizhu-update-progress', progress),
     install: (action) => windows.runConfirmedQuit(() => quit(action)),
@@ -645,7 +742,18 @@ async function start(): Promise<void> {
       if (!healthy && ['runtime.health', 'workspace.status', 'settings.write'].includes(request.operation))
         fail('RUNTIME_UNAVAILABLE', '业务进程不可用，未保存内容仍保留')
       if (!sameContext(request.context, runtime.context)) fail('WORKSPACE_CHANGED', '数据空间已变化，请重试')
+      if (accountChanging && ![
+        'app.bootstrap', 'account.status', 'workspace.status', 'runtime.health', 'settings.write',
+        'window.minimize', 'window.toggleMaximize', 'window.state', 'window.close',
+        'editor.resolveTransition', 'editor.resolveClose', 'editor.resolveAppClose',
+        'clipboard.read', 'clipboard.write', 'clipboard.writeSensitive', 'system.saveText',
+        ...(confirmingAccount && window === windows.editor ? ['sftp.readFile', 'sftp.writeFile'] : []),
+      ].includes(request.operation)) fail('ACCOUNT_BUSY', '账号正在切换，请稍后重试')
       const value = await execute(window, request.operation, request.input)
+      if (isAccountOperation(request.operation) && value && typeof value === 'object' && Object.hasOwn(value, 'fromContext')) {
+        const transition = workspaceTransitionSchema.parse(value)
+        return { id, context, transition }
+      }
       return { id, context, value }
     } catch (cause) {
       return { id, context, error: failureOf(cause) }
@@ -655,7 +763,7 @@ async function start(): Promise<void> {
   await load(window)
   if (smoke) {
     const { runSmoke } = await import('./smoke.ts')
-    await runSmoke({ windows, runtime: () => runtime, load, root: dataRoot, keyMode, startedAt,assets:join(__dirname,'../renderer/assets') })
+    await runSmoke({ windows, runtime: () => runtime, load, root: dataRoot, keyMode, startedAt,assets:join(__dirname,'../renderer/assets'), accountFixture })
     await quit()
   }
 }
@@ -663,6 +771,8 @@ void start().catch(async (cause) => {
   console.error('eizhu initialization failed; existing data retained')
   if (smoke) console.error(cause)
   await runtime?.close().catch(() => undefined)
+  await closeAccountNetwork().catch(() => undefined)
+  await accountFixture?.close().catch(() => undefined)
   deviceKey?.fill(0)
   if (!smoke) {
     const failure = failureOf(cause)

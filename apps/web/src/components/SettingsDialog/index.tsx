@@ -15,6 +15,8 @@ import { SyncPanel } from './SyncPanel';
 import { AboutPanel } from './AboutPanel';
 import { LogPanel } from './LogPanel';
 import { HistoryPanel } from './HistoryPanel';
+import { AiPanel } from './AiPanel';
+import { AiIcon } from '@/lib/serverIcons';
 import { isTestBuild } from '@/lib/updater';
 import { isDesktopRuntime } from '@/lib/platform';
 import { AccountPanel } from './AccountPanel';
@@ -22,8 +24,9 @@ import { themeOptions,appFontFamilyOptions,terminalFontFamilyOptions,terminalFon
 interface SettingsPageProps {
     onBack: () => void;
     initialTab?: SettingsTab;
+    onTabChange?: (tab: SettingsTab) => void;
 }
-export type SettingsTab = 'appearance' | 'terminal' | 'backup' | 'account' | 'sync' | 'logs' | 'diagnostics' | 'about';
+export type SettingsTab = 'appearance' | 'terminal' | 'backup' | 'account' | 'sync' | 'logs' | 'diagnostics' | 'about' | 'ai';
 const baseTabs: {
     key: SettingsTab;
     label: string;
@@ -32,18 +35,19 @@ const baseTabs: {
     { key: 'account', label: '账号', icon: UserRound },
     { key: 'appearance', label: '外观', icon: Palette },
     { key: 'terminal', label: '终端', icon: Terminal },
+    { key: 'ai', label: 'AI 助手', icon: AiIcon },
     { key: 'backup', label: '数据备份', icon: DatabaseBackup },
     { key: 'sync', label: '云同步', icon: CloudSync },
     { key: 'about', label: '关于', icon: Info },
 ];
-export function SettingsPage({ onBack, initialTab = 'appearance' }: SettingsPageProps) {
+export function SettingsPage({ onBack, initialTab = 'appearance', onTabChange }: SettingsPageProps) {
     const page = useRef<HTMLElement>(null);
     const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab);
     const [themePickerOpen, setThemePickerOpen] = useState(false);
     useEffect(() => {
         page.current?.querySelector<HTMLElement>('[role="tab"][data-state="active"]')?.focus();
     }, []);
-    const { theme, setTheme, fontSize, setFontSize, fontFamily, setFontFamily, fontFamilyCN, setFontFamilyCN, appFontSize, setAppFontSize, appFontFamily, setAppFontFamily, terminalTheme, setTerminalTheme, terminalPopupMenu, setTerminalPopupMenu, } = useSettingsStore();
+    const { theme, setTheme, fontSize, setFontSize, fontFamily, setFontFamily, fontFamilyCN, setFontFamilyCN, appFontSize, setAppFontSize, appFontFamily, setAppFontFamily, terminalTheme, setTerminalTheme, terminalCommandHighlight, setTerminalCommandHighlight, terminalLogHighlight, setTerminalLogHighlight, terminalPopupMenu, setTerminalPopupMenu, } = useSettingsStore();
     const currentThemeLabel = terminalThemes.find((t) => t.id === terminalTheme)?.label ?? '跟随应用';
     const tabs = isDesktopRuntime() && isTestBuild()
         ? [...baseTabs.slice(0, -1), { key: 'logs' as const, label: '日志', icon: FileText }, baseTabs.at(-1)!]
@@ -56,7 +60,7 @@ export function SettingsPage({ onBack, initialTab = 'appearance' }: SettingsPage
             event.stopPropagation();
             onBack();
         }}>
-      <Tabs className="settings-page-layout" orientation="vertical" value={activeTab} onValueChange={(value) => setActiveTab(value as SettingsTab)}>
+      <Tabs className="settings-page-layout" orientation="vertical" value={activeTab} onValueChange={(value) => { setActiveTab(value as SettingsTab); onTabChange?.(value as SettingsTab) }}>
         <aside className="settings-page-sidebar" aria-label="设置导航">
           <div className="settings-page-titlebar" data-eizhu-drag-region={isDesktopRuntime() || undefined}/>
           <div className="settings-page-back-row">
@@ -89,11 +93,11 @@ export function SettingsPage({ onBack, initialTab = 'appearance' }: SettingsPage
                 <div className="settings-card">
                   <div className="settings-field">
                     <div className="settings-field-info">
-                      <Label className="settings-field-label">主题</Label>
+                      <Label htmlFor="settings-theme" className="settings-field-label">主题</Label>
                       <span className="settings-field-desc">选择界面配色方案</span>
                     </div>
                     <Select value={theme} onValueChange={(value) => setTheme(value as 'light' | 'dark' | 'system')}>
-                      <SelectTrigger className="settings-select"><SelectValue placeholder="请选择"/></SelectTrigger>
+                      <SelectTrigger id="settings-theme" className="settings-select"><SelectValue placeholder="请选择"/></SelectTrigger>
                       <SelectContent>{themeOptions.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent>
                     </Select>
                   </div>
@@ -101,14 +105,14 @@ export function SettingsPage({ onBack, initialTab = 'appearance' }: SettingsPage
                   {/* 界面字体 */}
                   <div className="settings-field">
                     <div className="settings-field-info">
-                      <Label className="settings-field-label">
+                      <Label htmlFor="settings-app-font" className="settings-field-label">
                         <Type size={13} className="settings-field-icon"/>
                         界面字体
                       </Label>
                       <span className="settings-field-desc">软件界面使用的字体</span>
                     </div>
                     <Select value={appFontFamily} onValueChange={setAppFontFamily}>
-                      <SelectTrigger className="settings-select"><SelectValue placeholder="请选择"/></SelectTrigger>
+                      <SelectTrigger id="settings-app-font" className="settings-select"><SelectValue placeholder="请选择"/></SelectTrigger>
                       <SelectContent>{appFontFamilyOptions.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent>
                     </Select>
                   </div>
@@ -116,11 +120,11 @@ export function SettingsPage({ onBack, initialTab = 'appearance' }: SettingsPage
                   {/* 界面字体大小 */}
                   <div className="settings-field">
                     <div className="settings-field-info">
-                      <Label className="settings-field-label">界面字体大小</Label>
+                      <Label htmlFor="settings-app-size" className="settings-field-label">界面字体大小</Label>
                       <span className="settings-field-desc">界面文字的基础大小</span>
                     </div>
                     <div className="settings-number-group">
-                      <Input type="number" aria-label="界面字体大小" min={10} max={20} value={appFontSize} onChange={(e) => {
+                      <Input id="settings-app-size" type="number" aria-label="界面字体大小" min={10} max={20} value={appFontSize} onChange={(e) => {
             const v = Number(e.target.value);
             if (!isNaN(v))
                 setAppFontSize(v);
@@ -142,13 +146,13 @@ export function SettingsPage({ onBack, initialTab = 'appearance' }: SettingsPage
                 <div className="settings-card">
                   <div className="settings-field">
                     <div className="settings-field-info">
-                      <Label className="settings-field-label">
+                      <Label htmlFor="settings-terminal-theme" className="settings-field-label">
                         <Palette size={13} className="settings-field-icon"/>
                         终端主题
                       </Label>
                       <span className="settings-field-desc">终端颜色方案</span>
                     </div>
-                    <Button type="button" variant="outline" className="settings-theme-btn" onClick={() => setThemePickerOpen(true)}>
+                    <Button id="settings-terminal-theme" type="button" variant="outline" className="settings-theme-btn" onClick={() => setThemePickerOpen(true)}>
                       <span>{currentThemeLabel}</span>
                       <ChevronRight size={14}/>
                     </Button>
@@ -157,17 +161,33 @@ export function SettingsPage({ onBack, initialTab = 'appearance' }: SettingsPage
                   {/* 终端主题选择器 Dialog */}
                   <TerminalThemePicker open={themePickerOpen} onOpenChange={setThemePickerOpen} value={terminalTheme} onChange={setTerminalTheme}/>
 
+                  <div className="settings-field">
+                    <div className="settings-field-info">
+                      <Label htmlFor="settings-terminal-command-marker" className="settings-field-label">命令块标识</Label>
+                      <span id="settings-terminal-command-marker-desc" className="settings-field-desc">用右侧竖条标出每次命令及其输出的范围，保留终端原配色。支持 Bash 4.4+、Zsh 和 Fish。</span>
+                    </div>
+                    <Switch id="settings-terminal-command-marker" aria-describedby="settings-terminal-command-marker-desc" checked={terminalCommandHighlight} onCheckedChange={setTerminalCommandHighlight}/>
+                  </div>
+
+                  <div className="settings-field">
+                    <div className="settings-field-info">
+                      <Label htmlFor="settings-terminal-log-highlight" className="settings-field-label">日志关键词高亮</Label>
+                      <span id="settings-terminal-log-highlight-desc" className="settings-field-desc">为无颜色输出中的 ERROR、WARN、INFO 等日志等级补充颜色。</span>
+                    </div>
+                    <Switch id="settings-terminal-log-highlight" aria-describedby="settings-terminal-log-highlight-desc" checked={terminalLogHighlight} onCheckedChange={setTerminalLogHighlight}/>
+                  </div>
+
                   {/* 终端字体（英文） */}
                   <div className="settings-field">
                     <div className="settings-field-info">
-                      <Label className="settings-field-label">
+                      <Label htmlFor="settings-terminal-font-en" className="settings-field-label">
                         <Type size={13} className="settings-field-icon"/>
                         终端字体（英文）
                       </Label>
                       <span className="settings-field-desc">等宽字体，用于显示代码和英文字符</span>
                     </div>
                     <Select value={fontFamily} onValueChange={setFontFamily}>
-                      <SelectTrigger className="settings-select"><SelectValue placeholder="请选择"/></SelectTrigger>
+                      <SelectTrigger id="settings-terminal-font-en" className="settings-select"><SelectValue placeholder="请选择"/></SelectTrigger>
                       <SelectContent>{terminalFontFamilyOptions.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent>
                     </Select>
                   </div>
@@ -175,14 +195,14 @@ export function SettingsPage({ onBack, initialTab = 'appearance' }: SettingsPage
                   {/* 终端字体（中文） */}
                   <div className="settings-field">
                     <div className="settings-field-info">
-                      <Label className="settings-field-label">
+                      <Label htmlFor="settings-terminal-font-cn" className="settings-field-label">
                         <Type size={13} className="settings-field-icon"/>
                         终端字体（中文）
                       </Label>
                       <span className="settings-field-desc">中文字体，用于显示中文字符</span>
                     </div>
                     <Select value={fontFamilyCN} onValueChange={setFontFamilyCN}>
-                      <SelectTrigger className="settings-select"><SelectValue placeholder="请选择"/></SelectTrigger>
+                      <SelectTrigger id="settings-terminal-font-cn" className="settings-select"><SelectValue placeholder="请选择"/></SelectTrigger>
                       <SelectContent>{terminalFontFamilyCNOptions.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent>
                     </Select>
                   </div>
@@ -190,11 +210,11 @@ export function SettingsPage({ onBack, initialTab = 'appearance' }: SettingsPage
                   {/* 终端字体大小 */}
                   <div className="settings-field">
                     <div className="settings-field-info">
-                      <Label className="settings-field-label">终端字体大小</Label>
+                      <Label htmlFor="settings-terminal-size" className="settings-field-label">终端字体大小</Label>
                       <span className="settings-field-desc">终端文字的大小</span>
                     </div>
                     <div className="settings-number-group">
-                      <Input type="number" aria-label="终端字体大小" min={8} max={32} value={fontSize} onChange={(e) => {
+                      <Input id="settings-terminal-size" type="number" aria-label="终端字体大小" min={8} max={32} value={fontSize} onChange={(e) => {
             const v = Number(e.target.value);
             if (!isNaN(v))
                 setFontSize(v);
@@ -203,16 +223,19 @@ export function SettingsPage({ onBack, initialTab = 'appearance' }: SettingsPage
                     </div>
                   </div>
 
-                  {/* 自动补全分隔线 */}
-                  <div className="settings-divider"/>
+                </div>
+              </div>
+              <div className="settings-section">
+                <div className="settings-section-title">输入与补全</div>
+                <div className="settings-card">
 
                   {/* 弹出菜单补全 */}
                   <div className="settings-field">
                     <div className="settings-field-info">
-                      <Label className="settings-field-label">自动补全</Label>
+                      <Label htmlFor="settings-terminal-completion" className="settings-field-label">自动补全</Label>
                       <span className="settings-field-desc">输入时显示浮动补全面板，↑/↓ 选择，Enter 应用，Tab 透传给远端 shell。</span>
                     </div>
-                    <Switch checked={terminalPopupMenu} onCheckedChange={setTerminalPopupMenu}/>
+                    <Switch id="settings-terminal-completion" checked={terminalPopupMenu} onCheckedChange={setTerminalPopupMenu}/>
                   </div>
                 </div>
               </div>
@@ -220,6 +243,7 @@ export function SettingsPage({ onBack, initialTab = 'appearance' }: SettingsPage
             </TabsContent>
 
             <TabsContent value="backup" className="settings-content"><BackupPanel /></TabsContent>
+            <TabsContent value="ai" className="settings-content"><AiPanel /></TabsContent>
 
             <TabsContent value="account" className="settings-content"><AccountPanel /></TabsContent>
 

@@ -9,8 +9,18 @@ const path = z
   .min(1)
   .max(32768)
   .refine((v) => !v.includes('\0'))
+const completionOperand = z
+  .string()
+  .max(32768)
+  .refine((v) => !Array.from(v).some((c) => c.charCodeAt(0) < 32 || c.charCodeAt(0) === 127))
 const status = z.enum(['connecting', 'connected', 'reconnecting', 'suspended', 'disconnected', 'error'])
 const response = z.strictObject({ session_id: id, status: z.string().max(40) })
+const endpoint = z.strictObject({
+  host: z.string().min(1).max(512),
+  port: z.int().min(1).max(65535),
+  username: z.string().max(512),
+})
+const sessionTarget = endpoint.extend({ profile_id: id, profile_name: z.string().max(512) })
 export const authPromptSchema = z.strictObject({
   request_id: id,
   profile_id: id,
@@ -22,10 +32,12 @@ export const authPromptSchema = z.strictObject({
 })
 export const connectionStateSchema = z.strictObject({
   session_id: id,
+  target: sessionTarget.optional(),
   status: z.string().max(40),
   stage: z.string().max(80),
   message: z.string().max(1024),
   error: z.string().max(1024).optional(),
+  error_code: z.string().max(80).optional(),
   waiting_for_host_key: z.boolean().optional(),
   host_key_request_id: id.optional(),
   host_key_fingerprint: z.string().max(256).optional(),
@@ -46,10 +58,8 @@ export const sessionMessageSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('auth_request_closed'), payload: z.strictObject({ request_id: id }) }),
   z.strictObject({
     type: z.literal('metadata'),
-    payload: z.strictObject({
+    payload: sessionTarget.extend({
       session_id: id,
-      host: z.string(),
-      username: z.string(),
       protocol: z.literal('ssh'),
     }),
   }),
@@ -78,12 +88,13 @@ export const sessionMessageSchema = z.discriminatedUnion('type', [
     }),
   }),
 ])
+export const isPublicTunnelBind = (host: string): boolean => host === '0.0.0.0' || host === '::'
 export const tunnelConfigSchema = z.strictObject({
   id: z.string().max(160),
   name: z.string().trim().min(1).max(512),
   profile_id: id,
   kind: z.enum(['local', 'remote', 'dynamic']),
-  bind_host: z.enum(['127.0.0.1', '::1', 'localhost']),
+  bind_host: z.enum(['127.0.0.1', '::1', 'localhost', '0.0.0.0', '::']),
   bind_port: z.int().min(0).max(65535),
   target_host: z
     .string()
@@ -123,6 +134,7 @@ export const sshGlobalEventSchema = z.union([
     workspaceGeneration: z.int(),
   }),
 ])
+export type SshGlobalEvent = z.infer<typeof sshGlobalEventSchema>
 const generator = z.enum([
   'paths',
   'git-branches',
@@ -154,11 +166,65 @@ const testResult = z.strictObject({
   ),
 })
 const num = z.number().finite()
+const nonnegative = z.number().finite().nonnegative()
+const percent = nonnegative.max(100)
+export const serverMetricKindSchema = z.enum(['cpu', 'memory', 'disk', 'network'])
+export type ServerMetricKind = z.infer<typeof serverMetricKindSchema>
+export const serverMetricsSummarySchema = z.strictObject({
+  cpu: percent,
+  mem_percent: percent,
+  disk_percent: percent,
+  net_rx: nonnegative,
+  net_tx: nonnegative,
+})
+export type ServerMetricsSummary = z.infer<typeof serverMetricsSummarySchema>
+export const serverMetricDetailSchema = z.discriminatedUnion('kind', [
+  z.strictObject({
+    kind: z.literal('cpu'),
+    cpu: percent,
+    cpu_detail: z.array(percent).max(4096),
+    cpu_mhz: nonnegative,
+  }),
+  z.strictObject({
+    kind: z.literal('memory'),
+    mem_used: nonnegative,
+    mem_total: nonnegative,
+    mem_percent: percent,
+    mem_detail: z.array(z.strictObject({ name: z.string().max(512), percent, rss: nonnegative })).max(6),
+  }),
+  z.strictObject({
+    kind: z.literal('disk'),
+    disk_used: nonnegative,
+    disk_total: nonnegative,
+    disk_percent: percent,
+    volumes: z
+      .array(
+        z.strictObject({
+          filesystem: z.string().max(4096),
+          path: z.string().max(32768),
+          used: nonnegative,
+          total: nonnegative,
+          percent,
+        }),
+      )
+      .max(256),
+  }),
+  z.strictObject({
+    kind: z.literal('network'),
+    net_rx: nonnegative,
+    net_tx: nonnegative,
+    net_detail: z
+      .array(z.strictObject({ name: z.string().max(256), rx: nonnegative, tx: nonnegative }))
+      .max(512),
+  }),
+])
+export type ServerMetricDetail = z.infer<typeof serverMetricDetailSchema>
 export const ssh = {
   'session.create': {
     input: z.strictObject({
       request: z.strictObject({
         profile_id: id,
+        expected_target: endpoint.omit({ username: true }).optional(),
         cols: z.int().min(1).max(1000).optional(),
         rows: z.int().min(1).max(1000).optional(),
         confirmed_host_key_fingerprint: z.string().optional(),
@@ -226,6 +292,10 @@ export const ssh = {
           ])
           .optional(),
         all: z.boolean().optional(),
+        gitDirectories: z.array(completionOperand).max(8).optional(),
+        dockerHost: completionOperand.optional(),
+        kubeconfig: completionOperand.optional(),
+        systemdUser: z.boolean().optional(),
       }),
       cwd: path.optional(),
     }),
@@ -266,7 +336,7 @@ export const ssh = {
   'tunnel.list': { input: empty, output: z.array(tunnelConfigSchema).max(128) },
   'tunnel.save': { input: z.strictObject({ config: tunnelConfigSchema }), output: tunnelConfigSchema },
   'tunnel.delete': { input: byId, output: ready },
-  'tunnel.start': { input: byId, output: tunnelStatusSchema },
+  'tunnel.start': { input: byId.extend({ confirmedConfig: tunnelConfigSchema.optional() }), output: tunnelStatusSchema },
   'tunnel.stop': { input: byId, output: ready },
   'tunnel.statuses': { input: empty, output: z.array(tunnelStatusSchema).max(128) },
   'serverDetail.create': {
@@ -307,23 +377,13 @@ export const ssh = {
       cpu_mhz: num,
     }),
   },
-  'serverDetail.getMetrics': {
+  'serverDetail.getSummary': {
     input: z.strictObject({ sessionId: id }),
-    output: z.strictObject({
-      cpu: num,
-      cpu_detail: z.array(num),
-      mem_used: num,
-      mem_total: num,
-      mem_percent: num,
-      mem_detail: z.array(z.strictObject({ name: z.string(), percent: num, rss: num })),
-      disk_used: num,
-      disk_total: num,
-      disk_percent: num,
-      cpu_mhz: num,
-      net_rx: num,
-      net_tx: num,
-      net_detail: z.array(z.strictObject({ name: z.string(), rx: num, tx: num })),
-    }),
+    output: serverMetricsSummarySchema,
+  },
+  'serverDetail.getMetricDetail': {
+    input: z.strictObject({ sessionId: id, kind: serverMetricKindSchema }),
+    output: serverMetricDetailSchema,
   },
 } as const
 export function isSshOperation(value: string): value is keyof typeof ssh {

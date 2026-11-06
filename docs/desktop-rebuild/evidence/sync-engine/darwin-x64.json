@@ -1,0 +1,118 @@
+{
+  "verifiedAt": "2026-10-27T17:33:09.858Z",
+  "sourceBase": "11685512ca65f6da5646244d69d00b84b1b5036d",
+  "sourceDigest": "b92d192fff46475cb25243ad1b50a92d1ecd638e19a7fd164fd24a8afed3720c",
+  "sourceState": "uncommitted batch 3 workspace changes",
+  "platform": "darwin",
+  "arch": "x64",
+  "version": "0.5.0-test.340.11685512",
+  "channel": "test",
+  "artifact": {
+    "path": "artifacts/desktop/eizhu-0.5.0-test.340.11685512-mac-x64.dmg",
+    "bytes": 158143354,
+    "sha256": "833fc1d9e432b872514b85fab5919d17f6399aa72d8015c3b65ec6aab0010ee3",
+    "signed": false,
+    "notarized": false
+  },
+  "smokeReportSha256": "9296f84b370f92d399edf903167858651a7cb1b013813d366eecfcf5e3f97cc8",
+  "packaged": true,
+  "electron": "44.9.0",
+  "node": "24.22.0",
+  "schema": {
+    "global": 2,
+    "business": 3
+  },
+  "checks": {
+    "types": true,
+    "lint": true,
+    "baselineVerify": true,
+    "architecture": true,
+    "foundationTests": 114,
+    "webTests": 293,
+    "baselineTests": 10
+  },
+  "syncEngine": {
+    "passed": true,
+    "synthetic": true,
+    "realBackend": false,
+    "realDualDevice": false,
+    "checks": [
+      "固定 Rust 包装、条目与墓碑向量；错误密码/身份篡改拒绝；密码轮换保留数据密钥",
+      "并发初始包装 CAS 得到同一 DEK；确认前不上传；默认预览合并离线且保留原库；第二设备应用不回声上传",
+      "冻结上传后继续编辑；旧确认只清理覆盖修订，新编辑保留并在下一批上传",
+      "提交响应丢失、重启恢复先查原请求；确认不存在后逐字节重发相同密文和 requestId",
+      "固定水位分页；双端并发编辑、删除冲突保留；选择时复核远端修订并避免覆盖新变化",
+      "不合法依赖删除保留有效图并持久化冲突；重启保留，后续合法关联修改可恢复",
+      "游标过期通过快照核对并保留本地待同步；密码轮换重包装同一 DEK，新设备使用新密码",
+      "预览绑定离线及账号本地修订；整体替换携带完整集合、水位和下一 epoch 密文；其他设备核对时保留本地编辑",
+      "超限整体替换明确拒绝且不拆分；远端业务/审计/影子/冲突/游标事务中途失败整体回滚"
+    ],
+    "devices": 2,
+    "fixedCryptoVectors": true,
+    "rememberedUnlock": true,
+    "unknownRequestRecovery": true,
+    "oldAckPreservesNewEdits": true,
+    "noRemoteEcho": true,
+    "dependencyConflicts": true,
+    "atomicCursor": true,
+    "replaceLimit": true
+  },
+  "syncDesktop": {
+    "passed": true,
+    "synthetic": true,
+    "realBackend": false,
+    "realEmail": false,
+    "rendererPasswordForm": true,
+    "previewCancelNoUpload": true,
+    "confirmedOfflineMerge": true,
+    "automaticOutbox": true,
+    "hintsNotConfirmations": true,
+    "singleSseConnection": true,
+    "sseReconnect": true,
+    "pauseReleasesSse": true,
+    "pausePreservesOutbox": true,
+    "lostHttpResponseNotReplayed": true,
+    "requestLookupRecovery": true,
+    "restartUnlockCache": true,
+    "logoutClearsUnlock": true,
+    "offlineOriginalRetained": true,
+    "screenshots": [
+      "sync-initialized-light.png",
+      "sync-unlocked-dark-narrow.png"
+    ]
+  },
+  "rendererIsolation": {
+    "node": "undefined",
+    "require": "undefined",
+    "officialBackup": "STAGE_NOT_READY"
+  },
+  "regression": {
+    "accountFoundation": true,
+    "accountClosure": true,
+    "stage2": true,
+    "stage3": true,
+    "stage3Storage": true,
+    "stage4": true,
+    "stage5": true,
+    "stage6": true,
+    "workspaceTabs": true
+  },
+  "screenshots": [
+    {
+      "path": "sync-initialized-light.png",
+      "sha256": "d63126699f73ff3112df54a6bd24da7b10fe91ec04ec4f0f1ae3f01f65b4f6ab"
+    },
+    {
+      "path": "sync-unlocked-dark-narrow.png",
+      "sha256": "084d086c56636369575f688d4c3090229c85b8b48f1e4df78f10820229c56ee7"
+    }
+  ],
+  "remaining": [
+    "真实后端账号、邮件与双端验收",
+    "其他目标平台",
+    "真实系统密钥库",
+    "签名公证",
+    "实际代理/TLS故障",
+    "8 小时稳定性"
+  ]
+}

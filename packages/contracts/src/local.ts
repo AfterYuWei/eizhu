@@ -122,28 +122,6 @@ export const statsSchema = z.strictObject({
   profiles: z.int().nonnegative(),
   snippets: z.int().nonnegative(),
 })
-const change = z.strictObject({
-  added: z.int().nonnegative(),
-  changed: z.int().nonnegative(),
-  unchanged: z.int().nonnegative(),
-  removedInReplace: z.int().nonnegative(),
-})
-export const restoreSchema = z.strictObject({
-  token: z.uuid(),
-  stats: statsSchema,
-  changes: z.strictObject({ groups: change, vault: change, profiles: change, snippets: change }),
-  credentialMode: z.enum(['none', 'plain', 'encrypted']),
-  exportedAt: time,
-  source: z.strictObject({
-    kind: z.enum(['file', 'safety', 'local_version', 'cloud']),
-    version: z.int().nonnegative().optional(),
-    origin: label.optional(),
-    providerName: label.optional(),
-    object: label.optional(),
-    name: label.optional(),
-    createdAt: time.optional(),
-  }),
-})
 const previewSchema = z.strictObject({
   credential_mode: z.enum(['none', 'plain', 'encrypted']),
   exported_at: time,
@@ -171,7 +149,9 @@ for (let depth = 0; depth < 3; depth++)
       second: splitTree,
     }),
   ])
+export const sidebarGroupsSchema = z.record(id, z.boolean())
 const localStateWrite = z.discriminatedUnion('key', [
+  z.strictObject({ key: z.literal('sidebar_groups'), value: sidebarGroupsSchema }),
   z.strictObject({
     key: z.literal('history_settings'),
     value: z.strictObject({
@@ -236,20 +216,20 @@ export const local = {
   'audit.list': { input: z.strictObject({ limit: z.int().min(1).max(500) }), output: z.array(auditSchema) },
   'audit.clear': { input: empty, output: ready },
   'localState.read': {
-    input: z.strictObject({ key: z.enum(['history_settings', 'terminal_layout', 'shortcuts']) }),
+    input: z.strictObject({ key: z.enum(['history_settings', 'terminal_layout', 'shortcuts', 'sidebar_groups']) }),
     output: z.unknown().nullable(),
   },
   'localState.write': {
     input: localStateWrite,
     output: ready,
   },
+  'backup.selectDirectory': { input: empty, output: z.string().min(1).max(32768).nullable() },
   'backup.pickFile': { input: empty, output: z.strictObject({ name: label, reference: id }).nullable() },
   'backup.export': {
     input: z.strictObject({ mode: z.enum(['none', 'plain', 'encrypted']), password: secret.optional() }),
     output: z.string().nullable(),
   },
   'backup.preview': { input: fileInput, output: previewSchema },
-  'backup.prepareRestore': { input: fileInput, output: restoreSchema },
   'backup.import': {
     input: fileInput.extend({ strategy: z.enum(['skip', 'overwrite', 'regenerate']) }),
     output: z.strictObject({
@@ -264,15 +244,6 @@ export const local = {
         .optional(),
     }),
   },
-  'backup.applyRestore': {
-    input: z.strictObject({ token: z.uuid(), mode: z.enum(['merge', 'replace']) }),
-    output: ready,
-  },
-  'backup.safetyVersions': {
-    input: empty,
-    output: z.array(z.strictObject({ id: z.uuid(), createdAt: time })),
-  },
-  'backup.previewSafety': { input: byId, output: restoreSchema },
   'document.pick': {
     input: z.strictObject({ multiple: z.boolean(), mimeTypes: z.array(label).max(16) }),
     output: z.array(descriptor),

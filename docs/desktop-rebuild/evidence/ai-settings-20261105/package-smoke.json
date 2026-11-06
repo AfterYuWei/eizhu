@@ -1,0 +1,65 @@
+{
+  "platform": "darwin",
+  "arch": "x64",
+  "packaged": true,
+  "aiDesktop": {
+    "passed": true,
+    "toolsetVersion": 2,
+    "protocols": [
+      "responses",
+      "chat",
+      "anthropic"
+    ],
+    "multiSession": true,
+    "approvalRequired": true,
+    "duplicateRejected": true,
+    "currentTerminalExecution": true,
+    "pendingTerminalInputBlocked": true,
+    "finalAnswerRetained": true,
+    "stopCancelsLongTasks": true,
+    "incompleteStreamRejected": true,
+    "encryptedStorage": true,
+    "settingsSelectedConfiguration": true,
+    "settingsEnableSwitch": true,
+    "settingsResponsiveLayout": true,
+    "remoteFileConflictAndEdit": true,
+    "sftp": "installed-openssh-subsystem",
+    "model": "loopback-synthetic",
+    "ssh": "loopback-synthetic",
+    "screenshots": [
+      "ai-v2-approval.png",
+      "ai-v2-light.png",
+      "ai-v2-dark.png",
+      "ai-v2-narrow.png",
+      "ai-settings-provider.png",
+      "ai-settings-agent-light.png",
+      "ai-settings-agent-dark.png",
+      "ai-settings-agent-narrow.png",
+      "ai-settings-disabled.png"
+    ]
+  },
+  "stage3Storage": {
+    "passed": true,
+    "retention": "500/30d",
+    "aiStorageMigrationAndEncryption": true,
+    "disabled": true,
+    "encrypted": true,
+    "persisted": true,
+    "excludedFromBackup": true,
+    "tunnelReferenceProtected": true
+  },
+  "allOtherGates": {
+    "stage2": true,
+    "accountFoundation": true,
+    "syncEngine": true,
+    "accountClosure": true,
+    "syncDesktop": true,
+    "stage3": true,
+    "stage4": true,
+    "stage5": true,
+    "stage6": true,
+    "workspaceTabs": true
+  },
+  "projectAppUnregisteredAndRemoved": true,
+  "developmentAndInstalledAppUntouched": true
+}

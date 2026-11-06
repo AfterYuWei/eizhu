@@ -17,11 +17,12 @@ interface ServerPickerProps {
 }
 /** Server selection dialog. Servers are grouped by their group (like the
  *  sidebar), with ungrouped servers rendered last. The currently active
- *  terminal tab's server is highlighted with an accent border. Picking a
+ *  terminal tab's server is highlighted with a neutral background. Picking a
  *  server connects it as a new tab in the target pane. */
 export function ServerPicker({ open, pane, onClose }: ServerPickerProps) {
     const { tabs, activeTabId } = useSessionStore();
     const servers = useSftpStore((s) => s.servers);
+    const loadServers = useSftpStore((s) => s.loadServers);
     const connectServer = useSftpStore((s) => s.connectServer);
     const [selectedId, setSelectedId] = useState<string | null>(null);
     const [groups, setGroups] = useState<Group[]>([]);
@@ -29,6 +30,7 @@ export function ServerPicker({ open, pane, onClose }: ServerPickerProps) {
     useEffect(() => {
         if (!open)
             return;
+        void loadServers();
         let cancelled = false;
         groupApi.list().then((list) => {
             if (!cancelled)
@@ -37,9 +39,9 @@ export function ServerPicker({ open, pane, onClose }: ServerPickerProps) {
         return () => {
             cancelled = true;
         };
-    }, [open]);
+    }, [open, loadServers]);
     // Resolve the active terminal tab's host as the "recommended" server.
-    const activeTab = tabs.find((t) => t.id === activeTabId && t.kind === 'terminal');
+    const activeTab = tabs.find((t) => t.id === activeTabId);
     const recommendedId = activeTab?.host ? `${activeTab.host}:${activeTab.port ?? 22}` : null;
     // Group servers like the sidebar: grouped servers under their group,
     // loose (no group / stale group id) servers rendered last.
@@ -100,7 +102,7 @@ export function ServerPicker({ open, pane, onClose }: ServerPickerProps) {
       <span className="sftp-picker-grp-cnt">{count}</span>
     </div>);
     return (<Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent showCloseButton={false} className="w-auto max-w-none gap-0 border-0 bg-transparent p-0 shadow-none">
+      <DialogContent showCloseButton={false} className="sftp-dialog w-auto max-w-none gap-0 border-0 bg-transparent p-0 shadow-none">
         <DialogTitle className="sr-only">选择服务器</DialogTitle>
         <div className="sftp-picker">
         <div className="sftp-picker-hdr">

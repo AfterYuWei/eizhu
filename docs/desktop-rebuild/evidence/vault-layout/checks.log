@@ -1,0 +1,361 @@
+npm run check
+exit: 0
+
+> check
+> tsc -p tsconfig.node.json --noEmit && npm run check --workspace @eizhu/web
+
+
+> check
+> tsc -b
+
+
+
+npm run lint
+exit: 0
+
+> lint
+> eslint apps/desktop packages scripts/*.mjs && npm run lint --workspace @eizhu/web
+
+
+> lint
+> eslint .
+
+
+
+npm test
+exit: 0
+
+> test
+> npm run test:foundation && npm run test:unit --workspace @eizhu/web && npm run baseline:test
+
+
+> test:foundation
+> node --experimental-strip-types --test packages/*/src/**/*.test.ts apps/desktop/src/main/*.test.ts scripts/desktop-build-settings.test.mjs scripts/prepare-desktop-release.test.mjs
+
+✔ file grants reject arbitrary paths, wrong windows, contexts, kinds and released references (26.038182ms)
+✔ shutdown message leaves stop pending until the real exit event and then removes its listener (12.613947ms)
+✔ graceful deadline kills the child but still waits for its exit event (21.157381ms)
+✔ failed kill rejects and removes the exit listener (7.622698ms)
+✔ successful forced kill still rejects at its deadline if no exit arrives and cleans up (11.549513ms)
+✔ postMessage failure switches directly to force kill and still waits for exit (1.435088ms)
+✔ missing pid is a no-op (0.634398ms)
+✔ asset protocol rejects another host, scheme, encoded traversal and path separators (2.50416ms)
+✔ page authorization checks exact origin instead of URL prefix matching (0.742621ms)
+✔ main clears an unchanged secret after 30 seconds and preserves later user copies (9.195103ms)
+✔ candidate is pinned, old token expires, cancelled close never installs, retry uses verified cache (10.647785ms)
+✔ GitHub defaults select explicit test/latest channels; switching never permits downgrades (0.810438ms)
+✔ HTTPS overrides keep their target directory and latest metadata while other channels use GitHub (0.452548ms)
+✔ wrong-channel metadata is rejected even when the updater reports no newer version (0.370024ms)
+✔ real GitHub provider isolates preview and stable releases when a stable app opts into test (13.087434ms)
+✔ busy update prevents provider replacement; failed download invalidates candidate and redacts errors (1.693863ms)
+✔ release metadata rejects external paths, traversal, wrong channel and missing digest (4.3506ms)
+✔ synchronous installer errors cannot be reported as a successful install (0.910786ms)
+✔ scope rejects stale instances, workspaces and generations independently (1.807576ms)
+✔ only exact request envelopes, bounded settings and http(s) external links are accepted (7.840957ms)
+✔ errors never serialize raw third-party details and preserve intentional structured context (5.919528ms)
+✔ stage 2 exposes local domains while SSH, accounts and cloud remain reserved (24.370919ms)
+✔ list output schemas reject leaked credentials and invalid restore sources (2.62648ms)
+✔ redacts multiline keys, quoted passwords, bearer tokens, query tokens and URL credentials (33.972364ms)
+✔ 文件 IPC 拒绝越界分块、NUL、遍历文件名及伪造事件 (34.069977ms)
+✔ SSH contract rejects arbitrary completion programs, unsafe listeners and invalid input (36.294273ms)
+✔ desktop OAuth binds single-use state, PKCE, loopback path and provider revision (126.126358ms)
+✔ editing a target invalidates its outstanding OAuth callback before token exchange (48.167914ms)
+✔ cloud contracts reject path traversal, embedded credentials, unsafe counts, corrupt indices and official targets (10.627436ms)
+✔ WebDAV creates only its namespaced collection, sends conditional writes and never follows redirects (8.725994ms)
+✔ malformed index, foreign namespace, duplicate versions and HTTP failures cannot become an empty cloud (2.004795ms)
+✔ S3 SigV4 matches the AWS documented GET test vector (8.682764ms)
+✔ OneDrive download uses metadata ETag and never forwards bearer tokens to the download host (2.054849ms)
+✔ Drive refuses ambiguous same-name folders instead of choosing an arbitrary destination (2.010556ms)
+✔ daily schedules use local time, run once after missed time and combine with interval schedules (15.472101ms)
+✔ Ed25519 preserves two leading zero public-key octets (plain) (526.975421ms)
+✔ Ed25519 preserves two leading zero public-key octets (encrypted) (1431.939895ms)
+✔ fresh restricted key persists privately and is reused; never reads an old app directory (30.601129ms)
+✔ locked system key is preserved, never falls back or generates a new key (69.564732ms)
+✔ existing data without device key cannot initialize a replacement key (30.509237ms)
+✔ close aborts first, waits all owned resources in reverse order, is idempotent (5.291742ms)
+✔ 本机文件领域不能读取、列出或重命名应用私有目录及其别名 (19.748682ms)
+✔ 文本保存保留权限、换行和内容哈希，已有文件另存不覆盖 (71.806812ms)
+✔ 相同 mtime 的远端变化仍以内容哈希拒绝覆盖 (47.903048ms)
+✔ 编辑器拒绝非法 UTF-8、二进制和超大文本 (68.288962ms)
+✔ 符号链接及链接目录不能用于修改、读取或归档 (10.758853ms)
+✔ 目录 tar.gz 与 ZIP 流携带真实字节、空目录及中文路径 (23.937828ms)
+✔ 上传按序确认，暂停保留检查点，重启手动恢复并校验原文件 (103.670777ms)
+✔ 上传仅在校验与提交后替换目标；目标变化和取消均保留原文件 (28.985753ms)
+✔ 五路传输上限与取消释放通道 (29.794578ms)
+✔ 并发发起上传仍严格限制五路，篡改暂存文件禁止拼接 (31.162059ms)
+✔ 重名目录整体重命名，保留原目标并拒绝同一文件系统的自身复制 (37.239714ms)
+✔ 源文件在排队期间变化，恢复后拒绝提交目标 (28.843648ms)
+✔ fixed generators quote path and namespace operands and never run package scripts (2.606071ms)
+✔ metrics preserve CPU, memory, disk and network delta semantics (2.029662ms)
+✔ SOCKS destination encoding preserves IPv4, IPv6, mapped IPv4 and remote DNS (13.66181ms)
+✔ route resolves vault username and credentials, orders multiple jumps and omits unrelated records (8.255493ms)
+✔ test connection patch cannot retain password when auth changes to key or alter the stored profile (5.986483ms)
+✔ binary terminal waits for real byte acknowledgements and keeps replay bounded (138.081231ms)
+✔ replacing a terminal port cannot retain an old consumer (1.057761ms)
+✔ worker queue is bounded; closing drains accepted jobs and rejects new work (175.075375ms)
+✔ worker crash rejects active and queued jobs without replay or orphan promises (208.131914ms)
+✔ queued cancellation frees capacity and removes its abort listener (163.13029ms)
+✔ active cancellation waits for worker completion and leaves the caller buffer owned by the caller (126.110899ms)
+✔ unserializable input rejects immediately without poisoning the worker or leaking timers (68.388389ms)
+✔ VERSION/channel/target share one deterministic build configuration (488.320236ms)
+✔ update feeds isolate Electron, channel and target; reject unsafe URLs (497.333178ms)
+✔ release requires all four targets and hashes the exact copied installer bytes (214.501054ms)
+✔ stable: updater parses platform manifests with exact installer SHA-512 and both macOS architectures (70.366493ms)
+✔ test: updater parses platform manifests with exact installer SHA-512 and both macOS architectures (63.85119ms)
+✔ release rejects a missing target or installer (28.222484ms)
+✔ release rejects mismatched provenance, failed smoke and incomplete load (38.105336ms)
+✔ publication retry requires this repository, main, the stable workflow and four successful package jobs (1.58574ms)
+ℹ tests 73
+ℹ suites 0
+ℹ pass 73
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 2626.32761
+
+> test:unit
+> vitest run
+
+
+ RUN  v5.0.5 /Users/yuwei/Desktop/Projects/yuweinfo/XControl/apps/web
+
+
+ Test Files  64 passed (64)
+      Tests  266 passed (266)
+   Start at  15:51:10
+   Duration  10.87s (environment 47%, tests 26%, import 24%, transform 3%, worker 1%)
+
+    Isolate  64 workers spawned · ~1.27s startup each (spawn + environment, per file)
+             at least ~4.15s faster with isolate: false — reuses workers across files instead of one per file
+
+
+> baseline:test
+> node --test scripts/desktop-baseline.test.mjs
+
+✔ frozen source, UI assets and original Rust backup/sync vectors verify independently in Node (626.478802ms)
+✔ wrong password, format AAD and modified authentication tags reject original exporter ciphertext (246.886605ms)
+✔ sync ciphertext is bound to user, type, ID, revision, epoch, key version and deletion (1.933692ms)
+✔ encrypted OpenSSH specimen contains a real password-protected private key and dependency graph (1.272754ms)
+✔ none specimens never retain vault bodies, references or proxy/inline secrets (1.034698ms)
+✔ a changed frozen fixture is rejected before any cryptographic or UI comparison (40.700787ms)
+✔ adding an unreviewed file cannot silently expand the frozen evidence set (34.065468ms)
+✔ acceptance coverage rejects orphan mappings and duplicate interfaces (5.716177ms)
+✔ fixture lookup rejects paths outside the evidence directory (0.559007ms)
+✔ legacy interfaces can be reconstructed from the frozen Git source after deleting the old runtime (4290.022025ms)
+ℹ tests 10
+ℹ suites 0
+ℹ pass 10
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 5400.427693
+
+
+npm run baseline:verify
+exit: 0
+
+> baseline:verify
+> node scripts/verify-desktop-baseline.mjs --check-source
+
+{
+  "sourceCommit": "d8a20e0f77ab04af4a4a729f94884a68c4022a5f",
+  "cases": 39,
+  "commands": 183,
+  "events": 7,
+  "assets": 37,
+  "backupFiles": 7,
+  "rejectedBackupFiles": 10,
+  "syncItems": 2,
+  "browserScreenshots": 10,
+  "nativeEvidence": "pending",
+  "userApprovalAtCapture": "pending"
+}
+
+
+npm run desktop:build
+exit: 0
+
+> desktop:build
+> node scripts/build-desktop.mjs
+
+vite v8.3.4 building ssr environment for production...
+transforming...
+✓ 138 modules transformed.
+rendering chunks...
+apps/desktop/out/main/chunks/rolldown-runtime-VH7oDXx4.cjs    1.12 kB
+apps/desktop/out/main/compute.cjs                             3.40 kB
+apps/desktop/out/main/stage3.cjs                              4.10 kB
+apps/desktop/out/main/chunks/client-Dv9G-RE2.cjs              4.71 kB
+apps/desktop/out/main/chunks/model-B8bxyiLJ.cjs               8.38 kB
+apps/desktop/out/main/chunks/backup-B3MFIeu3.cjs             11.49 kB
+apps/desktop/out/main/database.cjs                           12.15 kB
+apps/desktop/out/main/chunks/network-myC8HGlq.cjs            13.08 kB
+apps/desktop/out/main/stage2.cjs                             15.22 kB
+apps/desktop/out/main/chunks/network-C5rdJfS8.cjs            17.35 kB
+apps/desktop/out/main/chunks/store-BHQakrPb.cjs              34.97 kB
+apps/desktop/out/main/index.cjs                              55.35 kB
+apps/desktop/out/main/chunks/smoke-v28UQoIj.cjs             100.89 kB
+apps/desktop/out/main/runtime.cjs                           140.04 kB
+apps/desktop/out/main/chunks/src-DH1LMuG1.cjs               177.75 kB
+
+✓ built in 102ms
+vite v8.3.4 building ssr environment for production...
+
+ WARN  inlineDynamicImports option is deprecated, please use codeSplitting: false instead.
+
+transforming...
+✓ 89 modules transformed.
+rendering chunks...
+apps/desktop/out/preload/index.cjs  184.32 kB
+
+✓ built in 47ms
+vite v8.3.4 building client environment for production...
+transforming...
+✓ 3421 modules transformed.
+rendering chunks...
+apps/desktop/out/renderer/smoke.html                                   0.72 kB
+apps/desktop/out/renderer/index.html                                   0.77 kB
+apps/desktop/out/renderer/assets/fnos-D9Pn5BoR.png                     5.01 kB
+apps/desktop/out/renderer/assets/amazon-linux-Bux-8bZR.png             9.88 kB
+apps/desktop/out/renderer/assets/oracle-linux-B33_5dx7.png            10.75 kB
+apps/desktop/out/renderer/assets/codicon-DF1abBS2.ttf                153.22 kB
+apps/desktop/out/renderer/assets/editor.worker-BireoB1h.js           599.52 kB
+apps/desktop/out/renderer/assets/json.worker-Cf5QJNgF.js             879.43 kB
+apps/desktop/out/renderer/assets/html.worker-CuKc8SMn.js           1,237.37 kB
+apps/desktop/out/renderer/assets/css.worker-C-lynN6T.js            1,734.73 kB
+apps/desktop/out/renderer/assets/ts.worker-h5HLmVta.js            11,614.97 kB
+apps/desktop/out/renderer/assets/App-CI7QFhtt.css                     12.43 kB
+apps/desktop/out/renderer/assets/monaco-CJc0byHM.css                 114.97 kB
+apps/desktop/out/renderer/assets/editor-B3hG8qNE.css                 132.60 kB
+apps/desktop/out/renderer/assets/index-ChABa0km.css                  273.77 kB
+apps/desktop/out/renderer/assets/download-BL8aLrCZ.js                  0.50 kB
+apps/desktop/out/renderer/assets/pencil-BeucIa3U.js                    0.52 kB
+apps/desktop/out/renderer/assets/archive-YUNCW-fh.js                   0.53 kB
+apps/desktop/out/renderer/assets/file-text-DkRUn8YV.js                 0.68 kB
+apps/desktop/out/renderer/assets/copy-s53eGERW.js                      0.78 kB
+apps/desktop/out/renderer/assets/sync-j50pbX5V.js                      0.82 kB
+apps/desktop/out/renderer/assets/database-DiV32qD8.js                  0.83 kB
+apps/desktop/out/renderer/assets/terminalActions-DIRsRh-n.js           0.91 kB
+apps/desktop/out/renderer/assets/plus-DTVC_2rS.js                      0.97 kB
+apps/desktop/out/renderer/assets/hard-drive-CYcqsX68.js                1.05 kB
+apps/desktop/out/renderer/assets/cpu-CAhGrpg-.js                       1.07 kB
+apps/desktop/out/renderer/assets/azcli-BueKBzxs.js                     1.10 kB
+apps/desktop/out/renderer/assets/javascript-DMoGG6Iq.js                1.19 kB
+apps/desktop/out/renderer/assets/terminal-jtZ7JOOt.js                  1.28 kB
+apps/desktop/out/renderer/assets/ini-DTIBAIdj.js                       1.45 kB
+apps/desktop/out/renderer/assets/csp-DZYL_xxv.js                       1.54 kB
+apps/desktop/out/renderer/assets/desktop-B_B69bMy.js                   1.89 kB
+apps/desktop/out/renderer/assets/history-WLn7hZB0.js                   1.94 kB
+apps/desktop/out/renderer/assets/workers-BRhyC6ZN.js                   2.05 kB
+apps/desktop/out/renderer/assets/sidebarDetail-DMDsAVe3.js             2.18 kB
+apps/desktop/out/renderer/assets/smoke-_F8essyp.js                     2.22 kB
+apps/desktop/out/renderer/assets/pla-BzbPIlnr.js                       2.31 kB
+apps/desktop/out/renderer/assets/sb-BqfWChAd.js                        2.35 kB
+apps/desktop/out/renderer/assets/bat-BtlR8kz3.js                       2.37 kB
+apps/desktop/out/renderer/assets/scheme-BjwWTE9E.js                    2.39 kB
+apps/desktop/out/renderer/assets/flow9-CKzEwGTQ.js                     2.44 kB
+apps/desktop/out/renderer/assets/xml-Clu_Hbhr.js                       2.65 kB
+apps/desktop/out/renderer/assets/dockerfile-niVMWbHT.js                2.72 kB
+apps/desktop/out/renderer/assets/pascaligo-Bz6BidB6.js                 2.73 kB
+apps/desktop/out/renderer/assets/lua-69F9fsQp.js                       2.89 kB
+apps/desktop/out/renderer/assets/graphql-BL1d50Hm.js                   2.94 kB
+apps/desktop/out/renderer/assets/cameligo-CwhtnMfj.js                  3.02 kB
+apps/desktop/out/renderer/assets/lexon-7qu52rqi.js                     3.20 kB
+apps/desktop/out/renderer/assets/objective-c-BVrbesWk.js               3.24 kB
+apps/desktop/out/renderer/assets/sparql-Bss3ZStT.js                    3.37 kB
+apps/desktop/out/renderer/assets/mips-CqOBgpd3.js                      3.38 kB
+apps/desktop/out/renderer/assets/go-BLS0Z9bs.js                        3.60 kB
+apps/desktop/out/renderer/assets/sophia-BJQ32VCf.js                    3.61 kB
+apps/desktop/out/renderer/assets/bicep-DE5WZgyW.js                     3.65 kB
+apps/desktop/out/renderer/assets/m3-hTbrTun5.js                        3.82 kB
+apps/desktop/out/renderer/assets/fsharp-BTSv1ki3.js                    3.91 kB
+apps/desktop/out/renderer/assets/pascal-BaYlZPqj.js                    4.01 kB
+apps/desktop/out/renderer/assets/typespec-C_i0mO2g.js                  4.06 kB
+apps/desktop/out/renderer/assets/shell-D_QsW6SA.js                     4.15 kB
+apps/desktop/out/renderer/assets/r-DP1TVdnp.js                         4.15 kB
+apps/desktop/out/renderer/assets/java-BibXeV5m.js                      4.23 kB
+apps/desktop/out/renderer/assets/qsharp-CkbrUwot.js                    4.32 kB
+apps/desktop/out/renderer/assets/powershell-CmjV5C9L.js                4.41 kB
+apps/desktop/out/renderer/assets/hcl-CMpHa-Qa.js                       4.47 kB
+apps/desktop/out/renderer/assets/kotlin-rou37MqY.js                    4.52 kB
+apps/desktop/out/renderer/assets/cypher-DkTxC-V3.js                    4.55 kB
+apps/desktop/out/renderer/assets/redis-mHx2F3O-.js                     4.63 kB
+apps/desktop/out/renderer/assets/yaml-B-SPeizM.js                      4.64 kB
+apps/desktop/out/renderer/assets/liquid-BFeGs7Hb.js                    4.69 kB
+apps/desktop/out/renderer/assets/tcl-B3iXI0vO.js                       4.74 kB
+apps/desktop/out/renderer/assets/coffee-BL_gkiBX.js                    4.93 kB
+apps/desktop/out/renderer/assets/less-DL9aHh-v.js                      4.97 kB
+apps/desktop/out/renderer/assets/markdown-t5CK9nzS.js                  5.04 kB
+apps/desktop/out/renderer/assets/restructuredtext-DjOTvjGi.js          5.20 kB
+apps/desktop/out/renderer/assets/cssMode-DBTEzrxI.js                   5.23 kB
+apps/desktop/out/renderer/assets/apex-DJWJJ94E.js                      5.32 kB
+apps/desktop/out/renderer/assets/python-x1Sr5LFz.js                    5.38 kB
+apps/desktop/out/renderer/assets/rust-Be4EdzRq.js                      5.53 kB
+apps/desktop/out/renderer/assets/dart-BIEhpB6b.js                      5.54 kB
+apps/desktop/out/renderer/assets/css-CExYsIB1.js                       5.83 kB
+apps/desktop/out/renderer/assets/mdx-Dxpl_Jgo.js                       6.07 kB
+apps/desktop/out/renderer/assets/csharp-zdzSZoGX.js                    6.12 kB
+apps/desktop/out/renderer/assets/htmlMode-CeYrAedH.js                  6.15 kB
+apps/desktop/out/renderer/assets/html-IMj3_oSh.js                      6.22 kB
+apps/desktop/out/renderer/assets/msdax-Mu5hasat.js                     6.30 kB
+apps/desktop/out/renderer/assets/swift-KqI1vnUF.js                     6.53 kB
+apps/desktop/out/renderer/assets/typescript-DuyJLs44.js                6.60 kB
+apps/desktop/out/renderer/assets/pug-DtzEKYbg.js                       6.68 kB
+apps/desktop/out/renderer/assets/cpp-o60F7HPm.js                       6.94 kB
+apps/desktop/out/renderer/assets/ecl-DvhxziJS.js                       7.07 kB
+apps/desktop/out/renderer/assets/vb-DXI76xeI.js                        7.43 kB
+apps/desktop/out/renderer/assets/twig-C6pvpK6c.js                      8.00 kB
+apps/desktop/out/renderer/assets/wgsl-BsivhlYM.js                      8.29 kB
+apps/desktop/out/renderer/assets/handlebars-u8veTaF5.js                8.36 kB
+apps/desktop/out/renderer/assets/scss-CM1fVVyf.js                      8.38 kB
+apps/desktop/out/renderer/assets/SnippetDialog-Bu_jOLlm.js             9.59 kB
+apps/desktop/out/renderer/assets/julia-CymIWxRw.js                     9.75 kB
+apps/desktop/out/renderer/assets/systemverilog-DBa0uYAR.js             9.85 kB
+apps/desktop/out/renderer/assets/st-BaWYkEdZ.js                        9.87 kB
+apps/desktop/out/renderer/assets/scala-Na7rvtRh.js                     9.95 kB
+apps/desktop/out/renderer/assets/php-C8_8alL-.js                      10.44 kB
+apps/desktop/out/renderer/assets/postiats-CGFxKu15.js                 10.77 kB
+apps/desktop/out/renderer/assets/perl-CBCocOvt.js                     10.87 kB
+apps/desktop/out/renderer/assets/razor-CtmnjRKu.js                    11.15 kB
+apps/desktop/out/renderer/assets/ruby-THC_P5Cj.js                     11.26 kB
+apps/desktop/out/renderer/assets/settings-DOqcIo49.js                 11.90 kB
+apps/desktop/out/renderer/assets/clojure-m-OLxXLv.js                  12.14 kB
+apps/desktop/out/renderer/assets/EditorTabs-BDdCvNxU.js               12.20 kB
+apps/desktop/out/renderer/assets/protobuf-DAJDbDNp.js                 12.27 kB
+apps/desktop/out/renderer/assets/elixir-D9hXg5yA.js                   12.65 kB
+apps/desktop/out/renderer/assets/sql-Bf91wk7V.js                      13.06 kB
+apps/desktop/out/renderer/assets/mysql-DeGRW2MH.js                    14.18 kB
+apps/desktop/out/renderer/assets/redshift-DnKJaUgZ.js                 14.45 kB
+apps/desktop/out/renderer/assets/DeleteConfirmDialog-CcfD1wM0.js      15.10 kB
+apps/desktop/out/renderer/assets/pgsql-DWPWcf96.js                    16.23 kB
+apps/desktop/out/renderer/assets/abap-BBOyZ_Jb.js                     18.20 kB
+apps/desktop/out/renderer/assets/desktopActions-DCEY8Amn.js           18.75 kB
+apps/desktop/out/renderer/assets/powerquery-CP7Cljr3.js               19.90 kB
+apps/desktop/out/renderer/assets/preload-helper-D3jimNHh.js           20.34 kB
+apps/desktop/out/renderer/assets/freemarker2-aNRxusoQ.js              21.30 kB
+apps/desktop/out/renderer/assets/EditorWindowApp-8Ki_elId.js          21.51 kB
+apps/desktop/out/renderer/assets/solidity-CXZ6dms6.js                 22.93 kB
+apps/desktop/out/renderer/assets/jsonMode-DxA_BcDb.js                 26.07 kB
+apps/desktop/out/renderer/assets/dist-DAJ3FDmS.js                     27.30 kB
+apps/desktop/out/renderer/assets/dist-C18yGMOF.js                     32.99 kB
+apps/desktop/out/renderer/assets/tsMode-X9PA2VUl.js                   36.02 kB
+apps/desktop/out/renderer/assets/ServerDetail-B5OtQDle.js             44.25 kB
+apps/desktop/out/renderer/assets/select-2vjG3Kps.js                   61.55 kB
+apps/desktop/out/renderer/assets/clipboard-D3oerzu_.js                66.39 kB
+apps/desktop/out/renderer/assets/lspLanguageFeatures-5bi1o_sT.js      74.79 kB
+apps/desktop/out/renderer/assets/SftpView-CwxgZXXP.js                 86.83 kB
+apps/desktop/out/renderer/assets/VaultView-CeDzPWHG.js               102.58 kB
+apps/desktop/out/renderer/assets/groupIcons-Bi_HgaPN.js              112.41 kB
+apps/desktop/out/renderer/assets/bridge-YHGPdCSS.js                  167.59 kB
+apps/desktop/out/renderer/assets/SettingsDialog-DE43tu2n.js          178.47 kB
+apps/desktop/out/renderer/assets/WindowControls-60xAWa4O.js          198.36 kB
+apps/desktop/out/renderer/assets/input-ClB7u0mV.js                   205.64 kB
+apps/desktop/out/renderer/assets/App-POIi-l4c.js                     258.62 kB
+apps/desktop/out/renderer/assets/index-DlJqqXO4.js                   479.85 kB
+apps/desktop/out/renderer/assets/TerminalPane-B5ajN1iT.js            727.48 kB
+apps/desktop/out/renderer/assets/monaco-C3uW0AFL.js                2,348.10 kB
+apps/desktop/out/renderer/assets/editor.api-DeXLbq5P.js            5,062.87 kB
+
+✓ built in 3.57s

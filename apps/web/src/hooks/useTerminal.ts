@@ -5,6 +5,7 @@ import { Unicode11Addon } from '@xterm/addon-unicode11';
 import { WebLinksAddon } from '@xterm/addon-web-links';
 import { WebglAddon } from '@xterm/addon-webgl';
 import { getTerminalTheme } from '@/lib/terminalThemes';
+import { TerminalHighlighting } from '@/lib/terminalHighlighting';
 import { openExternal } from '@/lib/desktop';
 import { writeClipboardText,readClipboardText } from '@/lib/clipboard';
 import { toast } from 'sonner';
@@ -23,6 +24,8 @@ interface UseTerminalOptions {
     fontFamily?: string;
     fontFamilyCN?: string;
     terminalTheme?: string;
+    commandMarkers?: boolean;
+    logHighlight?: boolean;
     onData?: (data: string) => void;
     onFontSizeChange?: (delta: number) => void; // Ctrl+滚轮缩放时调用，delta 为 ±1
     onResize?: (cols: number, rows: number) => void; // 终端尺寸变化时调用（字体变化、容器resize）
@@ -35,9 +38,10 @@ const openLink = (uri: string) => {
     }
 };
 export function useTerminal(options: UseTerminalOptions) {
-    const { containerRef, fontSize = 14, fontFamily, fontFamilyCN, terminalTheme = 'default', onData, onFontSizeChange, onResize } = options;
+    const { containerRef, fontSize = 14, fontFamily, fontFamilyCN, terminalTheme = 'default', commandMarkers = true, logHighlight = false, onData, onFontSizeChange, onResize } = options;
     const terminalRef = useRef<Terminal | null>(null);
     const fitAddonRef = useRef<FitAddon | null>(null);
+    const highlightingRef = useRef<TerminalHighlighting | null>(null);
     const onDataRef = useRef(onData);
     const onFontSizeChangeRef = useRef(onFontSizeChange);
     const onResizeRef = useRef(onResize);
@@ -98,6 +102,9 @@ export function useTerminal(options: UseTerminalOptions) {
         // Enable Unicode 11 character width for better CJK and emoji rendering
         terminal.unicode.activeVersion = '11';
         terminal.open(containerRef.current);
+        const highlighting = new TerminalHighlighting({ theme: terminalTheme, commandMarkers, logs: logHighlight });
+        terminal.loadAddon(highlighting);
+        highlightingRef.current = highlighting;
         // 尝试加载 WebGL 渲染器以提升高频更新性能（如进度条、实时日志）
         // 如果 WebGL 不可用，会自动回退到 Canvas 渲染器
         try {
@@ -120,13 +127,6 @@ export function useTerminal(options: UseTerminalOptions) {
             });
         }
         fitAddon.fit();
-        // Wait for fonts to finish loading before the final fit. xterm.js measures
-        // character size immediately; if the real font hasn't loaded yet, the row
-        // height is wrong and the terminal can render with a one-line offset.
-        const fitTimeout = setTimeout(() => fitAddon.fit(), 100);
-        document.fonts.ready.then(() => {
-            fitAddon.fit();
-        });
         terminalRef.current = terminal;
         fitAddonRef.current = fitAddon;
         // Use ref so the callback is always current without re-creating the terminal
@@ -148,6 +148,9 @@ export function useTerminal(options: UseTerminalOptions) {
                 return true;
             // 粘贴：Ctrl+V / Ctrl+Shift+V（mac 为 Cmd+V），统一由终端写入剪贴板内容。
             if (key === 'v') {
+                // 返回 false 只跳过 xterm 按键处理，仍需取消系统默认粘贴以免重复写入。
+                event.preventDefault();
+                event.stopPropagation();
                 readClipboardText()
                     .then((clip) => {
                     if (clip)
@@ -337,7 +340,6 @@ export function useTerminal(options: UseTerminalOptions) {
         };
         window.addEventListener('resize', handleResize);
         return () => {
-            clearTimeout(fitTimeout);
             if (resizeTimer)
                 clearTimeout(resizeTimer);
             window.removeEventListener('resize', handleResize);
@@ -346,6 +348,7 @@ export function useTerminal(options: UseTerminalOptions) {
             terminalElement?.removeEventListener('contextmenu', handleContextMenu, true);
             terminalElement?.removeEventListener('wheel', handleWheel);
             terminal.dispose();
+            highlightingRef.current = null;
             terminalRef.current = null;
             fitAddonRef.current = null;
         };
@@ -358,11 +361,38 @@ export function useTerminal(options: UseTerminalOptions) {
         const terminal = terminalRef.current;
         if (!terminal)
             return;
+        const family = buildFontFamily();
         terminal.options.fontSize = fontSize;
-        terminal.options.fontFamily = buildFontFamily();
+        terminal.options.fontFamily = family;
         fitAddonRef.current?.fit();
         // 字体变化后通知父组件新的终端尺寸
         onResizeRef.current?.(terminal.cols, terminal.rows);
+        let cancelled = false;
+        const refreshFontMetrics = () => {
+            if (cancelled)
+                return;
+            // fit() reuses cached character metrics, and xterm ignores unchanged
+            // options. Equivalent CSS whitespace forces a public-API remeasure
+            // without changing the user's font size or resizing the buffer first.
+            terminal.options.fontFamily = `${family} `;
+            terminal.options.fontFamily = family;
+            terminal.clearTextureAtlas();
+            fitAddonRef.current?.fit();
+            terminal.refresh(0, terminal.rows - 1);
+            onResizeRef.current?.(terminal.cols, terminal.rows);
+        };
+        // fonts.ready can already be resolved before the terminal first uses its
+        // font. Explicitly load both weights before correcting metrics and glyphs.
+        void Promise.all([
+            document.fonts.load(`${fontSize}px ${family}`, 'W中'),
+            document.fonts.load(`bold ${fontSize}px ${family}`, 'W中'),
+        ]).then(refreshFontMetrics, () => {
+            if (cancelled)
+                return;
+            refreshFontMetrics();
+            toast.warning('终端字体加载失败，已使用备用字体');
+        });
+        return () => { cancelled = true; };
     }, [fontSize, fontFamily, fontFamilyCN, buildFontFamily]);
     // Update terminal theme without recreating terminal
     useEffect(() => {
@@ -371,6 +401,9 @@ export function useTerminal(options: UseTerminalOptions) {
             return;
         terminal.options.theme = getTerminalTheme(terminalTheme);
     }, [terminalTheme]);
+    useEffect(() => {
+        highlightingRef.current?.update({ theme: terminalTheme, commandMarkers, logs: logHighlight });
+    }, [terminalTheme, commandMarkers, logHighlight]);
     const write = useCallback((data: string) => {
         return new Promise<void>((resolve) => { const terminal=terminalRef.current; if(terminal)terminal.write(data,resolve);else resolve() });
     }, []);
@@ -378,9 +411,11 @@ export function useTerminal(options: UseTerminalOptions) {
         terminalRef.current?.writeln(data);
     }, []);
     const clear = useCallback(() => {
+        highlightingRef.current?.reset();
         terminalRef.current?.clear();
     }, []);
     const reset = useCallback(() => {
+        highlightingRef.current?.reset();
         terminalRef.current?.reset();
     }, []);
     const fit = useCallback(() => {

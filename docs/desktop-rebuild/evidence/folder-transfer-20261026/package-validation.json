@@ -1,0 +1,73 @@
+{
+  "platform": "darwin",
+  "arch": "x64",
+  "electron": "44.9.0",
+  "packaged": true,
+  "version": "0.5.0-test.334.e0988810",
+  "sourceDigest": "e042434df019d9fcaf00e0237341b3574cc7e7d77868bbfa7c7b912b1eaccce0",
+  "artifact": "artifacts/desktop/folder-transfer-20261026/eizhu-0.5.0-test.334.e0988810-mac-x64.dmg",
+  "sha256": "1e472cbcd7159bbbefee87e152aaf8143bd4384441ff4078589269f77b94c032",
+  "applicationSmokePassed": true,
+  "stagesPassed": {
+    "stage2": true,
+    "stage3": true,
+    "stage4": true,
+    "stage5": true,
+    "stage6": true
+  },
+  "sftp": {
+    "passed": true,
+    "unavailable": false,
+    "subsystem": "OpenSSH sftp-server",
+    "hostKeyConfirmation": true,
+    "streaming": true,
+    "largeUpload": {
+      "bytes": 33554449,
+      "elapsedMs": 474,
+      "finalizeMs": 33,
+      "sha256": true
+    },
+    "resume": true,
+    "relay": true,
+    "tarGz": true,
+    "zip": true,
+    "archiveTools": {
+      "tar": true,
+      "unzip": true
+    },
+    "safeSave": true,
+    "unsupportedAtomicReplacePreservesOriginal": true,
+    "editorOwnership": true,
+    "dirtyCloseCancelled": true,
+    "staleWindowCloseRejected": true,
+    "encryptedCheckpoints": true,
+    "singletonPage": true,
+    "navigationRetainsConnections": true,
+    "navigationRetainsTransfer": true
+  },
+  "recovery": {
+    "failed": "RUNTIME_UNAVAILABLE",
+    "generation": 2,
+    "retainedEditorMemory": true,
+    "persistedSettings": true
+  },
+  "backgroundDirectoryConflicts": true,
+  "collector": {
+    "commandExitCode": 1,
+    "applicationExitCode": 0,
+    "error": "并行编辑器任务扩展了收集脚本，截图导出引用了该快照没有的 stage4.editorLayout.screenshots。",
+    "resolution": "独立读取同次运行的 smoke.json，核对最终 EIZHU_SMOKE_OK 并导出本任务证据，未改动并行任务脚本。"
+  },
+  "tests": {
+    "foundation": 93,
+    "frontend": 285,
+    "baseline": 10,
+    "total": 388
+  },
+  "smallFiles": {
+    "count": 160,
+    "planBytes": 111674,
+    "maximumProgressBytes": 820,
+    "perFileContentsVerified": true
+  }
+}

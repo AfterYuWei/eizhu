@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Dialog,DialogContent,DialogHeader,DialogTitle,DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { InlineError } from '@/components/ui/inline-error';
 import { Folder,FileText,AlertTriangle } from 'lucide-react';
 import type { SftpEntry } from '@/types/sftp';
 export interface DeleteConfirmDialogProps {
@@ -34,7 +35,7 @@ export function DeleteConfirmDialog({ open, onOpenChange, entries, onConfirm, }:
     if (dirCount > 0)
         summary.push(`${dirCount} 个文件夹`);
     return (<Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="sftp-dialog">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <AlertTriangle className="h-5 w-5 text-destructive"/>
@@ -47,9 +48,9 @@ export function DeleteConfirmDialog({ open, onOpenChange, entries, onConfirm, }:
             确定要删除以下 {summary.join('和')} 吗？此操作无法撤销。
           </p>
 
-          <div className="max-h-[300px] overflow-y-auto border rounded-md p-2 space-y-1">
+          <div className="max-h-[300px] overflow-y-auto rounded-md bg-[var(--surface-app)] p-2 space-y-1">
             {entries.map((entry) => (<div key={entry.path} className="flex items-center gap-2 px-2 py-1 text-sm rounded hover:bg-muted">
-                {entry.is_dir ? (<Folder className="h-4 w-4 text-blue-500 flex-shrink-0"/>) : (<FileText className="h-4 w-4 text-gray-500 flex-shrink-0"/>)}
+                {entry.is_dir ? (<Folder className="h-4 w-4 text-muted-foreground flex-shrink-0"/>) : (<FileText className="h-4 w-4 text-gray-500 flex-shrink-0"/>)}
                 <span className="truncate">{entry.name}</span>
                 {!entry.is_dir && entry.size > 0 && (<span className="text-xs text-muted-foreground ml-auto flex-shrink-0">
                     {formatSize(entry.size)}
@@ -57,10 +58,10 @@ export function DeleteConfirmDialog({ open, onOpenChange, entries, onConfirm, }:
               </div>))}
           </div>
 
-          {error && (<p className="text-sm text-destructive mt-3">{error}</p>)}
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="flex-row items-center gap-2">
+          <InlineError message={error} className="flex-1"/>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
             取消
           </Button>
