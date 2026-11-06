@@ -3,6 +3,7 @@ import { useWorkspaceViewStore } from './workspaceView'
 import { sessionApi } from '@/api/session'
 import { useServerDetailStore } from '@/store/serverDetail'
 import type { SessionApiError } from '@/types/session'
+import type { SessionTarget } from '@/types/sessionMessage'
 
 export type TabStatus = 'connecting' | 'connected' | 'disconnected' | 'error' | 'reconnecting'
 
@@ -23,7 +24,6 @@ export interface SessionTab {
   nextRetryAt?: number
   hostKeyFingerprint?: string
   knownHostKeyFingerprint?: string
-  manualConnect?: boolean
   detailAttached?: boolean
 }
 
@@ -40,10 +40,10 @@ interface SessionStore {
     targetTabId?: string,
   ) => Promise<string>
   openDraftTab: () => string
-  cancelConnection: (tabId: string) => Promise<void>
   closeTab: (tabId: string) => Promise<void>
   setActiveTab: (tabId: string) => void
   updateTabStatus: (tabId: string, status: TabStatus, sessionId?: string) => void
+  updateTabTarget: (tabId: string, sessionId: string, target: SessionTarget) => void
   updateTabCwd: (tabId: string, cwd: string) => void
   updateTabLatency: (tabId: string, latency: number) => void
   fetchSessions: () => Promise<void>
@@ -89,40 +89,33 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     try {
       const response = await sessionApi.create({
         profile_id: profileId,
+        ...(host !== undefined && port !== undefined
+          ? { expected_target: { host, port } }
+          : {}),
         cols: 80,
         rows: 24,
       })
       const current = get().tabs.find((tab) => tab.id === tabId)
       // Cancellation may happen before the create response supplies a session ID.
       if (current !== newTab) {
-        if (current?.manualConnect && current.profileId === profileId && !current.sessionId) {
-          set((state) => ({
-            tabs: state.tabs.map((tab) =>
-              tab === current ? { ...tab, sessionId: response.session_id } : tab,
-            ),
-          }))
-          await get().cancelConnection(tabId)
-        } else {
-          await sessionApi.close(response.session_id)
-        }
+        await sessionApi.close(response.session_id)
         return tabId
       }
       get().updateTabStatus(tabId, 'connecting', response.session_id)
     } catch (err) {
       const current = get().tabs.find((tab) => tab.id === tabId)
-      if (!current || (current !== newTab && !current.manualConnect)) {
+      if (current !== newTab) {
         console.error('Failed to release an obsolete session:', err)
         return tabId
       }
       const apiErr = err as SessionApiError
-      if (current.manualConnect && !current.sessionId) return tabId
       if (isHostKeyChangedError(apiErr)) {
         get().setTabHostKeyPrompt(tabId, apiErr.host_fingerprint!, apiErr.known_host_fingerprint)
       } else {
         get().markTabError(
           tabId,
-          apiErr?.error?.code || (current.manualConnect ? 'cancel_failed' : 'create_failed'),
-          apiErr?.error?.message || (current.manualConnect ? '取消连接失败，请重试' : '无法连接到服务器'),
+          apiErr?.error?.code || 'create_failed',
+          apiErr?.error?.message || '无法连接到服务器',
         )
         console.error('Failed to create session:', err)
       }
@@ -150,46 +143,14 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     return tabId
   },
 
-  cancelConnection: async (tabId) => {
+  closeTab: async (tabId) => {
     const tab = get().tabs.find((item) => item.id === tabId)
     if (!tab) return
-    set((state) => ({
-      tabs: state.tabs.map((item) =>
-        item.id === tabId
-          ? {
-              ...item,
-              status: 'disconnected',
-              manualConnect: true,
-              errorReason: undefined,
-              errorMessage: undefined,
-              reconnectAttempt: undefined,
-              nextRetryAt: undefined,
-              hostKeyFingerprint: undefined,
-              knownHostKeyFingerprint: undefined,
-            }
-          : item,
-      ),
-    }))
     if (tab.sessionId) await sessionApi.close(tab.sessionId)
     const current = get().tabs.find((item) => item.id === tabId)
-    if (!current?.manualConnect || current.sessionId !== tab.sessionId) return
+    if (!current || current.sessionId !== tab.sessionId) return
     if (current.detailAttached && current.profileId)
       useServerDetailStore.getState().disconnect(current.profileId)
-    set((state) => ({
-      tabs: state.tabs.map((item) =>
-        item === current ? { ...item, sessionId: null, detailAttached: false, latency: undefined } : item,
-      ),
-    }))
-  },
-
-  closeTab: async (tabId) => {
-    const tab = get().tabs.find((t) => t.id === tabId)
-    if (tab?.sessionId) {
-      sessionApi.close(tab.sessionId).catch(console.error)
-    }
-    if (tab?.detailAttached && tab.profileId) {
-      useServerDetailStore.getState().disconnect(tab.profileId)
-    }
 
     set((state) => {
       const tabs = state.tabs.filter((t) => t.id !== tabId)
@@ -217,6 +178,22 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     }))
   },
 
+  updateTabTarget: (tabId, sessionId, target) => {
+    set((state) => ({
+      tabs: state.tabs.map((tab) =>
+        tab.id === tabId && tab.sessionId === sessionId && tab.profileId === target.profile_id
+          ? {
+              ...tab,
+              profileName: target.profile_name,
+              host: target.host,
+              port: target.port,
+              username: target.username,
+            }
+          : tab,
+      ),
+    }))
+  },
+
   updateTabStatus: (tabId, status, sessionId) => {
     let shouldAttach = false
     let attachProfileId = ''
@@ -230,7 +207,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
                 status,
                 // The shell can report its first CWD before the ready metadata.
                 cwd: status === 'connected' && (!sessionId || sessionId === tab.sessionId) ? tab.cwd : undefined,
-                ...(sessionId ? { sessionId, manualConnect: false } : {}),
+                ...(sessionId ? { sessionId } : {}),
               }
 
               if (status === 'connected' && !!tab.profileId && !tab.detailAttached) {

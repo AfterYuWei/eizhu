@@ -1,5 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { setImmediate } from 'node:timers/promises'
 import { DesktopError, offlineWorkspace } from '@eizhu/contracts'
 import type { AccountStatus, WorkspaceIdentity } from '@eizhu/contracts'
 import type { AccountSession } from './repository.ts'
@@ -192,24 +193,114 @@ test('concurrent expiry refreshes once, persists rotation and exposes only publi
   }
 })
 
-test('lost refresh response invalidates that session without clearing cached data keys or retrying', async () => {
+test('offline refresh keeps the session, bounds retries and resumes automatically after reconnecting', async (context) => {
+  context.mock.timers.enable({ apis: ['Date', 'setTimeout'], now: Date.now() })
   const identity = accountWorkspace(42),
-    store = storage(identity, session()),
+    initial = session(),
+    store = storage(identity, initial),
+    statuses: AccountStatus[] = []
+  let requests = 0,
+    offline = true
+  const service = new AccountService(
+    store.api,
+    async () => {
+      requests++
+      if (offline) throw new Error('synthetic offline refresh')
+      return response(200, {
+        accessToken: 'new-access',
+        refreshToken: 'new-refresh',
+        expiresIn: 1800,
+        user,
+      })
+    },
+    identity,
+    (status) => statuses.push(status),
+  )
+  try {
+    service.start()
+    await setImmediate()
+    context.mock.timers.tick(1000)
+    await setImmediate()
+    assert.deepEqual(store.rows.get(identity.id), initial)
+    assert.equal((await store.api.status()).sessionState, 'authenticated')
+    await Promise.all([
+      assert.rejects(service.execute('account.me', undefined), code('ACCOUNT_UNAVAILABLE')),
+      assert.rejects(service.execute('account.me', undefined), code('ACCOUNT_UNAVAILABLE')),
+    ])
+    assert.equal(requests, 1)
+    context.mock.timers.tick(4999)
+    await setImmediate()
+    assert.equal(requests, 1)
+    offline = false
+    context.mock.timers.tick(1)
+    await setImmediate()
+    assert.equal(requests, 2)
+    assert.equal(store.rows.get(identity.id)?.tokens?.refreshToken, 'new-refresh')
+    assert.deepEqual(store.rows.get(identity.id)?.cachedSyncKey, initial.cachedSyncKey)
+    assert.equal(statuses.at(-1)?.sessionState, 'authenticated')
+  } finally {
+    await service.close()
+  }
+})
+
+test('refresh rate limits and server errors preserve credentials and respect the retry delay', async (context) => {
+  context.mock.timers.enable({ apis: ['Date', 'setTimeout'], now: Date.now() })
+  for (const status of [429, 503]) {
+    const identity = accountWorkspace(42),
+      initial = session(),
+      store = storage(identity, initial)
+    let requests = 0
+    const service = new AccountService(
+      store.api,
+      async () => {
+        requests++
+        return { ...response(status), headers: { 'retry-after': '120' } }
+      },
+      identity,
+      () => {},
+    )
+    try {
+      await assert.rejects(
+        service.execute('account.me', undefined),
+        code(status === 429 ? 'RATE_LIMITED' : 'ACCOUNT_UNAVAILABLE'),
+      )
+      assert.deepEqual(store.rows.get(identity.id), initial)
+      context.mock.timers.tick((status === 429 ? 120000 : 5000) - 1)
+      await setImmediate()
+      assert.equal(requests, 1)
+      context.mock.timers.tick(1)
+      await setImmediate()
+      assert.equal(requests, 2)
+      assert.deepEqual(store.rows.get(identity.id), initial)
+    } finally {
+      await service.close()
+    }
+  }
+})
+
+test('a lost refresh response keeps credentials until the server explicitly rejects the old token', async (context) => {
+  context.mock.timers.enable({ apis: ['Date', 'setTimeout'], now: Date.now() })
+  const identity = accountWorkspace(42),
+    initial = session(),
+    store = storage(identity, initial),
     statuses: AccountStatus[] = []
   let requests = 0
   const service = new AccountService(
     store.api,
     async () => {
-      requests++
-      throw new Error('synthetic lost refresh')
+      if (++requests === 1) throw new Error('synthetic lost refresh response after rotation')
+      return response(401, { code: 'INVALID_REFRESH_TOKEN' })
     },
     identity,
     (status) => statuses.push(status),
   )
   try {
     await assert.rejects(service.execute('account.me', undefined), code('ACCOUNT_UNAVAILABLE'))
-    await assert.rejects(service.execute('account.me', undefined), code('ACCOUNT_NOT_LOGGED_IN'))
-    assert.equal(requests, 1)
+    assert.deepEqual(store.rows.get(identity.id), initial)
+    assert.equal((await store.api.status()).sessionState, 'authenticated')
+    context.mock.timers.tick(5000)
+    await setImmediate()
+    assert.equal(requests, 2)
     assert.equal(store.rows.get(identity.id)?.tokens, null)
     assert.ok(store.rows.get(identity.id)?.cachedSyncKey)
     assert.equal(statuses.at(-1)?.sessionState, 'reauth_required')
@@ -293,7 +384,8 @@ test('logout never refreshes expired credentials and leaves key deletion to the 
 
 test('closing cancels and waits for in-flight refresh without emitting a late account event', async () => {
   const identity = accountWorkspace(42),
-    store = storage(identity, session()),
+    initial = session(),
+    store = storage(identity, initial),
     statuses: AccountStatus[] = []
   let started!: () => void
   const ready = new Promise<void>((resolve) => {
@@ -314,6 +406,7 @@ test('closing cancels and waits for in-flight refresh without emitting a late ac
   await service.close()
   await rejected
   assert.equal(statuses.length, 0)
+  assert.deepEqual(store.rows.get(identity.id), initial)
   await assert.rejects(service.execute('account.me', undefined), code('RUNTIME_CLOSED'))
 })
 

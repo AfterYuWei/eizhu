@@ -6,7 +6,7 @@ import type { ClientChannel } from 'ssh2'
 import { ssh, fail, failureOf, DesktopError, isPublicTunnelBind } from '@eizhu/contracts'
 import type { RuntimeContext } from '@eizhu/contracts'
 import type { Session, SessionCreateRequest } from '@eizhu/contracts/models/session'
-import type { SessionMessage, ConnectionLogEntry } from '@eizhu/contracts/models/sessionMessage'
+import type { SessionMessage, ConnectionLogEntry, SessionTarget } from '@eizhu/contracts/models/sessionMessage'
 import type { TunnelConfig, TunnelStatus } from '@eizhu/contracts/models/api'
 import type { WorkerClient } from '../workers/client.ts'
 import { SshConnection, execBounded } from './connection.ts'
@@ -19,6 +19,8 @@ import { complete, readDirectory } from './completion.ts'
 import { INFO_COMMAND, SUMMARY_COMMAND, METRIC_COMMANDS, parseInfo, parseSummary, parseMetricDetail } from './metrics.ts'
 import { TunnelListener } from './tunnel.ts'
 interface TerminalSession {
+  expectedTarget?: SessionCreateRequest['expected_target']
+  target?: SessionTarget
   system?: string
   endpoint?: { host: string; port: number; username: string }
   meta: Session
@@ -179,7 +181,7 @@ export class SshService {
     s.logs = s.logs.slice(-60)
     this.event(s, {
       type: 'connection_state',
-      payload: { session_id: s.meta.id, status, stage, message, logs: s.logs, ...extra },
+      payload: { session_id: s.meta.id, target: s.target, status, stage, message, logs: s.logs, ...extra },
     })
   }
   private cancelPrompts(owner: string): void {
@@ -312,8 +314,8 @@ export class SshService {
     if (s.meta.status !== 'connected' || !s.connection.client) fail('SSH_NOT_CONNECTED', 'SSH 会话尚未连接')
     return s
   }
-  private launch(s: TerminalSession): void {
-    s.task = this.connectTerminal(s).catch(async (cause) => {
+  private launch(s: TerminalSession, plan?: ConnectionHop[]): void {
+    s.task = this.connectTerminal(s, plan).catch(async (cause) => {
       if (s.closed) return
       const error = failureOf(cause)
       this.state(s, 'error', error.stage ?? s.stage, error.message, {
@@ -325,12 +327,27 @@ export class SshService {
       await s.connection.close()
     })
   }
-  private async connectTerminal(s: TerminalSession): Promise<void> {
+  private async connectTerminal(s: TerminalSession, prepared?: ConnectionHop[]): Promise<void> {
     s.system = undefined
     s.endpoint = undefined
     const connection = s.connection,
       owner = s.meta.id
-    const plan = await this.plan({ id: s.meta.profile_id })
+    const plan = prepared ?? (await this.plan({ id: s.meta.profile_id }))
+    const target = plan[plan.length - 1].profile
+    if (
+      s.expectedTarget &&
+      (target.host !== s.expectedTarget.host || target.port !== s.expectedTarget.port)
+    )
+      fail('PROFILE_CHANGED', '服务器地址或端口已变化，请从服务器列表重新连接')
+    s.expectedTarget = { host: target.host, port: target.port }
+    const sessionTarget: SessionTarget = {
+      ...s.expectedTarget,
+      username: target.username,
+      profile_id: target.id,
+      profile_name: target.name,
+    }
+    s.target = sessionTarget
+    this.state(s, 'connecting', 'preparing', '已核对本次连接目标，正在连接')
     const client = await connection.connect(
       plan,
       this.hooks(owner, connection, () => {
@@ -393,7 +410,7 @@ export class SshService {
       this.state(s, 'connected', 'ready', 'SSH 连接成功')
       this.event(s, {
         type: 'metadata',
-        payload: { session_id: owner, host: hop.profile.host, username: hop.profile.username, protocol: 'ssh' },
+        payload: { ...sessionTarget, session_id: owner, protocol: 'ssh' },
       })
     }
     shell.on('data', (data: Buffer) => {
@@ -550,10 +567,11 @@ export class SshService {
       case 'session.create': {
         if (this.terminals.size >= 128) fail('QUEUE_FULL', 'SSH 会话过多')
         const { request } = input as { request: SessionCreateRequest }
-        await this.database.call('profile.get', { id: request.profile_id })
+        const plan = await this.plan({ id: request.profile_id })
         const id = randomUUID(),
           connection = new SshConnection()
         const s: TerminalSession = {
+          expectedTarget: request.expected_target,
           meta: {
             id,
             profile_id: request.profile_id,
@@ -577,7 +595,7 @@ export class SshService {
         }
         this.terminals.set(id, s)
         this.state(s, 'connecting', 'preparing', '正在读取服务器配置与认证方式')
-        this.launch(s)
+        this.launch(s, plan)
         return { session_id: id, status: 'connecting' }
       }
       case 'session.list':

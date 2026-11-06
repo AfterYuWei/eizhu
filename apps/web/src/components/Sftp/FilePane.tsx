@@ -280,7 +280,7 @@ export function FilePane({ pane, onPickServer }: FilePaneProps) {
         { id: 'rename', label: '重命名', icon: <Pencil size={13}/>, onClick: () => store.openRenameDialog(pane, entry) },
         { id: 'copy', label: '复制路径', icon: <Copy size={13}/>, onClick: () => void writeClipboardText(entry.path) },
         { id: 'd3', label: '', divider: true },
-        { id: 'del', label: '删除', icon: <Trash2 size={13}/>, danger: true, onClick: () => store.openDeleteConfirm(pane, [entry]) },
+        { id: 'del', label: '删除', icon: <Trash2 size={13}/>, danger: true, onClick: () => store.openDeleteConfirm(pane, selected.has(entry.path) ? undefined : [entry]) },
     ];
     const blankMenuItems = (): MenuItem[] => [
         { id: 'newFile', label: '新建文件', icon: <FilePlus size={13}/>, onClick: () => store.openNewFileDialog(pane) },

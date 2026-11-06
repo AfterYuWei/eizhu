@@ -234,11 +234,29 @@ export async function verifyAccountClosure(
   )
   fixture.offline = false
   fixture.rejectMeCount = 1
+  fixture.refreshOffline = true
+  const beforeOfflineRefresh = count('refresh')
+  await expectCode('window.eizhu.account.me()', 'ACCOUNT_UNAVAILABLE')
+  assert.equal(count('refresh'), beforeOfflineRefresh)
+  assert.equal(await js(`window.eizhu.account.status().then(s=>s.sessionState)`), 'authenticated')
+  await js('window.eizhu.runtime.restart()')
+  assert.equal(await js(`window.eizhu.account.status().then(s=>s.sessionState)`), 'authenticated')
+  assert.equal((await js<{ id: string }>('window.eizhu.workspace.status()')).id, accountA.id)
+  fixture.refreshOffline = false
+  fixture.rejectMeCount = 1
+  await js('window.eizhu.account.me()')
+  assert.equal(count('refresh') - beforeOfflineRefresh, 1)
+  assert.equal(await js(`window.eizhu.account.status().then(s=>s.sessionState)`), 'authenticated')
+  step('refresh-offline-session-survives-restart-and-reconnect')
+
+  fixture.rejectMeCount = 1
   fixture.dropNextRefresh = true
   const beforeLostRefresh = count('refresh')
   await expectCode('window.eizhu.account.me()', 'ACCOUNT_UNAVAILABLE')
   assert.equal(count('refresh') - beforeLostRefresh, 1)
-  assert.equal(await js(`window.eizhu.account.status().then(s=>s.sessionState)`), 'reauth_required')
+  assert.equal(await js(`window.eizhu.account.status().then(s=>s.sessionState)`), 'authenticated')
+  await waitFor(window, `window.eizhu.account.status().then(s=>s.sessionState==='reauth_required')`)
+  assert.equal(count('refresh') - beforeLostRefresh, 2)
   const afterLostRefresh = count('refresh')
   await expectCode('window.eizhu.account.me()', 'ACCOUNT_NOT_LOGGED_IN')
   assert.equal(count('refresh'), afterLostRefresh)

@@ -103,7 +103,7 @@
 .shell-child-groups { padding-left: 14px; }
 .desktop-shell .grp-label-text { color: var(--fg-3); }
 .desktop-shell .grp-cnt { background: transparent; font-size: 11px; padding: 0 3px; min-width: 0; }
-.desktop-shell .srv { display: flex; gap: 8px; min-height: 32px; padding: 5px 8px 5px 30px; margin: 0; border: 0; border-radius: var(--r-sm); font-size: inherit; opacity: 1; }
+.desktop-shell .srv { display: flex; gap: 8px; min-height: 32px; padding: 5px 8px 5px 30px; margin: 2px 0; border: 0; border-radius: var(--r-sm); font-size: inherit; opacity: 1; }
 .desktop-shell .srv:hover { background: var(--shell-hover); }
 .desktop-shell .srv.active { background: var(--shell-selected); }
 .desktop-shell .srv-icon { color: var(--fg-3); opacity: 1; width: 16px; height: 18px; }

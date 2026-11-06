@@ -1,6 +1,10 @@
 .ai-inspector {
+  --ai-command-bg: color-mix(in srgb, var(--bg-elevated) 94%, black);
   font-size: 14px;
   color: var(--fg);
+}
+.dark .ai-inspector {
+  --ai-command-bg: color-mix(in srgb, var(--bg-elevated) 80%, black);
 }
 .ai-inspector button[data-variant='default'],
 .ai-settings button[data-variant='default'] {
@@ -109,6 +113,44 @@
   width: 18px;
   height: 18px;
   color: var(--fg-3);
+}
+.ai-message-elapsed {
+  margin-left: 5px;
+  color: var(--fg-3);
+  font-size: 12px;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+.ai-reply-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.ai-message-part {
+  min-width: 0;
+}
+.ai-message-part .ai-markdown > :last-child {
+  margin-bottom: 0;
+}
+.ai-message-part > .ai-command:first-child {
+  margin-top: 0;
+}
+.ai-response-status {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 20px 12px;
+  color: var(--fg-2);
+  font-size: 12px;
+  line-height: 20px;
+}
+.ai-response-status > span:first-child {
+  display: inline-flex;
+  color: inherit;
+}
+.ai-response-status [role='status'] {
+  color: inherit;
 }
 .ai-markdown {
   font-size: 14px;
@@ -478,16 +520,18 @@
 .desktop-shell .ai-inspector .ai-message {
   min-width: 0;
 }
-.desktop-shell .ai-inspector .ai-message.is-assistant:has(+ .is-continuation) {
-  margin-bottom: 16px;
+.desktop-shell .ai-inspector .ai-command .ai-code-block,
+.desktop-shell .ai-inspector .ai-approval .ai-code-block {
+  background: var(--ai-command-bg);
 }
 .desktop-shell .ai-inspector .ai-command-summary {
   display: grid;
-  grid-template-columns: 14px minmax(0, 1fr);
-  align-items: start;
-  gap: 2px 7px;
+  grid-template-columns: 14px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 7px;
   padding: 8px;
   border-radius: 8px;
+  background: var(--ai-command-bg);
   cursor: pointer;
   list-style: none;
 }
@@ -496,25 +540,102 @@
 }
 .desktop-shell .ai-inspector .ai-command-summary:hover,
 .desktop-shell .ai-inspector .ai-command-summary:focus-visible {
-  background: var(--bg-elevated);
+  background: color-mix(in srgb, var(--ai-command-bg) 94%, var(--fg));
 }
 .desktop-shell .ai-inspector .ai-command-summary > svg {
-  margin-top: 3px;
   color: var(--fg-3);
 }
-.desktop-shell .ai-inspector .ai-command[open] > summary > svg {
+.desktop-shell .ai-inspector .ai-command[open] > summary > svg,
+.desktop-shell .ai-inspector .ai-tool-record[open] > summary > svg {
   transform: rotate(90deg);
 }
 .desktop-shell .ai-inspector .ai-command-summary .ai-command-purpose {
   margin: 0;
   font-size: 13px;
   line-height: 20px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.desktop-shell .ai-inspector .ai-tool-records-scroll {
+  max-height: min(280px, 42dvh);
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  padding: 8px 0;
+}
+.desktop-shell .ai-inspector .ai-tool-record > .ai-command-summary {
+  background: transparent;
+}
+.desktop-shell .ai-inspector .ai-tool-record > .ai-command-summary .ai-command-purpose {
+  font-weight: 400;
+}
+.desktop-shell .ai-inspector .ai-tool-record[data-state='completed'] > .ai-command-summary {
+  color: var(--fg-2);
+}
+.desktop-shell .ai-inspector .ai-tool-record > .ai-command-summary:is(:hover, :focus-visible) {
+  background: var(--bg-hover);
+}
+.desktop-shell .ai-inspector .ai-tool-records.is-single > .ai-tool-records-scroll > .ai-tool-record > summary {
+  display: none;
+}
+.desktop-shell .ai-inspector .ai-tool-record-content {
+  padding: 2px 8px 8px;
+}
+.desktop-shell .ai-inspector .ai-tool-record-content .ai-code-block {
+  margin: 10px 0;
+  border-radius: 8px;
+}
+.desktop-shell .ai-inspector .ai-tool-record-content pre {
+  max-height: none;
+}
+.desktop-shell .ai-inspector .ai-command-context {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 10px;
+  color: var(--fg-3);
+  font-size: 12px;
+  line-height: 20px;
+  overflow-wrap: anywhere;
+}
+.desktop-shell .ai-inspector .ai-command-context:empty {
+  display: none;
+}
+.desktop-shell .ai-inspector .ai-command-context .ai-command-target {
+  margin: 0;
+}
+.desktop-shell .ai-inspector .ai-command-result-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  color: var(--fg-3);
+  font-size: 12px;
+  line-height: 20px;
+}
+.desktop-shell .ai-inspector .ai-command-result-meta [data-attention='true'],
+.desktop-shell .ai-inspector .ai-command-stderr .ai-code-block-heading {
+  color: var(--red);
+}
+.desktop-shell .ai-inspector .ai-command-hint,
+.desktop-shell .ai-inspector .ai-command-raw {
+  margin: 8px 0;
+  color: var(--fg-3);
+  font-size: 12px;
+  line-height: 20px;
+  overflow-wrap: anywhere;
+}
+.desktop-shell .ai-inspector .ai-command-raw > summary {
+  width: fit-content;
+  padding: 4px 0;
+  cursor: pointer;
 }
 .desktop-shell .ai-inspector .ai-command-status {
-  grid-column: 2;
   color: var(--fg-3);
   font-size: 12px;
   line-height: 18px;
+  white-space: nowrap;
 }
 .desktop-shell .ai-inspector .ai-command-status[data-attention='true'],
 .desktop-shell .ai-inspector .ai-command-notice {
@@ -702,3 +823,18 @@
 .ai-history-row > button:first-child > span { width: 100%; white-space: normal; overflow-wrap: anywhere; }
 .ai-history-row .ai-history-delete { flex-shrink: 0; color: var(--red); }
 .ai-history-empty { padding: 32px 0; text-align: center; color: var(--fg-3); }
+.ai-error-dialog {
+  width: min(440px, calc(100vw - 32px));
+  font: var(--sans-size) / 1.5 var(--sans);
+  color: var(--fg);
+}
+.ai-error-dialog [data-slot='dialog-header'] {
+  text-align: left;
+}
+.ai-error-dialog [data-slot='dialog-description'] {
+  max-height: 50dvh;
+  overflow: auto;
+  color: var(--fg-2);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

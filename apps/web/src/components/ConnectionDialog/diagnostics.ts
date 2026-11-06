@@ -25,6 +25,11 @@ export function stageLabel(stage?: string): string {
 /** 建议以明确的错误码为依据；信息不足时不猜测网络或认证原因。 */
 export function connectionDiagnosis(code?: string): { title: string; suggestion: string } {
   switch (code) {
+    case 'PROFILE_CHANGED':
+      return {
+        title: '连接配置已变化',
+        suggestion: '从服务器列表重新打开连接；本次连接已停止，未切换到变化后的目标。',
+      }
     case 'SSH_DNS_FAILED':
     case 'PROXY_DNS_FAILED':
       return {

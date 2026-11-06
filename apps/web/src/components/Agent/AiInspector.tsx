@@ -8,8 +8,9 @@ import type {
   AiModelCatalog,
   AiProvider,
 } from '@eizhu/contracts'
+import { failureOf } from '@eizhu/contracts'
 import { useAiStore } from '@/store/ai'
-import { useSessionStore } from '@/store/session'
+import { useSessionStore, type SessionTab } from '@/store/session'
 import { useDesktopShellStore } from '@/store/desktopShell'
 import { bridge } from '@/lib/bridge'
 import { AiIcon, AiAgentIcon, AiModeCheckIcon, AiDeleteIcon, AI_PERMISSION_ICONS } from '@/lib/serverIcons'
@@ -22,6 +23,7 @@ import {
   DialogClose,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -65,8 +67,16 @@ const permissionModes = [
     Icon: AI_PERMISSION_ICONS.auto,
   },
 ] as const
+const ConfirmationIcon = AI_PERMISSION_ICONS.confirm
 
 type Draft = { text: string; attachments: Array<{ name: string; content: string }> }
+function connectedTabSessionIds(tabs: SessionTab[]) {
+  return [
+    ...new Set(
+      tabs.filter((tab) => tab.sessionId && tab.status === 'connected').map((tab) => tab.sessionId!),
+    ),
+  ].sort()
+}
 export function AiInspector({
   open,
   overlay,
@@ -89,8 +99,7 @@ export function AiInspector({
   const [cliStatuses, setCliStatuses] = useState<AiCliStatus[]>([])
   const [official, setOfficial] = useState<AiCapabilities | null>(null)
   const [newBackend, setNewBackend] = useState<AiBackend | null>(null)
-  const connectedTabs = tabs.filter((t) => t.sessionId && t.status === 'connected')
-  const sessionIds = [...new Set(connectedTabs.map((t) => t.sessionId!))].sort()
+  const sessionIds = connectedTabSessionIds(tabs)
   const sessionKey = JSON.stringify(sessionIds)
   const targetKey = JSON.stringify(conversation?.targets.map((t) => t.sessionId).sort() ?? [])
   const scopeReady = sessionIds.length > 0 && sessionIds.length <= 32 && sessionKey === targetKey
@@ -100,6 +109,7 @@ export function AiInspector({
     draft = drafts[key] ?? { text: '', attachments: [] }
   const [error, setError] = useState(''),
     [loading, setLoading] = useState(false)
+  const [dismissedError, setDismissedError] = useState('')
   const [history, setHistory] = useState<Array<
     Pick<AiConversation, 'id' | 'title' | 'updatedAt' | 'backend'>
   > | null>(null)
@@ -112,6 +122,53 @@ export function AiInspector({
     conversation?.status === 'thinking' ||
     conversation?.status === 'executing' ||
     conversation?.status === 'awaiting_confirmation'
+  const turns = useMemo(() => {
+    const groups: Array<{
+      id: string
+      messages: AiConversation['messages']
+      request?: AiConversation['messages'][number]
+    }> = []
+    let request: AiConversation['messages'][number] | undefined
+    for (const message of conversation?.messages ?? []) {
+      const last = groups.at(-1)
+      if (message.role === 'user') {
+        request = message
+        groups.push({ id: message.id, messages: [message] })
+      } else if (last && last.messages[0]?.role !== 'user') last.messages.push(message)
+      else groups.push({ id: request ? request.id + ':reply' : message.id, messages: [message], request })
+    }
+    const last = groups.at(-1)
+    if (busy && last?.messages[0]?.role === 'user')
+      groups.push({ id: last.id + ':reply', messages: [], request: last.messages[0] })
+    return groups
+  }, [conversation?.messages, busy])
+  const pausedCall =
+    conversation?.status === 'paused'
+      ? turns
+          .at(-1)
+          ?.messages.findLast(
+            (message) => message.tool?.state === 'unknown' || message.tool?.state === 'failed',
+          )?.tool
+      : undefined
+  const conversationError =
+    conversation?.error ||
+    (pausedCall ? pausedCall.error || '本轮有命令执行结果未知，请先在终端核查，再发送后续指令。' : '')
+  const errorKey = JSON.stringify([
+    workspaceGeneration(),
+    conversationId,
+    conversation?.messages.findLast((message) => message.role === 'user')?.id,
+    conversationError,
+  ])
+  const visibleError = error || (errorKey !== dismissedError ? conversationError : '')
+  const latestMessage = conversation?.messages.at(-1)
+  const activity =
+    conversation?.status === 'awaiting_confirmation'
+      ? '等待你确认'
+      : conversation?.status === 'executing'
+        ? '正在执行操作…'
+        : latestMessage?.role === 'assistant' && latestMessage.text
+          ? '正在回复…'
+          : '正在思考…'
   const update = (value: Partial<Draft>) => setDrafts((s) => ({ ...s, [key]: { ...draft, ...value } }))
   const positionPicker = (id: 'ai-agent-picker' | 'ai-chat-model') => {
     setPickerBoundary(document.getElementById(id)?.closest<HTMLElement>('.ai-inspector') ?? null)
@@ -132,23 +189,65 @@ export function AiInspector({
     [setLoading, setError],
   )
   useEffect(() => {
-    if (!open || !conversationId || sessionKey === targetKey || !window.eizhu) return
-    let live = true
-    scopeQueue.current = scopeQueue.current.then(async () => {
-      if (!live) return
-      await act(async () => {
-        const ids: string[] = JSON.parse(sessionKey)
-        const next =
-          ids.length && ids.length <= 32
-            ? await bridge().ai.scope({ conversationId, sessionIds: ids })
-            : (await bridge().ai.cancel({ conversationId }), await bridge().ai.read({ conversationId }))
-        if (live) put(next)
+    if (!window.eizhu) return
+    let live = true,
+      version = 0
+    const generation = workspaceGeneration()
+    const synchronize = () => {
+      if (!live || generation !== workspaceGeneration()) return
+      const currentVersion = ++version
+      const ids = connectedTabSessionIds(useSessionStore.getState().tabs)
+      const conversationIds = Object.keys(useAiStore.getState().conversations).sort()
+      if (!conversationIds.length) return
+      scopeQueue.current = scopeQueue.current.then(async () => {
+        if (!live || currentVersion !== version || generation !== workspaceGeneration()) return
+        await act(
+          async () => {
+            for (const id of conversationIds) {
+              if (!live || currentVersion !== version || generation !== workspaceGeneration()) return
+              if (!useAiStore.getState().conversations[id]) continue
+              try {
+                const next = await bridge().ai.scope({
+                  conversationId: id,
+                  sessionIds: ids.length <= 32 ? ids : [],
+                })
+                if (live && currentVersion === version && generation === workspaceGeneration()) put(next)
+              } catch (error) {
+                if (!live || generation !== workspaceGeneration()) return
+                const code = failureOf(error).code
+                if (code === 'NOT_FOUND' || code === 'FORBIDDEN') forget(id)
+                else throw error
+              }
+            }
+          },
+          (message) => {
+            if (message) setError(message)
+          },
+        )
       })
+    }
+    // Observe store transitions directly: React can batch a same-ID reconnect into one render.
+    const unsubscribeTabs = useSessionStore.subscribe((state, previous) => {
+      if (
+        JSON.stringify(connectedTabSessionIds(state.tabs)) !==
+        JSON.stringify(connectedTabSessionIds(previous.tabs))
+      )
+        synchronize()
     })
+    const unsubscribeConversations = useAiStore.subscribe((state, previous) => {
+      if (
+        JSON.stringify(Object.keys(state.conversations).sort()) !==
+        JSON.stringify(Object.keys(previous.conversations).sort())
+      )
+        synchronize()
+    })
+    synchronize()
     return () => {
       live = false
+      unsubscribeTabs()
+      unsubscribeConversations()
     }
-  }, [open, conversationId, sessionKey, targetKey, act, put])
+  }, [act, put, forget])
   useEffect(() => {
     if (!window.eizhu) return
     return bridge().events.on('eizhu-ai-message', (event) => {
@@ -264,10 +363,10 @@ export function AiInspector({
       }
       if (generation === workspaceGeneration()) update({ attachments: [...draft.attachments, ...additions] })
     })
-  const newConversation = async () => {
+  const newConversation = async (connectedIds: string[]) => {
     if (!agent || !ready) throw new Error('请选择可用的Agent和模型')
     let created = await bridge().ai.open({
-      sessionIds,
+      sessionIds: connectedIds,
       backend: { ...agent.backend, model },
     })
     if (created.permission !== newPermission)
@@ -282,11 +381,39 @@ export function AiInspector({
     act(async () => {
       if (!settings?.enabled || !draft.text.trim()) return
       if (!ready) throw new Error('请选择可用的Agent和模型')
-      if (!sessionIds.length) throw new Error('请先打开SSH连接')
-      if (sessionIds.length > 32) throw new Error('AI最多支持32个已连接的SSH会话，请关闭多余连接')
       await scopeQueue.current
-      const c = conversation ?? (await newConversation())
-      if (conversation && !scopeReady) put(await bridge().ai.scope({ conversationId: c.id, sessionIds }))
+      const connectedIds = connectedTabSessionIds(useSessionStore.getState().tabs)
+      if (!connectedIds.length) throw new Error('请先打开SSH连接')
+      if (connectedIds.length > 32) throw new Error('AI最多支持32个已连接的SSH会话，请关闭多余连接')
+      const c = conversation ?? (await newConversation(connectedIds))
+      const generation = workspaceGeneration()
+      const refresh = scopeQueue.current.then(async () => {
+        const ids = connectedTabSessionIds(useSessionStore.getState().tabs)
+        const next = await bridge().ai.scope({
+          conversationId: c.id,
+          sessionIds: ids.length <= 32 ? ids : [],
+        })
+        if (generation !== workspaceGeneration()) throw new Error('工作区已变化，请重新发送')
+        put(next)
+      })
+      // Send reports the refresh failure; recovering the queue keeps later Tab changes usable.
+      scopeQueue.current = refresh.catch(() => undefined)
+      await refresh
+      let synchronized: Promise<void>
+      do {
+        synchronized = scopeQueue.current
+        await synchronized
+      } while (synchronized !== scopeQueue.current)
+      if (generation !== workspaceGeneration()) throw new Error('工作区已变化，请重新发送')
+      const latestIds = connectedTabSessionIds(useSessionStore.getState().tabs)
+      const scoped = useAiStore.getState().conversations[c.id]
+      if (!latestIds.length) throw new Error('请先打开SSH连接')
+      if (latestIds.length > 32) throw new Error('AI最多支持32个已连接的SSH会话，请关闭多余连接')
+      if (
+        !scoped ||
+        JSON.stringify(scoped.targets.map((target) => target.sessionId).sort()) !== JSON.stringify(latestIds)
+      )
+        throw new Error('Tab连接范围正在更新，请在连接就绪后重新发送')
       await bridge().ai.send({
         conversationId: c.id,
         text: draft.text.trim(),
@@ -449,17 +576,31 @@ export function AiInspector({
               <p>当前对话独立于终端标签</p>
             </div>
           )}
-          {conversation?.messages.map((m, i) => (
+          {turns.map((turn, i) => (
             <AiMessage
-              key={m.id}
-              message={m}
-              target={conversation.targets.find((t) => t.sessionId === m.tool?.sessionId)}
-              continuation={i > 0 && conversation.messages[i - 1].role !== 'user' && m.role !== 'user'}
+              key={turn.id}
+              messages={turn.messages}
+              targets={conversation?.targets}
+              busy={busy && i === turns.length - 1}
+              startedAt={turn.request?.startedAt}
+              completedAt={turn.request?.completedAt}
               onError={setError}
             />
           ))}
         </div>
       </div>
+      {busy && (
+        <div className="ai-response-status" role="status" aria-live="polite" aria-atomic="true">
+          <span aria-hidden="true">
+            {conversation?.status === 'awaiting_confirmation' ? (
+              <ConfirmationIcon size={16} />
+            ) : (
+              <Loading inline />
+            )}
+          </span>
+          <span>{activity}</span>
+        </div>
+      )}
       {conversation?.jobs.some((j) => j.status === 'running') && (
         <div className="ai-task-state">
           {conversation.jobs
@@ -495,14 +636,29 @@ export function AiInspector({
           </Button>
         </div>
       )}
-      {(error || conversation?.error) && (
-        <p className="ai-error" role="alert">
-          {error || conversation?.error}
-        </p>
-      )}
-      {conversation?.status === 'paused' && (
-        <p className="ai-command-notice">任务已暂停。请先核查结果，再发送后续指令。</p>
-      )}
+      <Dialog
+        open={open && Boolean(visibleError)}
+        onOpenChange={(value) => {
+          if (!value) {
+            setError('')
+            setDismissedError(errorKey)
+          }
+        }}
+      >
+        <DialogContent className="ai-error-dialog" showCloseButton={false}>
+          <DialogHeader>
+            <DialogTitle>
+              {error ? 'AI 操作失败' : conversation?.status === 'paused' ? 'AI 任务已暂停' : 'AI 任务异常'}
+            </DialogTitle>
+            <DialogDescription>{visibleError}</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button variant="secondary">知道了</Button>
+            </DialogClose>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       {!settings?.enabled && <p className="ai-command-notice">请在设置中启用AI助手。</p>}
       {settings?.enabled && !ready && (
         <p className="ai-command-notice">请选择可用的Agent和模型；可在设置中配置供应商或检查CLI安装。</p>
@@ -713,11 +869,7 @@ export function AiInspector({
             >
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <SelectTrigger
-                    id="ai-chat-model"
-                    className="ai-model-picker"
-                    aria-label="选择模型"
-                  >
+                  <SelectTrigger id="ai-chat-model" className="ai-model-picker" aria-label="选择模型">
                     <SelectValue placeholder="模型" />
                   </SelectTrigger>
                 </TooltipTrigger>

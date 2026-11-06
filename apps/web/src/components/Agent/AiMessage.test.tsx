@@ -20,15 +20,42 @@ beforeEach(() => {
 afterEach(async () => {
   await act(async () => root.unmount())
   host.remove()
+  vi.useRealTimers()
 })
-const render = (message: AiConversation['messages'][number]) =>
+const render = (
+  message: AiConversation['messages'][number],
+  timing: { busy?: boolean; startedAt?: number; completedAt?: number } = {},
+) =>
   act(async () =>
     root.render(
       <TooltipProvider>
-        <AiMessage message={message} onError={() => {}} />
+        <AiMessage messages={[message]} {...timing} onError={() => {}} />
       </TooltipProvider>,
     ),
   )
+it('updates elapsed time beside the AI name and freezes at the persisted completion time', async () => {
+  vi.useFakeTimers()
+  const startedAt = Date.UTC(2026, 10, 6, 6)
+  vi.setSystemTime(startedAt + 64000)
+  const message = { id: 'm', role: 'assistant' as const, text: '正在检查' }
+  await render(message, { startedAt, busy: true })
+  expect(host.querySelector('.ai-message-role time')?.textContent).toBe('已处理 1 分 4 秒')
+  await act(async () => vi.advanceTimersByTime(2000))
+  expect(host.querySelector('time')?.textContent).toBe('已处理 1 分 6 秒')
+  await render(message, { startedAt, completedAt: startedAt + 387000 })
+  expect(host.querySelector('time')?.textContent).toBe('耗时 6 分 27 秒')
+  expect(host.querySelector('time')?.getAttribute('datetime')).toBe('PT387S')
+  await act(async () => vi.advanceTimersByTime(10000))
+  expect(host.querySelector('time')?.textContent).toBe('耗时 6 分 27 秒')
+  expect(vi.getTimerCount()).toBe(0)
+})
+it('does not invent elapsed time for old history or a run interrupted by a restart', async () => {
+  const message = { id: 'm', role: 'assistant' as const, text: '历史回复' }
+  await render(message)
+  expect(host.querySelector('time')).toBeNull()
+  await render(message, { startedAt: Date.now() - 3600000 })
+  expect(host.querySelector('time')).toBeNull()
+})
 it('renders analysis, GFM tables and exact code copy', async () => {
   await render({
     id: 'm',

@@ -380,7 +380,7 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
     )
     assert.equal(
       await js(
-        "const s=document.querySelector('.ai-command-summary'),p=s.querySelector('.ai-command-purpose').getBoundingClientRect(),t=s.querySelector('.ai-command-status').getBoundingClientRect();return p.width>40&&p.bottom<=t.top+1",
+        "const s=document.querySelector('.ai-command-summary'),p=s.querySelector('.ai-command-purpose').getBoundingClientRect(),t=s.querySelector('.ai-command-status').getBoundingClientRect();return p.width>40&&p.right<=t.left&&Math.abs(p.top+p.height/2-t.top-t.height/2)<2",
       ),
       true,
     )
@@ -394,6 +394,14 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
     conversations.push(proposed.id)
     assert.equal(proposed.targets.length, 2)
     assert.equal(commands.length, 0)
+    assert.equal(await js("return document.querySelectorAll('.ai-message.is-assistant').length"), 1)
+    assert.equal(await js("return document.querySelector('.ai-response-status')?.textContent"), '等待你确认')
+    assert.ok(
+      await js("return document.querySelector('.ai-message-role time')?.textContent.startsWith('已处理 ')"),
+    )
+    const request = proposed.messages.find((m) => m.role === 'user')!
+    assert.equal(typeof request.startedAt, 'number')
+    assert.equal(request.completedAt, undefined)
     assert.equal(await js("return document.querySelectorAll('.ai-messages .ai-approval').length"), 0)
     window.setContentSize(1280, 800)
     await js('await document.fonts.ready;await new Promise(r=>setTimeout(r,150))')
@@ -425,6 +433,12 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
     assert.equal(commands.length, 2)
     const completed = await read()
     assert.ok(completed.messages.at(-1)?.text.includes('检查完成'))
+    const completedRequest = completed.messages.find((m) => m.id === request.id)!
+    assert.ok(completedRequest.completedAt! >= request.startedAt!)
+    await wait("return document.querySelector('.ai-message-role time')?.textContent.startsWith('耗时 ')")
+    assert.equal(await js("return !!document.querySelector('.ai-response-status')"), false)
+    assert.equal(await js("return document.querySelectorAll('.ai-message.is-assistant').length"), 1)
+    assert.equal(await js("return document.querySelectorAll('[aria-label=复制回复]').length"), 1)
     assert.ok(
       completed.messages.some(
         (m) => m.tool?.name === 'terminal_execute' && JSON.stringify(m.tool.result).includes('你好'),
@@ -451,11 +465,41 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
       (await window.webContents.capturePage(undefined, { stayAwake: true })).toPNG(),
     )
     screenshots.push('ai-v2-narrow.png')
+    await js("document.querySelector('button[aria-label=右侧栏]').click()")
+    await wait("return !document.querySelector('.ai-inspector').checkVisibility()")
+    const revisionBeforeReconnect = completed.revision
+    const reconnect = await call<{ session_id: string }>('session', 'reconnect', { id: targetIds[0] })
+    assert.equal(reconnect.session_id, targetIds[0])
+    await wait(
+      'return window.eizhu.session.list().then(rows=>rows.some(row=>row.id===' +
+        JSON.stringify(targetIds[0]) +
+        "&&row.status==='connected'))",
+    )
+    await wait(
+      'return window.__aiV2?.id===' +
+        JSON.stringify(proposed.id) +
+        '&&window.__aiV2.revision>' +
+        (revisionBeforeReconnect + 2) +
+        '&&window.__aiV2.targets.length===2',
+    )
+    await call('ai', 'send', { conversationId: proposed.id, text: '相同Tab重连后继续检查', attachments: [] })
+    await wait(
+      'return window.__aiV2?.id===' +
+        JSON.stringify(proposed.id) +
+        "&&window.__aiV2.status==='idle'&&window.__aiV2.messages.some(message=>message.role==='user'&&message.text==='相同Tab重连后继续检查')",
+    )
+    assert.equal((await read()).error, '')
+    await js("document.querySelector('button[aria-label=右侧栏]').click()")
+    await wait("return document.querySelector('.shell-inspector-picker').checkVisibility()")
+    await js(
+      "[...document.querySelectorAll('.shell-inspector-choices button')].find(button=>button.textContent==='AI').click()",
+    )
+    await wait("return document.querySelector('.ai-inspector').checkVisibility()")
     const beforeBusy = commands.length
     await call('session', 'input', { id: targetIds[0], data: 'unfinished-input' })
     const blocked = aiConversationSchema.parse(
       await call('ai', 'open', {
-        sessionIds: [targetIds[0]],
+        sessionIds: targetIds,
         backend: { kind: 'custom', providerId: 'responses', model: 'synthetic-ai' },
       }),
     )
@@ -479,7 +523,7 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
     mode = 'interrupted'
     const cut = aiConversationSchema.parse(
       await call('ai', 'open', {
-        sessionIds: [targetIds[0]],
+        sessionIds: targetIds,
         backend: { kind: 'custom', providerId: 'responses', model: 'synthetic-ai' },
       }),
     )
@@ -490,7 +534,7 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
     mode = 'long'
     const long = aiConversationSchema.parse(
       await call('ai', 'open', {
-        sessionIds: [targetIds[0]],
+        sessionIds: targetIds,
         backend: { kind: 'custom', providerId: 'responses', model: 'synthetic-ai' },
       }),
     )
@@ -509,7 +553,7 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
       for (const conflict of [true, false]) {
         const chat = aiConversationSchema.parse(
           await call('ai', 'open', {
-            sessionIds: [targetIds[0]],
+            sessionIds: targetIds,
             backend: { kind: 'custom', providerId: 'responses', model: 'synthetic-ai' },
           }),
         )
@@ -692,15 +736,15 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
           await js(
             "document.getElementById('ai-permission-picker').blur();document.getElementById('ai-permission-picker').focus()",
           )
-          await wait("return !!document.querySelector('[role=tooltip]')?.textContent.includes('切换操作权限')")
+          await wait(
+            "return !!document.querySelector('[role=tooltip]')?.textContent.includes('切换操作权限')",
+          )
           await js("document.getElementById('ai-permission-picker').blur()")
           await wait("return !document.querySelector('[role=tooltip]')")
           await js(
             "document.getElementById('ai-agent-picker').blur();document.getElementById('ai-agent-picker').focus()",
           )
-          await wait(
-            "return !!document.querySelector('[role=tooltip]')?.textContent.includes('切换供应商')",
-          )
+          await wait("return !!document.querySelector('[role=tooltip]')?.textContent.includes('切换供应商')")
           await js("document.getElementById('ai-agent-picker').blur()")
           await wait("return !document.querySelector('[role=tooltip]')")
         }
@@ -1003,12 +1047,17 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
       currentTerminalExecution: true,
       pendingTerminalInputBlocked: true,
       finalAnswerRetained: true,
+      continuousAssistantTurn: true,
+      liveActivityStatus: true,
+      persistedTurnElapsedTime: true,
       stopCancelsLongTasks: true,
       incompleteStreamRejected: true,
       encryptedStorage: true,
       settingsSelectedConfiguration: true,
       composerAgentSelection: true,
       scopeFollowsOpenSshSessions: true,
+      scopeWhileInspectorHidden: true,
+      sameIdReconnectScopeRefresh: true,
       scopeReadOnly: true,
       scopeHidden: true,
       conversationHistoryDialog: true,

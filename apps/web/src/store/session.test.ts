@@ -13,7 +13,7 @@ beforeEach(() => {
 })
 afterEach(() => useSessionStore.setState(useSessionStore.getInitialState(), true))
 
-it('waits for the backend to release a cancelled session and detaches only this tab from server details', async () => {
+it('关闭标签前等待会话释放，并解除服务器详情引用', async () => {
   useSessionStore.setState({
     tabs: [
       {
@@ -38,32 +38,25 @@ it('waits for the backend to release a cancelled session and detaches only this 
   let finished = false
   const cancellation = useSessionStore
     .getState()
-    .cancelConnection('tab')
+    .closeTab('tab')
     .then(() => {
       finished = true
     })
   expect(finished).toBe(false)
   expect(useSessionStore.getState().tabs[0]).toMatchObject({
-    status: 'disconnected',
+    status: 'reconnecting',
     sessionId: 'ssh',
-    manualConnect: true,
-    reconnectAttempt: undefined,
-    nextRetryAt: undefined,
   })
   expect(disconnect).not.toHaveBeenCalled()
   release()
   await cancellation
   expect(finished).toBe(true)
   expect(disconnect).toHaveBeenCalledExactlyOnceWith('server')
-  expect(useSessionStore.getState().tabs[0]).toMatchObject({
-    id: 'tab',
-    sessionId: null,
-    detailAttached: false,
-  })
-  expect(useSessionStore.getState().activeTabId).toBe('tab')
+  expect(useSessionStore.getState().tabs).toEqual([])
+  expect(useSessionStore.getState().activeTabId).toBeNull()
 })
 
-it('closes a late create response after cancellation without reopening or removing the tab', async () => {
+it('取消创建中的连接后移除标签，并释放迟到的会话', async () => {
   let resolve!: (value: Awaited<ReturnType<typeof sessionApi.create>>) => void
   vi.mocked(sessionApi.create).mockReturnValue(
     new Promise((done) => {
@@ -72,17 +65,13 @@ it('closes a late create response after cancellation without reopening or removi
   )
   const pending = useSessionStore.getState().openTab('server', '服务器')
   const id = useSessionStore.getState().tabs[0].id
-  await useSessionStore.getState().cancelConnection(id)
+  await useSessionStore.getState().closeTab(id)
+  expect(useSessionStore.getState().tabs).toEqual([])
   resolve({ session_id: 'late-ssh', status: 'connecting' })
   await pending
   expect(sessionApi.close).toHaveBeenCalledExactlyOnceWith('late-ssh')
-  expect(useSessionStore.getState().tabs).toHaveLength(1)
-  expect(useSessionStore.getState().tabs[0]).toMatchObject({
-    id,
-    status: 'disconnected',
-    sessionId: null,
-    manualConnect: true,
-  })
+  expect(useSessionStore.getState().tabs).toEqual([])
+  expect(useSessionStore.getState().activeTabId).toBeNull()
 })
 
 it('discards a create failure received after cancellation', async () => {
@@ -94,12 +83,34 @@ it('discards a create failure received after cancellation', async () => {
   )
   const pending = useSessionStore.getState().openTab('server', '服务器')
   const id = useSessionStore.getState().tabs[0].id
-  await useSessionStore.getState().cancelConnection(id)
+  await useSessionStore.getState().closeTab(id)
   reject({ error: { code: 'SSH_AUTH_FAILED', message: '认证失败' } })
   await pending
-  expect(useSessionStore.getState().tabs[0]).toMatchObject({
-    status: 'disconnected',
-    errorReason: undefined,
-    errorMessage: undefined,
+  expect(useSessionStore.getState().tabs).toEqual([])
+  expect(useSessionStore.getState().activeTabId).toBeNull()
+})
+
+it.each(['first', 'last'])('关闭连接标签沿用选中规则：当前标签为 %s', async (activeTabId) => {
+  useSessionStore.setState({
+    tabs: ['first', 'last'].map((id) => ({
+      id, profileId: id, profileName: id, sessionId: id, status: 'connecting',
+    })),
+    activeTabId,
   })
+  await useSessionStore.getState().closeTab('last')
+  expect(sessionApi.close).toHaveBeenCalledExactlyOnceWith('last')
+  expect(useSessionStore.getState().tabs.map((tab) => tab.id)).toEqual(['first'])
+  expect(useSessionStore.getState().activeTabId).toBe('first')
+})
+
+it('连接携带用户选择的目标，旧会话或其他服务器的元数据不能覆盖标签', async () => {
+  vi.mocked(sessionApi.create).mockResolvedValue({ session_id: 'ssh-a', status: 'connecting' })
+  const id = await useSessionStore.getState().openTab('a', '服务器 A', 'a.example.test', 2222, 'user-a')
+  expect(sessionApi.create).toHaveBeenCalledWith({ profile_id: 'a', expected_target: { host: 'a.example.test', port: 2222 }, cols: 80, rows: 24 })
+  const target = { profile_id: 'a', profile_name: '实际名称', host: 'actual.example.test', port: 2200, username: 'actual-user' }
+  useSessionStore.getState().updateTabTarget(id, 'old-ssh', target)
+  useSessionStore.getState().updateTabTarget(id, 'ssh-a', { ...target, profile_id: 'b' })
+  expect(useSessionStore.getState().tabs[0]).toMatchObject({ profileName: '服务器 A', host: 'a.example.test', port: 2222, username: 'user-a' })
+  useSessionStore.getState().updateTabTarget(id, 'ssh-a', target)
+  expect(useSessionStore.getState().tabs[0]).toMatchObject({ profileId: 'a', profileName: '实际名称', host: 'actual.example.test', port: 2200, username: 'actual-user' })
 })

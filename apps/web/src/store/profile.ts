@@ -4,6 +4,9 @@ import { groupApi } from '@/api/group'
 import type { Profile,ProfileCreateRequest,ProfileUpdateRequest } from '@/types/profile'
 import type { Group } from '@/types/group'
 import { isAutoManagedServerIcon } from '@/lib/serverIconKeys'
+import { workspaceGeneration } from '@/lib/workspaceScope'
+
+let profileReadVersion = 0
 
 interface ProfileStore {
   profiles: Profile[]
@@ -40,6 +43,8 @@ export const useProfileStore = create<ProfileStore>((set, get) => ({
   error: null,
 
   fetchProfiles: async () => {
+    const version = ++profileReadVersion,
+      generation = workspaceGeneration()
     set({ loading: true, error: null })
     try {
       const { selectedGroupId, searchQuery } = get()
@@ -47,8 +52,10 @@ export const useProfileStore = create<ProfileStore>((set, get) => ({
         group_id: selectedGroupId || undefined,
         search: searchQuery || undefined,
       })
-      set({ profiles: profiles ?? [], loading: false })
+      if (version === profileReadVersion && generation === workspaceGeneration())
+        set({ profiles: profiles ?? [], loading: false })
     } catch (err) {
+      if (version !== profileReadVersion || generation !== workspaceGeneration()) return
       console.error('Failed to fetch profiles:', err)
       set({ error: errorMessage(err), loading: false })
     }
@@ -66,20 +73,25 @@ export const useProfileStore = create<ProfileStore>((set, get) => ({
   refreshAll: async () => {
     // 备份中可能包含当前筛选之外的分组和服务器。批量导入完成后回到
     // 全量视图，并在两个请求都成功后一次性更新，避免侧栏短暂显示孤儿记录。
+    const version = ++profileReadVersion,
+      generation = workspaceGeneration()
     set({ selectedGroupId: null, searchQuery: '', loading: true, error: null })
     try {
       const [profiles, groups] = await Promise.all([
         profileApi.list(),
         groupApi.list(),
       ])
-      set({ profiles: profiles ?? [], groups: groups ?? [], loading: false })
+      if (version === profileReadVersion && generation === workspaceGeneration())
+        set({ profiles: profiles ?? [], groups: groups ?? [], loading: false })
     } catch (err) {
-      set({ error: errorMessage(err), loading: false })
+      if (version === profileReadVersion && generation === workspaceGeneration())
+        set({ error: errorMessage(err), loading: false })
       throw err
     }
   },
 
   applySnapshot: (profiles, groups) => {
+    ++profileReadVersion
     set({
       profiles: profiles ?? [],
       groups: groups ?? [],
@@ -97,8 +109,15 @@ export const useProfileStore = create<ProfileStore>((set, get) => ({
   },
 
   updateProfile: async (id, data) => {
+    const generation = workspaceGeneration()
     const profile = await profileApi.update(id, data)
-    get().fetchProfiles()
+    if (generation === workspaceGeneration()) {
+      ++profileReadVersion
+      set((state) => ({
+        profiles: state.profiles.map((item) => item.id === id ? profile : item),
+      }))
+      void get().fetchProfiles()
+    }
     return profile
   },
 

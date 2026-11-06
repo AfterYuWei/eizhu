@@ -12,7 +12,7 @@ beforeEach(() => {
   useSessionStore.setState(useSessionStore.getInitialState(), true)
 })
 afterEach(() => { resetTerminalLayout(); vi.useRealTimers() })
-it('四窗格上限、比例、焦点与合并保持连接，关闭仅关闭所属会话', () => {
+it('四窗格上限、比例、焦点与合并保持连接，关闭仅关闭所属会话', async () => {
   useSessionStore.setState({ tabs: [{ id: 'a', profileId: 'p', profileName: 'p', status: 'connected', sessionId: 'ssh-one' }], activeTabId: 'a' })
   for (const axis of ['horizontal', 'vertical', 'horizontal'] as const) useTerminalLayoutStore.getState().split(axis)
   const state = useTerminalLayoutStore.getState()
@@ -27,7 +27,7 @@ it('四窗格上限、比例、焦点与合并保持连接，关闭仅关闭所�
   state.merge(); expect(leaves(useTerminalLayoutStore.getState().tree)).toEqual(['a'])
   expect(useSessionStore.getState().tabs).toHaveLength(4)
   expect(sessionApi.close).not.toHaveBeenCalled()
-  useSessionStore.getState().closeTab('a')
+  await useSessionStore.getState().closeTab('a')
   expect(sessionApi.close).toHaveBeenCalledExactlyOnceWith('ssh-one')
   expect(leaves(useTerminalLayoutStore.getState().tree)).toHaveLength(1)
 })

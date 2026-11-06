@@ -7,6 +7,7 @@ export interface Session {
 
 export interface SessionCreateRequest {
   profile_id: string
+  expected_target?: { host: string; port: number }
   cols?: number
   rows?: number
   confirmed_host_key_fingerprint?: string

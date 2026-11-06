@@ -15,6 +15,12 @@ const completionOperand = z
   .refine((v) => !Array.from(v).some((c) => c.charCodeAt(0) < 32 || c.charCodeAt(0) === 127))
 const status = z.enum(['connecting', 'connected', 'reconnecting', 'suspended', 'disconnected', 'error'])
 const response = z.strictObject({ session_id: id, status: z.string().max(40) })
+const endpoint = z.strictObject({
+  host: z.string().min(1).max(512),
+  port: z.int().min(1).max(65535),
+  username: z.string().max(512),
+})
+const sessionTarget = endpoint.extend({ profile_id: id, profile_name: z.string().max(512) })
 export const authPromptSchema = z.strictObject({
   request_id: id,
   profile_id: id,
@@ -26,6 +32,7 @@ export const authPromptSchema = z.strictObject({
 })
 export const connectionStateSchema = z.strictObject({
   session_id: id,
+  target: sessionTarget.optional(),
   status: z.string().max(40),
   stage: z.string().max(80),
   message: z.string().max(1024),
@@ -51,10 +58,8 @@ export const sessionMessageSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('auth_request_closed'), payload: z.strictObject({ request_id: id }) }),
   z.strictObject({
     type: z.literal('metadata'),
-    payload: z.strictObject({
+    payload: sessionTarget.extend({
       session_id: id,
-      host: z.string(),
-      username: z.string(),
       protocol: z.literal('ssh'),
     }),
   }),
@@ -219,6 +224,7 @@ export const ssh = {
     input: z.strictObject({
       request: z.strictObject({
         profile_id: id,
+        expected_target: endpoint.omit({ username: true }).optional(),
         cols: z.int().min(1).max(1000).optional(),
         rows: z.int().min(1).max(1000).optional(),
         confirmed_host_key_fingerprint: z.string().optional(),

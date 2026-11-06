@@ -90,6 +90,8 @@ export const aiMessageSchema = z.strictObject({
   id: z.uuid(),
   role: z.enum(['user', 'assistant', 'tool']),
   text: z.string().max(196608),
+  startedAt: z.int().nonnegative().optional(),
+  completedAt: z.int().nonnegative().optional(),
   tool: aiToolCallSchema.optional(),
 })
 export const aiConversationSchema = z.strictObject({
@@ -159,7 +161,7 @@ export const ai = {
   'ai.read': { input: conversationId, output: aiConversationSchema },
   'ai.remove': { input: conversationId, output: z.void() },
   'ai.scope': {
-    input: conversationId.extend({ sessionIds: z.array(id).min(1).max(32) }),
+    input: conversationId.extend({ sessionIds: z.array(id).max(32) }),
     output: aiConversationSchema,
   },
   'ai.backend': { input: conversationId.extend({ backend: aiBackendSchema }), output: aiConversationSchema },

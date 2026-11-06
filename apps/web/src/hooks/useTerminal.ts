@@ -148,6 +148,9 @@ export function useTerminal(options: UseTerminalOptions) {
                 return true;
             // 粘贴：Ctrl+V / Ctrl+Shift+V（mac 为 Cmd+V），统一由终端写入剪贴板内容。
             if (key === 'v') {
+                // 返回 false 只跳过 xterm 按键处理，仍需取消系统默认粘贴以免重复写入。
+                event.preventDefault();
+                event.stopPropagation();
                 readClipboardText()
                     .then((clip) => {
                     if (clip)

@@ -307,11 +307,15 @@ export async function acceptLiveSync(
   a.faults.forceMe401 = true
   a.faults.dropRefresh = true
   await assert.rejects(a.call('account.me'), code('ACCOUNT_UNAVAILABLE'))
-  assert.equal((await a.call<AccountStatus>('account.status')).sessionState, 'reauth_required')
+  assert.equal((await a.call<AccountStatus>('account.status')).sessionState, 'authenticated')
+  await wait(
+    async () => (await a.call<AccountStatus>('account.status')).sessionState === 'reauth_required',
+    '刷新令牌明确失效',
+  )
   assert.ok((await a.call<Array<{ id: string }>>('group.list')).some((g) => g.id === group.id))
   await a.login('account.login', email, password)
   assert.equal((await status(a)).unlocked, true)
-  checks.push('刷新轮换后丢弃响应要求重新登录，账号空间、本地数据与记住解锁保留')
+  checks.push('刷新响应丢失先保留会话，仅在服务端明确拒绝旧刷新令牌后要求重新登录；本地数据与记住解锁保留')
 
   phase('password-reset-mail')
   const newPassword = 'Aa1!' + randomBytes(36).toString('base64url')

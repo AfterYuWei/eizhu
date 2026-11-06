@@ -4,7 +4,7 @@ import { mkdir, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { randomBytes, randomUUID } from 'node:crypto'
 import Database from 'better-sqlite3'
-import { DesktopError, offlineWorkspace } from '@eizhu/contracts'
+import { DesktopError, offlineWorkspace, local as localContracts } from '@eizhu/contracts'
 import { FoundationStore } from './store.ts'
 import { payloadSchema } from '../local/model.ts'
 import { entries } from '../sync/model.ts'
@@ -21,6 +21,7 @@ import type { WorkerClient } from '../workers/client.ts'
 import type { SyncConflict, SyncPreview } from '@eizhu/contracts'
 import type { WireItem } from '../sync/model.ts'
 import { answerWorker } from '../workers/client.ts'
+import type { ConnectionHop } from '../ssh/plan.ts'
 
 const code = (expected: string) => (e: unknown) => e instanceof DesktopError && e.error.code === expected
 async function verify() {
@@ -168,6 +169,44 @@ async function verify() {
     checks.push(
       '注册后两端使用登录缓存的同一 DEK；确认前不上传；默认预览合并离线且保留原库；第二设备应用不回声上传',
     )
+
+    const serverA = localContracts['profile.create'].output.parse(a.store.local.execute('profile.create', {
+      request: { name: '离线编辑服务器 A', host: 'old-a.example.invalid', username: 'user-a', auth_type: 'password', password: 'synthetic-a' },
+    }))
+    const serverB = localContracts['profile.create'].output.parse(a.store.local.execute('profile.create', {
+      request: { name: '离线编辑服务器 B', host: 'b.example.invalid', username: 'user-b', auth_type: 'password', password: 'synthetic-b' },
+    }))
+    await a.sync.execute('sync.now', undefined)
+    await b.sync.execute('sync.now', undefined)
+    const confirmed = (await a.sync.status()).lastConfirmed
+    peer.offline = true
+    a.store.local.execute('profile.update', { id: serverA.id, request: { host: 'new-a.example.invalid', port: 2222 } })
+    await assert.rejects(a.sync.execute('sync.now', undefined), code('ACCOUNT_UNAVAILABLE'))
+    assert.equal((await a.sync.status()).status, 'offline')
+    assert.equal((await a.sync.status()).pendingCount, 1)
+    assert.equal((await a.sync.status()).lastConfirmed, confirmed)
+    const route = () => (a.store.local.sshExecute('ssh.plan', { id: serverA.id }) as ConnectionHop[]).at(-1)!
+    assert.equal(route().profile.host, 'new-a.example.invalid')
+    assert.equal(route().profile.port, 2222)
+    assert.equal(route().credential.password, 'synthetic-a')
+    assert.equal(localContracts['profile.get'].output.parse(a.store.local.execute('profile.get', { id: serverB.id })).host, 'b.example.invalid')
+    // Another device edits the same record while A is offline. Reconnection must preserve A's edit as a conflict.
+    b.store.local.execute('profile.update', { id: serverA.id, request: { host: 'remote-a.example.invalid' } })
+    peer.offline = false
+    await b.sync.execute('sync.now', undefined)
+    await a.sync.execute('sync.now', undefined)
+    assert.equal(route().profile.host, 'new-a.example.invalid')
+    const serverConflict = ((await a.sync.execute('sync.conflicts', undefined)) as SyncConflict[]).find((item) => item.itemId === serverA.id)!
+    assert.ok(serverConflict)
+    await a.sync.execute('sync.resolveConflict', { itemType: 'profile', itemId: serverA.id, choice: 'keep_local', remoteRevision: serverConflict.remoteRevision })
+    await a.sync.execute('sync.now', undefined)
+    await b.sync.execute('sync.now', undefined)
+    assert.equal(localContracts['profile.get'].output.parse(b.store.local.execute('profile.get', { id: serverA.id })).host, 'new-a.example.invalid')
+    a.store.local.execute('profile.delete', { id: serverA.id })
+    a.store.local.execute('profile.delete', { id: serverB.id })
+    await a.sync.execute('sync.now', undefined)
+    await b.sync.execute('sync.now', undefined)
+    checks.push('后端不可用时保存 A 的地址、端口和凭据立即用于本地 SSH 计划；B 不变；恢复同步保留并发编辑冲突，不静默覆盖 A')
 
     a.store.local.execute('group.update', { id: group.id, request: { name: '上传中旧编辑' } })
     peer.holdPush = async () => {

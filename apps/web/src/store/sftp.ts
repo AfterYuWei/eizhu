@@ -768,9 +768,8 @@ export function createSftpStore(options: SftpStoreOptions = {}): SftpStoreApi {
     openDeleteConfirm: (pane, entries) => {
       const tab = activeTabOf(get(), pane)
       if (!tab) return
-      const entriesToDelete = entries ?? Array.from(tab.selected).map((path) =>
-        tab.entries.find((e) => e.path === path)
-      ).filter(Boolean) as SftpEntry[]
+      const candidates = tab.view === 'tree' && tab.tree ? flattenEntries(tab.tree) : tab.entries
+      const entriesToDelete = entries ?? candidates.filter((entry) => tab.selected.has(entry.path))
       if (entriesToDelete.length === 0) return
       set({
         deleteConfirm: { pane, entries: entriesToDelete },

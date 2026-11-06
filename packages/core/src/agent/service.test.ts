@@ -222,6 +222,9 @@ test('multi-session commands require approval; duplicate/window decisions cannot
     const c = await f.open()
     await f.send(c.id)
     const call = await f.pending()
+    const request = f.current.messages.find((m) => m.role === 'user')!
+    assert.equal(typeof request.startedAt, 'number')
+    assert.equal(request.completedAt, undefined)
     assert.equal(f.execs.length, 0)
     await assert.rejects(
       f.service.execute(
@@ -240,10 +243,21 @@ test('multi-session commands require approval; duplicate/window decisions cannot
     )
     await f.pending()
     assert.deepEqual(f.execs, ['a'])
+    assert.equal(f.current.messages[0].startedAt, request.startedAt)
+    assert.equal(f.current.messages[0].completedAt, undefined)
     await f.decide(c.id)
     await until(() => f.current.status === 'idle')
     assert.deepEqual(f.execs, ['a', 'b'])
     assert.equal(f.current.messages.at(-1)?.text, '已完成任务')
+    const completed = f.current.messages[0]
+    assert.ok(completed.completedAt! >= completed.startedAt!)
+    const saved = storedAiConversationSchema.parse(f.records.get(c.id))
+    assert.equal(saved.conversation.messages[0].completedAt, completed.completedAt)
+    await f.send(c.id)
+    await until(
+      () => f.current.messages.filter((m) => m.role === 'user' && m.completedAt !== undefined).length === 2,
+    )
+    assert.equal(f.current.messages[0].completedAt, completed.completedAt)
   } finally {
     await f.service.close()
   }
@@ -301,6 +315,117 @@ test('connection replacement and scope removal revoke pending approvals', async 
     await f.service.close()
   }
 })
+test('an incorrect model session ID is reported as unauthorized while the actual SSH connection stays usable', async () => {
+  const f = fixture([{ name: 'terminal_execute', args: command('not-an-authorized-session') }])
+  try {
+    const c = await f.open()
+    const binding = f.bindings.get('a')!
+    await f.send(c.id)
+    await until(() => f.current.status === 'error')
+    assert.ok(f.current.messages.some((message) => message.role === 'assistant' && message.text))
+    assert.match(f.current.error, /不在当前对话授权范围/)
+    assert.doesNotMatch(f.current.error, /实例已变化/)
+    assert.equal(f.ssh.agentConnected('a', binding), true)
+    assert.equal(f.execs.length, 0)
+  } finally {
+    await f.service.close()
+  }
+})
+test('revoked AI authorization is distinguished from an actual SSH connection replacement', async () => {
+  const f = fixture([])
+  try {
+    const c = await f.open()
+    const binding = f.bindings.get('a')!
+    await f.service.invalidateSession('a')
+    assert.equal(f.ssh.agentConnected('a', binding), true)
+    await assert.rejects(f.send(c.id), /正在更新连接授权/)
+    assert.equal(f.execs.length, 0)
+    await f.service.execute('ai.scope', { conversationId: c.id, sessionIds: ['a', 'b'] }, 1)
+    f.bindings.set('a', {})
+    await assert.rejects(f.send(c.id), /连接已断开或实例已更换/)
+    assert.equal(f.execs.length, 0)
+  } finally {
+    await f.service.close()
+  }
+})
+test('refreshing an unchanged connected scope preserves the running turn and its approval', async () => {
+  const f = fixture([{ name: 'terminal_execute', args: command('a') }, null])
+  try {
+    const c = await f.open()
+    await f.send(c.id)
+    const call = await f.pending()
+    const revision = f.current.revision
+    const refreshed = aiConversationSchema.parse(
+      await f.service.execute('ai.scope', { conversationId: c.id, sessionIds: ['b', 'a'] }, 1),
+    )
+    assert.equal(refreshed.revision, revision)
+    assert.equal(refreshed.status, 'awaiting_confirmation')
+    assert.equal(refreshed.messages.find((message) => message.tool?.id === call.id)?.tool?.state, 'pending')
+    await f.decide(c.id)
+    await until(() => f.current.status === 'idle')
+    assert.deepEqual(f.execs, ['a'])
+  } finally {
+    await f.service.close()
+  }
+})
+test('a same-ID reconnect refreshes the binding and expires old approvals without creating another conversation', async () => {
+  const f = fixture([
+    { name: 'terminal_execute', args: command('a') },
+    { name: 'terminal_execute', args: command('a') },
+    null,
+  ])
+  try {
+    const c = await f.open()
+    await f.send(c.id)
+    const oldCall = await f.pending()
+    const revision = f.current.revision
+    f.bindings.set('a', {})
+    await f.service.execute('ai.scope', { conversationId: c.id, sessionIds: ['a', 'b'] }, 1)
+    assert.equal(f.current.id, c.id)
+    assert.ok(f.current.revision > revision)
+    assert.equal(
+      f.current.messages.find((message) => message.tool?.id === oldCall.id)?.tool?.state,
+      'expired',
+    )
+    await assert.rejects(
+      f.service.execute(
+        'ai.decide',
+        { conversationId: c.id, callId: oldCall.id, revision, decision: 'once' },
+        1,
+      ),
+    )
+    assert.equal(f.execs.length, 0)
+    await f.send(c.id)
+    await f.decide(c.id)
+    await until(() => f.current.status === 'idle')
+    assert.deepEqual(f.execs, ['a'])
+    assert.equal(f.current.messages.filter((message) => message.role === 'user').length, 2)
+  } finally {
+    await f.service.close()
+  }
+})
+test('scope refresh excludes unavailable sessions and accepts an empty connected-tab set', async () => {
+  const f = fixture([])
+  try {
+    const c = await f.open()
+    f.bindings.delete('a')
+    const refreshed = aiConversationSchema.parse(
+      await f.service.execute('ai.scope', { conversationId: c.id, sessionIds: ['a', 'b'] }, 1),
+    )
+    assert.deepEqual(
+      refreshed.targets.map((target) => target.sessionId),
+      ['b'],
+    )
+    const empty = aiConversationSchema.parse(
+      await f.service.execute('ai.scope', { conversationId: c.id, sessionIds: [] }, 1),
+    )
+    assert.deepEqual(empty.targets, [])
+    await assert.rejects(f.send(c.id), /已连接的SSH Tab/)
+    assert.equal(f.execs.length, 0)
+  } finally {
+    await f.service.close()
+  }
+})
 test('interrupted model stream and failed durable checkpoint dispatch nothing', async () => {
   for (const mode of ['partial', 'disk'] as const) {
     const f = fixture([{ name: 'terminal_execute', args: command() }, null])
@@ -315,6 +440,7 @@ test('interrupted model stream and failed durable checkpoint dispatch nothing', 
       }
       await until(() => ['error', 'idle', 'paused'].includes(f.current.status))
       assert.equal(f.execs.length, 0)
+      assert.ok(f.current.messages[0].completedAt! >= f.current.messages[0].startedAt!)
     } finally {
       f.failWrites = false
       await f.service.close()
@@ -365,6 +491,10 @@ test('Stop cancels every long task created by an external Agent', async () => {
     await f.service.execute('ai.cancel', { conversationId: c.id }, 1)
     assert.deepEqual(f.stops.sort(), ['a', 'b'])
     assert.ok(f.current.jobs.every((j) => j.status === 'unknown'))
+    const completedAt = f.current.messages[0].completedAt
+    assert.ok(completedAt! >= f.current.messages[0].startedAt!)
+    await f.service.execute('ai.permission', { conversationId: c.id, permission: 'confirm' }, 1)
+    assert.equal(f.current.messages[0].completedAt, completedAt)
   } finally {
     await f.service.close()
   }
@@ -702,6 +832,7 @@ test('restart expires approvals, marks in-flight work unknown and never replays 
   const stored = storedAiConversationSchema.parse(f.records.get(c.id))
   stored.conversation.status = 'executing'
   stored.conversation.messages.push(
+    { id: randomUUID(), role: 'user', text: '检查', startedAt: Date.now() - 3600000 },
     {
       id: randomUUID(),
       role: 'tool',
@@ -743,8 +874,9 @@ test('restart expires approvals, marks in-flight work unknown and never replays 
   try {
     const read = aiConversationSchema.parse(await resumed.execute('ai.read', { conversationId: c.id }, 1))
     assert.equal(read.status, 'paused')
-    assert.equal(read.messages[0].tool?.state, 'unknown')
-    assert.equal(read.messages[1].tool?.state, 'expired')
+    assert.equal(read.messages[0].completedAt, undefined)
+    assert.equal(read.messages[1].tool?.state, 'unknown')
+    assert.equal(read.messages[2].tool?.state, 'expired')
     assert.equal(f.execs.length, 0)
     await assert.rejects(
       resumed.execute(

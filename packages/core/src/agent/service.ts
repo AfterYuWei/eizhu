@@ -142,6 +142,11 @@ export class AgentService {
     await this.storage({ kind: 'save', value: a.stored })
     this.notify(a)
   }
+  private async finish(a: Active) {
+    const request = a.stored.conversation.messages.findLast((m) => m.role === 'user')
+    if (request?.startedAt !== undefined) request.completedAt = Date.now()
+    await this.save(a)
+  }
   private owned(id: string, owner: number) {
     const a = this.active.get(id)
     if (!a || a.owner !== owner) fail('FORBIDDEN', '请在当前窗口重新打开对话')
@@ -150,13 +155,16 @@ export class AgentService {
   private guard(a: Active, sessionId?: string) {
     if (this.closed) fail('RUNTIME_CLOSED', 'AI服务已关闭')
     if (sessionId) {
+      if (!a.stored.conversation.targets.some((t) => t.sessionId === sessionId))
+        fail(
+          'AI_TARGET_NOT_AUTHORIZED',
+          'AI选择的连接不在当前对话授权范围内，操作未执行。SSH连接状态未受影响。',
+        )
       const binding = a.bindings.get(sessionId)
-      if (
-        !binding ||
-        !a.stored.conversation.targets.some((t) => t.sessionId === sessionId) ||
-        !this.ssh.agentConnected(sessionId, binding)
-      )
-        fail('AI_SCOPE_CHANGED', '连接范围或SSH连接实例已变化，请重新选择连接')
+      if (!binding)
+        fail('AI_SCOPE_CHANGED', 'AI对话正在更新连接授权，请等待Tab连接就绪后重新发送；这不表示SSH已断开。')
+      if (!this.ssh.agentConnected(sessionId, binding))
+        fail('AI_SCOPE_CHANGED', 'AI绑定的SSH连接已断开或实例已更换，请等待Tab重新连接成功后再发送。')
       return binding
     }
   }
@@ -217,7 +225,7 @@ export class AgentService {
         this.repairWire(a)
         c.status = cancelled ? 'paused' : 'error'
         c.error = cancelled ? '已停止；请核查尚未确认结束的远端任务' : failureOf(error).message
-        await this.save(a)
+        await this.finish(a)
       })
       .catch(() => {
         a.stored.conversation.status = 'error'
@@ -255,11 +263,35 @@ export class AgentService {
     return c
   }
   private async targets(a: Active, ids: string[]) {
-    const next = await Promise.all([...new Set(ids)].map((id) => this.ssh.agentTarget(id)))
+    const resolved = await Promise.all(
+      [...new Set(ids)].sort().map(async (id) => {
+        try {
+          return await this.ssh.agentTarget(id)
+        } catch (error) {
+          const code = failureOf(error).code
+          if (code === 'SSH_NOT_CONNECTED' || code === 'NOT_FOUND') return undefined
+          throw error
+        }
+      }),
+    )
+    let next = resolved.filter((value) => value !== undefined)
+    const changed =
+      next.length !== a.bindings.size ||
+      next.length !== a.stored.conversation.targets.length ||
+      next.some((value) => a.bindings.get(value.target.sessionId) !== value.binding)
+    if (!changed) {
+      a.stored.conversation.targets = next.map((value) => value.target)
+      return false
+    }
+    if (a.task || a.jobs.size || a.approval) {
+      await this.stop(a)
+      next = next.filter((value) => this.ssh.agentConnected(value.target.sessionId, value.binding))
+    }
     a.bindings = new Map(next.map((v) => [v.target.sessionId, v.binding]))
     a.stored.conversation.targets = next.map((v) => v.target)
     a.grants.clear()
     a.stored.conversation.revision++
+    return true
   }
   private output(a: Active, value: unknown) {
     const data = z.json().parse(JSON.parse(JSON.stringify(value))),
@@ -595,7 +627,7 @@ export class AgentService {
       )
       a.stored.nativeSession = result.nativeSession
       c.status = 'idle'
-      await this.save(a)
+      await this.finish(a)
       return
     }
     for (let step = 0; step < 32; step++) {
@@ -651,7 +683,7 @@ export class AgentService {
       a.stored.wire.push(...result.messages)
       if (!result.calls.length) {
         c.status = 'idle'
-        await this.save(a)
+        await this.finish(a)
         return
       }
       for (const call of result.calls) {
@@ -669,14 +701,14 @@ export class AgentService {
         })
         if (a.stored.conversation.status === 'paused') {
           this.repairWire(a)
-          await this.save(a)
+          await this.finish(a)
           return
         }
       }
     }
     c.status = 'paused'
     c.error = '本轮已达到32步，请核查后继续'
-    await this.save(a)
+    await this.finish(a)
   }
   private async readJson(request: Parameters<AiTransport>[0], signal: AbortSignal) {
     let text = ''
@@ -889,9 +921,7 @@ export class AgentService {
       case 'ai.scope': {
         const d = ai['ai.scope'].input.parse(input),
           a = this.owned(d.conversationId, owner)
-        await this.stop(a)
-        await this.targets(a, d.sessionIds)
-        await this.save(a)
+        if (await this.targets(a, d.sessionIds)) await this.save(a)
         return a.stored.conversation
       }
       case 'ai.backend': {
@@ -924,7 +954,7 @@ export class AgentService {
         const config = await this.config()
         if (!config.enabled) fail('AI_DISABLED', '请先在设置中启用AI助手')
         await this.availableBackend(c.backend, config)
-        if (!c.targets.length) fail('AI_SCOPE_CHANGED', '请先选择连接')
+        if (!c.targets.length) fail('AI_SCOPE_CHANGED', '请先打开已连接的SSH Tab')
         for (const t of c.targets) {
           this.guard(a, t.sessionId)
           t.cwd = (await this.ssh.agentTarget(t.sessionId)).target.cwd
@@ -944,7 +974,7 @@ export class AgentService {
           config.providers.map((p) => p.apiKey),
         )
         if (c.messages.length > 1950) fail('AI_HISTORY_LIMIT', '对话已满，请新建对话')
-        c.messages.push({ id: randomUUID(), role: 'user', text })
+        c.messages.push({ id: randomUUID(), role: 'user', text, startedAt: Date.now() })
         if (c.title === '新对话') c.title = d.text.slice(0, 60)
         a.stored.wire.push({ role: 'user', content: text })
         c.error = ''

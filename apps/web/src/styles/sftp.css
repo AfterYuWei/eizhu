@@ -16,7 +16,8 @@
   --fg-5: var(--sftp-muted);
   --input-hover-border: var(--border);
   --input-hover-bg: var(--bg-hover);
-  --input-selection-bg: var(--bg-active);
+  --input-selection-bg: color-mix(in srgb, var(--fg) 25%, var(--surface-panel));
+  --input-selection-fg: var(--fg);
 }
 .sftp-dialog {
   --surface-app: light-dark(#f4f4f4, #171717);

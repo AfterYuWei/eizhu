@@ -1,6 +1,13 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { ssh, sessionMessageSchema, isPublicTunnelBind } from '../ssh.ts'
+test('session targets carry the reviewed endpoint and actual server identity without credential fields', () => {
+  const target = { host: 'a.example.test', port: 2222 }
+  assert.equal(ssh['session.create'].input.safeParse({ request: { profile_id: 'a', expected_target: target } }).success, true)
+  assert.equal(ssh['session.create'].input.safeParse({ request: { profile_id: 'a', expected_target: { ...target, port: 0 } } }).success, false)
+  assert.equal(ssh['session.create'].input.safeParse({ request: { profile_id: 'a', expected_target: { ...target, password: 'not-allowed' } } }).success, false)
+  assert.equal(sessionMessageSchema.safeParse({ type: 'metadata', payload: { ...target, username: 'user', profile_id: 'a', profile_name: '服务器 A', session_id: 'ssh-a', protocol: 'ssh' } }).success, true)
+})
 test('completion contexts remain typed, bounded and reject control characters or shell programs', () => {
   const request = {
     id: 's',

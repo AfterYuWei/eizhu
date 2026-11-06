@@ -32,6 +32,7 @@ export class AccountService {
   private controller = new AbortController()
   private running = new Set<Promise<unknown>>()
   private refreshing?: Promise<AccountSession>
+  private refreshRetry?: { at: number; error: DesktopError }
   private timer?: ReturnType<typeof setTimeout>
   private closed = false
   private loggingOut = false
@@ -73,13 +74,16 @@ export class AccountService {
   start(): void {
     if (this.workspace.id !== 'offline') void this.run(() => this.schedule()).catch(() => undefined)
   }
-  private async schedule(): Promise<void> {
+  private async schedule(retryDelay?: number): Promise<void> {
     if (this.timer) clearTimeout(this.timer)
     this.timer = undefined
     if (this.closed) return
     const session = await this.storage.session(this.workspace)
     if (!session?.tokens || this.closed) return
-    const delay = Math.max(1000, Math.min(2147483647, session.tokens.expiresAt - Date.now() - 60_000))
+    const delay = Math.max(
+      1000,
+      Math.min(2147483647, retryDelay ?? session.tokens.expiresAt - Date.now() - 60_000),
+    )
     this.timer = setTimeout(() => {
       this.timer = undefined
       void this.run(() => this.refresh()).catch(() => undefined)
@@ -92,6 +96,7 @@ export class AccountService {
     this.refreshing ??= (async () => {
       const previous = await this.current(),
         expected = previous.tokens!.refreshToken
+      if (this.refreshRetry && Date.now() < this.refreshRetry.at) throw this.refreshRetry.error
       try {
         const response = await this.client.request(
           'refresh',
@@ -106,15 +111,33 @@ export class AccountService {
           tokens,
           user: { ...previous.user, ...response.user },
         })
+        this.refreshRetry = undefined
         await this.publish()
         await this.schedule()
         return next
       } catch (cause) {
-        // Refresh rotates once. Any unknown result requires login rather than replaying an old refresh token.
-        await this.storage.update(this.workspace, expected, { tokens: null }).catch((error: unknown) => {
-          if (errorCode(error) !== 'ACCOUNT_SESSION_CHANGED') throw error
-        })
-        await this.publish()
+        if (['ACCOUNT_NOT_LOGGED_IN', 'ACCOUNT_DISABLED'].includes(errorCode(cause))) {
+          await this.storage.update(this.workspace, expected, { tokens: null }).catch((error: unknown) => {
+            if (errorCode(error) !== 'ACCOUNT_SESSION_CHANGED') throw error
+          })
+          await this.publish()
+        } else if (cause instanceof DesktopError && cause.retryable && !this.closed && !this.loggingOut) {
+          const latest = await this.storage.session(this.workspace)
+          if (latest?.tokens?.refreshToken === expected) {
+            const retry = z.object({ retryAfterSeconds: z.number().positive() }).safeParse(cause.details)
+            const delay =
+              cause.error.code === 'RATE_LIMITED'
+                ? Math.max(
+                    1000,
+                    Math.min(3600000, (retry.success ? retry.data.retryAfterSeconds : 60) * 1000),
+                  )
+                : 5000
+            // Keep the persisted token until the server explicitly rejects it. Its one-time
+            // consumption prevents a later attempt from rotating the same token twice.
+            this.refreshRetry = { at: Date.now() + delay, error: cause }
+            await this.schedule(delay)
+          }
+        }
         throw cause
       }
     })().finally(() => {
@@ -289,6 +312,7 @@ export class AccountService {
           masterKeys: response.keys,
         })
         if (workspace.id === this.workspace.id) {
+          this.refreshRetry = undefined
           await this.publish()
           await this.schedule()
         }

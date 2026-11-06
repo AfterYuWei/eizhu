@@ -2,6 +2,7 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import type { SftpEntry } from '@/types/sftp'
 import { createSftpStore, type SftpStoreApi } from '@/store/sftp'
 import { setWorkspaceGeneration } from '@/lib/workspaceScope'
 import { SftpStoreContext } from './storeContext'
@@ -87,4 +88,49 @@ it('刷新及树视图读取都有进度，切换到其他标签不会沿用旧�
   expect(host.querySelector('[role="progressbar"]')).toBeNull()
   await act(async () => { tree.resolve({ path: '/', entries: [] }); await pending })
   expect(store.getState().leftTabs[0].loading).toBe(false)
+})
+
+it.each(['list', 'tree'] as const)('%s 视图中 Command 多选后右键删除保留全部选中项', async (view) => {
+  const entries: SftpEntry[] = ['one.txt', 'two.txt', 'zzz.txt'].map((name) => ({ name, path: `/${name}`, is_dir: false, size: 1, mod_time: '' }))
+  const tab = store.getState().leftTabs[0]
+  await act(async () => store.setState({ leftTabs: [{
+    ...tab, sessionId: 'session', view, entries: view === 'list' ? entries : [],
+    tree: { entry: { name: '/', path: '/', is_dir: true, size: 0, mod_time: '' }, children: entries.map((entry) => ({ entry, children: [] })) },
+  }] }))
+  const rows = host.querySelectorAll<HTMLElement>('[role="row"]')
+  await act(async () => rows[0].click())
+  await act(async () => rows[1].dispatchEvent(new MouseEvent('click', { bubbles: true, metaKey: true })))
+  expect(store.getState().leftTabs[0].selected).toEqual(new Set(['/one.txt', '/two.txt']))
+  await act(async () => rows[1].dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true })))
+  const deleteItem = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find((item) => item.textContent === '删除')!
+  await act(async () => deleteItem.click())
+  expect(store.getState().deleteConfirm?.entries.map((entry) => entry.path)).toEqual(['/one.txt', '/two.txt'])
+  expect(store.getState().leftTabs[0].selected).toEqual(new Set(['/one.txt', '/two.txt']))
+})
+
+it.each(['list', 'tree'] as const)('%s 视图右键未选中项只删除该项', async (view) => {
+  const entries: SftpEntry[] = ['one.txt', 'two.txt'].map((name) => ({ name, path: `/${name}`, is_dir: false, size: 1, mod_time: '' }))
+  const tab = store.getState().leftTabs[0]
+  await act(async () => store.setState({ leftTabs: [{
+    ...tab, sessionId: 'session', view, selected: new Set(['/one.txt']), entries,
+    tree: { entry: { name: '/', path: '/', is_dir: true, size: 0, mod_time: '' }, children: entries.map((entry) => ({ entry, children: [] })) },
+  }] }))
+  const rows = host.querySelectorAll<HTMLElement>('[role="row"]')
+  await act(async () => rows[1].dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true })))
+  const deleteItem = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find((item) => item.textContent === '删除')!
+  await act(async () => deleteItem.click())
+  expect(store.getState().deleteConfirm?.entries.map((entry) => entry.path)).toEqual(['/two.txt'])
+})
+
+it('树形视图工具栏删除包括展开目录内的多选文件', async () => {
+  const directory: SftpEntry = { name: 'folder', path: '/folder', is_dir: true, size: 0, mod_time: '' }
+  const entries: SftpEntry[] = ['one.txt', 'two.txt'].map((name) => ({ name, path: `/folder/${name}`, is_dir: false, size: 1, mod_time: '' }))
+  const tab = store.getState().leftTabs[0]
+  await act(async () => store.setState({ leftTabs: [{
+    ...tab, sessionId: 'session', view: 'tree', entries: [directory],
+    selected: new Set(entries.map((entry) => entry.path)),
+    tree: { entry: { ...directory, name: '/', path: '/' }, children: [{ entry: directory, children: entries.map((entry) => ({ entry, children: [] })) }] },
+  }] }))
+  await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="删除"]')!.click())
+  expect(store.getState().deleteConfirm?.entries).toEqual(entries)
 })

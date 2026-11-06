@@ -30,6 +30,7 @@ export interface AccountFixture {
   setupRequired: boolean
   denyRegister: boolean
   offline: boolean
+  refreshOffline: boolean
   rejectMeCount: number
   dropNextRefresh: boolean
   dropNextLogout: boolean
@@ -269,6 +270,7 @@ export async function createAccountFixture(): Promise<AccountFixture> {
     setupRequired: false,
     denyRegister: false,
     offline: false,
+    refreshOffline: false,
     rejectMeCount: 0,
     dropNextRefresh: false,
     dropNextLogout: false,
@@ -292,6 +294,8 @@ export async function createAccountFixture(): Promise<AccountFixture> {
     transport: (request, signal) => {
       if (fixture.offline) return Promise.reject(new Error('Synthetic offline'))
       const source = new URL(request.url)
+      if (fixture.refreshOffline && source.pathname === '/api/auth/refresh')
+        return Promise.reject(new Error('Synthetic refresh offline'))
       return accountHttp(
         { ...request, url: `http://127.0.0.1:${port}${source.pathname}${source.search}` },
         signal,

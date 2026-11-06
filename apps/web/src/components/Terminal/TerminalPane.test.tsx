@@ -50,12 +50,11 @@ vi.mock('@/hooks/useSessionChannel', () => ({
 }))
 vi.mock('@/store/history', () => ({ useHistoryStore: { getState: () => ({ load: async () => {} }) } }))
 vi.mock('@/components/Terminal/CompletionPanel', () => ({ CompletionPanel: () => null }))
-vi.mock('@/components/Terminal/AuthPromptDialog', () => ({ AuthPromptDialog: () => null }))
 
 let host: HTMLDivElement, root: Root
 function View() {
   const tab = useSessionStore((state) => state.tabs[0])
-  return <TerminalPane tab={tab} isActive={false} isVisible={false} />
+  return tab ? <TerminalPane tab={tab} isActive={false} isVisible={false} /> : null
 }
 const message = async (payload: SessionMessage) => act(async () => mocks.onMessage!(payload))
 beforeEach(async () => {
@@ -77,6 +76,7 @@ afterEach(async () => {
   await act(async () => root.unmount())
   host.remove()
   useSessionStore.setState(useSessionStore.getInitialState(), true)
+  vi.useRealTimers()
   vi.unstubAllGlobals()
 })
 
@@ -100,13 +100,35 @@ it('renders a replayed failure snapshot at host confirmation as an error without
 it('保留连接就绪前上报的当前目录，并在重连开始时清除旧目录', async () => {
   await act(async () => useSessionStore.setState((state) => ({ tabs: state.tabs.map((tab) => ({ ...tab, detailAttached: true })) })))
   await message({ type: 'cwd', payload: { path: '/root' } })
-  await message({ type: 'metadata', payload: { session_id: 'ssh', host: 'example.test', username: 'user', protocol: 'ssh' } })
+  await message({ type: 'metadata', payload: { session_id: 'ssh', profile_id: 'server', profile_name: '服务器', host: 'example.test', port: 22, username: 'user', protocol: 'ssh' } })
   expect(useSessionStore.getState().tabs[0].cwd).toBe('/root')
   await message({ type: 'connection_state', payload: { session_id: 'ssh', status: 'reconnecting', stage: 'retry_wait', retry_attempt: 1, next_retry_at: Date.now() + 1000 } })
   expect(useSessionStore.getState().tabs[0].cwd).toBeUndefined()
   await message({ type: 'cwd', payload: { path: '/home/user' } })
-  await message({ type: 'metadata', payload: { session_id: 'ssh', host: 'example.test', username: 'user', protocol: 'ssh' } })
+  await message({ type: 'metadata', payload: { session_id: 'ssh', profile_id: 'server', profile_name: '服务器', host: 'example.test', port: 22, username: 'user', protocol: 'ssh' } })
   expect(useSessionStore.getState().tabs[0].cwd).toBe('/home/user')
+})
+
+it('按实际连接快照更新地址、端口与标签，忽略不属于当前会话的就绪消息', async () => {
+  await act(async () => useSessionStore.setState((state) => ({ tabs: state.tabs.map((tab) => ({ ...tab, detailAttached: true, host: 'old.test', port: 22, username: 'old' })) })))
+  const target = { profile_id: 'server', profile_name: '实际服务器', host: 'actual.test', port: 2222, username: 'actual' }
+  await message({ type: 'connection_state', payload: { session_id: 'ssh', status: 'connecting', stage: 'preparing', target } })
+  expect(useSessionStore.getState().tabs[0]).toMatchObject({ profileName: '实际服务器', host: 'actual.test', port: 2222, username: 'actual' })
+  await message({ type: 'metadata', payload: { ...target, session_id: 'other-ssh', protocol: 'ssh' } })
+  expect(useSessionStore.getState().tabs[0]).toMatchObject({ sessionId: 'ssh', status: 'connecting' })
+  await message({ type: 'metadata', payload: { ...target, session_id: 'ssh', profile_id: 'other-server', protocol: 'ssh' } })
+  expect(useSessionStore.getState().tabs[0].status).toBe('connecting')
+  await message({ type: 'metadata', payload: { ...target, session_id: 'ssh', protocol: 'ssh' } })
+  expect(useSessionStore.getState().tabs[0].status).toBe('connected')
+})
+
+it('标签已换绑时，旧订阅回调不能把它重新绑定回旧会话', async () => {
+  const previous = mocks.onMessage!
+  await act(async () => {
+    useSessionStore.setState({ tabs: [{ id: 'tab', profileId: 'other-server', profileName: '服务器 B', sessionId: 'new-ssh', status: 'connecting' }] })
+    previous({ type: 'metadata', payload: { session_id: 'ssh', profile_id: 'server', profile_name: '服务器 A', host: 'a.test', port: 22, username: 'a', protocol: 'ssh' } })
+  })
+  expect(useSessionStore.getState().tabs[0]).toMatchObject({ profileId: 'other-server', profileName: '服务器 B', sessionId: 'new-ssh', status: 'connecting' })
 })
 
 it('changes from the retry countdown to the actual operation as soon as a new attempt starts', async () => {
@@ -137,7 +159,7 @@ it('changes from the retry countdown to the actual operation as soon as a new at
   expect(document.querySelector('[role="progressbar"]')).not.toBeNull()
 })
 
-it('cancels the active connection and retry countdown without removing its tab, ignores late events, and permits manual reconnect', async () => {
+it('取消连接与重连倒计时后关闭标签，迟到事件不再恢复页面', async () => {
   await message({
     type: 'connection_state',
     payload: {
@@ -152,34 +174,20 @@ it('cancels the active connection and retry countdown without removing its tab, 
     [...document.querySelectorAll('button')].find((button) => button.textContent === '取消连接')!.click(),
   )
   expect(sessionApi.close).toHaveBeenCalledExactlyOnceWith('ssh')
-  expect(useSessionStore.getState().activeTabId).toBe('tab')
-  expect(useSessionStore.getState().tabs).toHaveLength(1)
-  expect(useSessionStore.getState().tabs[0]).toMatchObject({
-    id: 'tab',
-    status: 'disconnected',
-    sessionId: null,
-    manualConnect: true,
-    reconnectAttempt: undefined,
-    nextRetryAt: undefined,
-  })
+  expect(useSessionStore.getState().activeTabId).toBeNull()
+  expect(useSessionStore.getState().tabs).toEqual([])
+  expect(host.querySelector('.terminal-pane-root')).toBeNull()
+  expect(terminalActions('tab')).toBeUndefined()
   expect(document.querySelector('[role="dialog"]')).toBeNull()
   await message({ type: 'error', payload: { code: 'SSH_NETWORK_ERROR', message: '迟到的连接错误' } })
   await message({
     type: 'metadata',
-    payload: { session_id: 'ssh', host: 'example.test', username: 'user', protocol: 'ssh' },
+    payload: { session_id: 'ssh', profile_id: 'server', profile_name: '服务器', host: 'example.test', port: 22, username: 'user', protocol: 'ssh' },
   })
   expect(document.querySelector('[role="dialog"]')).toBeNull()
-  expect(useSessionStore.getState().tabs[0].status).toBe('disconnected')
-  await act(async () =>
-    [...document.querySelectorAll('button')].find((button) => button.textContent === '连接服务器')!.click(),
-  )
-  expect(sessionApi.create).toHaveBeenCalledOnce()
-  expect(useSessionStore.getState().tabs[0]).toMatchObject({
-    sessionId: 'new-ssh',
-    status: 'connecting',
-    manualConnect: false,
-  })
-  expect(document.querySelector('[role="dialog"]')).not.toBeNull()
+  expect(useSessionStore.getState().tabs).toEqual([])
+  expect(sessionApi.create).not.toHaveBeenCalled()
+  expect(document.body.textContent).not.toContain('连接服务器')
 })
 
 it('releases a session returned by a reconnect request after cancellation without reviving its tab', async () => {
@@ -201,11 +209,8 @@ it('releases a session returned by a reconnect request after cancellation withou
     await pending
   })
   expect(sessionApi.close).toHaveBeenCalledWith('ssh')
-  expect(useSessionStore.getState().tabs[0]).toMatchObject({
-    id: 'tab',
-    status: 'disconnected',
-    sessionId: null,
-  })
+  expect(useSessionStore.getState().tabs).toEqual([])
+  expect(useSessionStore.getState().activeTabId).toBeNull()
   expect(document.querySelector('[role="dialog"]')).toBeNull()
 })
 
@@ -221,6 +226,63 @@ it('keeps cancellation failures in the connection log and retains the session fo
   await act(async () =>
     [...document.querySelectorAll('button')].find((button) => button.textContent === '取消连接')!.click(),
   )
-  expect(useSessionStore.getState().tabs[0]).toMatchObject({ status: 'disconnected', sessionId: null })
+  expect(useSessionStore.getState().tabs).toEqual([])
+  expect(useSessionStore.getState().activeTabId).toBeNull()
   expect(document.querySelector('[role="dialog"]')).toBeNull()
+})
+
+it('主机指纹确认选择取消时关闭连接标签', async () => {
+  await message({
+    type: 'connection_state',
+    payload: {
+      session_id: 'ssh', status: 'connecting', stage: 'hostkey_confirm',
+      host_key_request_id: 'hostkey-request', host_key_fingerprint: 'SHA256:test',
+    },
+  })
+  await act(async () =>
+    [...document.querySelectorAll('button')].find((button) => button.textContent === '取消连接')!.click(),
+  )
+  expect(sessionApi.decideHostKey).toHaveBeenCalledExactlyOnceWith('hostkey-request', 'SHA256:test', 'reject')
+  expect(sessionApi.close).toHaveBeenCalledExactlyOnceWith('ssh')
+  expect(useSessionStore.getState().tabs).toEqual([])
+  expect(document.querySelector('[role="dialog"]')).toBeNull()
+})
+
+it('交互式认证选择取消时收起提示并关闭连接标签', async () => {
+  await message({
+    type: 'auth_request',
+    payload: {
+      request_id: 'auth-request', session_id: 'ssh', name: 'SSH 交互式认证', instructions: '',
+      prompts: [{ prompt: '密码', echo: false }],
+    },
+  })
+  expect(document.body.textContent).toContain('SSH 交互式认证')
+  await act(async () =>
+    [...document.querySelectorAll('button')].find((button) => button.textContent === '取消连接')!.click(),
+  )
+  expect(sessionApi.close).toHaveBeenCalledExactlyOnceWith('ssh')
+  expect(useSessionStore.getState().tabs).toEqual([])
+  expect(document.querySelector('[role="dialog"]')).toBeNull()
+})
+
+it('Escape 关闭连接失败对话框时也移除对应标签', async () => {
+  await message({ type: 'error', payload: { code: 'SSH_AUTH_FAILED', message: '认证失败' } })
+  await act(async () => {
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+  })
+  expect(sessionApi.close).toHaveBeenCalledExactlyOnceWith('ssh')
+  expect(useSessionStore.getState().tabs).toEqual([])
+  expect(document.querySelector('[role="dialog"]')).toBeNull()
+})
+
+it('连接成功后自动收起对话框，保留正常连接的标签', async () => {
+  vi.useFakeTimers()
+  await message({
+    type: 'metadata',
+    payload: { session_id: 'ssh', profile_id: 'server', profile_name: '服务器', host: 'example.test', port: 22, username: 'user', protocol: 'ssh' },
+  })
+  await act(async () => vi.advanceTimersByTime(700))
+  expect(document.querySelector('[role="dialog"]')).toBeNull()
+  expect(useSessionStore.getState().tabs[0]).toMatchObject({ id: 'tab', sessionId: 'ssh', status: 'connected' })
+  expect(sessionApi.close).not.toHaveBeenCalled()
 })
