@@ -104,6 +104,10 @@ export function AiInspector({
     Pick<AiConversation, 'id' | 'title' | 'updatedAt' | 'backend'>
   > | null>(null)
   const [historyError, setHistoryError] = useState('')
+  const [pickerPosition, setPickerPosition] = useState<{ offset: number; boundary: HTMLElement | null }>({
+    offset: 8,
+    boundary: null,
+  })
   const messages = useRef<HTMLDivElement>(null),
     follow = useRef(true)
   const pending = conversation?.messages.findLast((m) => m.tool?.state === 'pending')?.tool
@@ -112,6 +116,15 @@ export function AiInspector({
     conversation?.status === 'executing' ||
     conversation?.status === 'awaiting_confirmation'
   const update = (value: Partial<Draft>) => setDrafts((s) => ({ ...s, [key]: { ...draft, ...value } }))
+  const positionPicker = (id: 'ai-agent-picker' | 'ai-chat-model') => {
+    const trigger = document.getElementById(id)
+    const composer = trigger?.closest<HTMLElement>('.ai-composer')
+    if (!trigger || !composer) return
+    setPickerPosition({
+      offset: trigger.getBoundingClientRect().top - composer.getBoundingClientRect().top + 8,
+      boundary: trigger.closest<HTMLElement>('.ai-inspector'),
+    })
+  }
   const act = useCallback(
     async (action: () => Promise<unknown>, onError: (message: string) => void = setError) => {
       const generation = workspaceGeneration()
@@ -651,7 +664,10 @@ export function AiInspector({
               value={agent?.value ?? ''}
               disabled={loading || !settings?.enabled}
               onOpenChange={(open) => {
-                if (open) void refreshAgents()
+                if (open) {
+                  positionPicker('ai-agent-picker')
+                  void refreshAgents()
+                }
               }}
               onValueChange={(value) => {
                 const next = agents.find((a) => a.value === value)
@@ -672,7 +688,15 @@ export function AiInspector({
                 </TooltipTrigger>
                 <TooltipContent side="top">{agent?.label ?? '选择Agent'}</TooltipContent>
               </Tooltip>
-              <SelectContent>
+              <SelectContent
+                position="popper"
+                side="top"
+                align="start"
+                sideOffset={pickerPosition.offset}
+                collisionBoundary={pickerPosition.boundary}
+                collisionPadding={8}
+                className="ai-composer-select"
+              >
                 {agents.map((a) => (
                   <SelectItem key={a.value} value={a.value}>
                     <span className="ai-agent-option">
@@ -693,6 +717,9 @@ export function AiInspector({
             <Select
               value={ready ? 'model:' + model : ''}
               disabled={loading || !agent || !settings?.enabled}
+              onOpenChange={(open) => {
+                if (open) positionPicker('ai-chat-model')
+              }}
               onValueChange={(value) => {
                 if (agent) void changeBackend({ ...agent.backend, model: value.slice(6) })
               }}
@@ -705,7 +732,15 @@ export function AiInspector({
               >
                 <SelectValue placeholder="模型" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent
+                position="popper"
+                side="top"
+                align="end"
+                sideOffset={pickerPosition.offset}
+                collisionBoundary={pickerPosition.boundary}
+                collisionPadding={8}
+                className="ai-composer-select"
+              >
                 {agent?.models.map((m) => (
                   <SelectItem key={m.id} value={'model:' + m.id}>
                     {m.name || m.id}

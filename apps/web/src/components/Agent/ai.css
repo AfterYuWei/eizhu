@@ -679,6 +679,15 @@
 .ai-permission-menu [data-permission='auto'] > svg:first-child { color: var(--yellow); }
 .ai-agent-option { display: inline-flex; align-items: center; gap: 8px; }
 .ai-agent-option > svg { flex-shrink: 0; }
+.ai-composer-select {
+  width: 240px;
+  max-width: var(--radix-select-content-available-width);
+  max-height: min(320px, var(--radix-select-content-available-height));
+  font: 13px / 1.5 var(--sans);
+}
+.ai-composer-select [data-slot='select-viewport'] { height: auto; min-width: 0; }
+.ai-composer-select [role='option'] > span:last-child,
+.ai-composer-select .ai-agent-option { min-width: 0; white-space: normal; overflow-wrap: anywhere; }
 @container (max-width: 420px) {
   .ai-composer-start { flex: 0 0 auto; }
   .ai-permission-picker,

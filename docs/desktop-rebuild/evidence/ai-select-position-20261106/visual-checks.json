@@ -1,0 +1,510 @@
+{
+  "browser": "Installed Microsoft Edge (static Web)",
+  "productionComponent": "AiInspector",
+  "layouts": [
+    {
+      "dark": false,
+      "picker": "ai-agent-picker",
+      "sidebar": 320,
+      "side": "top",
+      "menu": {
+        "left": 744,
+        "right": 984,
+        "top": 488,
+        "bottom": 536,
+        "width": 240,
+        "height": 48
+      },
+      "panel": {
+        "left": 672,
+        "right": 992,
+        "top": 8,
+        "bottom": 692
+      },
+      "composer": {
+        "left": 684,
+        "right": 980,
+        "top": 548,
+        "bottom": 680
+      },
+      "overlapsComposer": false,
+      "horizontalOverflow": false,
+      "viewportScrollable": false,
+      "options": 1,
+      "draft": "检查磁盘使用情况，先保留这段草稿。"
+    },
+    {
+      "dark": false,
+      "picker": "ai-chat-model",
+      "sidebar": 320,
+      "side": "top",
+      "menu": {
+        "left": 694,
+        "right": 934,
+        "top": 402,
+        "bottom": 536,
+        "width": 240,
+        "height": 134
+      },
+      "panel": {
+        "left": 672,
+        "right": 992,
+        "top": 8,
+        "bottom": 692
+      },
+      "composer": {
+        "left": 684,
+        "right": 980,
+        "top": 548,
+        "bottom": 680
+      },
+      "overlapsComposer": false,
+      "horizontalOverflow": false,
+      "viewportScrollable": false,
+      "options": 3,
+      "draft": "检查磁盘使用情况，先保留这段草稿。"
+    },
+    {
+      "dark": false,
+      "picker": "ai-agent-picker",
+      "sidebar": 400,
+      "side": "top",
+      "menu": {
+        "left": 674,
+        "right": 914,
+        "top": 488,
+        "bottom": 536,
+        "width": 240,
+        "height": 48
+      },
+      "panel": {
+        "left": 592,
+        "right": 992,
+        "top": 8,
+        "bottom": 692
+      },
+      "composer": {
+        "left": 604,
+        "right": 980,
+        "top": 548,
+        "bottom": 680
+      },
+      "overlapsComposer": false,
+      "horizontalOverflow": false,
+      "viewportScrollable": false,
+      "options": 1,
+      "draft": "检查磁盘使用情况，先保留这段草稿。"
+    },
+    {
+      "dark": false,
+      "picker": "ai-chat-model",
+      "sidebar": 400,
+      "side": "top",
+      "menu": {
+        "left": 694,
+        "right": 934,
+        "top": 402,
+        "bottom": 536,
+        "width": 240,
+        "height": 134
+      },
+      "panel": {
+        "left": 592,
+        "right": 992,
+        "top": 8,
+        "bottom": 692
+      },
+      "composer": {
+        "left": 604,
+        "right": 980,
+        "top": 548,
+        "bottom": 680
+      },
+      "overlapsComposer": false,
+      "horizontalOverflow": false,
+      "viewportScrollable": false,
+      "options": 3,
+      "draft": "检查磁盘使用情况，先保留这段草稿。"
+    },
+    {
+      "dark": false,
+      "picker": "ai-agent-picker",
+      "sidebar": 560,
+      "side": "top",
+      "menu": {
+        "left": 558,
+        "right": 798,
+        "top": 488,
+        "bottom": 536,
+        "width": 240,
+        "height": 48
+      },
+      "panel": {
+        "left": 432,
+        "right": 992,
+        "top": 8,
+        "bottom": 692
+      },
+      "composer": {
+        "left": 444,
+        "right": 980,
+        "top": 548,
+        "bottom": 680
+      },
+      "overlapsComposer": false,
+      "horizontalOverflow": false,
+      "viewportScrollable": false,
+      "options": 1,
+      "draft": "检查磁盘使用情况，先保留这段草稿。"
+    },
+    {
+      "dark": false,
+      "picker": "ai-chat-model",
+      "sidebar": 560,
+      "side": "top",
+      "menu": {
+        "left": 694,
+        "right": 934,
+        "top": 402,
+        "bottom": 536,
+        "width": 240,
+        "height": 134
+      },
+      "panel": {
+        "left": 432,
+        "right": 992,
+        "top": 8,
+        "bottom": 692
+      },
+      "composer": {
+        "left": 444,
+        "right": 980,
+        "top": 548,
+        "bottom": 680
+      },
+      "overlapsComposer": false,
+      "horizontalOverflow": false,
+      "viewportScrollable": false,
+      "options": 3,
+      "draft": "检查磁盘使用情况，先保留这段草稿。"
+    },
+    {
+      "dark": true,
+      "picker": "ai-agent-picker",
+      "sidebar": 320,
+      "side": "top",
+      "menu": {
+        "left": 744,
+        "right": 984,
+        "top": 488,
+        "bottom": 536,
+        "width": 240,
+        "height": 48
+      },
+      "panel": {
+        "left": 672,
+        "right": 992,
+        "top": 8,
+        "bottom": 692
+      },
+      "composer": {
+        "left": 684,
+        "right": 980,
+        "top": 548,
+        "bottom": 680
+      },
+      "overlapsComposer": false,
+      "horizontalOverflow": false,
+      "viewportScrollable": false,
+      "options": 1,
+      "draft": "检查磁盘使用情况，先保留这段草稿。"
+    },
+    {
+      "dark": true,
+      "picker": "ai-chat-model",
+      "sidebar": 320,
+      "side": "top",
+      "menu": {
+        "left": 694,
+        "right": 934,
+        "top": 402,
+        "bottom": 536,
+        "width": 240,
+        "height": 134
+      },
+      "panel": {
+        "left": 672,
+        "right": 992,
+        "top": 8,
+        "bottom": 692
+      },
+      "composer": {
+        "left": 684,
+        "right": 980,
+        "top": 548,
+        "bottom": 680
+      },
+      "overlapsComposer": false,
+      "horizontalOverflow": false,
+      "viewportScrollable": false,
+      "options": 3,
+      "draft": "检查磁盘使用情况，先保留这段草稿。"
+    },
+    {
+      "dark": true,
+      "picker": "ai-agent-picker",
+      "sidebar": 400,
+      "side": "top",
+      "menu": {
+        "left": 674,
+        "right": 914,
+        "top": 488,
+        "bottom": 536,
+        "width": 240,
+        "height": 48
+      },
+      "panel": {
+        "left": 592,
+        "right": 992,
+        "top": 8,
+        "bottom": 692
+      },
+      "composer": {
+        "left": 604,
+        "right": 980,
+        "top": 548,
+        "bottom": 680
+      },
+      "overlapsComposer": false,
+      "horizontalOverflow": false,
+      "viewportScrollable": false,
+      "options": 1,
+      "draft": "检查磁盘使用情况，先保留这段草稿。"
+    },
+    {
+      "dark": true,
+      "picker": "ai-chat-model",
+      "sidebar": 400,
+      "side": "top",
+      "menu": {
+        "left": 694,
+        "right": 934,
+        "top": 402,
+        "bottom": 536,
+        "width": 240,
+        "height": 134
+      },
+      "panel": {
+        "left": 592,
+        "right": 992,
+        "top": 8,
+        "bottom": 692
+      },
+      "composer": {
+        "left": 604,
+        "right": 980,
+        "top": 548,
+        "bottom": 680
+      },
+      "overlapsComposer": false,
+      "horizontalOverflow": false,
+      "viewportScrollable": false,
+      "options": 3,
+      "draft": "检查磁盘使用情况，先保留这段草稿。"
+    },
+    {
+      "dark": true,
+      "picker": "ai-agent-picker",
+      "sidebar": 560,
+      "side": "top",
+      "menu": {
+        "left": 558,
+        "right": 798,
+        "top": 488,
+        "bottom": 536,
+        "width": 240,
+        "height": 48
+      },
+      "panel": {
+        "left": 432,
+        "right": 992,
+        "top": 8,
+        "bottom": 692
+      },
+      "composer": {
+        "left": 444,
+        "right": 980,
+        "top": 548,
+        "bottom": 680
+      },
+      "overlapsComposer": false,
+      "horizontalOverflow": false,
+      "viewportScrollable": false,
+      "options": 1,
+      "draft": "检查磁盘使用情况，先保留这段草稿。"
+    },
+    {
+      "dark": true,
+      "picker": "ai-chat-model",
+      "sidebar": 560,
+      "side": "top",
+      "menu": {
+        "left": 694,
+        "right": 934,
+        "top": 402,
+        "bottom": 536,
+        "width": 240,
+        "height": 134
+      },
+      "panel": {
+        "left": 432,
+        "right": 992,
+        "top": 8,
+        "bottom": 692
+      },
+      "composer": {
+        "left": 444,
+        "right": 980,
+        "top": 548,
+        "bottom": 680
+      },
+      "overlapsComposer": false,
+      "horizontalOverflow": false,
+      "viewportScrollable": false,
+      "options": 3,
+      "draft": "检查磁盘使用情况，先保留这段草稿。"
+    },
+    {
+      "height": 700,
+      "many": true,
+      "picker": "ai-agent-picker",
+      "sidebar": 400,
+      "side": "top",
+      "menu": {
+        "left": 674,
+        "right": 914,
+        "top": 216,
+        "bottom": 536,
+        "width": 240,
+        "height": 320
+      },
+      "panel": {
+        "left": 592,
+        "right": 992,
+        "top": 8,
+        "bottom": 692
+      },
+      "composer": {
+        "left": 604,
+        "right": 980,
+        "top": 548,
+        "bottom": 680
+      },
+      "overlapsComposer": false,
+      "horizontalOverflow": false,
+      "viewportScrollable": true,
+      "options": 41,
+      "draft": "检查磁盘使用情况，先保留这段草稿。"
+    },
+    {
+      "height": 700,
+      "many": true,
+      "picker": "ai-chat-model",
+      "sidebar": 400,
+      "side": "top",
+      "menu": {
+        "left": 694,
+        "right": 934,
+        "top": 216,
+        "bottom": 536,
+        "width": 240,
+        "height": 320
+      },
+      "panel": {
+        "left": 592,
+        "right": 992,
+        "top": 8,
+        "bottom": 692
+      },
+      "composer": {
+        "left": 604,
+        "right": 980,
+        "top": 548,
+        "bottom": 680
+      },
+      "overlapsComposer": false,
+      "horizontalOverflow": false,
+      "viewportScrollable": true,
+      "options": 53,
+      "draft": "检查磁盘使用情况，先保留这段草稿。"
+    },
+    {
+      "height": 360,
+      "many": true,
+      "picker": "ai-agent-picker",
+      "sidebar": 400,
+      "side": "top",
+      "menu": {
+        "left": 674,
+        "right": 914,
+        "top": 12,
+        "bottom": 196,
+        "width": 240,
+        "height": 184
+      },
+      "panel": {
+        "left": 592,
+        "right": 992,
+        "top": 8,
+        "bottom": 352
+      },
+      "composer": {
+        "left": 604,
+        "right": 980,
+        "top": 208,
+        "bottom": 340
+      },
+      "overlapsComposer": false,
+      "horizontalOverflow": false,
+      "viewportScrollable": true,
+      "options": 41,
+      "draft": "检查磁盘使用情况，先保留这段草稿。"
+    },
+    {
+      "height": 360,
+      "many": true,
+      "picker": "ai-chat-model",
+      "sidebar": 400,
+      "side": "top",
+      "menu": {
+        "left": 694,
+        "right": 934,
+        "top": 12,
+        "bottom": 196,
+        "width": 240,
+        "height": 184
+      },
+      "panel": {
+        "left": 592,
+        "right": 992,
+        "top": 8,
+        "bottom": 352
+      },
+      "composer": {
+        "left": 604,
+        "right": 980,
+        "top": 208,
+        "bottom": 340
+      },
+      "overlapsComposer": false,
+      "horizontalOverflow": false,
+      "viewportScrollable": true,
+      "options": 53,
+      "draft": "检查磁盘使用情况，先保留这段草稿。"
+    }
+  ],
+  "keyboardOpenAndFocusRestore": true,
+  "modelSwitchPreservesDraft": true,
+  "runtimeErrors": 0,
+  "externalRequests": 0
+}

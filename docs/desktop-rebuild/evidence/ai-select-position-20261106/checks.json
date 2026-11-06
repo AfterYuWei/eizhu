@@ -1,0 +1,31 @@
+{
+  "sourceSha256": {
+    "apps/web/src/components/Agent/AiInspector.tsx": "9f6329cd2af8b08dee63efe358f3c7783e926532c5ae35bf80c07025adeeed86",
+    "apps/web/src/components/Agent/ai.css": "7999aa7f24818b662701d807c012e2c1ee20c66348e5069587eefdfc7e1a602f"
+  },
+  "check": true,
+  "lint": true,
+  "focusedInspectorTests": 30,
+  "web": {
+    "files": 87,
+    "passed": 1005
+  },
+  "baselineVerify": true,
+  "fixedBaselineTests": 10,
+  "architectureVerify": true,
+  "webBuild": true,
+  "visualLayoutCases": 16,
+  "menuPosition": "above entire composer and inside sidebar",
+  "menuWidth": 240,
+  "maxMenuHeight": 320,
+  "keyboardOpenAndFocusRestore": true,
+  "modelSwitchPreservesDraft": true,
+  "cleanup": {
+    "ownedPreviewProcesses": 0,
+    "temporaryProfilesRemoved": true
+  },
+  "electronSmoke": "not-run-renderer-only",
+  "toolDownloads": false,
+  "pushed": false,
+  "unrelatedChangesPreserved": true
+}
