@@ -1,0 +1,41 @@
+{
+  "sourceCommit": "8bf3697a73c4cc06575e5c6a7455ebf29dff2fa7",
+  "check": true,
+  "lint": true,
+  "baselineVerify": true,
+  "architectureVerify": true,
+  "foundation": {
+    "passed": 259,
+    "skipped": 2,
+    "skipReason": "Fish not installed"
+  },
+  "web": {
+    "files": 87,
+    "passed": 999
+  },
+  "fixedBaselineTests": 10,
+  "focusedInspectorTests": 30,
+  "electronAiSmoke": true,
+  "firstObserverCommandCount": 0,
+  "firstAutoCommandCount": 2,
+  "firstAutoApprovalRequired": false,
+  "initialPermissionFailureSendsNothing": true,
+  "firstSendFailurePreservesDraft": true,
+  "testServices": "loopback-synthetic model/SSH and installed OpenSSH SFTP",
+  "packagedSmoke": "not-run-this-ui-followup",
+  "productionCodeScope": "renderer only; contract/runtime/preload/core unchanged",
+  "downloads": false,
+  "pushed": false,
+  "unrelatedChangesPreserved": true,
+  "providerBrandIconsIncomplete": [
+    "OpenAI (neutral Orbit glyph)",
+    "SiliconFlow",
+    "Zhipu/GLM",
+    "Volcengine/Doubao"
+  ],
+  "cleanup": {
+    "temporaryWorktreeRemoved": true,
+    "isolatedTestProcesses": 0,
+    "packagedAppCreated": false
+  }
+}
