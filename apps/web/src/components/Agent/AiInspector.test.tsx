@@ -589,3 +589,69 @@ it('history delete dispatches only once while its request is pending', async () 
   expect(api.ai.remove).toHaveBeenCalledTimes(1)
   await act(async () => finish())
 })
+
+async function choosePermission(value: string) {
+  await act(async () =>
+    document
+      .getElementById('ai-permission-picker')!
+      .dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })),
+  )
+  await act(async () =>
+    document.querySelector<HTMLElement>('.ai-permission-menu [data-permission="' + value + '"]')!.click(),
+  )
+}
+for (const permission of ['observer', 'auto'] as const)
+  it(
+    'new chat can select ' + permission + ' before its first message and applies it before sending',
+    async () => {
+      await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="新建AI对话"]')!.click())
+      expect(host.querySelector<HTMLButtonElement>('#ai-permission-picker')!.disabled).toBe(false)
+      await choosePermission(permission)
+      expect(api.ai.open).not.toHaveBeenCalled()
+      expect(api.ai.permission).not.toHaveBeenCalled()
+      const created = { ...c, id: 'first-chat' }
+      api.ai.open.mockResolvedValue(created)
+      api.ai.permission.mockResolvedValue({ ...created, permission })
+      await fill('首条消息使用选定模式')
+      await act(async () => button('发送').click())
+      expect(api.ai.permission).toHaveBeenCalledWith({ conversationId: 'first-chat', permission })
+      expect(api.ai.permission.mock.invocationCallOrder[0]).toBeLessThan(
+        api.ai.send.mock.invocationCallOrder[0],
+      )
+      expect(useAiStore.getState().conversations['first-chat'].permission).toBe(permission)
+      expect(api.ai.send).toHaveBeenCalledWith({
+        conversationId: 'first-chat',
+        text: '首条消息使用选定模式',
+        attachments: [],
+      })
+    },
+  )
+it('starting another new chat resets its mode to confirmation', async () => {
+  await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="新建AI对话"]')!.click())
+  await choosePermission('auto')
+  expect(host.querySelector('#ai-permission-picker')!.getAttribute('data-permission')).toBe('auto')
+  await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="新建AI对话"]')!.click())
+  expect(host.querySelector('#ai-permission-picker')!.getAttribute('data-permission')).toBe('confirm')
+})
+it('failed initial permission application sends nothing and preserves the new draft and chosen mode', async () => {
+  await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="新建AI对话"]')!.click())
+  await choosePermission('auto')
+  api.ai.open.mockResolvedValue({ ...c, id: 'first-chat' })
+  api.ai.permission.mockRejectedValue(new Error('设置执行模式失败'))
+  await fill('不得在模式未确认时运行')
+  await act(async () => button('发送').click())
+  expect(api.ai.send).not.toHaveBeenCalled()
+  expect(useAiStore.getState().selectedId).toBeNull()
+  expect(host.querySelector('textarea')!.value).toBe('不得在模式未确认时运行')
+  expect(host.querySelector('#ai-permission-picker')!.getAttribute('data-permission')).toBe('auto')
+  expect(host.querySelector('[role=alert]')!.textContent).toBe('设置执行模式失败')
+})
+it('a failed first send retains the draft in the conversation that was created', async () => {
+  await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="新建AI对话"]')!.click())
+  api.ai.open.mockResolvedValue({ ...c, id: 'first-chat' })
+  api.ai.send.mockRejectedValue(new Error('发送失败'))
+  await fill('保留这条消息')
+  await act(async () => button('发送').click())
+  expect(useAiStore.getState().selectedId).toBe('first-chat')
+  expect(host.querySelector('textarea')!.value).toBe('保留这条消息')
+})

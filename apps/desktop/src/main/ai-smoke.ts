@@ -920,9 +920,7 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
       targetIds.length,
     )
     conversations.splice(conversations.indexOf(historyChat.id), 1)
-    await js(
-      "document.querySelector('.ai-history-dialog [aria-label=关闭对话历史]').click()",
-    )
+    await js("document.querySelector('.ai-history-dialog [aria-label=关闭对话历史]').click()")
     await wait(
       "return !document.querySelector('.ai-history-dialog')&&document.querySelector('.ai-inspector').checkVisibility()",
     )
@@ -935,6 +933,65 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
     )
     const saved = aiConversationSchema.parse(await call('ai', 'read', { conversationId: proposed.id }))
     assert.equal(saved.id, proposed.id)
+    let previousModeChat = proposed.id
+    for (const [permission, label] of [
+      ['observer', '只读观察'],
+      ['auto', '自动执行'],
+    ] as const) {
+      await wait("return !document.querySelector('[aria-label=新建AI对话]').disabled")
+      await js("document.querySelector('[aria-label=新建AI对话]').click()")
+      await wait(
+        "return document.getElementById('ai-permission-picker').dataset.permission==='confirm'&&!document.getElementById('ai-permission-picker').disabled",
+      )
+      await js(
+        "document.getElementById('ai-permission-picker').dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}))",
+      )
+      await wait("return document.querySelectorAll('.ai-permission-menu [role=menuitemradio]').length===3")
+      await js(
+        "[...document.querySelectorAll('.ai-permission-menu [role=menuitemradio]')].find(e=>e.dataset.permission===d).click()",
+        permission,
+      )
+      await wait(
+        "return !document.querySelector('.ai-permission-menu')&&document.getElementById('ai-permission-picker').dataset.permission===" +
+          JSON.stringify(permission),
+      )
+      if (permission === 'auto') {
+        await js(
+          "document.getElementById('ai-permission-picker').dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}))",
+        )
+        await wait("return document.querySelectorAll('.ai-permission-menu [role=menuitemradio]').length===3")
+        await js('await document.fonts.ready;await new Promise(r=>setTimeout(r,150))')
+        await writeFile(
+          join(root, 'ai-new-chat-auto-mode.png'),
+          (await window.webContents.capturePage(undefined, { stayAwake: true })).toPNG(),
+        )
+        screenshots.push('ai-new-chat-auto-mode.png')
+        await js(
+          "document.querySelector('.ai-permission-menu').dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))",
+        )
+        await wait("return !document.querySelector('.ai-permission-menu')")
+      }
+      const beforeModeCommands: number = commands.length
+      await js(
+        "const input=document.querySelector('.ai-composer textarea');Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(input,d);input.dispatchEvent(new Event('input',{bubbles:true}))",
+        '首次' + label + '模式验证',
+      )
+      await wait("return !document.querySelector('.ai-composer [aria-label=发送]').disabled")
+      await js("document.querySelector('.ai-composer [aria-label=发送]').click()")
+      await wait(
+        'return window.__aiV2?.id!==' +
+          JSON.stringify(previousModeChat) +
+          '&&window.__aiV2?.permission===' +
+          JSON.stringify(permission) +
+          "&&window.__aiV2?.status==='idle'&&window.__aiV2?.messages.at(-1)?.text.includes('检查完成')",
+      )
+      const modeChat = await read()
+      conversations.push(modeChat.id)
+      assert.equal(modeChat.permission, permission)
+      assert.ok(!modeChat.messages.some((m) => m.tool?.state === 'pending'))
+      assert.equal(commands.length - beforeModeCommands, permission === 'auto' ? 2 : 0)
+      previousModeChat = modeChat.id
+    }
     assert.ok(fingerprint.startsWith('SHA256:'))
     return {
       passed: true,
@@ -957,6 +1014,9 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
       conversationHistoryDialog: true,
       deleteOnlyInHistory: true,
       executionModeExplained: true,
+      initialPermissionBeforeSend: true,
+      initialObserverReadOnly: true,
+      initialAutoNoApproval: true,
       executionModeInsideComposer: true,
       compactIconOnlyControls: true,
       compactSingleToolbarRow: true,

@@ -83,7 +83,8 @@ export function AiInspector({
   const { selectedId, conversations, select, put, progress, forget, settings, setSettings } = useAiStore()
   const conversation = selectedId ? conversations[selectedId] : undefined
   const conversationId = conversation?.id
-  const mode = permissionModes.find((m) => m.value === (conversation?.permission ?? 'confirm'))!
+  const [newPermission, setNewPermission] = useState<AiConversation['permission']>('confirm')
+  const mode = permissionModes.find((m) => m.value === (conversation?.permission ?? newPermission))!
   const loggedIn = useAccountStore((s) => s.status?.loggedIn)
   const [cliStatuses, setCliStatuses] = useState<AiCliStatus[]>([])
   const [official, setOfficial] = useState<AiCapabilities | null>(null)
@@ -261,10 +262,13 @@ export function AiInspector({
     })
   const newConversation = async () => {
     if (!agent || !ready) throw new Error('请选择可用的Agent和模型')
-    const created = await bridge().ai.open({
+    let created = await bridge().ai.open({
       sessionIds,
       backend: { ...agent.backend, model },
     })
+    if (created.permission !== newPermission)
+      created = await bridge().ai.permission({ conversationId: created.id, permission: newPermission })
+    setDrafts((current) => ({ ...current, [created.id]: draft }))
     put(created)
     select(created.id)
     setHistory(null)
@@ -332,6 +336,7 @@ export function AiInspector({
             onClick={() => {
               select(null)
               setNewBackend(null)
+              setNewPermission('confirm')
               setHistory(null)
             }}
           >
@@ -396,6 +401,7 @@ export function AiInspector({
                         void act(async () => {
                           await scopeQueue.current
                           await bridge().ai.remove({ conversationId: h.id })
+                          if (selectedId === h.id) setNewPermission('confirm')
                           forget(h.id)
                           setHistory((current) => current?.filter((row) => row.id !== h.id) ?? null)
                           setDrafts((current) => {
@@ -591,7 +597,7 @@ export function AiInspector({
                       data-permission={mode.value}
                       aria-label={'执行模式：' + mode.label}
                       title={mode.description}
-                      disabled={!conversation || loading || !settings?.enabled}
+                      disabled={loading || !settings?.enabled}
                     >
                       <mode.Icon size={14} />
                       <span>{mode.short}</span>
@@ -613,15 +619,19 @@ export function AiInspector({
                       data-permission={item.value}
                       aria-checked={mode.value === item.value}
                       onSelect={() => {
-                        if (conversation && item.value !== mode.value)
-                          void act(async () =>
-                            put(
-                              await bridge().ai.permission({
-                                conversationId: conversation.id,
-                                permission: item.value,
-                              }),
-                            ),
-                          )
+                        if (item.value === mode.value) return
+                        if (!conversation) {
+                          setNewPermission(item.value)
+                          return
+                        }
+                        void act(async () =>
+                          put(
+                            await bridge().ai.permission({
+                              conversationId: conversation.id,
+                              permission: item.value,
+                            }),
+                          ),
+                        )
                       }}
                     >
                       <item.Icon size={16} />
