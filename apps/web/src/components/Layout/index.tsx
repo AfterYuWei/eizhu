@@ -172,6 +172,7 @@ export function Layout() {
     '--shell-terminal-bg': terminalPalette.theme.background,
     '--shell-terminal-fg': terminalPalette.category === 'dark' ? '#FFFFFF' : '#171717',
   } as CSSProperties} role="application" aria-label="eizhu">
+    {showControls && <div className="shell-titlebar-drag-region" data-eizhu-drag-region aria-hidden="true" />}
     <div className="shell-session-view" ref={sessionView} inert={settingsOpen} aria-hidden={settingsOpen || undefined}>
       <div ref={sidebarSpace} className={`shell-sidebar-space ${sidebarHidden ? 'is-collapsed' : ''} ${sidebarButtonMotion ? 'is-button-motion' : ''}`} style={{ width: sidebarHidden ? 0 : visibleSidebarWidth }}>
       <aside ref={sidebar} id="desktop-main-sidebar" className={`eizhu-sidebar shell-sidebar ${sidebarHidden && !preview.present ? 'collapsed' : ''} ${preview.present ? 'is-preview' : ''} ${preview.open ? 'is-preview-open' : ''} ${preview.instantCollapse ? 'is-preview-resting' : ''}`} style={{ width: preview.present ? DEFAULT_DESKTOP_SIDEBAR_WIDTH : visibleSidebarWidth }} aria-label="主导航" aria-hidden={!sidebarInteractive} inert={!sidebarInteractive} onPointerEnter={preview.enter} onPointerLeave={preview.leave}>

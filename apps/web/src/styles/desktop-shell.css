@@ -185,6 +185,8 @@
    clipping. macOS native controls keep their existing shared top-band layout. */
 .desktop-shell > .shell-window-controls { position: absolute; top: 0; right: 0; z-index: 40; width: var(--shell-window-controls-width); height: var(--shell-top-height); margin: 0; }
 .desktop-shell > .shell-window-controls .tb-btn { width: var(--shell-window-button-width); height: 100%; }
+/* Fill the separate title row, clear of the floating left tools and window buttons. */
+.shell-titlebar-drag-region { position: absolute; top: 0; left: calc(24px + 2 * var(--shell-icon-size) + var(--shell-icon-gap)); right: var(--shell-window-controls-width); height: var(--shell-top-height); z-index: 1; }
 /* Windows/Linux reserve a separate top row for custom window controls. The
    workspace starts below it; macOS keeps its native controls beside the header. */
 .desktop-shell:not(.is-mac) .shell-workspace { margin-top: calc(var(--shell-top-height) - var(--shell-outer-gap)); }
