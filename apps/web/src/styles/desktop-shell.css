@@ -269,6 +269,8 @@ body:has(.desktop-shell) :is([role="menu"], [data-slot="select-content"], [data-
   max-width: calc(100vw - 16px);
 }
 body:has(.desktop-shell) :is([role="menu"], [data-slot="select-content"], [data-slot="popover-content"], [data-slot="tooltip-content"], [data-slot="hover-card-content"]) {
+  /* Portal 浮层覆盖原生标题栏拖拽区时仍须接收鼠标输入。 */
+  -webkit-app-region: no-drag;
   border: 0;
   border-radius: var(--r-lg);
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.08);
