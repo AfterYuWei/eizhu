@@ -53,6 +53,8 @@ const button = (label: string) =>
 const status = () => host.querySelector('[role=status]')!.textContent
 async function click(id: string) {
   await act(async () => document.getElementById(id)!.click())
+  // Radix 在下一轮定时任务恢复关闭浮层的焦点，再进行下一次交互。
+  await act(async () => vi.runOnlyPendingTimersAsync())
 }
 async function choose(id: string, label: string) {
   await click(id)
@@ -61,6 +63,7 @@ async function choose(id: string, label: string) {
       .find((e) => e.textContent === label)!
       .click(),
   )
+  await act(async () => vi.runOnlyPendingTimersAsync())
 }
 async function fill(id: string, value: string) {
   await act(async () => {
@@ -70,7 +73,9 @@ async function fill(id: string, value: string) {
   })
 }
 async function manage(open = true) {
-  if (Boolean(document.querySelector('.ai-model-manager')) !== open) await click('ai-model-manage')
+  if (Boolean(document.querySelector('.ai-model-manager[data-state="open"]')) !== open)
+    await click('ai-model-manage')
+  expect(Boolean(document.querySelector('.ai-model-manager[data-state="open"]'))).toBe(open)
 }
 async function addManual(name: string) {
   await manage()
@@ -94,6 +99,7 @@ async function reopen() {
   await act(async () => root.render(<AiPanel />))
 }
 beforeEach(async () => {
+  vi.useFakeTimers()
   ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
   vi.clearAllMocks()
   vi.stubGlobal(
@@ -165,7 +171,9 @@ beforeEach(async () => {
 })
 afterEach(async () => {
   await act(async () => root.unmount())
+  await act(async () => vi.runOnlyPendingTimersAsync())
   host.remove()
+  vi.useRealTimers()
   vi.unstubAllGlobals()
 })
 it('shows only the chosen engine and saves it centrally', async () => {

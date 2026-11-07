@@ -10,6 +10,7 @@ import { terminalActions } from '@/lib/terminalActions'
 
 const mocks = vi.hoisted(() => ({
   onMessage: undefined as ((message: SessionMessage) => void) | undefined,
+  onOpen: undefined as (() => void) | undefined,
   terminal: {
     write: vi.fn(),
     writeln: vi.fn(),
@@ -43,8 +44,9 @@ vi.mock('@/api/session', () => ({
 }))
 vi.mock('@/hooks/useCompletion', () => ({ useCompletion: () => mocks.completion }))
 vi.mock('@/hooks/useSessionChannel', () => ({
-  useSessionChannel: (options: { onMessage: (message: SessionMessage) => void }) => {
+  useSessionChannel: (options: { onMessage: (message: SessionMessage) => void; onOpen: () => void }) => {
     mocks.onMessage = options.onMessage
+    mocks.onOpen = options.onOpen
     return mocks.channel
   },
 }))
@@ -285,4 +287,29 @@ it('连接成功后自动收起对话框，保留正常连接的标签', async (
   expect(document.querySelector('[role="dialog"]')).toBeNull()
   expect(useSessionStore.getState().tabs[0]).toMatchObject({ id: 'tab', sessionId: 'ssh', status: 'connected' })
   expect(sessionApi.close).not.toHaveBeenCalled()
+})
+
+it.each(['channel', 'metadata'] as const)('%s 的延迟终端适配在卸载后不再执行', async (source) => {
+  vi.useFakeTimers()
+  if (source === 'channel') await act(async () => mocks.onOpen!())
+  else await message({
+    type: 'metadata',
+    payload: { session_id: 'ssh', profile_id: 'server', profile_name: '服务器', host: 'example.test', port: 22, username: 'user', protocol: 'ssh' },
+  })
+  await act(async () => root.render(null))
+  mocks.terminal.fit.mockClear()
+  await act(async () => vi.advanceTimersByTime(700))
+  expect(mocks.terminal.fit).not.toHaveBeenCalled()
+})
+
+it('就绪后立即断开时，不会被上一条成功消息的收起计时隐藏重连提示', async () => {
+  vi.useFakeTimers()
+  await message({
+    type: 'metadata',
+    payload: { session_id: 'ssh', profile_id: 'server', profile_name: '服务器', host: 'example.test', port: 22, username: 'user', protocol: 'ssh' },
+  })
+  await message({ type: 'disconnect', payload: { message: '连接中断' } })
+  await act(async () => vi.advanceTimersByTime(700))
+  expect(document.querySelector('.connection-retry-status')).not.toBeNull()
+  expect(useSessionStore.getState().tabs[0].status).toBe('reconnecting')
 })

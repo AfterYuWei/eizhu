@@ -74,6 +74,7 @@ export function TerminalPane({ tab, isActive, isVisible = isActive }: TerminalPa
     });
     const hasSpecificError = useRef(false);
     const fontSizeHintTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const terminalFitTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const channelStatusRef = useRef<ChannelStatus>('connecting');
     const sendInputRef = useRef<(data: string) => void>(() => { });
     const sendResizeRef = useRef<(cols: number, rows: number) => void>(() => { });
@@ -362,14 +363,15 @@ export function TerminalPane({ tab, isActive, isVisible = isActive }: TerminalPa
                 setConnectionErrorCode('');
                 setBackendStage('ready');
                 setDialogStatus('connected');
-                setTimeout(() => setShowDialog(false), 500);
                 // The session was created with the default 80x24 PTY (the real
                 // terminal size is only known after mount). Push the actual size
                 // once the shell is confirmed ready, after fonts have settled, so
                 // vim/htop and friends render at the correct dimensions even if
                 // the earlier resize raced with shell startup.
                 lastReportedSizeRef.current = null;
-                setTimeout(() => {
+                if (terminalFitTimeoutRef.current !== null) clearTimeout(terminalFitTimeoutRef.current);
+                terminalFitTimeoutRef.current = setTimeout(() => {
+                    terminalFitTimeoutRef.current = null;
                     fit();
                 }, 100);
                 break;
@@ -461,7 +463,9 @@ export function TerminalPane({ tab, isActive, isVisible = isActive }: TerminalPa
             clear();
             // fit() reports the resulting size through onResize, which forwards
             // it to the backend. Delayed slightly so the container has settled.
-            setTimeout(() => {
+            if (terminalFitTimeoutRef.current !== null) clearTimeout(terminalFitTimeoutRef.current);
+            terminalFitTimeoutRef.current = setTimeout(() => {
+                terminalFitTimeoutRef.current = null;
                 fit();
             }, 50);
         },
@@ -579,6 +583,17 @@ export function TerminalPane({ tab, isActive, isVisible = isActive }: TerminalPa
     }, [fit, isVisible]);
     useEffect(() => { if (isActive && tab.profileId && tab.sessionId && !document.activeElement?.closest('[role="tablist"]'))
         getTerminal()?.focus(); }, [isActive, getTerminal, tab.profileId, tab.sessionId]);
+    useEffect(() => {
+        if (dialogStatus !== 'connected') return;
+        const timer = setTimeout(() => setShowDialog(false), 500);
+        return () => clearTimeout(timer);
+    }, [dialogStatus]);
+    useEffect(() => () => {
+        if (terminalFitTimeoutRef.current !== null) {
+            clearTimeout(terminalFitTimeoutRef.current);
+            terminalFitTimeoutRef.current = null;
+        }
+    }, [tab.sessionId]);
     useEffect(() => {
         return () => {
             if (fontSizeHintTimeoutRef.current !== null) {
