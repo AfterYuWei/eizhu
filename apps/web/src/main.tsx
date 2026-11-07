@@ -16,6 +16,12 @@ async function bootstrap() {
     installFrontendLogging()
     const isEditor = desktopBootstrap()?.window === 'editor'
     const { default: App } = isEditor ? await import('@/components/Editor/EditorWindowApp') : await import('./App')
+    const workspace = desktopBootstrap()?.workspace
+    if (!isEditor && workspace) {
+      const { applyWorkspace } = await import('@/lib/workspace')
+      // Initialize before connection controls mount; a later refresh must not reset new tabs.
+      applyWorkspace(workspace)
+    }
     window.addEventListener('eizhu:settings-updated', () => {
       void import('@/store/settings').then(async ({ useSettingsStore, initTheme }) => {
         await useSettingsStore.persist.rehydrate()

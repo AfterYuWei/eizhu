@@ -9,6 +9,7 @@ import { useTerminalLayoutStore } from '@/store/terminalLayout'
 import { useProfileStore } from '@/store/profile'
 import { useVaultStore } from '@/store/vault'
 import { useSyncStore } from '@/store/sync'
+import { sessionApi } from '@/api/session'
 
 vi.mock('@/api/localState', () => ({ localStateApi: { read: vi.fn(), write: vi.fn() } }))
 
@@ -22,6 +23,24 @@ beforeEach(() => {
   vi.mocked(localStateApi.write).mockResolvedValue(undefined)
 })
 afterEach(() => vi.restoreAllMocks())
+
+it('首次渲染已应用启动空间时，迟到的同代次刷新保留创建中的 SSH 连接', async () => {
+  vi.mocked(localStateApi.read).mockResolvedValue({})
+  const workspace = { id: 'offline', generation: 1, userId: 0 }
+  applyWorkspace(workspace)
+  let created!: (value: Awaited<ReturnType<typeof sessionApi.create>>) => void
+  vi.spyOn(sessionApi, 'create').mockReturnValue(new Promise((resolve) => { created = resolve }))
+  const close = vi.spyOn(sessionApi, 'close').mockResolvedValue(undefined)
+  const pending = useSessionStore.getState().openTab('server', '服务器')
+  const tab = useSessionStore.getState().tabs[0]
+
+  applyWorkspace(workspace)
+  expect(useSessionStore.getState().tabs[0]).toBe(tab)
+  created({ session_id: 'ssh', status: 'connecting' })
+  await pending
+  expect(useSessionStore.getState().tabs[0]).toMatchObject({ id: tab.id, sessionId: 'ssh' })
+  expect(close).not.toHaveBeenCalled()
+})
 
 it('启动和重新进入空间只恢复文件夹状态，不读取旧会话快照', async () => {
   vi.mocked(localStateApi.read).mockImplementation(async (key) => key === 'sidebar_groups'
