@@ -1,4 +1,3 @@
-/* eslint-disable no-control-regex -- Terminal/protocol boundaries handle control bytes explicitly. */
 import assert from 'node:assert/strict'
 import { once } from 'node:events'
 import { createHash, randomUUID } from 'node:crypto'
@@ -14,6 +13,7 @@ import { app, type BrowserWindow } from 'electron'
 import type { RuntimeHost } from './runtime-host.ts'
 import { aiConversationSchema, aiModelCatalogSchema, aiSettingsSchema } from '@eizhu/contracts'
 import { modelFixture } from '@eizhu/core/agent/model-fixture'
+import { createAiSmokeShell } from './ai-smoke-shell.ts'
 
 /** Explicit loopback services; exercises the real Electron/Worker/SQLite/SSH chain. */
 export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHost, root: string) {
@@ -56,22 +56,14 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
           const channel = accept()
           channel.on('error', () => undefined)
           channel.write('$ ')
-          channel.on('data', (bytes: Buffer) => {
-            const script = bytes.toString()
-            channel.write(script + '\r\n')
-            if (!/[\r\n\x03]/.test(script)) return
-            const token = script.match(/eizhuAi;([\w-]+);start/)?.[1]
-            if (token) {
-              commands.push(script)
-              channel.write('\x1b]1337;eizhuAi;' + token + ';start\x07')
-              channel.write('你好 🧪\r\nsynthetic warning\r\n')
-              if (mode !== 'long') channel.write('\x1b]1337;eizhuAi;' + token + ';end;3\x07')
-              else return
-            }
-            channel.write('\x1b]7;file:///tmp\x07\x1b]1337;eizhuPrompt\x07')
-            if (script.includes('__eizhu_osc7')) channel.write('\x1b]1337;eizhuOsc7Ready\x07')
-            channel.write('$ ')
-          })
+          channel.on(
+            'data',
+            createAiSmokeShell(
+              (data) => channel.write(data),
+              commands,
+              () => mode === 'long',
+            ),
+          )
         })
         session.on('subsystem', (accept, reject, info) => {
           if (info.name !== 'sftp' || !sftpServer) {
@@ -217,17 +209,22 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
     window.webContents.executeJavaScript('(async d=>{' + source + '})(' + JSON.stringify(data) + ')')
   const call = <T = unknown>(domain: string, method: string, input?: unknown) =>
     js<T>('return window.eizhu[d.domain][d.method](d.input)', { domain, method, input })
-  const wait = async (source: string) => {
-    for (let i = 0; i < 240; i++) {
+  const wait = async (source: string, timeout = 12000) => {
+    const deadline = performance.now() + timeout
+    do {
       if (await js<boolean>(source)) return
       await new Promise((r) => setTimeout(r, 50))
-    }
+    } while (performance.now() < deadline)
     await writeFile(
       join(root, 'ai-v2-failure.png'),
       (await window.webContents.capturePage(undefined, { stayAwake: true })).toPNG(),
     )
     const state = await js(
-      "return {viewport:{width:innerWidth,height:innerHeight},modelManager:(()=>{const e=document.querySelector('.ai-model-manager');return e?{client:e.clientWidth,scroll:e.scrollWidth,availableHeight:getComputedStyle(e).getPropertyValue('--radix-popover-content-available-height'),rect:e.getBoundingClientRect().toJSON()}:null})(),status:window.__aiV2?.status,error:window.__aiV2?.error,backend:window.__aiV2?.backend,tools:window.__aiV2?.messages.filter(m=>m.tool).map(m=>({name:m.tool.name,state:m.tool.state,error:m.tool.error})),buttons:[...document.querySelectorAll('.ai-composer button')].map(b=>({text:b.textContent,disabled:b.disabled}))}",
+      "const sessions=await window.eizhu.session.list();const connections=await Promise.all(sessions.map(async session=>{const messages=await window.eizhu.session.attach({id:session.id});const state=messages.find(m=>m.type==='connection_state')?.payload;return {...session,stage:state?.stage,errorCode:state?.error_code,waitingForHostKey:state?.waiting_for_host_key}}));return {connections,viewport:{width:innerWidth,height:innerHeight},modelManager:(()=>{const e=document.querySelector('.ai-model-manager');return e?{client:e.clientWidth,scroll:e.scrollWidth,availableHeight:getComputedStyle(e).getPropertyValue('--radix-popover-content-available-height'),rect:e.getBoundingClientRect().toJSON()}:null})(),status:window.__aiV2?.status,error:window.__aiV2?.error,backend:window.__aiV2?.backend,tools:window.__aiV2?.messages.filter(m=>m.tool).map(m=>({name:m.tool.name,state:m.tool.state,error:m.tool.error})),buttons:[...document.querySelectorAll('.ai-composer button')].map(b=>({text:b.textContent,disabled:b.disabled}))}",
+    )
+    await writeFile(
+      join(root, 'ai-v2-failure.json'),
+      JSON.stringify({ condition: source, state }, null, 2) + '\n',
     )
     throw new Error('AI v2 smoke timeout: ' + source + ' ' + JSON.stringify(state))
   }
@@ -307,10 +304,13 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
           "));if(!row)return false;row.dispatchEvent(new MouseEvent('dblclick',{bubbles:true}));return true",
       )
       await wait(
-        "const trust=[...document.querySelectorAll('[role=dialog] button')].find(b=>b.textContent==='信任并继续');if(trust){trust.click();return false}return window.eizhu.session.list().then(rows=>rows.some(r=>r.profile_id===" +
+        'const session=(await window.eizhu.session.list()).find(r=>r.profile_id===' +
           JSON.stringify(profileId) +
-          "&&r.status==='connected'))",
+          ");if(!session)return false;if(session.status==='connected')return true;const messages=await window.eizhu.session.attach({id:session.id});const request=messages.find(m=>m.type==='connection_state')?.payload.host_key_request_id;const trust=[...document.querySelectorAll('[role=dialog] button')].find(b=>b.textContent==='信任并继续');window.__aiSmokeTrusted??=new Set();if(request&&trust&&!window.__aiSmokeTrusted.has(request)){window.__aiSmokeTrusted.add(request);trust.click()}return false",
+        // A shell may legitimately use its 10s initialization fallback after SSH/authentication.
+        30000,
       )
+      console.log('EIZHU_AI_SSH_CONNECTED', name)
     }
     await wait(
       "for(const dialog of document.querySelectorAll('.connection-dialog'))[...dialog.querySelectorAll('button')].find(b=>b.textContent==='关闭')?.click();return !document.querySelector('.connection-dialog')",

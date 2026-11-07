@@ -16,6 +16,7 @@ assert.ok(
   'duration must be 1000..28800000 ms',
 )
 args.push(`--load-duration=${duration}`)
+const evidenceRoot = `artifacts/smoke/${process.platform}-${process.arch}`
 // Linux CI needs a real X server (xvfb-run); it never disables Chromium sandboxing here.
 await new Promise((accept, reject) => {
   const child = spawn(executable, args, {
@@ -39,6 +40,16 @@ await new Promise((accept, reject) => {
     if (code === 0) accept()
     else reject(new Error(`Smoke exit ${code}`))
   })
+}).catch(async (cause) => {
+  await mkdir(evidenceRoot, { recursive: true })
+  for (const name of ['ai-v2-failure.png', 'ai-v2-failure.json']) {
+    try {
+      await copyFile(join(root, name), join(evidenceRoot, name))
+    } catch (error) {
+      if (error.code !== 'ENOENT') console.error(`无法保留烟测失败证据 ${name}:`, error)
+    }
+  }
+  throw cause
 })
 const report = JSON.parse(await readFile(join(root, 'smoke.json'), 'utf8'))
 assert.equal(report.renderer.node, 'undefined')
@@ -71,7 +82,6 @@ assert.equal(report.stage6.passed, true)
 assert.equal(report.workspaceTabs.passed, true)
 assert.equal(report.aiDesktop.passed, true)
 if (executableArg) assert.equal(report.packaged, true)
-const evidenceRoot = `artifacts/smoke/${process.platform}-${process.arch}`
 await mkdir(evidenceRoot, { recursive: true })
 // Keep visual evidence outside the temporary profile so CI and later reviews can retrieve it.
 for (const name of ['home-light.png', 'home-dark.png', 'editor-empty.png', ...report.aiDesktop.screenshots, ...report.workspaceTabs.screenshots, ...report.accountClosure.screenshots, ...report.syncDesktop.screenshots, ...report.stage3.completionUi.screenshots, ...report.stage3.portMapping.screenshots]) {
