@@ -77,6 +77,7 @@ export function AiModelCandidates({
         <PopoverContent
           className="ai-model-manager"
           align="end"
+          collisionPadding={8}
           aria-labelledby="ai-model-manager-title"
           onOpenAutoFocus={(e) => {
             e.preventDefault()

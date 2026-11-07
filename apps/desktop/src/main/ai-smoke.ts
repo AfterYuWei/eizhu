@@ -227,7 +227,7 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
       (await window.webContents.capturePage(undefined, { stayAwake: true })).toPNG(),
     )
     const state = await js(
-      "return {modelManager:(()=>{const e=document.querySelector('.ai-model-manager');return e?{client:e.clientWidth,scroll:e.scrollWidth,rect:e.getBoundingClientRect().toJSON()}:null})(),status:window.__aiV2?.status,error:window.__aiV2?.error,backend:window.__aiV2?.backend,tools:window.__aiV2?.messages.filter(m=>m.tool).map(m=>({name:m.tool.name,state:m.tool.state,error:m.tool.error})),buttons:[...document.querySelectorAll('.ai-composer button')].map(b=>({text:b.textContent,disabled:b.disabled}))}",
+      "return {viewport:{width:innerWidth,height:innerHeight},modelManager:(()=>{const e=document.querySelector('.ai-model-manager');return e?{client:e.clientWidth,scroll:e.scrollWidth,availableHeight:getComputedStyle(e).getPropertyValue('--radix-popover-content-available-height'),rect:e.getBoundingClientRect().toJSON()}:null})(),status:window.__aiV2?.status,error:window.__aiV2?.error,backend:window.__aiV2?.backend,tools:window.__aiV2?.messages.filter(m=>m.tool).map(m=>({name:m.tool.name,state:m.tool.state,error:m.tool.error})),buttons:[...document.querySelectorAll('.ai-composer button')].map(b=>({text:b.textContent,disabled:b.disabled}))}",
     )
     throw new Error('AI v2 smoke timeout: ' + source + ' ' + JSON.stringify(state))
   }
@@ -630,11 +630,24 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
     )
     await js("document.getElementById('ai-add-model').click()")
     assert.equal(await js("return document.querySelectorAll('.ai-model-pool li').length"), 3)
-    await wait(
-      "const e=document.querySelector('.ai-model-manager'),r=e.getBoundingClientRect();return e.scrollWidth<=e.clientWidth+1&&r.left>=0&&r.right<=innerWidth+1&&r.top>=0&&r.bottom<=innerHeight+1",
-    )
-    await captureSetting('ai-settings-candidate-pool.png')
+    for (const [width, height] of [
+      [1280, 900],
+      [1280, 720],
+      [900, 600],
+    ]) {
+      window.setContentSize(width, height)
+      await js("document.getElementById('ai-model-manage').scrollIntoView({block:'center'})")
+      await wait(
+        "const e=document.querySelector('.ai-model-manager'),r=e.getBoundingClientRect();return e.scrollWidth<=e.clientWidth+1&&r.left>=0&&r.right<=innerWidth+1&&r.top>=0&&r.bottom<=innerHeight+1",
+      )
+      await captureSetting(
+        width === 1280 && height === 900
+          ? 'ai-settings-candidate-pool.png'
+          : `ai-settings-candidate-pool-${width}-${height}.png`,
+      )
+    }
     await manageModels(false)
+    window.setContentSize(1280, 900)
     await chooseSetting('ai-model', '合成备用模型')
     await js("document.querySelector('.ai-settings-advanced summary').click()")
     await chooseSetting('ai-context', '256K')
