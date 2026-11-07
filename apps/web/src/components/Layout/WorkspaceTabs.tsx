@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef } from 'react'
-import { CircleAlert, LoaderCircle, Plus, SquareTerminal, Waypoints, X } from 'lucide-react'
+import { CircleAlert, LoaderCircle, Plus, SquareTerminal, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useSessionStore, type SessionTab } from '@/store/session'
@@ -31,21 +31,18 @@ function ConnectionIndicator({ tab }: { tab: SessionTab }) {
 
 export function WorkspaceTabs() {
   const { tabs, activeTabId, setActiveTab } = useSessionStore()
-  const { activePage, portMappingOpened, openPortMapping, closePortMapping } = useWorkspaceViewStore()
+  const activePage = useWorkspaceViewStore((state) => state.activePage)
   const profiles = useProfileStore((state) => state.profiles)
   const scroll = useRef<HTMLDivElement>(null)
   const add = useRef<HTMLButtonElement>(null)
   const focusOnRemoval = useRef<string | null>(null)
-  const mappingWasOpen = useRef(portMappingOpened)
 
   useLayoutEffect(() => {
-    const mappingClosed = mappingWasOpen.current && !portMappingOpened
-    mappingWasOpen.current = portMappingOpened
-    if (!mappingClosed && (!focusOnRemoval.current || tabs.some((tab) => tab.id === focusOnRemoval.current))) return
+    if (!focusOnRemoval.current || tabs.some((tab) => tab.id === focusOnRemoval.current)) return
     focusOnRemoval.current = null
     const selected = scroll.current?.querySelector<HTMLButtonElement>('[aria-selected="true"]')
     ;(selected ?? add.current)?.focus()
-  }, [tabs, portMappingOpened])
+  }, [tabs])
 
   useEffect(() => {
     const host = scroll.current
@@ -63,7 +60,7 @@ export function WorkspaceTabs() {
     }
     host.addEventListener('wheel', wheel, { passive: false })
     return () => { observer.disconnect(); host.removeEventListener('wheel', wheel) }
-  }, [activePage, activeTabId, tabs.length, portMappingOpened])
+  }, [activePage, activeTabId, tabs.length])
 
   return <div className="shell-workspace-tabs">
     <div className="shell-tab-scroll" ref={scroll}>
@@ -93,7 +90,7 @@ export function WorkspaceTabs() {
               <TooltipTrigger asChild>
                 <Button type="button" variant="ghost" role="tab" className="shell-tab-select"
                   id={`workspace-tab-${tab.id}`} aria-controls={`workspace-panel-${tab.id}`}
-                  aria-selected={active} aria-label={[label, status].filter(Boolean).join(' · ')} tabIndex={active || (activePage !== 'terminal' && activePage !== 'port-mapping' && tab.id === (activeTabId ?? tabs[0]?.id)) ? 0 : -1}
+                  aria-selected={active} aria-label={[label, status].filter(Boolean).join(' · ')} tabIndex={active || (activePage !== 'terminal' && tab.id === (activeTabId ?? tabs[0]?.id)) ? 0 : -1}
                   onClick={(event) => {
                     setActiveTab(tab.id)
                     if (event.detail > 0) requestAnimationFrame(() => {
@@ -114,16 +111,6 @@ export function WorkspaceTabs() {
               }}><X size={13} /></ShellIconButton>
           </div>
         })}
-        {portMappingOpened && <div role="presentation" className={cn('shell-tab', activePage === 'port-mapping' && 'is-active')}>
-          <Tooltip><TooltipTrigger asChild>
-            <Button type="button" variant="ghost" role="tab" className="shell-tab-select" id="workspace-tab-port-mapping" aria-controls="workspace-port-mapping"
-              aria-selected={activePage === 'port-mapping'} tabIndex={activePage === 'port-mapping' || (!tabs.length && activePage !== 'terminal') ? 0 : -1} onClick={openPortMapping}>
-              <Waypoints size={16} aria-hidden="true" /><span className="shell-tab-name">端口映射</span>
-            </Button>
-          </TooltipTrigger><TooltipContent side="bottom" sideOffset={8}>端口映射 · 关闭页面不会停止映射</TooltipContent></Tooltip>
-          <ShellIconButton label="关闭端口映射页面" className="shell-tab-close" tabIndex={activePage === 'port-mapping' ? 0 : -1}
-            onClick={closePortMapping}><X size={13} /></ShellIconButton>
-        </div>}
       </div>
     </div>
     <ShellIconButton ref={add} label="新建连接 (Ctrl/Cmd+Shift+T)" className="shell-tab-add" onClick={() => runDesktopAction('new')}><Plus size={16} /></ShellIconButton>

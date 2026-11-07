@@ -23,16 +23,16 @@ beforeEach(async () => {
 })
 afterEach(resetWorkspaceView)
 
-it('端口映射是单例工具页面，不创建 SSH 会话，关闭返回原终端或连接首页', async () => {
+it('端口映射是单例工具页面，切换不改变 SSH 标签，空间重置时清理页面', async () => {
   const id = useSessionStore.getState().openDraftTab()
   const tabs = useSessionStore.getState().tabs
   useWorkspaceViewStore.getState().openPortMapping()
   useWorkspaceViewStore.getState().openPortMapping()
   expect(useWorkspaceViewStore.getState()).toMatchObject({ activePage: 'port-mapping', portMappingOpened: true })
   expect(useSessionStore.getState().tabs).toBe(tabs)
-  useWorkspaceViewStore.getState().closePortMapping()
+  useSessionStore.getState().setActiveTab(id)
   expect(useSessionStore.getState().activeTabId).toBe(id)
-  expect(useWorkspaceViewStore.getState()).toMatchObject({ activePage: 'terminal', portMappingOpened: false })
+  expect(useWorkspaceViewStore.getState()).toMatchObject({ activePage: 'terminal', portMappingOpened: true })
   useWorkspaceViewStore.getState().openPortMapping()
   await resetWorkspaceView()
   expect(useWorkspaceViewStore.getState()).toMatchObject({ activePage: 'terminal', portMappingOpened: false })

@@ -23,7 +23,7 @@ export function WorkspaceContent({ onAddServer }: { onAddServer: () => void }) {
     {vaultOpened && <section id="workspace-vault" className="shell-page" aria-label="密钥管理" hidden={activePage !== 'vault'} inert={activePage !== 'vault'}>
       <Suspense fallback={<Loading />}><VaultView /></Suspense>
     </section>}
-    {portMappingOpened && <section key={workspaceGeneration()} id="workspace-port-mapping" role="tabpanel" aria-labelledby="workspace-tab-port-mapping" className="shell-page" hidden={activePage !== 'port-mapping'} inert={activePage !== 'port-mapping'}>
+    {portMappingOpened && <section key={workspaceGeneration()} id="workspace-port-mapping" aria-label="端口映射" className="shell-page" hidden={activePage !== 'port-mapping'} inert={activePage !== 'port-mapping'}>
       <Suspense fallback={<Loading />}><PortMappingView active={activePage === 'port-mapping'} /></Suspense>
     </section>}
   </>

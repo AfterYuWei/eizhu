@@ -197,6 +197,8 @@
 .desktop-shell .shell-page[hidden] { display: none; }
 .desktop-shell .term-workspace:not(.is-split) .term-pane-card { border: 0; border-radius: 0; box-shadow: none; }
 .desktop-shell .term-workspace:not(.is-split) .term-pane-card::before { display: none; }
+.desktop-shell .term-pane-card.is-draft { padding: 0; background: var(--surface-workspace); }
+.desktop-shell .term-pane-card.is-draft::before { display: none; }
 .desktop-shell .term-wrap:has(.term-workspace.is-split) { margin: 0 8px 8px; }
 .desktop-shell .term-wrap.terminal-layout > .term-workspace { overflow: hidden; }
 .desktop-shell .sftp-root, .desktop-shell .vault-view { background: var(--surface-panel); }

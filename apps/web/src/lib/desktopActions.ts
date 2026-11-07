@@ -73,8 +73,8 @@ export async function executeDesktopAction(id: DesktopActionId, tabId?: string):
     else if (id === 'new') useSessionStore.getState().openDraftTab()
     else if (id === 'tunnels') useWorkspaceViewStore.getState().openPortMapping()
     else if (id === 'close') {
-      if (!tabId && useWorkspaceViewStore.getState().activePage === 'port-mapping') useWorkspaceViewStore.getState().closePortMapping()
-      else { const active = tabId ?? (terminalPage ? useSessionStore.getState().activeTabId : null); if (active) await useSessionStore.getState().closeTab(active) }
+      const active = tabId ?? (terminalPage ? useSessionStore.getState().activeTabId : null)
+      if (active) await useSessionStore.getState().closeTab(active)
     }
     else if (id === 'sftp') { const tab = activeTerminal(); await useWorkspaceViewStore.getState().openSftp(tab?.profileId, tab?.cwd) }
     else {

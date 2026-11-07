@@ -13,7 +13,6 @@ interface WorkspaceViewState {
   openSftp: (profileId?: string, path?: string) => Promise<void>
   openVault: () => void
   openPortMapping: () => void
-  closePortMapping: () => void
 }
 
 let serversReady: Promise<void> = Promise.resolve()
@@ -29,7 +28,6 @@ export const useWorkspaceViewStore = create<WorkspaceViewState>((set, get) => ({
   showTerminal: () => set({ activePage: 'terminal' }),
   openVault: () => set({ activePage: 'vault', vaultOpened: true }),
   openPortMapping: () => set({ activePage: 'port-mapping', portMappingOpened: true }),
-  closePortMapping: () => set((state) => ({ portMappingOpened: false, activePage: state.activePage === 'port-mapping' ? 'terminal' : state.activePage })),
   openSftp: async (profileId, path) => {
     let store = get().sftpStore
     if (!store) {
