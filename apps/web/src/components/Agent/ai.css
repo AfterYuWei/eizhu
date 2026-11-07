@@ -763,7 +763,7 @@
 .ai-context-options { width: var(--radix-popper-anchor-width, 240px); padding: 4px; font: var(--sans-size) / 1.5 var(--sans); }
 .ai-context-options > button { display: block; width: 100%; padding: 6px 10px; border: 0; border-radius: var(--r-sm); background: transparent; text-align: left; color: var(--fg); cursor: pointer; }
 .ai-context-options > button:is(:hover, .is-active, [aria-selected='true']) { background: var(--bg-active); }
-.ai-model-manager { display: flex; flex-direction: column; gap: 10px; width: 380px; max-width: calc(100vw - 32px); max-height: min(620px, 85vh); overflow-y: auto; font: 13px / 1.5 var(--sans); }
+.ai-model-manager { display: flex; flex-direction: column; gap: 10px; width: 380px; max-width: calc(100vw - 32px); max-height: min(620px, 85vh, var(--radix-popover-content-available-height)); overflow-y: auto; font: 13px / 1.5 var(--sans); }
 .ai-model-manager h3 { margin: 0; font-size: 14px; font-weight: 600; }
 .ai-model-manager :is(input, button) { font: inherit; box-shadow: none; }
 .ai-model-manager button:focus-visible { background: var(--bg-active); }
