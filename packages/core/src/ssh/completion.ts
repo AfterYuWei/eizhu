@@ -69,7 +69,8 @@ export async function withSftp<T>(
         sftp.end()
         return
       }
-      sftp.once('error', () => finish(networkError('SFTP_READ_FAILED', '远端目录不可读')))
+      sftp.once('error', () => finish(networkError('SFTP_NOT_CONNECTED', '文件连接已断开')))
+      sftp.once('close', () => finish(networkError('SFTP_NOT_CONNECTED', '文件连接已断开')))
       void run(sftp).then(
         (v) => finish(undefined, v),
         (e) => finish(e),

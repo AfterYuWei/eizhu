@@ -32,7 +32,7 @@ export async function verifyEditorLayout(editor: BrowserWindow, main: BrowserWin
     screenshots.push(name)
   }
   try {
-    if (process.platform === 'darwin') assert.deepEqual(editor.getWindowButtonPosition(), { x: 16, y: 24 })
+    if (process.platform === 'darwin') assert.deepEqual(editor.getWindowButtonPosition(), { x: 16, y: 16 })
     editor.setContentSize(1280, 800)
     const themes: Record<string, Awaited<ReturnType<typeof geometry>>> = {}
     for (const theme of ['light', 'dark']) {
@@ -40,7 +40,7 @@ export async function verifyEditorLayout(editor: BrowserWindow, main: BrowserWin
       await main.webContents.executeJavaScript(`window.eizhu.settings.write(${JSON.stringify({ key: 'eizhu-settings', value })})`)
       await wait(`document.documentElement.classList.contains('${theme}')&&getComputedStyle(document.querySelector('.monaco-editor')).backgroundColor===getComputedStyle(document.querySelector('.editor-body')).backgroundColor`)
       const measured = await geometry()
-      assert.ok(measured.height >= 64 && measured.draggable && measured.actionsFit && measured.themed && !measured.genericBar)
+      assert.ok(measured.height === 48 && measured.draggable && measured.actionsFit && measured.themed && !measured.genericBar)
       if (process.platform === 'darwin') assert.ok(measured.nativeInset >= 88)
       themes[theme] = measured
       await capture(`editor-${theme}.png`)

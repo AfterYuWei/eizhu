@@ -12,6 +12,7 @@ export async function verifyCompletionUi(
   sessionId: string,
   root: string,
   receivedInputs: string[],
+  dropFileChannel: () => void,
 ) {
   const js = <T = unknown>(source: string, data?: unknown): Promise<T> =>
     window.webContents.executeJavaScript(`(async d=>{${source}})(${JSON.stringify(data)})`)
@@ -106,6 +107,12 @@ export async function verifyCompletionUi(
       'inspector follows shell cd',
     )
     await capture('server-detail-follow-cwd.png')
+    await js(`document.querySelector('.sdetail-pane[aria-hidden="false"] button[title="自动跟随已开启：点击关闭"]').click()`)
+    dropFileChannel()
+    await js(`document.querySelector('.sdetail-pane[aria-hidden="false"] button[title="刷新"]').click()`)
+    await wait(() => js<boolean>(`return document.querySelector('.sdetail-pane[aria-hidden="false"] [role="status"]')?.textContent.includes('自动重连')`), 'inspector detects closed SFTP channel')
+    await wait(() => js<boolean>(`return !document.querySelector('.sdetail-pane[aria-hidden="false"] .sdetail-file-error')&&document.querySelector('.sdetail-pane[aria-hidden="false"] .sdetail-file-path')?.textContent==='/tmp/stage3-project'&&document.querySelector('.sdetail-pane[aria-hidden="false"] .sdetail-file-area')?.getAttribute('aria-busy')==='false'`), 'inspector automatically reconnects at original directory')
+    await capture('server-detail-auto-reconnected.png')
     await js(`document.querySelector('.shell-inspector:not([hidden]) button[aria-label="关闭右侧栏"]').click()`)
     let cases = 0
     for (const command of [
@@ -298,6 +305,7 @@ export async function verifyCompletionUi(
       screenshots,
       syntheticRemote: true,
       serverDetailFollowCwd: true,
+      serverDetailAutoReconnect: true,
       nativeIme: false,
       terminalHighlighting: true,
       terminalCommandStripsRemoved: true,
