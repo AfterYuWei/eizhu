@@ -32,6 +32,8 @@
 
 随后 dev `876555a` 的 Quality 和 Windows 通过，Intel Mac 最终包在合成 SSH 就绪等待超时。AI 合成终端改为按换行/中断分帧并跨数据块保留 UTF-8，覆盖启动脚本的所有字节分割点及粘连命令；原实现会在分片时漏发就绪标记。单个 SSH 就绪等待给予 30 秒，覆盖产品已有的 10 秒 shell 初始化兜底及握手过程，其他 UI 等待保持 12 秒；每个主机指纹请求只点击确认一次。失败时记录会话状态、实际连接阶段及错误码，并将截图和 JSON 保留到 CI 烟测产物中。
 
+2026-11-12 的 dev `1673ab2` 在 [测试包工作流](https://github.com/AfterYuWei/eizhu/actions/runs/43213056750) 中，Intel Mac 通过，Windows 在 Claude 合成 CLI 回归清理临时工作目录时因 `EBUSY` 失败；同一提交的 Quality 通过。合成 CLI 原先在 MCP 调用返回后立即报告任务完成，未等待自己启动的 MCP 子进程退出。现由每次调用持有该进程，在报告完成前关闭其 stdin、等待真实 `close` 事件并检查退出码，保留三种 CLI 的配置隔离、工具目录和真实 IPC 调用断言。Windows 修复验收以新一轮 CI 的执行结果为准。
+
 矩阵使用 windows-2022、macos-15-intel、macos-15、ubuntu-22.04；Linux 配置 Clang 15、Xvfb 和打包依赖。每个目标独立 `npm ci`、重建本机 Electron ABI，禁止跨目标复用原生模块。
 ssh2 1.17.0 的 Ed25519 公钥前导零编码修正在依赖安装、构建及打包前应用，版本与源码不匹配即拒绝继续；固定样本回归随完整测试执行，详见 [CI 密钥生成修复](../docs/desktop-rebuild/CI_KEYGEN_FIX.md)。
 源码通过 `.gitattributes` 统一以 LF 检出，确保四目标源码指纹一致；固定兼容样本与原始烟测日志保留 `-text` 字节边界。
