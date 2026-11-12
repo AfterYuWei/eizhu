@@ -1,3 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="eizhu">
-  <path fill="currentColor" d="M12 12h42L42 24h12L42 36h12L42 52H10l14-14H10l14-14H12z"/>
+  <path fill="currentColor" opacity=".45" d="M34.5 26H48L32 40H17.5Z"/>
+  <path fill="currentColor" d="M18 15H46L52 21.5L48 26H11Z"/>
+  <path fill="currentColor" d="M17.5 40H54L46.5 51H19L13.5 45Z"/>
 </svg>

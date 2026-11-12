@@ -14,6 +14,7 @@
   "scripts": {
     "baseline:verify": "node scripts/verify-desktop-baseline.mjs --check-source",
     "baseline:test": "node --test scripts/desktop-baseline.test.mjs",
+    "icons:generate": "electron scripts/generate-desktop-icons.mjs",
     "desktop:dev": "electron-vite dev --config apps/desktop/electron.vite.config.ts",
     "desktop:build": "node scripts/build-desktop.mjs",
     "desktop:package": "node scripts/package-desktop.mjs",
