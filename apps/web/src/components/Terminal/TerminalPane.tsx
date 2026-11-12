@@ -43,7 +43,7 @@ export function TerminalPane({ tab, isActive, isVisible = isActive }: TerminalPa
     const pickerInputRef = useRef<HTMLInputElement>(null);
     const { updateTabStatus, updateTabTarget, updateTabCwd, updateTabLatency, markTabError, markTabReconnecting, clearTabError, closeTab, clearTabHostKeyPrompt, } = useSessionStore();
     const { profiles, updateDetectedIcon } = useProfileStore();
-    const { fontSize, fontFamily, fontFamilyCN, terminalTheme, terminalCommandHighlight, terminalLogHighlight, terminalPopupMenu, setFontSize, } = useSettingsStore();
+    const { fontSize, fontFamily, fontFamilyCN, terminalTheme, terminalLogHighlight, terminalPopupMenu, setFontSize, } = useSettingsStore();
     const effectiveFontSize = fontSize;
     // 默认字体大小（用于显示相对变化）
     const DEFAULT_FONT_SIZE = DEFAULT_DESKTOP_TERMINAL_FONT_SIZE;
@@ -149,7 +149,6 @@ export function TerminalPane({ tab, isActive, isVisible = isActive }: TerminalPa
         fontFamily,
         fontFamilyCN,
         terminalTheme: effectiveTerminalTheme,
-        commandMarkers: terminalCommandHighlight,
         logHighlight: terminalLogHighlight,
         onData: (data) => {
             if (useWorkspaceViewStore.getState().activePage !== 'terminal' || useSessionStore.getState().activeTabId !== tab.id || !tab.sessionId)
@@ -175,6 +174,7 @@ export function TerminalPane({ tab, isActive, isVisible = isActive }: TerminalPa
         reconnectRequestPendingRef.current = true;
         isReconnectingRef.current = true;
         beginLocalConnection('正在恢复远程会话');
+        updateTabStatus(tab.id, 'connecting');
         try {
             const { cols, rows } = getSize();
             const currentSessionId = useSessionStore.getState().tabs
@@ -193,7 +193,9 @@ export function TerminalPane({ tab, isActive, isVisible = isActive }: TerminalPa
                 }
                 return;
             }
-            updateTabStatus(tab.id, 'connecting', response.session_id);
+            // Same-ID readiness events can arrive before this RPC response.
+            if (response.session_id !== currentSessionId)
+                updateTabStatus(tab.id, 'connecting', response.session_id);
             reconnectRequestPendingRef.current = false;
         }
         catch (cause) {

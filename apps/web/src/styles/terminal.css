@@ -1,4 +1,9 @@
 /* ===== TERMINAL ===== */
+.xterm .xterm-scrollable-element > .scrollbar.vertical > .slider {
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background-clip: padding-box;
+}
 /* Terminal content follows its selected palette; spacing separates its surface. */
 .term-wrap {
   flex: 1;
@@ -55,25 +60,6 @@
   box-sizing: border-box;
   background: var(--term-bg);
 }
-
-/* The marker lives in the right gutter, outside the selectable terminal cells. */
-.xterm .eizhu-command-marker {
-  right: 0;
-  pointer-events: none;
-}
-.xterm .eizhu-command-marker::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  right: -6px;
-  width: 2px;
-  border-radius: 1px;
-  background: var(--terminal-command-marker-color);
-  opacity: 0.7;
-}
-.xterm .eizhu-command-marker.is-block-start::after { top: 2px; }
-.xterm .eizhu-command-marker.is-block-end::after { bottom: 2px; }
 
 /* Split panes keep the terminal canvas free of toolbars and title rows. */
 .term-workspace {
@@ -226,7 +212,6 @@
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
-  scrollbar-width: thin;
   padding: 3px;
   margin: -3px;
 }

@@ -10,6 +10,8 @@ const executable = executableArg ? resolve(executableArg) : electron
 const container = await mkdtemp(join(tmpdir(), 'eizhu-desktop-smoke-'))
 const root = join(container, 'profile')
 const args = [...(executableArg ? [] : ['.']), '--smoke-test', `--smoke-root=${container}`]
+const terminalOnly = process.argv.includes('--terminal-only')
+if (terminalOnly) args.push('--terminal-smoke')
 const duration = Number(process.argv.findLast((arg) => arg.startsWith('--duration='))?.split('=')[1] ?? 3000)
 assert.ok(
   Number.isSafeInteger(duration) && duration >= 1000 && duration <= 8 * 60 * 60 * 1000,
@@ -51,6 +53,20 @@ await new Promise((accept, reject) => {
   }
   throw cause
 })
+if (terminalOnly) {
+  const report = JSON.parse(await readFile(join(root, 'terminal-smoke.json'), 'utf8'))
+  assert.equal(report.stage3.passed, true)
+  assert.equal(report.stage3.completionUi.reconnectInput, true)
+  assert.equal(report.stage3.completionUi.roundedScrollbars, true)
+  assert.equal(report.stage3.completionUi.terminalCommandStripsRemoved, true)
+  await mkdir(evidenceRoot, { recursive: true })
+  for (const name of [...report.stage3.completionUi.screenshots, ...report.stage3.portMapping.screenshots])
+    await copyFile(join(root, name), join(evidenceRoot, name))
+  const evidence = `artifacts/smoke/${process.platform}-${process.arch}-terminal.json`
+  await writeFile(evidence, JSON.stringify(report, null, 2) + '\n')
+  console.log(`终端烟测通过：${process.platform}/${process.arch}；证据 ${evidence}`)
+  process.exit(0)
+}
 const report = JSON.parse(await readFile(join(root, 'smoke.json'), 'utf8'))
 assert.equal(report.renderer.node, 'undefined')
 assert.equal(report.renderer.require, 'undefined')
@@ -73,6 +89,9 @@ assert.equal(report.stage3.passed, true)
 assert.equal(report.stage3.portMapping.passed, true)
 assert.equal(report.stage3.completionUi.passed, true)
 assert.equal(report.stage3.completionUi.terminalHighlighting, true)
+assert.equal(report.stage3.completionUi.reconnectInput, true)
+assert.equal(report.stage3.completionUi.roundedScrollbars, true)
+assert.equal(report.stage3.completionUi.terminalCommandStripsRemoved, true)
 assert.equal(report.stage3.completionMatrix.generators, 10)
 assert.equal(report.stage3.load.passed, true)
 if (report.stage4.unavailable) console.warn('阶段 4 协议集成待验：本机缺少 OpenSSH sftp-server')
@@ -92,7 +111,7 @@ if (report.stage5.passed)
   await copyFile(join(root, 'stage5-backup.png'), join(evidenceRoot, 'stage5-backup.png'))
 await copyFile(join(root, 'stage6-update.png'), join(evidenceRoot, 'stage6-update.png'))
 if (report.stage4.passed)
-  for (const name of ['stage4-editor.png', 'stage4-sftp.png', ...report.stage4.editorLayout.screenshots])
+  for (const name of ['stage4-editor.png', 'stage4-sftp.png', ...report.stage4.editorLayout.screenshots, ...report.stage4.reconnect.screenshots])
     await copyFile(join(root, name), join(evidenceRoot, name))
 await writeFile(
   `artifacts/smoke/${process.platform}-${process.arch}.json`,

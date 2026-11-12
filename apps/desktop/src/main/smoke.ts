@@ -81,6 +81,14 @@ export async function runSmoke(options: {
     throw error
   }
   step('renderer-ready')
+  if (process.argv.includes('--terminal-smoke')) {
+    const stage3 = await verifyStage3(window, options.runtime(), root)
+    await writeFile(
+      join(root, 'terminal-smoke.json'),
+      JSON.stringify({ platform: process.platform, arch: process.arch, packaged: app.isPackaged, stage3 }, null, 2) + '\n',
+    )
+    return
+  }
   if (process.argv.includes('--ai-smoke-only')) {
     const aiDesktop = await verifyAiDesktop(window, options.runtime(), root)
     await writeFile(

@@ -559,6 +559,7 @@ export async function verifyStage4(
         ? true
         : undefined,
     )
+    const clientsBeforeUi = new Set(clients)
     await window.webContents.executeJavaScript(
       `[...document.querySelectorAll('.sftp-server-card')].find(e=>e.textContent.includes('阶段 4 合成服务器')).dispatchEvent(new MouseEvent('dblclick',{bubbles:true}))`,
     )
@@ -573,9 +574,24 @@ export async function verifyStage4(
       `Promise.race([document.fonts.ready.then(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))),new Promise(resolve=>setTimeout(resolve,250))])`,
     )
     await writeFile(join(root, 'stage4-sftp.png'), (await window.webContents.capturePage()).toPNG())
-    const fileSessions = await call<Array<{ id: string; profile_id: string }>>('sftp.listSessions')
-    const uiSession = fileSessions.find((session) => session.profile_id === profileId && session.id !== sessionId)
+    let fileSessions = await call<Array<{ id: string; profile_id: string }>>('sftp.listSessions')
+    let uiSession = fileSessions.find((session) => session.profile_id === profileId && session.id !== sessionId)
     assert.ok(uiSession, 'SFTP 页面拥有自己的内部服务器连接')
+    const uiPeer = [...clients].filter((client) => !clientsBeforeUi.has(client))
+    assert.equal(uiPeer.length, 1)
+    await window.webContents.executeJavaScript(`[...document.querySelectorAll('.sftp-pane .sftp-row')].find(row=>row.querySelector('.sftp-cell-name')?.textContent==='source').dispatchEvent(new MouseEvent('dblclick',{bubbles:true}))`)
+    await wait(async () => (await window.webContents.executeJavaScript(`!!document.querySelector('.sftp-cell-name[title="配置.json"]')`)) ? true : undefined)
+    uiPeer[0].end()
+    await wait(async () => (await window.webContents.executeJavaScript(`document.querySelector('.sftp-pane-error [role="alert"]')?.textContent.includes('连接已失效')&&document.querySelector('.sftp-pane-error button')?.textContent==='重新连接'`)) ? true : undefined)
+    await writeFile(join(root, 'stage4-sftp-disconnected.png'), (await window.webContents.capturePage()).toPNG())
+    await window.webContents.executeJavaScript(`document.querySelector('.sftp-pane-error button').click()`)
+    await wait(async () => (await window.webContents.executeJavaScript(`!document.querySelector('.sftp-pane-error')&&!!document.querySelector('.sftp-cell-name[title="配置.json"]')&&[...document.querySelectorAll('.sftp-crumb-row')].some(row=>row.textContent.includes('source'))`)) ? true : undefined)
+    await window.webContents.executeJavaScript(`new Promise(resolve=>setTimeout(resolve,250))`)
+    await writeFile(join(root, 'stage4-sftp-reconnected.png'), (await window.webContents.capturePage()).toPNG())
+    const oldUiSession = uiSession.id
+    fileSessions = await call<Array<{ id: string; profile_id: string }>>('sftp.listSessions')
+    uiSession = fileSessions.find((session) => session.profile_id === profileId && session.id !== sessionId)
+    assert.ok(uiSession && uiSession.id !== oldUiSession)
     const inFlight = await call<{ upload_id: string; tasks: Array<{ id: string }> }>('sftp.uploadBegin', {
       sessionId: uiSession.id, name: 'navigation-inflight.txt', destDir: remote, size: 6, overwrite: false, lastModified: 42,
     })
@@ -640,6 +656,7 @@ export async function verifyStage4(
       singletonPage: true,
       navigationRetainsConnections: true,
       navigationRetainsTransfer: true,
+      reconnect: { passed: true, restoredPath: true, screenshots: ['stage4-sftp-disconnected.png', 'stage4-sftp-reconnected.png'] },
     }
   } finally {
     if (windows.editor) windows.closeEditor(true)

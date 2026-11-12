@@ -90,6 +90,9 @@
   --mono: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
   --sans: -apple-system, BlinkMacSystemFont, 'Inter', 'Noto Sans SC', system-ui, sans-serif;
   --sans-size: 12px;
+  --scrollbar-thumb: color-mix(in srgb, var(--fg) 24%, transparent);
+  --scrollbar-thumb-hover: color-mix(in srgb, var(--fg) 36%, transparent);
+  --scrollbar-thumb-active: color-mix(in srgb, var(--fg) 46%, transparent);
   --r: 8px;
   --r-sm: 6px;
   --r-xs: 4px;
@@ -319,21 +322,39 @@
   }
   * {
     scrollbar-width: thin;
-    scrollbar-color: var(--bg-active) transparent;
+    scrollbar-color: var(--scrollbar-thumb) transparent;
+  }
+  /* Chromium's standard scrollbar properties override the rounded thumb below. */
+  @supports selector(::-webkit-scrollbar) {
+    * {
+      scrollbar-width: auto;
+      scrollbar-color: auto;
+    }
   }
   *::-webkit-scrollbar {
-    width: 5px;
-    height: 5px;
+    width: 8px;
+    height: 8px;
   }
   *::-webkit-scrollbar-track {
     background: transparent;
   }
   *::-webkit-scrollbar-thumb {
-    background: var(--bg-active);
-    border-radius: 3px;
+    background: var(--scrollbar-thumb);
+    background-clip: padding-box;
+    border: 1px solid transparent;
+    border-radius: 999px;
   }
   *::-webkit-scrollbar-thumb:hover {
-    background: var(--fg-5);
+    background-color: var(--scrollbar-thumb-hover);
+  }
+  *::-webkit-scrollbar-thumb:active {
+    background-color: var(--scrollbar-thumb-active);
+  }
+  *::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+  *::-webkit-scrollbar-button {
+    display: none;
   }
   /* Smooth theme transition for all chrome elements — terminal container
      (.term-wrap and its descendants) is excluded to avoid animating the

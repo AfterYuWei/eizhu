@@ -1,4 +1,5 @@
 import { once } from 'node:events'
+import assert from 'node:assert/strict'
 import { writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { BrowserWindow } from 'electron'
@@ -235,27 +236,58 @@ export async function verifyCompletionUi(
     )
     // Verify the production hook, settings UI and persistence together over the same SSH port.
     await runtime.call('session.input', { id: uiSession, data: 'terminal-colors-smoke\r' })
-    await wait(() => js<boolean>(`return document.querySelectorAll('.eizhu-command-marker').length===5&&document.querySelectorAll('.eizhu-command-marker.is-block-start').length===2&&document.querySelectorAll('.eizhu-command-marker.is-block-end').length===2`), 'command and output blocks rendered')
+    await wait(() => js<boolean>(`return document.querySelectorAll('.xterm-decoration').length===0`), 'terminal has no command strips')
     await capture('terminal-highlighting-shell.png')
     await js(`document.dispatchEvent(new KeyboardEvent('keydown',{key:'y',ctrlKey:true,shiftKey:true,bubbles:true}))`)
     await wait(() => js<boolean>(`return [...document.querySelectorAll('[role="tab"]')].some(tab=>tab.textContent==='终端')`), 'terminal settings available')
     await js(`const tab=[...document.querySelectorAll('[role="tab"]')].find(tab=>tab.textContent==='终端');tab.focus();tab.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}))`)
-    await wait(() => js<boolean>(`return document.querySelector('#settings-terminal-command-marker')?.getAttribute('aria-checked')==='true'&&document.querySelector('#settings-terminal-log-highlight')?.getAttribute('aria-checked')==='false'`), 'marker and log defaults')
+    await wait(() => js<boolean>(`return !document.querySelector('#settings-terminal-command-marker')&&document.querySelector('#settings-terminal-log-highlight')?.getAttribute('aria-checked')==='false'`), 'command strip setting removed and log default preserved')
     await js(`document.querySelector('#settings-terminal-log-highlight').click()`)
-    await wait(() => js<boolean>(`return document.querySelectorAll('.xterm-decoration:not(.eizhu-command-marker)').length===3&&document.querySelectorAll('.eizhu-command-marker').length===5`), 'log levels independently decorated')
-    await js(`document.querySelector('#settings-terminal-command-marker').click()`)
-    await wait(() => js<boolean>(`return document.querySelectorAll('.eizhu-command-marker').length===0&&document.querySelectorAll('.xterm-decoration').length===3`), 'command blocks independently disabled')
+    await wait(() => js<boolean>(`return document.querySelectorAll('.xterm-decoration').length===3&&document.querySelectorAll('.eizhu-command-marker').length===0`), 'log levels decorated without command strips')
     await js(`document.querySelector('#settings-terminal-log-highlight').click()`)
     await wait(() => js<boolean>(`return document.querySelectorAll('.xterm-decoration').length===0`), 'original colors restored')
-    await js(`document.querySelector('#settings-terminal-command-marker').click()`)
     await wait(async () => {
       const values = await runtime.call<Record<string, string>>('settings.read')
       const state = JSON.parse(values['eizhu-settings']).state
-      return state.terminalCommandHighlight === true && state.terminalLogHighlight === false
+      return state.terminalLogHighlight === false
     }, 'highlight preferences persisted')
     await capture('terminal-highlighting-settings.png')
     await js(`document.querySelector('.settings-page-back').click()`)
-    await wait(() => js<boolean>(`return !document.querySelector('.settings-page')&&document.querySelectorAll('.eizhu-command-marker').length===5`), 'terminal retained after settings')
+    await wait(() => js<boolean>(`return !document.querySelector('.settings-page')&&document.querySelectorAll('.xterm-decoration').length===0`), 'terminal retained without command strips after settings')
+    // Use the actual menu and xterm input path; direct session.input bypasses its readiness guard.
+    for (let attempt = 0; attempt < 2; attempt++) {
+      await js(`document.querySelector('button[aria-label="更多操作"]').dispatchEvent(new PointerEvent('pointerdown',{button:0,pointerType:'mouse',bubbles:true}))`)
+      await wait(() => js<boolean>(`return [...document.querySelectorAll('[role="menuitem"]')].some(item=>item.textContent==='重新连接')`), 'reconnect menu available')
+      await js(`[...document.querySelectorAll('[role="menuitem"]')].find(item=>item.textContent==='重新连接').click()`)
+      await wait(() => js<boolean>(`return !!document.querySelector('.connection-status')`), 'reconnect started')
+      await wait(() => js<boolean>(`const label=document.querySelector('.shell-tab.is-active [role="tab"]')?.getAttribute('aria-label');return !document.querySelector('.connection-status')&&(label?.includes('已连接')||label?.endsWith(' ms'))`), 'reconnected terminal ready')
+      await type('git', 'git')
+      key('Escape')
+      const offset = receivedInputs.length
+      key('Enter')
+      await wait(async () => receivedInputs.slice(offset).join('').includes('\r'), 'reconnected command submitted')
+    }
+    // Populate scrollback, then inspect the painted scrollbar geometry in both themes.
+    await runtime.call('session.input', { id: uiSession, data: 'burst' })
+    await wait(() => js<boolean>(`const bar=document.querySelector('.xterm .scrollbar.vertical');const thumb=bar?.querySelector('.slider')?.getBoundingClientRect();return !!thumb&&thumb.height>0&&thumb.height<bar.getBoundingClientRect().height/2`), 'terminal scrollback rendered')
+    await js(`document.querySelector('.xterm').dispatchEvent(new WheelEvent('wheel',{deltaY:100000,bubbles:true}))`)
+    for (const theme of ['light', 'dark']) {
+      await js(`document.documentElement.className=d`, theme)
+      const geometry = await js<{ native: string; thumb: number; radius: string; hidden: string }>(`
+        const probe=document.createElement('div');probe.style.cssText='width:160px;height:100px;overflow:scroll';document.body.append(probe);
+        const native=getComputedStyle(probe,'::-webkit-scrollbar').width;
+        const slider=document.querySelector('.xterm .scrollbar.vertical .slider');const style=getComputedStyle(slider);
+        const thumb=slider.getBoundingClientRect().width-parseFloat(style.borderLeftWidth)-parseFloat(style.borderRightWidth);
+        const radius=style.borderRadius;const hidden=getComputedStyle(document.querySelector('.shell-tab-scroll')).scrollbarWidth;
+        probe.remove();return {native,thumb,radius,hidden};
+      `)
+      assert.equal(geometry.native, '8px')
+      assert.equal(geometry.thumb, 6)
+      assert.equal(geometry.radius, '999px')
+      assert.equal(geometry.hidden, 'none')
+      await js(`document.querySelector('.xterm-scrollable-element').dispatchEvent(new MouseEvent('mouseover',{bubbles:true}));await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));await new Promise(resolve=>setTimeout(resolve,150))`)
+      await capture(`scrollbar-terminal-${theme}.png`)
+    }
     return {
       passed: true,
       cases,
@@ -268,7 +300,10 @@ export async function verifyCompletionUi(
       serverDetailFollowCwd: true,
       nativeIme: false,
       terminalHighlighting: true,
-      terminalCommandBlocks: true,
+      terminalCommandStripsRemoved: true,
+      reconnectInput: true,
+      reconnectAttempts: 2,
+      roundedScrollbars: true,
     }
   } catch (error) {
     const state = await js(`const p=document.querySelector('.xctrl-completion-panel');return {focus:document.activeElement?.className,popup:p?.textContent,rect:p?.getBoundingClientRect().toJSON(),viewport:[innerWidth,innerHeight]}`)

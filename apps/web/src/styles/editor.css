@@ -364,3 +364,6 @@
 @media (prefers-reduced-motion: reduce) {
   .editor-tab, .editor-tab-close, .editor-btn { transition: none; }
 }
+.monaco-scrollable-element > .scrollbar > .slider {
+  border-radius: 999px;
+}

@@ -1487,7 +1487,7 @@
 .desktop-shell .vault-list-item-meta { display: flex; justify-content: space-between; gap: 8px; margin-top: 3px; color: var(--vault-muted); font-size: max(12px, calc(var(--sans-size) - 2px)); }
 .desktop-shell .vault-list-item-meta time { white-space: nowrap; font-variant-numeric: tabular-nums; }
 .desktop-shell .vault-list-count { margin-top: auto; padding: 16px 9px 6px; color: var(--vault-muted); font-size: max(12px, calc(var(--sans-size) - 2px)); }
-.desktop-shell .vault-inspector { min-width: 0; min-height: 0; padding-top: 8px; overflow-y: auto; scrollbar-width: thin; }
+.desktop-shell .vault-inspector { min-width: 0; min-height: 0; padding-top: 8px; overflow-y: auto; }
 .desktop-shell .vault-detail-view, .desktop-shell .vault-inline-editor { max-width: 1120px; }
 .desktop-shell .vault-detail-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; margin-bottom: 24px; }
 .desktop-shell .vault-detail-heading h2 { margin: 0; font: 500 var(--sans-size) / 1.5 var(--sans); overflow-wrap: anywhere; }

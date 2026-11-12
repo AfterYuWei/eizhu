@@ -45,6 +45,7 @@ export function SftpView({ store }: { store: SftpStoreApi }) {
     }, [store]);
     useSftpTransfer(sessionIds, {
         onTask: (task) => store.getState().acceptTransferTasks([task]),
+        onSessionStatus: (sessionId, status) => store.getState().acceptSessionStatus(sessionId, status),
     });
     return (<SftpStoreContext.Provider value={store}>
       <div className="sftp-root">

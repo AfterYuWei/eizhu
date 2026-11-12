@@ -72,6 +72,24 @@ it('已分配会话但等待主机确认时仍显示连接进度；失败后结�
   expect(store.getState().leftTabs[0]).toMatchObject({ connecting: false, loading: false, error: '认证失败' })
 })
 
+it('连接失效显示重新连接按钮，点击后恢复失效前目录', async () => {
+  const tab = store.getState().leftTabs[0]
+  await act(async () => {
+    store.setState({ leftTabs: [{ ...tab, sessionId: 'old', path: '/work/projects' }] })
+    store.getState().acceptSessionStatus('old', 'disconnected')
+  })
+  expect(host.querySelector('[role="alert"]')?.textContent).toContain('连接已失效')
+  const button = host.querySelector<HTMLButtonElement>('.sftp-pane-error button')!
+  expect(button.textContent).toBe('重新连接')
+  api.getSession.mockResolvedValue({ status: 'disconnected' })
+  api.createSession.mockResolvedValue({ session_id: 'new', status: 'connected', home_dir: '/home' })
+  api.list.mockResolvedValue({ path: '/work/projects', entries: [] })
+  await act(async () => button.click())
+  expect(api.list).toHaveBeenCalledExactlyOnceWith('new', '/work/projects', false)
+  expect(store.getState().leftTabs[0].path).toBe('/work/projects')
+  expect(host.querySelector('.sftp-pane-error')).toBeNull()
+})
+
 it('刷新及树视图读取都有进度，切换到其他标签不会沿用旧标签的加载状态', async () => {
   const tab = store.getState().leftTabs[0]
   await act(async () => store.setState({ leftTabs: [{ ...tab, sessionId: 'session', view: 'tree' }] }))
