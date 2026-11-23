@@ -129,7 +129,7 @@ export class AgentService {
       if (!provider) fail('AI_CONFIG', '请选择已配置的供应商')
       const model = backend.model || provider.model
       if (model !== provider.model && !provider.models?.some((m) => m.id === model))
-        fail('AI_CONFIG', '所选模型已不在供应商候选池中，请重新选择')
+        fail('AI_CONFIG', '所选模型不在供应商的模型列表中，请重新选择')
       return { kind: 'custom' as const, providerId: provider.id, model }
     }
     if (backend.kind === 'official') {

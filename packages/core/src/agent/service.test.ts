@@ -1126,7 +1126,7 @@ test('conversation model selection accepts only its provider candidate pool', as
         { sessionId: 'a', conversationId: a.id, backend: { kind: 'custom', providerId: 'p', model: 'unlisted' } },
         1,
       ),
-      /候选/,
+      /模型列表/,
     )
   } finally {
     await f.service.close()

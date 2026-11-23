@@ -27,8 +27,8 @@ const cliNames = { codex: 'Codex', claude: 'Claude Code', deepseek: 'DeepSeek Ha
 const connectionFeedback: Record<string, { id: string; message: string }> = {
   name: { id: 'ai-name', message: '请填写供应商名称（1–80个字符）。' },
   endpoint: { id: 'ai-endpoint', message: '请输入有效的接口基础地址，远程使用HTTPS，本机服务可使用HTTP。' },
-  model: { id: 'ai-model-manage', message: '请先添加候选模型，并从候选池中选择一个模型。' },
-  models: { id: 'ai-model-manage', message: '请检查候选池，最多1000个模型且不能重复。' },
+  model: { id: 'ai-model-manage', message: '请从模型列表中选择要使用的模型。' },
+  models: { id: 'ai-model-manage', message: '模型列表最多可添加 1000 个模型，模型 ID 不可重复。' },
   contextWindow: { id: 'ai-context', message: '上下文窗口须为4096–2000000之间的整数。' },
   apiKey: { id: 'ai-key', message: 'API Key不能超过8192个字符。' },
   protocol: { id: 'ai-protocol', message: '请在高级设置中选择受支持的接口协议。' },
@@ -61,7 +61,7 @@ export function AiPanel() {
   const [draft, setDraft] = useState<AiConnection>(fresh)
   const [source, setSource] = useState('official')
   const [cli, setCli] = useState<AiCli>({ kind: 'codex', path: '', model: '' })
-  const [discoveredModels, setDiscoveredModels] = useState<AiModelCatalog['models']>([])
+  const [discoveredModels, setDiscoveredModels] = useState<AiModelCatalog['models'] | null>(null)
   const [official, setOfficial] = useState<AiModelCatalog | null>(null)
   const [message, setMessage] = useState(''),
     [busy, setBusy] = useState(false)
@@ -83,7 +83,7 @@ export function AiPanel() {
         clearKey: false,
       })
     }
-    setDiscoveredModels([])
+    setDiscoveredModels(null)
   }
   useEffect(() => {
     let live = true
@@ -109,20 +109,23 @@ export function AiPanel() {
       live = false
     }
   }, [setSettings])
-  const run = async (work: () => Promise<void>) => {
+  const run = async (work: () => Promise<void>, reportError: (message: string) => void = setMessage) => {
     if (busy) return
     setBusy(true)
     setMessage('')
     try {
       await work()
     } catch (e) {
-      setMessage(e instanceof Error ? e.message : '操作失败')
+      reportError(e instanceof Error ? e.message : '操作失败')
     } finally {
       setBusy(false)
     }
   }
   const applyBackend = async (backend: AiBackend) => setSettings(await bridge().ai.setDefault(backend))
-  const validateDraft = (operation: 'ai.discover' | 'ai.test' | 'ai.configure') => {
+  const validateDraft = (
+    operation: 'ai.discover' | 'ai.test' | 'ai.configure',
+    reportError?: (message: string) => void,
+  ) => {
     const { models, ...connection } = draft
     const result = ai[operation].input.safeParse({
       ...(operation === 'ai.configure' ? { ...connection, models } : connection),
@@ -133,7 +136,12 @@ export function AiPanel() {
     if (result.success) return result.data
     const field = result.error.issues[0]?.path[0]
     const feedback = typeof field === 'string' ? connectionFeedback[field] : undefined
-    setMessage(feedback?.message ?? '请检查供应商配置。')
+    const error = feedback?.message ?? '请检查供应商配置。'
+    if (reportError) {
+      reportError(error)
+      return
+    }
+    setMessage(error)
     const control = feedback && document.getElementById(feedback.id)
     const advanced = control?.closest<HTMLDetailsElement>('details')
     if (advanced) advanced.open = true
@@ -181,7 +189,7 @@ export function AiPanel() {
                 disabled={busy}
                 onValueChange={(value) =>
                   void run(async () => {
-                    setDiscoveredModels([])
+                    setDiscoveredModels(null)
                     setCliMessage('')
                     if (value === 'builtin') {
                       const provider = settings.providers.find((p) => p.id === source)
@@ -223,7 +231,7 @@ export function AiPanel() {
                   disabled={busy}
                   onValueChange={(value) => {
                     setSource(value)
-                    setDiscoveredModels([])
+                    setDiscoveredModels(null)
                     setMessage('')
                     if (value === 'new') {
                       setDraft(fresh())
@@ -331,7 +339,7 @@ export function AiPanel() {
                     }),
                   })
                   setSource('new')
-                  setDiscoveredModels([])
+                  setDiscoveredModels(null)
                   setMessage('')
                 }}
               >
@@ -367,7 +375,7 @@ export function AiPanel() {
                 disabled={busy}
                 onChange={(e) => {
                   setDraft({ ...draft, endpoint: e.target.value })
-                  setDiscoveredModels([])
+                  setDiscoveredModels(null)
                 }}
               />
             </Field>
@@ -390,7 +398,7 @@ export function AiPanel() {
                 disabled={busy}
                 onChange={(e) => {
                   setDraft({ ...draft, apiKey: e.target.value || undefined, clearKey: false })
-                  setDiscoveredModels([])
+                  setDiscoveredModels(null)
                 }}
               />
             </Field>
@@ -402,12 +410,12 @@ export function AiPanel() {
                   disabled={busy}
                   onCheckedChange={(clearKey) => {
                     setDraft({ ...draft, clearKey, apiKey: undefined })
-                    setDiscoveredModels([])
+                    setDiscoveredModels(null)
                   }}
                 />
               </Field>
             )}
-            <Field id="ai-model" label="模型" description="从候选池选择；添加、删除和选择均在保存后生效。">
+            <Field id="ai-model" label="模型" description="选择要使用的模型，保存后生效。">
               <AiModelCandidates
                 key={draft.id}
                 models={models}
@@ -415,18 +423,11 @@ export function AiPanel() {
                 discovered={discoveredModels}
                 disabled={busy}
                 onChange={(models, model) => setDraft({ ...draft, models, model })}
-                onDiscover={() =>
+                onDiscover={(reportError) =>
                   void run(async () => {
-                    const input = validateDraft('ai.discover')
-                    if (!input) return
-                    const result = await bridge().ai.discover(input)
-                    setDiscoveredModels(result.models)
-                    setMessage(
-                      result.models.length
-                        ? '探测完成，请将需要的模型加入候选池，再选择并保存'
-                        : '未发现可用模型，可在候选池中手动添加',
-                    )
-                  })
+                    const input = validateDraft('ai.discover', reportError)
+                    if (input) setDiscoveredModels((await bridge().ai.discover(input)).models)
+                  }, reportError)
                 }
               />
             </Field>
@@ -454,7 +455,7 @@ export function AiPanel() {
                   onValueChange={(protocol) => {
                     if (protocol === 'responses' || protocol === 'chat' || protocol === 'anthropic') {
                       setDraft({ ...draft, protocol })
-                      setDiscoveredModels([])
+                      setDiscoveredModels(null)
                     }
                   }}
                 >
@@ -481,7 +482,7 @@ export function AiPanel() {
                       setSource('official')
                       await applyBackend({ kind: 'official', model: '' })
                       setDraft(fresh())
-                      setDiscoveredModels([])
+                      setDiscoveredModels(null)
                     })
                   }
                 >

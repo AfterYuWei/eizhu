@@ -74,7 +74,7 @@ async function fill(id: string, value: string) {
 }
 async function manage(open = true) {
   if (Boolean(document.querySelector('.ai-model-manager[data-state="open"]')) !== open)
-    await click('ai-model-manage')
+    await click(open ? 'ai-model-manage' : 'ai-model-done')
   expect(Boolean(document.querySelector('.ai-model-manager[data-state="open"]'))).toBe(open)
 }
 async function addManual(name: string) {
@@ -87,9 +87,11 @@ async function discover() {
   await manage()
   await click('ai-discover-models')
 }
-async function addDiscovered(name: string) {
-  await choose('ai-discovered-model', name)
-  await click('ai-add-detected')
+async function checkDiscovered(id: string) {
+  await act(async () =>
+    document.querySelector<HTMLElement>(`#ai-discovered-model [title="${id}"]`)!
+      .closest('li')!.querySelector<HTMLButtonElement>('[role="checkbox"]')!.click(),
+  )
 }
 async function advanced() {
   await act(async () => host.querySelector<HTMLElement>('.ai-settings-advanced summary')!.click())
@@ -129,6 +131,8 @@ beforeEach(async () => {
       models: [
         { id: 'model-a', name: 'model-a' },
         { id: 'model-c', name: 'model-c' },
+        { id: 'model-d', name: '备用模型' },
+        { id: 'model-e', name: '另一个模型' },
       ],
       defaultModel: '',
       message: '',
@@ -216,21 +220,35 @@ it.each(aiProviderPresets)('prepares $name without saving or requesting a model'
   expect(api.ai.discover).not.toHaveBeenCalled()
   expect(api.ai.setDefault).not.toHaveBeenCalled()
 })
-it('adds only selected discoveries to the candidate pool and retains it across model/provider switches', async () => {
+it('adds checked discoveries across search filters and saves the selected model with its pool', async () => {
   await choose('ai-source', '新增供应商')
   await fill('ai-endpoint', 'https://private.invalid/v1')
   await discover()
   expect(api.ai.discover).toHaveBeenCalledWith(expect.objectContaining({ model: '', protocol: 'responses' }))
   expect(host.querySelector<HTMLButtonElement>('#ai-model')!.disabled).toBe(true)
-  expect(document.querySelectorAll('.ai-model-pool li')).toHaveLength(0)
-  await addDiscovered('model-c')
-  expect(document.querySelectorAll('.ai-model-pool li')).toHaveLength(1)
+  expect(document.activeElement?.id).toBe('ai-model-search')
+  await fill('ai-model-search', 'MODEL-C')
+  expect(document.querySelectorAll('#ai-discovered-model li')).toHaveLength(1)
+  await act(async () => button('全选结果').click())
+  await fill('ai-model-search', '备用模型')
+  expect(document.querySelectorAll('#ai-discovered-model li')).toHaveLength(1)
+  await checkDiscovered('model-d')
+  expect(document.getElementById('ai-add-detected')?.textContent).toBe('添加所选模型（2）')
+  await click('ai-add-detected')
+  expect(document.querySelectorAll('.ai-model-pool li')).toHaveLength(2)
   expect(document.querySelector('.ai-model-pool')!.textContent).not.toContain('model-a')
+  expect(document.querySelector('.ai-model-pool')!.textContent).not.toContain('model-e')
+  await act(async () => button('model-c').click())
+  expect(document.querySelector('.ai-model-use[aria-pressed="true"]')?.textContent).toBe('model-c当前')
+  expect(api.ai.configure).not.toHaveBeenCalled()
   await manage(false)
-  await choose('ai-model', 'model-c')
+  expect(document.activeElement?.id).toBe('ai-model-manage')
   await act(async () => button('保存并使用').click())
   expect(api.ai.configure).toHaveBeenCalledWith(
-    expect.objectContaining({ model: 'model-c', models: [{ id: 'model-c', name: 'model-c' }] }),
+    expect.objectContaining({
+      model: 'model-c',
+      models: [{ id: 'model-c', name: 'model-c' }, { id: 'model-d', name: '备用模型' }],
+    }),
   )
   await choose('ai-source', '服务A')
   await choose('ai-source', '自定义模型')
@@ -246,7 +264,7 @@ it('adds manual names to the same array, deduplicates them, and persists deletio
   await fill('ai-model-name', 'private-model')
   await click('ai-add-model')
   expect(document.querySelectorAll('.ai-model-pool li')).toHaveLength(2)
-  expect(document.querySelector('.ai-model-manager [role=status]')!.textContent).toContain('已在候选池')
+  expect(document.querySelector('.ai-model-manager [role=status]')!.textContent).toContain('已在列表中')
   await manage(false)
   await choose('ai-model', 'private-model')
   await manage()
@@ -271,7 +289,7 @@ it('requires a new selection when the selected candidate is deleted', async () =
   await act(async () => document.querySelector<HTMLButtonElement>('[aria-label="删除模型 model-a"]')!.click())
   await manage(false)
   await act(async () => button('保存并使用').click())
-  expect(status()).toContain('从候选池中选择')
+  expect(status()).toContain('从模型列表中选择')
   expect(api.ai.configure).not.toHaveBeenCalled()
   await choose('ai-model', 'replacement')
   await act(async () => button('保存并使用').click())
@@ -285,7 +303,8 @@ it('preserves the candidate array through discovery and credential editing', asy
   await choose('ai-source', '服务A')
   await addManual('manual')
   await discover()
-  expect(document.querySelectorAll('.ai-model-pool li')).toHaveLength(2)
+  expect(document.querySelectorAll('#ai-discovered-model li')).toHaveLength(3)
+  expect(document.querySelector('#ai-discovered-model')?.textContent).not.toContain('model-a')
   await manage(false)
   await fill('ai-key', 'draft-key')
   await fill('ai-endpoint', 'https://changed.invalid/v1')
@@ -294,17 +313,26 @@ it('preserves the candidate array through discovery and credential editing', asy
   expect(document.querySelector('#ai-discovered-model')).toBeNull()
   expect(api.ai.configure).not.toHaveBeenCalled()
 })
+it('reports failed model discovery inside the dialog and preserves the candidate pool', async () => {
+  await choose('ai-source', '服务A')
+  api.ai.discover.mockRejectedValueOnce(new Error('获取模型失败'))
+  await discover()
+  expect(document.querySelector('.ai-model-manager [role=alert]')?.textContent).toBe('获取模型失败')
+  await manage(false)
+  await manage()
+  expect(document.querySelector('.ai-model-use[aria-pressed="true"]')?.textContent).toBe('model-a当前')
+})
 it('validates empty models and addresses without dispatching invalid RPCs', async () => {
   await choose('ai-source', '新增供应商')
   await discover()
-  expect(status()).toContain('有效的接口基础地址')
+  expect(document.querySelector('.ai-model-manager [role=alert]')?.textContent).toContain('有效的接口基础地址')
   expect(api.ai.discover).not.toHaveBeenCalled()
   await manage(false)
   await fill('ai-endpoint', 'https://private.invalid/v1')
   await fill('ai-key', 'draft-key')
   for (const action of ['测试连接', '保存并使用']) {
     await act(async () => button(action).click())
-    expect(status()).toContain('候选模型')
+    expect(status()).toContain('从模型列表中选择')
     expect(document.activeElement?.id).toBe('ai-model-manage')
   }
   expect(host.querySelector<HTMLInputElement>('#ai-key')!.value).toBe('draft-key')

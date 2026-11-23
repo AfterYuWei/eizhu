@@ -141,9 +141,9 @@ export const ai = {
   'ai.configure': {
     input: aiConnectionSchema.superRefine((value, ctx) => {
       if (value.models && !value.models.some((m) => m.id === value.model))
-        ctx.addIssue({ code: 'custom', path: ['model'], message: '请从候选池中选择模型' })
+        ctx.addIssue({ code: 'custom', path: ['model'], message: '请从模型列表中选择模型' })
       if (value.models && new Set(value.models.map((m) => m.id)).size !== value.models.length)
-        ctx.addIssue({ code: 'custom', path: ['models'], message: '候选池包含重复模型' })
+        ctx.addIssue({ code: 'custom', path: ['models'], message: '模型列表包含重复的模型 ID' })
     }),
     output: aiSettingsSchema,
   },

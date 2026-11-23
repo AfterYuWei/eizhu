@@ -220,7 +220,7 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
       (await window.webContents.capturePage(undefined, { stayAwake: true })).toPNG(),
     )
     const state = await js(
-      "const sessions=await window.eizhu.session.list();const connections=await Promise.all(sessions.map(async session=>{const messages=await window.eizhu.session.attach({id:session.id});const state=messages.find(m=>m.type==='connection_state')?.payload;return {...session,stage:state?.stage,errorCode:state?.error_code,waitingForHostKey:state?.waiting_for_host_key}}));return {connections,viewport:{width:innerWidth,height:innerHeight},modelManager:(()=>{const e=document.querySelector('.ai-model-manager');return e?{client:e.clientWidth,scroll:e.scrollWidth,availableHeight:getComputedStyle(e).getPropertyValue('--radix-popover-content-available-height'),rect:e.getBoundingClientRect().toJSON()}:null})(),status:window.__aiV2?.status,error:window.__aiV2?.error,backend:window.__aiV2?.backend,tools:window.__aiV2?.messages.filter(m=>m.tool).map(m=>({name:m.tool.name,state:m.tool.state,error:m.tool.error})),buttons:[...document.querySelectorAll('.ai-composer button')].map(b=>({text:b.textContent,disabled:b.disabled}))}",
+      "const sessions=await window.eizhu.session.list();const connections=await Promise.all(sessions.map(async session=>{const messages=await window.eizhu.session.attach({id:session.id});const state=messages.find(m=>m.type==='connection_state')?.payload;return {...session,stage:state?.stage,errorCode:state?.error_code,waitingForHostKey:state?.waiting_for_host_key}}));return {connections,viewport:{width:innerWidth,height:innerHeight},modelManager:(()=>{const e=document.querySelector('.ai-model-manager');return e?{client:e.clientWidth,scroll:e.scrollWidth,clientHeight:e.clientHeight,scrollHeight:e.scrollHeight,rect:e.getBoundingClientRect().toJSON()}:null})(),status:window.__aiV2?.status,error:window.__aiV2?.error,backend:window.__aiV2?.backend,tools:window.__aiV2?.messages.filter(m=>m.tool).map(m=>({name:m.tool.name,state:m.tool.state,error:m.tool.error})),buttons:[...document.querySelectorAll('.ai-composer button')].map(b=>({text:b.textContent,disabled:b.disabled}))}",
     )
     await writeFile(
       join(root, 'ai-v2-failure.json'),
@@ -601,9 +601,10 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
     await js("document.querySelector('button[aria-label=AI设置]').click()")
     await wait("return !!document.querySelector('.ai-settings #ai-engine')")
     const manageModels = async (open = true) => {
-      if ((await js("return !!document.querySelector('.ai-model-manager')")) !== open)
-        await js("document.getElementById('ai-model-manage').click()")
-      await wait("return !!document.querySelector('.ai-model-manager')===" + String(open))
+      const isOpen = "return !!document.querySelector('.ai-model-manager[data-state=open]')"
+      if ((await js(isOpen)) !== open)
+        await js("document.getElementById(d).click()", open ? 'ai-model-manage' : 'ai-model-done')
+      await wait(isOpen + '===' + String(open))
     }
     const probeModels = async () => {
       await manageModels()
@@ -612,9 +613,11 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
         "return !!document.getElementById('ai-discovered-model')&&!document.getElementById('ai-enabled').disabled",
       )
     }
-    const addDetected = async (name: string) => {
-      await chooseSetting('ai-discovered-model', name)
-      await js("document.getElementById('ai-add-detected').click()")
+    const checkDetected = async (name: string) => {
+      await js(
+        "[...document.querySelectorAll('#ai-discovered-model .ai-model-option')].find(row=>row.querySelector('.ai-model-name').firstChild.textContent===d).querySelector('[role=checkbox]').click()",
+        name,
+      )
     }
     const captureSetting = async (name: string) => {
       await wait("return !document.getElementById('ai-enabled').disabled")
@@ -637,9 +640,17 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
     assert.equal(await js("return document.querySelectorAll('#ai-cli-path').length"), 0)
     assert.equal(await js("return document.getElementById('ai-context').checkVisibility()"), false)
     const catalogRequests = directoryRequests
-    await probeModels()
+    await manageModels()
     assert.equal(await js("return document.querySelectorAll('.ai-model-pool li').length"), 1)
-    await addDetected('合成备用模型')
+    await probeModels()
+    assert.equal(await js("return document.querySelectorAll('#ai-discovered-model li').length"), 1)
+    await checkDetected('合成备用模型')
+    await captureSetting('ai-settings-available-models.png')
+    const modelManagerDark = await js("return document.documentElement.classList.contains('dark')")
+    await js("document.documentElement.classList.remove('dark')")
+    await captureSetting('ai-settings-available-models-light.png')
+    await js("document.documentElement.classList.toggle('dark',d)", modelManagerDark)
+    await js("document.getElementById('ai-add-detected').click()")
     await js(
       "const input=document.getElementById('ai-model-name');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,'synthetic-manual');input.dispatchEvent(new Event('input',{bubbles:true}))",
     )
@@ -833,15 +844,16 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
         action,
       )
       await wait(
-        "return !!document.querySelector('.ai-settings [role=status]')?.textContent.includes('请先添加候选模型')&&!document.getElementById('ai-enabled').disabled",
+        "return !!document.querySelector('.ai-settings [role=status]')?.textContent.includes('从模型列表中选择')&&!document.getElementById('ai-enabled').disabled",
       )
       assert.equal(await js('return document.activeElement.id'), 'ai-model-manage')
     }
     assert.deepEqual({ directoryRequests, inferenceRequests }, beforeValidation)
     await probeModels()
     assert.equal(directoryRequests, beforeValidation.directoryRequests + 1)
-    assert.equal(await js("return document.querySelectorAll('.ai-model-pool li').length"), 0)
-    await addDetected('合成模型')
+    assert.equal(await js("return document.querySelectorAll('#ai-discovered-model li').length"), 2)
+    await checkDetected('合成模型')
+    await js("document.getElementById('ai-add-detected').click()")
     await manageModels(false)
     await chooseSetting('ai-model', '合成模型')
     await js(
