@@ -131,7 +131,7 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
         ? data.input.filter((item: { type?: string }) => item.type === 'function_call')
         : []
       const executed = nativeCalls.filter((item: { name: string }) => item.name === 'terminal_execute')
-      const next = targetIds[executed.length]
+      const next = executed.length < 2 ? targetIds[0] : undefined
       const fileResult = Array.isArray(data.input)
         ? data.input.find((item: { type?: string }) => item.type === 'function_call_output')
         : undefined
@@ -196,7 +196,7 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
           protocol,
           calls.length
             ? '准备检查当前连接。'
-            : '## 检查完成\n\n两个连接已完成检查，退出码为3，请核查服务状态。',
+            : '## 检查完成\n\n当前连接已完成检查，退出码为3，请核查服务状态。',
           calls,
           mode !== 'interrupted',
         ),
@@ -317,6 +317,10 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
     )
     const sessions = await runtime.call<Array<{ id: string; profile_id: string }>>('session.list')
     targetIds = profiles.map((p) => sessions.find((s) => s.profile_id === p)!.id)
+    const switchTab = (name: string) => js(
+      "[...document.querySelectorAll('[role=tab]')].find(tab=>tab.textContent.includes(d)).click()", name,
+    )
+    await switchTab(names[0])
     await js("document.querySelector('button[aria-label=右侧栏]').click()")
     await wait("return !!document.querySelector('.shell-inspector-picker:not([hidden])')")
     await js(
@@ -368,7 +372,7 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
       '执行模式：执行前确认',
     )
     await js(
-      "const input=document.querySelector('.ai-composer textarea');Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(input,'合成验收：检查两个连接');input.dispatchEvent(new Event('input',{bubbles:true}))",
+      "const input=document.querySelector('.ai-composer textarea');Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(input,'合成验收：检查当前连接');input.dispatchEvent(new Event('input',{bubbles:true}))",
     )
     await js("[...document.querySelectorAll('.ai-composer button')].find(b=>b.textContent==='发送').click()")
     await wait(
@@ -388,7 +392,15 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
     )
     const proposed = await read()
     conversations.push(proposed.id)
-    assert.equal(proposed.targets.length, 2)
+    assert.equal(proposed.targets.length, 1)
+    assert.equal(commands.length, 0)
+    assert.equal(proposed.targets[0].sessionId, targetIds[0])
+    await switchTab(names[1])
+    await wait("return !document.querySelector('.ai-inspector:not([hidden])')")
+    assert.deepEqual(await call('ai', 'history', { sessionId: targetIds[1] }), [])
+    await assert.rejects(call('ai', 'read', { conversationId: proposed.id, sessionId: targetIds[1] }))
+    await switchTab(names[0])
+    await wait("return !!document.querySelector('.ai-inspector:not([hidden]) .ai-approval')")
     assert.equal(commands.length, 0)
     assert.equal(await js("return document.querySelectorAll('.ai-message.is-assistant').length"), 1)
     assert.equal(await js("return document.querySelector('.ai-response-status')?.textContent"), '等待你确认')
@@ -412,7 +424,7 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
     )
     await assert.rejects(
       call('ai', 'decide', {
-        conversationId: proposed.id,
+        conversationId: proposed.id, sessionId: targetIds[0],
         callId: pending.id,
         decision: 'once',
         revision: proposed.revision,
@@ -475,10 +487,12 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
       'return window.__aiV2?.id===' +
         JSON.stringify(proposed.id) +
         '&&window.__aiV2.revision>' +
-        (revisionBeforeReconnect + 2) +
-        '&&window.__aiV2.targets.length===2',
+        revisionBeforeReconnect +
+        '&&window.__aiV2.targets.length===1',
     )
-    await call('ai', 'send', { conversationId: proposed.id, text: '相同Tab重连后继续检查', attachments: [] })
+    await call('ai', 'scope', { conversationId: proposed.id, sessionId: targetIds[0] })
+    mode = 'test-text'
+    await call('ai', 'send', { conversationId: proposed.id, sessionId: targetIds[0], text: '相同Tab重连后继续检查', attachments: [] })
     await wait(
       'return window.__aiV2?.id===' +
         JSON.stringify(proposed.id) +
@@ -491,16 +505,17 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
       "[...document.querySelectorAll('.shell-inspector-choices button')].find(button=>button.textContent==='AI').click()",
     )
     await wait("return document.querySelector('.ai-inspector').checkVisibility()")
+    mode = 'normal'
     const beforeBusy = commands.length
     await call('session', 'input', { id: targetIds[0], data: 'unfinished-input' })
     const blocked = aiConversationSchema.parse(
       await call('ai', 'open', {
-        sessionIds: targetIds,
+        sessionId: targetIds[0],
         backend: { kind: 'custom', providerId: 'responses', model: 'synthetic-ai' },
       }),
     )
     conversations.push(blocked.id)
-    await call('ai', 'send', { conversationId: blocked.id, text: '检查忙终端', attachments: [] })
+    await call('ai', 'send', { conversationId: blocked.id, sessionId: targetIds[0], text: '检查忙终端', attachments: [] })
     await wait(
       'return window.__aiV2?.id===' +
         JSON.stringify(blocked.id) +
@@ -508,7 +523,7 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
     )
     const approval = (await read()).messages.findLast((m) => m.tool?.state === 'pending')!.tool!
     await call('ai', 'decide', {
-      conversationId: blocked.id,
+      conversationId: blocked.id, sessionId: targetIds[0],
       callId: approval.id,
       decision: 'once',
       revision: (await read()).revision,
@@ -519,42 +534,42 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
     mode = 'interrupted'
     const cut = aiConversationSchema.parse(
       await call('ai', 'open', {
-        sessionIds: targetIds,
+        sessionId: targetIds[0],
         backend: { kind: 'custom', providerId: 'responses', model: 'synthetic-ai' },
       }),
     )
     conversations.push(cut.id)
-    await call('ai', 'send', { conversationId: cut.id, text: '验证断流', attachments: [] })
+    await call('ai', 'send', { conversationId: cut.id, sessionId: targetIds[0], text: '验证断流', attachments: [] })
     await wait('return window.__aiV2?.id===' + JSON.stringify(cut.id) + "&&window.__aiV2.status==='error'")
     assert.ok(!(await read()).messages.some((m) => m.tool?.state === 'pending'))
     mode = 'long'
     const long = aiConversationSchema.parse(
       await call('ai', 'open', {
-        sessionIds: targetIds,
+        sessionId: targetIds[0],
         backend: { kind: 'custom', providerId: 'responses', model: 'synthetic-ai' },
       }),
     )
     conversations.push(long.id)
-    await call('ai', 'permission', { conversationId: long.id, permission: 'auto' })
-    await call('ai', 'send', { conversationId: long.id, text: '运行长任务等待中断', attachments: [] })
+    await call('ai', 'permission', { conversationId: long.id, sessionId: targetIds[0], permission: 'auto' })
+    await call('ai', 'send', { conversationId: long.id, sessionId: targetIds[0], text: '运行长任务等待中断', attachments: [] })
     await wait(
       'return window.__aiV2?.id===' +
         JSON.stringify(long.id) +
         "&&window.__aiV2.jobs.some(j=>j.status==='running')",
     )
-    await call('ai', 'cancel', { conversationId: long.id })
+    await call('ai', 'cancel', { conversationId: long.id, sessionId: targetIds[0] })
     assert.ok((await read()).jobs.every((j) => j.status !== 'running'))
     if (sftpServer) {
       mode = 'file'
       for (const conflict of [true, false]) {
         const chat = aiConversationSchema.parse(
           await call('ai', 'open', {
-            sessionIds: targetIds,
+            sessionId: targetIds[0],
             backend: { kind: 'custom', providerId: 'responses', model: 'synthetic-ai' },
           }),
         )
         conversations.push(chat.id)
-        await call('ai', 'send', { conversationId: chat.id, text: '修改远端配置', attachments: [] })
+        await call('ai', 'send', { conversationId: chat.id, sessionId: targetIds[0], text: '修改远端配置', attachments: [] })
         await wait(
           'return window.__aiV2?.id===' +
             JSON.stringify(chat.id) +
@@ -564,7 +579,7 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
         assert.ok(pending.preview.includes('--- 修改前') && pending.preview.includes('port=2222'))
         if (conflict) await writeFile(remoteFile, '# externally changed\nport=22\n')
         await call('ai', 'decide', {
-          conversationId: chat.id,
+          conversationId: chat.id, sessionId: targetIds[0],
           callId: pending.id,
           revision: (await read()).revision,
           decision: 'once',
@@ -673,7 +688,7 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
     assert.equal(switched.providers.find((p) => p.id === 'responses')?.contextWindow, 96000)
     assert.equal(switched.providers.find((p) => p.id === 'responses')?.models?.length, 3)
     assert.equal(
-      aiConversationSchema.parse(await call('ai', 'read', { conversationId: proposed.id })).backend.model,
+      aiConversationSchema.parse(await call('ai', 'read', { conversationId: proposed.id, sessionId: targetIds[0] })).backend.model,
       'synthetic-ai',
     )
     await js("document.querySelector('.settings-page-back').click()")
@@ -683,14 +698,14 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
       "return document.getElementById('ai-chat-model').textContent==='合成备用模型'&&!document.getElementById('ai-chat-model').disabled",
     )
     assert.equal(
-      aiConversationSchema.parse(await call('ai', 'read', { conversationId: proposed.id })).backend.model,
+      aiConversationSchema.parse(await call('ai', 'read', { conversationId: proposed.id, sessionId: targetIds[0] })).backend.model,
       'synthetic-alt',
     )
     const commandsBeforeSwitch = commands.length
     await js(
       "const input=document.querySelector('.ai-composer textarea');Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(input,'切换模型前保留草稿');input.dispatchEvent(new Event('input',{bubbles:true}))",
     )
-    await call('ai', 'send', { conversationId: proposed.id, text: '等待审批时切换模型', attachments: [] })
+    await call('ai', 'send', { conversationId: proposed.id, sessionId: targetIds[0], text: '等待审批时切换模型', attachments: [] })
     await wait("return !!document.querySelector('.ai-approval')")
     await chooseSetting('ai-chat-model', 'synthetic-ai')
     await wait(
@@ -701,8 +716,8 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
       await js("return document.querySelector('.ai-composer textarea').value"),
       '切换模型前保留草稿',
     )
-    const handed = aiConversationSchema.parse(await call('ai', 'read', { conversationId: proposed.id }))
-    assert.equal(handed.targets.length, 2)
+    const handed = aiConversationSchema.parse(await call('ai', 'read', { conversationId: proposed.id, sessionId: targetIds[0] }))
+    assert.equal(handed.targets.length, 1)
     assert.ok(handed.summary.includes('等待审批时切换模型'))
     assert.ok(!handed.messages.some((m) => m.tool?.state === 'pending'))
     assert.equal(commands.length, commandsBeforeSwitch)
@@ -889,7 +904,7 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
     await wait("return !document.querySelector('#ai-engine')")
     assert.equal((await call<{ enabled: boolean }>('ai', 'settings')).enabled, false)
     await assert.rejects(
-      call('ai', 'send', { conversationId: proposed.id, text: '关闭时不得运行', attachments: [] }),
+      call('ai', 'send', { conversationId: proposed.id, sessionId: targetIds[0], text: '关闭时不得运行', attachments: [] }),
     )
     assert.equal((await call<{ providers: unknown[] }>('ai', 'settings')).providers.length, 3)
     await captureSetting('ai-settings-disabled.png')
@@ -903,12 +918,12 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
       if (!/\.(sqlite|db)(-wal)?$/.test(name)) continue
       const bytes = await readFile(join(root, name))
       assert.ok(!bytes.includes(Buffer.from('synthetic-ai-api-key')))
-      assert.ok(!bytes.includes(Buffer.from('合成验收：检查两个连接')))
+      assert.ok(!bytes.includes(Buffer.from('合成验收：检查当前连接')))
       assert.ok(!bytes.includes(Buffer.from('合成备用模型')))
     }
     const historyChat = aiConversationSchema.parse(
       await call('ai', 'open', {
-        sessionIds: targetIds,
+        sessionId: targetIds[0],
         backend: { kind: 'custom', providerId: 'responses', model: 'synthetic-ai' },
       }),
     )
@@ -966,7 +981,7 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
         JSON.stringify(historyChat.id) +
         ")&&!document.querySelector('[aria-label=对话历史]').disabled",
     )
-    assert.ok(!(await call<Array<{ id: string }>>('ai', 'history')).some((h) => h.id === historyChat.id))
+    assert.ok(!(await call<Array<{ id: string }>>('ai', 'history', { sessionId: targetIds[0] })).some((h) => h.id === historyChat.id))
     const connected = await call<Array<{ id: string; status: string }>>('session', 'list')
     assert.equal(
       connected.filter((s) => targetIds.includes(s.id) && s.status === 'connected').length,
@@ -984,7 +999,7 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
       ),
       true,
     )
-    const saved = aiConversationSchema.parse(await call('ai', 'read', { conversationId: proposed.id }))
+    const saved = aiConversationSchema.parse(await call('ai', 'read', { conversationId: proposed.id, sessionId: targetIds[0] }))
     assert.equal(saved.id, proposed.id)
     let previousModeChat = proposed.id
     for (const [permission, label] of [
@@ -1045,12 +1060,29 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
       assert.equal(commands.length - beforeModeCommands, permission === 'auto' ? 2 : 0)
       previousModeChat = modeChat.id
     }
+    mode = 'interrupted'
+    await call('ai', 'send', { conversationId: previousModeChat, sessionId: targetIds[0], text: '验证固定异常提醒', attachments: [] })
+    await wait("return document.querySelector('.ai-fixed-notice')?.textContent.includes('重试回复')")
+    await js("document.querySelector('.ai-inspector').style.width='320px'")
+    for (const dark of [false, true]) {
+      await js("document.documentElement.classList.toggle('dark',d)", dark)
+      assert.equal(await js("const el=document.querySelector('.ai-fixed-notice');return el.nextElementSibling?.classList.contains('ai-composer')&&el.scrollWidth<=el.clientWidth+1&&!document.querySelector('[role=dialog]')"), true)
+      const name = dark ? 'ai-fixed-notice-dark.png' : 'ai-fixed-notice-light.png'
+      await writeFile(join(root, name), (await window.webContents.capturePage(undefined, { stayAwake: true })).toPNG())
+      screenshots.push(name)
+    }
+    mode = 'test-text'
+    await js("[...document.querySelectorAll('.ai-fixed-notice button')].find(b=>b.textContent==='重试回复').click()")
+    await wait("return window.__aiV2?.status==='idle'&&!document.querySelector('.ai-fixed-notice')")
+    assert.equal((await read()).messages.filter(m=>m.role==='user'&&m.text==='验证固定异常提醒').length, 1)
     assert.ok(fingerprint.startsWith('SHA256:'))
     return {
       passed: true,
       toolsetVersion: 2,
       protocols: ['responses', 'chat', 'anthropic'],
-      multiSession: true,
+      singleTabTarget: true,
+      approvalRemainsOnOwningTab: true,
+      hostHistoryIsolated: true,
       approvalRequired: true,
       duplicateRejected: true,
       currentTerminalExecution: true,
@@ -1061,11 +1093,11 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
       persistedTurnElapsedTime: true,
       stopCancelsLongTasks: true,
       incompleteStreamRejected: true,
+      fixedNoticeAndReplyRetry: true,
       encryptedStorage: true,
       settingsSelectedConfiguration: true,
       composerAgentSelection: true,
-      scopeFollowsOpenSshSessions: true,
-      scopeWhileInspectorHidden: true,
+      reconnectWhileInspectorHidden: true,
       sameIdReconnectScopeRefresh: true,
       scopeReadOnly: true,
       scopeHidden: true,
@@ -1106,7 +1138,7 @@ export async function verifyAiDesktop(window: BrowserWindow, runtime: RuntimeHos
     }
   } finally {
     mode = 'normal'
-    for (const conversationId of conversations) await call('ai', 'remove', { conversationId })
+    for (const conversationId of conversations) await call('ai', 'remove', { conversationId, sessionId: targetIds[0] })
     for (const s of await runtime.call<Array<{ id: string; profile_id: string }>>('session.list'))
       if (profiles.includes(s.profile_id)) await call('session', 'close', { id: s.id })
     for (const id of profiles) await call('profile', 'delete', { id })

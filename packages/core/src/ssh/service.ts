@@ -80,6 +80,12 @@ export class SshService {
     if (!this.agentConnected(sessionId, binding)) fail('AI_SCOPE_CHANGED', 'SSH连接已变化')
     return this.connected(sessionId).stream.context(startLine, maxLines)
   }
+  agentHistoryHost(sessionId: string) {
+    const s = this.get(sessionId)
+    const target = s.target
+    if (s.closed || !target) fail('SSH_NOT_CONNECTED', 'SSH 连接信息尚未就绪')
+    return { profileId: target.profile_id, host: target.host, port: target.port, username: target.username }
+  }
   async agentTarget(sessionId: string): Promise<{ target: AiTarget; binding: object }> {
     const s = this.connected(sessionId), binding = s.connection
     const p = s.endpoint ?? fail('SSH_NOT_CONNECTED', 'SSH 连接信息尚未就绪')

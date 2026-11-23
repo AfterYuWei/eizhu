@@ -5,8 +5,8 @@ import { setTimeout as delay } from 'node:timers/promises'
 import { AgentService } from './service.ts'
 import type { AgentExternal, AgentSsh } from './service.ts'
 import type { AiConversation } from '@eizhu/contracts'
-import { aiConversationSchema, aiModelCatalogSchema, fail } from '@eizhu/contracts'
-import { storedAiConfigSchema, storedAiConversationSchema } from './repository.ts'
+import { aiConversationSchema, aiModelCatalogSchema, aiSummarySchema, fail } from '@eizhu/contracts'
+import { sameAiHost, storedAiConfigSchema, storedAiConversationSchema } from './repository.ts'
 import { modelFixture } from './model-fixture.ts'
 import type { AiTransport } from './model.ts'
 const command = (sessionId = 'a') => ({
@@ -48,6 +48,7 @@ function fixture(
     bindings = new Map([
       ['a', {}],
       ['b', {}],
+      ['a2', {}],
     ]),
     execs: string[] = [],
     stops: string[] = []
@@ -59,7 +60,7 @@ function fixture(
     busy = false,
     partial = false
   const storage = async (raw: unknown) => {
-    const d = raw as { kind: string; value?: unknown; id?: string }
+    const d = raw as { kind: string; value?: unknown; id?: string; host?: import('@eizhu/contracts').AiHost }
     if (d.kind === 'config.read') return structuredClone(config)
     if (d.kind === 'config.write') {
       config = storedAiConfigSchema.parse(d.value)
@@ -74,21 +75,19 @@ function fixture(
     }
     if (d.kind === 'read') return structuredClone(records.get(d.id!))
     if (d.kind === 'list')
-      return [...records.values()].map((v) => storedAiConversationSchema.parse(v).conversation)
+      return [...records.values()].map((v) => storedAiConversationSchema.parse(v))
+        .filter((record) => sameAiHost(record.host, d.host))
+        .map((record) => aiSummarySchema.strip().parse(record.conversation))
     if (d.kind === 'remove') records.delete(d.id!)
   }
   const ssh: AgentSsh = {
+    agentHistoryHost: (sessionId) => {
+      const profileId = sessionId === 'a2' ? 'a' : sessionId
+      return { profileId, host: profileId + '.invalid', port: 22, username: 'test' }
+    },
     agentTarget: async (sessionId) => ({
       binding: bindings.get(sessionId) ?? fail('NOT_FOUND', '连接不存在'),
-      target: {
-        profileId: sessionId,
-        sessionId,
-        host: sessionId + '.invalid',
-        port: 22,
-        username: 'test',
-        cwd: '/tmp',
-        system: 'Linux',
-      },
+      target: { ...ssh.agentHistoryHost(sessionId), sessionId, cwd: '/tmp', system: 'Linux' },
     }),
     agentConnected: (id, b) => bindings.get(id) === b,
     agentReady: () => {
@@ -191,11 +190,11 @@ function fixture(
     set partial(v: boolean) {
       partial = v
     },
-    async open() {
-      return aiConversationSchema.parse(await service.execute('ai.open', { sessionIds: ['a', 'b'] }, 1))
+    async open(sessionId = 'a') {
+      return aiConversationSchema.parse(await service.execute('ai.open', { sessionId }, 1))
     },
     async send(id: string) {
-      await service.execute('ai.send', { conversationId: id, text: '检查', attachments: [] }, 1)
+      await service.execute('ai.send', { sessionId: 'a', conversationId: id, text: '检查', attachments: [] }, 1)
     },
     async pending() {
       await until(() => current?.status === 'awaiting_confirmation')
@@ -205,17 +204,17 @@ function fixture(
       const call = await this.pending()
       await service.execute(
         'ai.decide',
-        { conversationId: id, callId: call.id, revision: current!.revision, decision },
+        { sessionId: 'a', conversationId: id, callId: call.id, revision: current!.revision, decision },
         1,
       )
       return call
     },
   }
 }
-test('multi-session commands require approval; duplicate/window decisions cannot execute twice; final answer retained', async () => {
+test('commands on the bound session require approval; duplicate/window decisions cannot execute twice; final answer retained', async () => {
   const f = fixture([
     { name: 'terminal_execute', args: command('a') },
-    { name: 'terminal_execute', args: command('b') },
+    { name: 'terminal_execute', args: command('a') },
     null,
   ])
   try {
@@ -229,7 +228,7 @@ test('multi-session commands require approval; duplicate/window decisions cannot
     await assert.rejects(
       f.service.execute(
         'ai.decide',
-        { conversationId: c.id, callId: call.id, revision: 1, decision: 'once' },
+        { sessionId: 'a', conversationId: c.id, callId: call.id, revision: f.current.revision, decision: 'once' },
         2,
       ),
     )
@@ -237,7 +236,7 @@ test('multi-session commands require approval; duplicate/window decisions cannot
     await assert.rejects(
       f.service.execute(
         'ai.decide',
-        { conversationId: c.id, callId: call.id, revision: 1, decision: 'once' },
+        { sessionId: 'a', conversationId: c.id, callId: call.id, revision: f.current.revision, decision: 'once' },
         1,
       ),
     )
@@ -247,7 +246,7 @@ test('multi-session commands require approval; duplicate/window decisions cannot
     assert.equal(f.current.messages[0].completedAt, undefined)
     await f.decide(c.id)
     await until(() => f.current.status === 'idle')
-    assert.deepEqual(f.execs, ['a', 'b'])
+    assert.deepEqual(f.execs, ['a', 'a'])
     assert.equal(f.current.messages.at(-1)?.text, '已完成任务')
     const completed = f.current.messages[0]
     assert.ok(completed.completedAt! >= completed.startedAt!)
@@ -273,10 +272,9 @@ test('conversation grant is scoped to tool and connection instance', async () =>
     const c = await f.open()
     await f.send(c.id)
     await f.decide(c.id, 'conversation')
-    await until(() => f.execs.length === 2 && f.current.status === 'awaiting_confirmation')
+    await until(() => f.execs.length === 2 && f.current.status === 'error')
     assert.deepEqual(f.execs, ['a', 'a'])
-    await f.decide(c.id)
-    await until(() => f.current.status === 'idle')
+    assert.equal(f.current.errorCode, 'AI_TARGET_NOT_AUTHORIZED')
   } finally {
     await f.service.close()
   }
@@ -285,7 +283,7 @@ test('observer permits structured reads and refuses arbitrary shell commands', a
   const f = fixture([{ name: 'session_info', args: {} }, { name: 'terminal_execute', args: command() }, null])
   try {
     const c = await f.open()
-    await f.service.execute('ai.permission', { conversationId: c.id, permission: 'observer' }, 1)
+    await f.service.execute('ai.permission', { sessionId: 'a', conversationId: c.id, permission: 'observer' }, 1)
     await f.send(c.id)
     await until(() => f.current.status === 'idle')
     assert.equal(f.execs.length, 0)
@@ -304,12 +302,12 @@ test('connection replacement and scope removal revoke pending approvals', async 
     await assert.rejects(
       f.service.execute(
         'ai.decide',
-        { conversationId: c.id, callId: call.id, revision: f.current.revision, decision: 'once' },
+        { sessionId: 'a', conversationId: c.id, callId: call.id, revision: f.current.revision, decision: 'once' },
         1,
       ),
     )
     assert.equal(f.execs.length, 0)
-    await f.service.execute('ai.scope', { conversationId: c.id, sessionIds: ['b'] }, 1)
+    await f.service.execute('ai.scope', { sessionId: 'a', conversationId: c.id }, 1)
     assert.equal(f.current.messages.find((m) => m.tool?.id === call.id)?.tool?.state, 'expired')
   } finally {
     await f.service.close()
@@ -336,11 +334,11 @@ test('revoked AI authorization is distinguished from an actual SSH connection re
   try {
     const c = await f.open()
     const binding = f.bindings.get('a')!
-    await f.service.invalidateSession('a')
+    await f.service.changeSession('a', false, async () => undefined)
     assert.equal(f.ssh.agentConnected('a', binding), true)
     await assert.rejects(f.send(c.id), /正在更新连接授权/)
     assert.equal(f.execs.length, 0)
-    await f.service.execute('ai.scope', { conversationId: c.id, sessionIds: ['a', 'b'] }, 1)
+    await f.service.execute('ai.scope', { sessionId: 'a', conversationId: c.id }, 1)
     f.bindings.set('a', {})
     await assert.rejects(f.send(c.id), /连接已断开或实例已更换/)
     assert.equal(f.execs.length, 0)
@@ -356,7 +354,7 @@ test('refreshing an unchanged connected scope preserves the running turn and its
     const call = await f.pending()
     const revision = f.current.revision
     const refreshed = aiConversationSchema.parse(
-      await f.service.execute('ai.scope', { conversationId: c.id, sessionIds: ['b', 'a'] }, 1),
+      await f.service.execute('ai.scope', { sessionId: 'a', conversationId: c.id }, 1),
     )
     assert.equal(refreshed.revision, revision)
     assert.equal(refreshed.status, 'awaiting_confirmation')
@@ -380,7 +378,7 @@ test('a same-ID reconnect refreshes the binding and expires old approvals withou
     const oldCall = await f.pending()
     const revision = f.current.revision
     f.bindings.set('a', {})
-    await f.service.execute('ai.scope', { conversationId: c.id, sessionIds: ['a', 'b'] }, 1)
+    await f.service.execute('ai.scope', { sessionId: 'a', conversationId: c.id }, 1)
     assert.equal(f.current.id, c.id)
     assert.ok(f.current.revision > revision)
     assert.equal(
@@ -390,7 +388,7 @@ test('a same-ID reconnect refreshes the binding and expires old approvals withou
     await assert.rejects(
       f.service.execute(
         'ai.decide',
-        { conversationId: c.id, callId: oldCall.id, revision, decision: 'once' },
+        { sessionId: 'a', conversationId: c.id, callId: oldCall.id, revision, decision: 'once' },
         1,
       ),
     )
@@ -404,23 +402,90 @@ test('a same-ID reconnect refreshes the binding and expires old approvals withou
     await f.service.close()
   }
 })
-test('scope refresh excludes unavailable sessions and accepts an empty connected-tab set', async () => {
+test('a disconnected Tab never acquires another Tab, even on the same host', async () => {
   const f = fixture([])
   try {
     const c = await f.open()
     f.bindings.delete('a')
     const refreshed = aiConversationSchema.parse(
-      await f.service.execute('ai.scope', { conversationId: c.id, sessionIds: ['a', 'b'] }, 1),
+      await f.service.execute('ai.scope', { conversationId: c.id, sessionId: 'a' }, 1),
     )
-    assert.deepEqual(
-      refreshed.targets.map((target) => target.sessionId),
-      ['b'],
-    )
-    const empty = aiConversationSchema.parse(
-      await f.service.execute('ai.scope', { conversationId: c.id, sessionIds: [] }, 1),
-    )
-    assert.deepEqual(empty.targets, [])
-    await assert.rejects(f.send(c.id), /已连接的SSH Tab/)
+    assert.deepEqual(refreshed.targets.map((target) => target.sessionId), ['a'])
+    await assert.rejects(f.service.execute('ai.scope', { conversationId: c.id, sessionId: 'a2' }, 1), /绑定/)
+    await assert.rejects(f.send(c.id), /连接授权/)
+    assert.equal(f.execs.length, 0)
+  } finally {
+    await f.service.close()
+  }
+})
+
+test('concurrent SSH reconnect requests share AI invalidation and preserve SSH handling', async () => {
+  const f = fixture([{ name: 'terminal_execute', args: command() }])
+  try {
+    const c = await f.open()
+    await f.send(c.id)
+    const pending = await f.pending()
+    const revision = f.current.revision
+    let callers = 0
+    const reconnect = async () => {
+      callers++
+      await until(() => callers === 2)
+      return 'connecting'
+    }
+    assert.deepEqual(await Promise.all([
+      f.service.changeSession('a', false, reconnect),
+      f.service.changeSession('a', false, reconnect),
+    ]), ['connecting', 'connecting'])
+    assert.equal(f.current.revision, revision + 1)
+    assert.equal(f.current.messages.find((m) => m.tool?.id === pending.id)?.tool?.state, 'expired')
+    assert.equal(f.execs.length, 0)
+  } finally {
+    await f.service.close()
+  }
+})
+
+test('host history isolates profiles, serializes same-host resume and rebinds only after release', async () => {
+  const f = fixture([])
+  try {
+    const c = await f.open()
+    const other = await f.open('b')
+    await f.send(c.id)
+    await until(() => f.current.id === c.id && f.current.status === 'idle')
+    const history = async (sessionId: string) =>
+      (await f.service.execute('ai.history', { sessionId }, 1) as { id: string; activeSessionId?: string }[])
+    assert.deepEqual((await history('b')).map((row) => row.id), [other.id])
+    assert.equal((await history('a2'))[0].activeSessionId, 'a')
+    const request = { conversationId: c.id, sessionId: 'a2' }
+    await assert.rejects(f.service.execute('ai.read', { ...request, sessionId: 'b' }, 1), /不属于/)
+    await assert.rejects(f.service.execute('ai.remove', { ...request, sessionId: 'b' }, 1), /不属于/)
+    await assert.rejects(f.service.execute('ai.read', request, 1), /另一标签页/)
+    await f.service.changeSession('a', true, async () => { f.bindings.delete('a') })
+    const resumed = aiConversationSchema.parse(await f.service.execute('ai.read', request, 1))
+    assert.equal(resumed.id, c.id)
+    assert.equal(resumed.targets[0].sessionId, 'a2')
+    assert.equal(resumed.messages.filter((m) => m.role === 'user').length, 1)
+    assert.equal((await history('a2'))[0].activeSessionId, 'a2')
+    await assert.rejects(f.send(c.id), /绑定/)
+    assert.equal(f.execs.length, 0)
+    await f.service.execute('ai.send', { ...request, text: '继续', attachments: [] }, 1)
+    await until(() => f.current.id === c.id && f.current.status === 'idle')
+    assert.equal(f.current.messages.filter((m) => m.role === 'user').length, 2)
+  } finally {
+    await f.service.close()
+  }
+})
+
+test('retry replaces the incomplete assistant reply without adding a second user message', async () => {
+  const f = fixture([])
+  try {
+    const c = await f.open()
+    f.partial = true
+    await f.send(c.id)
+    await until(() => f.current.status === 'error')
+    f.partial = false
+    await f.service.execute('ai.retry', { conversationId: c.id, sessionId: 'a' }, 1)
+    await until(() => f.current.status === 'idle')
+    assert.deepEqual(f.current.messages.map((m) => m.role), ['user', 'assistant'])
     assert.equal(f.execs.length, 0)
   } finally {
     await f.service.close()
@@ -471,7 +536,7 @@ test('Stop cancels every long task created by an external Agent', async () => {
     status: async () => [{ kind: 'codex', path: '/synthetic/codex', available: true, message: 'fixture' }],
     run: async (_input, signal, _text, tool) => {
       await tool('terminal_start', command('a'))
-      await tool('terminal_start', command('b'))
+      await tool('terminal_start', command('a'))
       started = true
       await new Promise<void>((resolve) => {
         if (signal.aborted) resolve()
@@ -484,16 +549,16 @@ test('Stop cancels every long task created by an external Agent', async () => {
   f.long = true
   try {
     const c = await f.open()
-    await f.service.execute('ai.backend', { conversationId: c.id, backend: { kind: 'codex', model: '' } }, 1)
-    await f.service.execute('ai.permission', { conversationId: c.id, permission: 'auto' }, 1)
+    await f.service.execute('ai.backend', { sessionId: 'a', conversationId: c.id, backend: { kind: 'codex', model: '' } }, 1)
+    await f.service.execute('ai.permission', { sessionId: 'a', conversationId: c.id, permission: 'auto' }, 1)
     await f.send(c.id)
     await until(() => started)
-    await f.service.execute('ai.cancel', { conversationId: c.id }, 1)
-    assert.deepEqual(f.stops.sort(), ['a', 'b'])
+    await f.service.execute('ai.cancel', { sessionId: 'a', conversationId: c.id }, 1)
+    assert.deepEqual(f.stops.sort(), ['a', 'a'])
     assert.ok(f.current.jobs.every((j) => j.status === 'unknown'))
     const completedAt = f.current.messages[0].completedAt
     assert.ok(completedAt! >= f.current.messages[0].startedAt!)
-    await f.service.execute('ai.permission', { conversationId: c.id, permission: 'confirm' }, 1)
+    await f.service.execute('ai.permission', { sessionId: 'a', conversationId: c.id, permission: 'confirm' }, 1)
     assert.equal(f.current.messages[0].completedAt, completedAt)
   } finally {
     await f.service.close()
@@ -743,7 +808,7 @@ test('backend switch preserves a handoff and expires pending operations', async 
     const c = await f.open()
     await f.send(c.id)
     await f.pending()
-    await f.service.execute('ai.backend', { conversationId: c.id, backend: { kind: 'claude', model: '' } }, 1)
+    await f.service.execute('ai.backend', { sessionId: 'a', conversationId: c.id, backend: { kind: 'claude', model: '' } }, 1)
     assert.ok(f.current.summary.includes('检查'))
     assert.equal(f.current.backend.kind, 'claude')
     assert.equal(f.current.error, '')
@@ -771,7 +836,7 @@ test('native revocation immediately invalidates an outstanding approval before p
   const f = fixture([], external)
   try {
     const c = await f.open()
-    await f.service.execute('ai.backend', { conversationId: c.id, backend: { kind: 'codex', model: '' } }, 1)
+    await f.service.execute('ai.backend', { sessionId: 'a', conversationId: c.id, backend: { kind: 'codex', model: '' } }, 1)
     await f.send(c.id)
     const call = await f.pending()
     revoke!()
@@ -779,7 +844,7 @@ test('native revocation immediately invalidates an outstanding approval before p
     await assert.rejects(
       f.service.execute(
         'ai.decide',
-        { conversationId: c.id, callId: call.id, revision: f.current.revision, decision: 'once' },
+        { sessionId: 'a', conversationId: c.id, callId: call.id, revision: f.current.revision, decision: 'once' },
         1,
       ),
     )
@@ -812,7 +877,7 @@ test('large output handles page inside their conversation and persist separately
   })
   try {
     const c = await f.open()
-    await f.service.execute('ai.backend', { conversationId: c.id, backend: { kind: 'codex', model: '' } }, 1)
+    await f.service.execute('ai.backend', { sessionId: 'a', conversationId: c.id, backend: { kind: 'codex', model: '' } }, 1)
     await f.send(c.id)
     await until(() => f.current.status === 'idle')
     assert.ok((first as { handle: string }).handle)
@@ -872,7 +937,7 @@ test('restart expires approvals, marks in-flight work unknown and never replays 
     () => {},
   )
   try {
-    const read = aiConversationSchema.parse(await resumed.execute('ai.read', { conversationId: c.id }, 1))
+    const read = aiConversationSchema.parse(await resumed.execute('ai.read', { sessionId: 'a', conversationId: c.id }, 1))
     assert.equal(read.status, 'paused')
     assert.equal(read.messages[0].completedAt, undefined)
     assert.equal(read.messages[1].tool?.state, 'unknown')
@@ -881,7 +946,7 @@ test('restart expires approvals, marks in-flight work unknown and never replays 
     await assert.rejects(
       resumed.execute(
         'ai.decide',
-        { conversationId: c.id, callId: 'approval', revision: read.revision, decision: 'once' },
+        { sessionId: 'a', conversationId: c.id, callId: 'approval', revision: read.revision, decision: 'once' },
         1,
       ),
     )
@@ -910,8 +975,8 @@ test('context compaction preserves original records and saves a separate semanti
     () => {},
   )
   try {
-    await resumed.execute('ai.read', { conversationId: c.id }, 1)
-    await resumed.execute('ai.send', { conversationId: c.id, text: '继续', attachments: [] }, 1)
+    await resumed.execute('ai.read', { sessionId: 'a', conversationId: c.id }, 1)
+    await resumed.execute('ai.send', { sessionId: 'a', conversationId: c.id, text: '继续', attachments: [] }, 1)
     await until(() => f.modelSteps >= 2)
     await until(() => storedAiConversationSchema.parse(f.records.get(c.id)).conversation.status === 'idle')
     const result = storedAiConversationSchema.parse(f.records.get(c.id))
@@ -922,12 +987,12 @@ test('context compaction preserves original records and saves a separate semanti
     await resumed.close()
   }
 })
-test('an idle Agent exposes per-job stop without interrupting other terminals', async () => {
+test('an idle Agent exposes per-job stop without cancelling other jobs', async () => {
   const external: AgentExternal = {
     status: async () => [{ kind: 'codex', path: '/synthetic/codex', available: true, message: 'fixture' }],
     run: async (_i, _s, _t, tool) => {
       await tool('terminal_start', command('a'))
-      await tool('terminal_start', command('b'))
+      await tool('terminal_start', command('a'))
       return { nativeSession: 'fixture' }
     },
   }
@@ -935,16 +1000,16 @@ test('an idle Agent exposes per-job stop without interrupting other terminals', 
   f.long = true
   try {
     const c = await f.open()
-    await f.service.execute('ai.backend', { conversationId: c.id, backend: { kind: 'codex', model: '' } }, 1)
-    await f.service.execute('ai.permission', { conversationId: c.id, permission: 'auto' }, 1)
+    await f.service.execute('ai.backend', { sessionId: 'a', conversationId: c.id, backend: { kind: 'codex', model: '' } }, 1)
+    await f.service.execute('ai.permission', { sessionId: 'a', conversationId: c.id, permission: 'auto' }, 1)
     await f.send(c.id)
     await until(() => f.current.status === 'idle' && f.current.jobs.length === 2)
     const job = f.current.jobs[0]
-    await f.service.execute('ai.stopJob', { conversationId: c.id, jobId: job.id }, 1)
+    await f.service.execute('ai.stopJob', { sessionId: 'a', conversationId: c.id, jobId: job.id }, 1)
     assert.deepEqual(f.stops, ['a'])
     assert.equal(f.current.jobs[1].status, 'running')
-    await f.service.execute('ai.cancel', { conversationId: c.id }, 1)
-    assert.deepEqual(f.stops.sort(), ['a', 'b'])
+    await f.service.execute('ai.cancel', { sessionId: 'a', conversationId: c.id }, 1)
+    assert.deepEqual(f.stops.sort(), ['a', 'a'])
   } finally {
     await f.service.close()
   }
@@ -966,7 +1031,7 @@ test('disable stops the Agent, expires approvals and prevents subsequent runs wh
     await assert.rejects(
       f.service.execute(
         'ai.decide',
-        { conversationId: c.id, callId: call.id, revision: f.current.revision, decision: 'once' },
+        { sessionId: 'a', conversationId: c.id, callId: call.id, revision: f.current.revision, decision: 'once' },
         1,
       ),
     )
@@ -1007,22 +1072,22 @@ test('unavailable CLI cannot open, switch or send, including a restored conversa
     const c = await f.open()
     available = false
     await assert.rejects(
-      f.service.execute('ai.open', { sessionIds: ['a'], backend: { kind: 'codex', model: '' } }, 1),
+      f.service.execute('ai.open', { sessionId: 'a', backend: { kind: 'codex', model: '' } }, 1),
       /CLI/,
     )
     await assert.rejects(
-      f.service.execute('ai.backend', { conversationId: c.id, backend: { kind: 'codex', model: '' } }, 1),
+      f.service.execute('ai.backend', { sessionId: 'a', conversationId: c.id, backend: { kind: 'codex', model: '' } }, 1),
       /CLI/,
     )
     assert.equal(f.current.backend.kind, 'custom')
     available = true
-    await f.service.execute('ai.backend', { conversationId: c.id, backend: { kind: 'codex', model: '' } }, 1)
+    await f.service.execute('ai.backend', { sessionId: 'a', conversationId: c.id, backend: { kind: 'codex', model: '' } }, 1)
     available = false
     await assert.rejects(f.send(c.id), /CLI/)
     assert.equal(calls, 0)
     assert.equal(f.current.messages.length, 0)
     await f.service.execute('ai.setDefault', { kind: 'custom', providerId: 'p', model: 'fixture' }, 1)
-    const restored = (await f.service.execute('ai.read', { conversationId: c.id }, 1)) as AiConversation
+    const restored = (await f.service.execute('ai.read', { sessionId: 'a', conversationId: c.id }, 1)) as AiConversation
     assert.equal(restored.backend.kind, 'codex')
   } finally {
     await f.service.close()
@@ -1047,18 +1112,18 @@ test('conversation model selection accepts only its provider candidate pool', as
       b = await f.open()
     await f.service.execute(
       'ai.backend',
-      { conversationId: a.id, backend: { kind: 'custom', providerId: 'p', model: 'other' } },
+      { sessionId: 'a', conversationId: a.id, backend: { kind: 'custom', providerId: 'p', model: 'other' } },
       1,
     )
-    const selected = (await f.service.execute('ai.read', { conversationId: a.id }, 1)) as AiConversation
-    const untouched = (await f.service.execute('ai.read', { conversationId: b.id }, 1)) as AiConversation
+    const selected = (await f.service.execute('ai.read', { sessionId: 'a', conversationId: a.id }, 1)) as AiConversation
+    const untouched = (await f.service.execute('ai.read', { sessionId: 'a', conversationId: b.id }, 1)) as AiConversation
     assert.equal(selected.backend.model, 'other')
     assert.equal(untouched.backend.model, 'fixture')
     assert.equal(f.config.defaultBackend.model, 'fixture')
     await assert.rejects(
       f.service.execute(
         'ai.backend',
-        { conversationId: a.id, backend: { kind: 'custom', providerId: 'p', model: 'unlisted' } },
+        { sessionId: 'a', conversationId: a.id, backend: { kind: 'custom', providerId: 'p', model: 'unlisted' } },
         1,
       ),
       /候选/,
@@ -1087,11 +1152,11 @@ test('cancellation during CLI availability checking prevents a late send', async
   })
   try {
     const c = await f.open()
-    await f.service.execute('ai.backend', { conversationId: c.id, backend: { kind: 'codex', model: '' } }, 1)
+    await f.service.execute('ai.backend', { sessionId: 'a', conversationId: c.id, backend: { kind: 'codex', model: '' } }, 1)
     checking = true
     const pending = f.send(c.id)
     await delay(5)
-    await f.service.execute('ai.cancel', { conversationId: c.id }, 1)
+    await f.service.execute('ai.cancel', { sessionId: 'a', conversationId: c.id }, 1)
     finish()
     await assert.rejects(pending, /状态已变化/)
     assert.equal(calls, 0)

@@ -2,7 +2,7 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { beforeEach, afterEach, expect, it, vi } from 'vitest'
-import { DesktopError, type AiConversation, type AiToolCall } from '@eizhu/contracts'
+import { type AiConversation, type AiToolCall } from '@eizhu/contracts'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useAiStore } from '@/store/ai'
 import { useAccountStore } from '@/store/account'
@@ -15,6 +15,10 @@ const api = vi.hoisted(() => ({
     open: vi.fn(),
     send: vi.fn(),
     scope: vi.fn(),
+    release: vi.fn(),
+    retry: vi.fn(),
+    legacyHistory: vi.fn(),
+    legacyRead: vi.fn(),
     cancel: vi.fn(),
     stopJob: vi.fn(),
     history: vi.fn(),
@@ -117,15 +121,6 @@ beforeEach(async () => {
         cwd: '/tmp',
         system: 'Linux',
       },
-      {
-        sessionId: 'b',
-        profileId: 'q',
-        host: 'b.invalid',
-        username: 'test',
-        port: 22,
-        cwd: '/tmp',
-        system: 'Linux',
-      },
     ],
     messages: [{ id: 'u', role: 'user', text: '检查' }],
     jobs: [],
@@ -138,27 +133,11 @@ beforeEach(async () => {
     { id: 'other-chat', title: '旧对话', updatedAt: 1, backend: c.backend },
   ])
   api.ai.remove.mockResolvedValue(undefined)
-  api.ai.scope.mockImplementation(
-    async ({ conversationId, sessionIds }: { conversationId: string; sessionIds: string[] }) => {
-      const current = useAiStore.getState().conversations[conversationId]
-      if (
-        JSON.stringify(current.targets.map((target) => target.sessionId).sort()) ===
-        JSON.stringify([...sessionIds].sort())
-      )
-        return current
-      return {
-        ...current,
-        targets: sessionIds.map(
-          (sessionId) =>
-            current.targets.find((target) => target.sessionId === sessionId) ??
-            c.targets.find((target) => target.sessionId === sessionId) ?? { ...c.targets[0], sessionId },
-        ),
-        revision: current.revision + 1,
-        status: 'idle',
-        messages: current.messages.filter((m) => !m.tool),
-      }
-    },
+  api.ai.scope.mockImplementation(async ({ conversationId }: { conversationId: string }) =>
+    useAiStore.getState().conversations[conversationId] ?? c,
   )
+  api.ai.release.mockResolvedValue(undefined)
+  api.ai.legacyHistory.mockResolvedValue([])
   api.ai.permission.mockImplementation(async ({ permission }) => ({
     ...useAiStore.getState().conversations.chat,
     permission,
@@ -170,7 +149,7 @@ beforeEach(async () => {
     messages: c.messages.filter((m) => !m.tool),
   }))
   useAiStore.setState(
-    { ...useAiStore.getInitialState(), selectedId: c.id, conversations: { [c.id]: c } },
+    { ...useAiStore.getInitialState(), selectedByTab: { 'tab-a': c.id }, conversations: { [c.id]: c } },
     true,
   )
   useSessionStore.setState(
@@ -190,7 +169,7 @@ beforeEach(async () => {
   await act(async () =>
     root.render(
       <TooltipProvider>
-        <AiInspector open overlay={false} onClose={() => {}} onChoose={() => {}} />
+        <AiInspector tabId="tab-a" open overlay={false} onClose={() => {}} onChoose={() => {}} />
       </TooltipProvider>,
     ),
   )
@@ -238,7 +217,7 @@ async function pending(overrides: Partial<AiToolCall> = {}) {
 }
 it('changing terminal tab preserves the independent conversation and never opens another chat', async () => {
   await act(async () => useSessionStore.setState({ activeTabId: 'tab-b' }))
-  expect(useAiStore.getState().selectedId).toBe('chat')
+  expect(useAiStore.getState().selectedByTab['tab-a']).toBe('chat')
   expect(api.ai.open).not.toHaveBeenCalled()
   expect(host.textContent).toContain('检查')
 })
@@ -273,7 +252,7 @@ it('keeps text and multiple commands in one reply and copies the complete reply 
     c = {
       ...c,
       status: 'idle',
-      messages: [...c.messages, tool('t2', 'b'), { id: 'a2', role: 'assistant', text: '服务运行正常。' }],
+      messages: [...c.messages, tool('t2', 'a'), { id: 'a2', role: 'assistant', text: '服务运行正常。' }],
     }
     useAiStore.getState().put(c)
   })
@@ -289,7 +268,7 @@ it('keeps text and multiple commands in one reply and copies the complete reply 
   ).toEqual(['我来查看近期日志。', '执行记录（2 项）已完成', '服务运行正常。'])
   expect([...reply.querySelectorAll('.ai-command-target')].map((target) => target.textContent)).toEqual([
     'test@a.invalid:22',
-    'test@b.invalid:22',
+    'test@a.invalid:22',
   ])
   const copies = host.querySelectorAll<HTMLButtonElement>('[aria-label="复制回复"]')
   expect(copies).toHaveLength(1)
@@ -341,7 +320,7 @@ it('shows persistent activity before the first token, during tools and while rep
     useAiStore.getState().put({ ...useAiStore.getState().conversations.chat, status: 'paused' })
   })
   await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="停止Agent"]')!.click())
-  expect(api.ai.cancel).toHaveBeenCalledWith({ conversationId: c.id })
+  expect(api.ai.cancel).toHaveBeenCalledWith({ conversationId: c.id, sessionId: 'a' })
   expect(host.querySelector('.ai-response-status')).toBeNull()
   expect(document.querySelector('.ai-error-dialog')).toBeNull()
   expect(host.querySelector('.ai-message.is-assistant')?.getAttribute('aria-busy')).toBe('false')
@@ -359,7 +338,7 @@ it.each(['idle', 'paused', 'error'] as const)(
     expect(host.querySelector('[aria-label="停止Agent"]')).toBeNull()
     expect(host.querySelector('.ai-error,[role="alert"]')).toBeNull()
     if (status === 'error')
-      expect(document.querySelector('.ai-error-dialog [data-slot="dialog-description"]')?.textContent).toBe(
+      expect(document.querySelector('.ai-fixed-notice-copy span')?.textContent).toBe(
         '连接失败',
       )
   },
@@ -379,6 +358,7 @@ it('approval is fixed at the bottom; copy cannot execute; decision includes revi
   await act(async () => button('对话内允许此工具').click())
   expect(api.ai.decide).toHaveBeenCalledWith({
     conversationId: 'chat',
+    sessionId: 'a',
     callId: 'call',
     decision: 'conversation',
     revision: 4,
@@ -412,184 +392,64 @@ it('file approval retains the path and prepared diff instead of rendering file c
   expect(api.clipboard.write).toHaveBeenCalledWith({ text: preview })
   expect(api.ai.decide).not.toHaveBeenCalled()
 })
-it('scope changes disable old approvals before automatic synchronization finishes', async () => {
-  let finish!: (value: AiConversation) => void
-  api.ai.scope.mockReturnValue(
-    new Promise((resolve) => {
-      finish = resolve
-    }),
-  )
+it('disconnect disables approval while keeping the current host visible', async () => {
   await pending()
-  await act(async () =>
-    useSessionStore.setState((s) => ({ tabs: s.tabs.filter((t) => t.sessionId !== 'a') })),
-  )
+  await act(async () => useSessionStore.getState().updateTabStatus('tab-a', 'disconnected'))
   expect(button('允许本次').disabled).toBe(true)
-  expect(button('对话内允许此工具').disabled).toBe(true)
-  expect(api.ai.scope).toHaveBeenCalledWith({ conversationId: 'chat', sessionIds: ['b'] })
-  await act(async () => finish({ ...c, targets: [c.targets[1]], messages: [], status: 'idle' }))
+  expect(button('重新连接')).toBeDefined()
+  expect(host.querySelector('.ai-host-name')?.textContent).toBe('主机A')
+  expect(api.ai.scope).toHaveBeenLastCalledWith({ conversationId: 'chat', sessionId: 'a' })
 })
 it('approval failures remain visible and do not silently grant access', async () => {
   api.ai.decide.mockRejectedValue(new Error('审批已失效'))
   await pending()
   await act(async () => button('允许本次').click())
   expect(host.querySelector('.ai-approval')).not.toBeNull()
-  expect(document.querySelector('.ai-error-dialog [data-slot="dialog-description"]')?.textContent).toBe(
+  expect(document.querySelector('.ai-fixed-notice-copy span')?.textContent).toBe(
     '审批已失效',
   )
   expect(host.querySelector('[role="alert"]')).toBeNull()
 })
-it('scope stays hidden and automatically follows all connected SSH sessions', async () => {
-  expect(host.querySelector('.ai-scope-summary')).toBeNull()
-  expect(host.textContent).not.toContain('连接范围')
-  expect(host.querySelector('.ai-scope')).toBeNull()
-  expect(host.querySelector('.ai-session-controls [type=checkbox]')).toBeNull()
-  expect(button('应用连接范围')).toBeUndefined()
-  await act(async () =>
-    useSessionStore.setState((s) => ({
-      tabs: [
-        ...s.tabs,
-        { id: 'tab-c', sessionId: 'c', profileId: 'r', profileName: '主机C', status: 'connected' },
-      ],
-    })),
-  )
-  expect(api.ai.scope).toHaveBeenCalledWith({ conversationId: 'chat', sessionIds: ['a', 'b', 'c'] })
-  expect(host.textContent).not.toContain('连接范围')
+it('switching or disconnecting another Tab does not update this binding', async () => {
   api.ai.scope.mockClear()
-  await act(async () => useSessionStore.setState({ activeTabId: 'tab-b' }))
+  await fill('A 的草稿')
+  await act(async () => {
+    useSessionStore.getState().setActiveTab('tab-b')
+    useSessionStore.getState().updateTabStatus('tab-b', 'disconnected')
+  })
   expect(api.ai.scope).not.toHaveBeenCalled()
-  await act(async () =>
-    useSessionStore.setState((s) => ({ tabs: s.tabs.filter((t) => t.sessionId !== 'c') })),
-  )
-  expect(api.ai.scope).toHaveBeenCalledWith({ conversationId: 'chat', sessionIds: ['a', 'b'] })
+  expect(host.querySelector('textarea')?.value).toBe('A 的草稿')
+  expect(useAiStore.getState().conversations.chat.targets.map((t) => t.sessionId)).toEqual(['a'])
 })
-it('closing all SSH sessions stops the Agent and blocks sending', async () => {
-  await act(async () => useSessionStore.setState({ tabs: [], activeTabId: null }))
-  expect(api.ai.scope).toHaveBeenCalledWith({ conversationId: 'chat', sessionIds: [] })
-  expect(api.ai.cancel).not.toHaveBeenCalled()
-  expect(useAiStore.getState().conversations.chat.targets).toEqual([])
-  expect(host.textContent).not.toContain('连接范围')
-  await fill('不能执行')
+it('refreshes the same session after its Tab reconnects and keeps the draft', async () => {
+  await fill('在原主机继续')
+  await act(async () => useSessionStore.getState().updateTabStatus('tab-a', 'reconnecting'))
   expect(button('发送').disabled).toBe(true)
+  await act(async () => useSessionStore.getState().updateTabStatus('tab-a', 'connected'))
+  expect(api.ai.scope).toHaveBeenLastCalledWith({ conversationId: 'chat', sessionId: 'a' })
+  expect(button('发送').disabled).toBe(false)
+  expect(host.querySelector('textarea')?.value).toBe('在原主机继续')
 })
-it('keeps every opened conversation synchronized with connected Tabs while the AI panel is hidden', async () => {
-  await act(async () => {
-    useAiStore.getState().put({ ...c, id: 'background-chat' })
-    root.render(
-      <TooltipProvider>
-        <AiInspector open={false} overlay={false} onClose={() => {}} onChoose={() => {}} />
-      </TooltipProvider>,
-    )
-  })
-  api.ai.scope.mockClear()
-  await act(async () =>
-    useSessionStore.setState((state) => ({
-      tabs: [
-        state.tabs[1],
-        { id: 'connecting', sessionId: 'c', profileId: 'r', profileName: '连接中', status: 'connecting' },
-      ],
-    })),
-  )
-  expect(api.ai.scope).toHaveBeenCalledWith({ conversationId: 'chat', sessionIds: ['b'] })
-  expect(api.ai.scope).toHaveBeenCalledWith({ conversationId: 'background-chat', sessionIds: ['b'] })
-  expect(
-    Object.values(useAiStore.getState().conversations).every(
-      (chat) => chat.targets.length === 1 && chat.targets[0].sessionId === 'b',
-    ),
-  ).toBe(true)
-})
-it('automatically reauthorizes the same session ID after its Tab reconnects', async () => {
-  await act(async () =>
-    useSessionStore.setState((state) => ({
-      tabs: state.tabs.map((tab) => (tab.sessionId === 'a' ? { ...tab, status: 'reconnecting' } : tab)),
-    })),
-  )
-  expect(api.ai.scope).toHaveBeenLastCalledWith({ conversationId: 'chat', sessionIds: ['b'] })
-  await act(async () =>
-    useSessionStore.setState((state) => ({
-      tabs: state.tabs.map((tab) => (tab.sessionId === 'a' ? { ...tab, status: 'connected' } : tab)),
-    })),
-  )
-  expect(api.ai.scope).toHaveBeenLastCalledWith({ conversationId: 'chat', sessionIds: ['a', 'b'] })
-  expect(useAiStore.getState().selectedId).toBe('chat')
-  expect(api.ai.open).not.toHaveBeenCalled()
-})
-it('refreshes bindings even when React batches reconnecting and connected into the same render', async () => {
-  await act(async () => {
-    useSessionStore.setState((state) => ({
-      tabs: state.tabs.map((tab) => (tab.sessionId === 'a' ? { ...tab, status: 'reconnecting' } : tab)),
-    }))
-    useSessionStore.setState((state) => ({
-      tabs: state.tabs.map((tab) => (tab.sessionId === 'a' ? { ...tab, status: 'connected' } : tab)),
-    }))
-  })
-  expect(api.ai.scope).toHaveBeenLastCalledWith({ conversationId: 'chat', sessionIds: ['a', 'b'] })
-  expect(api.ai.open).not.toHaveBeenCalled()
-})
-it('discards a removed runtime conversation without blocking synchronization for the remaining chats', async () => {
-  await act(async () => useAiStore.getState().put({ ...c, id: 'background-chat' }))
-  const scope = api.ai.scope.getMockImplementation()!
-  api.ai.scope.mockImplementation(async (input) => {
-    if (input.conversationId === 'background-chat')
-      throw new DesktopError({ code: 'FORBIDDEN', message: '对话已移除' })
-    return scope(input)
-  })
-  await act(async () => useSessionStore.setState((state) => ({ tabs: [state.tabs[1]] })))
-  expect(useAiStore.getState().conversations['background-chat']).toBeUndefined()
-  expect(useAiStore.getState().conversations.chat.targets.map((target) => target.sessionId)).toEqual(['b'])
-  expect(document.querySelector('.ai-error-dialog')).toBeNull()
-})
-it('refreshes live bindings before every send even when connected Tab IDs are unchanged', async () => {
-  await fill('读取当前系统')
-  await act(async () => button('发送').click())
-  expect(api.ai.scope).toHaveBeenCalledWith({ conversationId: 'chat', sessionIds: ['a', 'b'] })
-  expect(api.ai.scope.mock.invocationCallOrder[0]).toBeLessThan(api.ai.send.mock.invocationCallOrder[0])
-  expect(api.ai.send).toHaveBeenCalledTimes(1)
-})
-it('waits for a newer Tab range arriving during the pre-send refresh and dispatches once', async () => {
+it('rechecks the bound session before send and keeps the draft if the session changes', async () => {
   let finish!: (value: AiConversation) => void
-  api.ai.scope.mockImplementationOnce(
-    () =>
-      new Promise((resolve) => {
-        finish = resolve
-      }),
-  )
+  api.ai.scope.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve }))
   await fill('使用当前连接')
   await act(async () => button('发送').click())
   expect(api.ai.send).not.toHaveBeenCalled()
-  await act(async () => useSessionStore.setState((state) => ({ tabs: [state.tabs[1]] })))
-  expect(api.ai.scope).toHaveBeenCalledTimes(1)
+  await act(async () => useSessionStore.getState().updateTabStatus('tab-a', 'reconnecting'))
   await act(async () => finish(c))
-  expect(api.ai.scope).toHaveBeenLastCalledWith({ conversationId: 'chat', sessionIds: ['b'] })
-  expect(useAiStore.getState().conversations.chat.targets.map((target) => target.sessionId)).toEqual(['b'])
-  expect(api.ai.send).toHaveBeenCalledTimes(1)
+  expect(api.ai.send).not.toHaveBeenCalled()
+  expect(host.querySelector('textarea')?.value).toBe('使用当前连接')
 })
-it('a failed scope refresh preserves the draft and does not block later Tab synchronization', async () => {
+it('a failed scope refresh preserves the draft for manual retry', async () => {
   api.ai.scope.mockRejectedValueOnce(new Error('同步连接失败'))
   await fill('保留未发送指令')
   await act(async () => button('发送').click())
   expect(api.ai.send).not.toHaveBeenCalled()
   expect(host.querySelector('textarea')!.value).toBe('保留未发送指令')
-  await act(async () => document.querySelector<HTMLButtonElement>('.ai-error-dialog button')!.click())
-  await act(async () => useSessionStore.setState((state) => ({ tabs: [state.tabs[1]] })))
-  expect(api.ai.scope).toHaveBeenLastCalledWith({ conversationId: 'chat', sessionIds: ['b'] })
+  expect(host.querySelector('.ai-fixed-notice')?.textContent).toContain('同步连接失败')
   await act(async () => button('发送').click())
   expect(api.ai.send).toHaveBeenCalledTimes(1)
-})
-it('automatic Tab synchronization does not dismiss an error the user has not acknowledged', async () => {
-  api.ai.scope.mockRejectedValueOnce(new Error('同步连接失败'))
-  await act(async () => useSessionStore.setState((state) => ({ tabs: [state.tabs[1]] })))
-  const dialog = document.querySelector('.ai-error-dialog')!
-  expect(dialog.textContent).toContain('同步连接失败')
-  await act(async () =>
-    useSessionStore.setState((state) => ({
-      tabs: [
-        ...state.tabs,
-        { id: 'tab-a', sessionId: 'a', profileId: 'p', profileName: '主机A', status: 'connected' },
-      ],
-    })),
-  )
-  expect(document.querySelector('.ai-error-dialog')).toBe(dialog)
-  expect(dialog.textContent).toContain('同步连接失败')
 })
 it('permission control is inside the input card and explains all three remote modes', async () => {
   const control = host.querySelector<HTMLButtonElement>('#ai-permission-picker')!
@@ -603,7 +463,7 @@ it('permission control is inside the input card and explains all three remote mo
   expect(options[0].textContent).toContain('不执行命令或修改文件')
   expect(options[2].textContent).toContain('当前SSH会话范围内')
   await act(async () => options[2].click())
-  expect(api.ai.permission).toHaveBeenCalledWith({ conversationId: 'chat', permission: 'auto' })
+  expect(api.ai.permission).toHaveBeenCalledWith({ sessionId: 'a', conversationId: 'chat', permission: 'auto' })
   expect(control.getAttribute('aria-label')).toBe('执行模式：自动执行')
 })
 it('supplier icon follows the provider and available native CLI instead of a robot', async () => {
@@ -637,7 +497,7 @@ it('idle Agent retains independent and all-task stop controls for running jobs',
   })
   api.ai.stopJob.mockResolvedValue({ ...c, jobs: [] })
   await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="停止任务 job1"]')!.click())
-  expect(api.ai.stopJob).toHaveBeenCalledWith({ conversationId: 'chat', jobId: 'job1' })
+  expect(api.ai.stopJob).toHaveBeenCalledWith({ sessionId: 'a', conversationId: 'chat', jobId: 'job1' })
 })
 
 it('blocks sending and Agent selection when AI is disabled', async () => {
@@ -647,7 +507,7 @@ it('blocks sending and Agent selection when AI is disabled', async () => {
       .setSettings({ enabled: false, providers: [], clis: [], defaultBackend: { kind: 'codex', model: '' } }),
   )
   expect(host.querySelector<HTMLButtonElement>('[id="ai-agent-picker"]')!.disabled).toBe(true)
-  expect(host.textContent).toContain('启用AI助手')
+  expect(host.textContent).toContain('AI 助手尚未启用')
   expect(button('发送').disabled).toBe(true)
 })
 
@@ -693,12 +553,14 @@ it('Agent and candidate model switches apply to this chat and preserve its draft
   await choose('ai-agent-picker', '测试供应商')
   expect(api.ai.backend).toHaveBeenLastCalledWith({
     conversationId: 'chat',
+    sessionId: 'a',
     backend: { kind: 'custom', providerId: 'p', model: 'model-a' },
   })
   expect(host.querySelector('textarea')!.value).toBe('保留草稿')
   await choose('ai-chat-model', '模型B')
   expect(api.ai.backend).toHaveBeenLastCalledWith({
     conversationId: 'chat',
+    sessionId: 'a',
     backend: { kind: 'custom', providerId: 'p', model: 'model-b' },
   })
   expect(useAiStore.getState().conversations.chat.targets[0].sessionId).toBe('a')
@@ -717,10 +579,10 @@ it('new chat sends with its chosen supplier and model', async () => {
   await fill('新任务')
   await act(async () => button('发送').click())
   expect(api.ai.open).toHaveBeenCalledWith({
-    sessionIds: ['a', 'b'],
+    sessionId: 'a',
     backend: { kind: 'custom', providerId: 'p', model: 'model-b' },
   })
-  expect(api.ai.send).toHaveBeenCalledWith({ conversationId: 'new-chat', text: '新任务', attachments: [] })
+  expect(api.ai.send).toHaveBeenCalledWith({ sessionId: 'a', conversationId: 'new-chat', text: '新任务', attachments: [] })
 })
 it('unavailable restored CLI remains unselected and cannot send', async () => {
   await act(async () => useAiStore.getState().put({ ...c, backend: { kind: 'claude', model: '' } }))
@@ -742,6 +604,7 @@ it('plus menu uploads text attachments, releases references and allows removal',
   await act(async () => button('发送').click())
   expect(api.ai.send).toHaveBeenCalledWith({
     conversationId: 'chat',
+    sessionId: 'a',
     text: '分析日志',
     attachments: [{ name: '日志.txt', content: 'hello' }],
   })
@@ -759,101 +622,40 @@ it('failed attachment reads release all selected references without partially at
   await attach()
   expect(api.document.release).toHaveBeenCalledTimes(2)
   expect(host.querySelector('.ai-attachment-chip')).toBeNull()
-  expect(document.querySelector('.ai-error-dialog [data-slot="dialog-description"]')?.textContent).toBe(
+  expect(document.querySelector('.ai-fixed-notice-copy span')?.textContent).toBe(
     '无法读取文件',
   )
   expect(host.querySelector('[role=alert]')).toBeNull()
 })
 
-it('uses the shared dialog for runtime errors and acknowledges one failure per conversation turn', async () => {
-  const error = '连接范围或SSH连接实例已变化，请重新选择连接'
-  const failed: AiConversation = { ...c, status: 'error', error }
-  await act(async () => useAiStore.getState().put(failed))
-  const dialog = document.querySelector('.ai-error-dialog')!
-  expect(dialog.getAttribute('role')).toBe('dialog')
-  expect(dialog.querySelector('[data-slot="dialog-title"]')?.textContent).toBe('AI 任务异常')
-  expect(dialog.querySelector('[data-slot="dialog-description"]')?.textContent).toBe(error)
-  expect(host.textContent).not.toContain(error)
-  await act(async () => dialog.querySelector<HTMLButtonElement>('button')!.click())
-  expect(document.querySelector('.ai-error-dialog')).toBeNull()
-  await act(async () => useAiStore.getState().put({ ...failed, updatedAt: 100 }))
-  expect(document.querySelector('.ai-error-dialog')).toBeNull()
-  await act(async () =>
-    useAiStore.getState().put({
-      ...failed,
-      messages: [...failed.messages, { id: 'u2', role: 'user', text: '再检查一次' }],
-    }),
-  )
-  expect(document.querySelector('.ai-error-dialog [data-slot="dialog-description"]')?.textContent).toBe(error)
-  expect(api.ai.send).not.toHaveBeenCalled()
+it('keeps one actionable notice by the composer without stealing focus', async () => {
+  await fill('未发送草稿')
+  const input = host.querySelector('textarea')!
+  input.focus()
+  const failure: AiConversation = { ...c, status: 'error', error: '模型流已中断', errorCode: 'AI_STREAM_INTERRUPTED' }
+  await act(async () => useAiStore.getState().put(failure))
+  const notice = host.querySelector('.ai-fixed-notice')!
+  expect(notice.nextElementSibling?.classList.contains('ai-composer')).toBe(true)
+  expect(notice.textContent).toContain('模型回复中断')
+  expect(document.activeElement).toBe(input)
+  expect(document.querySelector('[role=dialog]')).toBeNull()
+  await act(async () => useAiStore.getState().put({ ...failure, updatedAt: 100 }))
+  expect(host.querySelectorAll('.ai-fixed-notice')).toHaveLength(1)
+  await act(async () => button('重试回复').click())
+  expect(api.ai.retry).toHaveBeenCalledWith({ conversationId: 'chat', sessionId: 'a' })
+  expect(input.value).toBe('未发送草稿')
 })
-
-it('warns about an unknown result in a dialog but does not warn about an older turn after history restoration', async () => {
+it('shows unknown operation with a terminal action and no retry', async () => {
   await pending({ state: 'unknown', error: '命令结果未知，请先核查' })
   await act(async () => useAiStore.getState().put({ ...c, status: 'paused' }))
-  expect(document.querySelector('.ai-error-dialog [data-slot="dialog-title"]')?.textContent).toBe(
-    'AI 任务已暂停',
-  )
-  expect(document.querySelector('.ai-error-dialog [data-slot="dialog-description"]')?.textContent).toBe(
-    '命令结果未知，请先核查',
-  )
-  expect(host.querySelector('.ai-inspector > .ai-command-notice')).toBeNull()
-  await act(async () => document.querySelector<HTMLButtonElement>('.ai-error-dialog button')!.click())
-  await act(async () =>
-    useAiStore.getState().put({
-      ...c,
-      status: 'paused',
-      messages: [
-        ...c.messages,
-        { id: 'new-user', role: 'user', text: '后续检查' },
-        { id: 'done', role: 'assistant', text: '检查完成' },
-      ],
-    }),
-  )
-  expect(document.querySelector('.ai-error-dialog')).toBeNull()
+  expect(host.querySelector('.ai-fixed-notice strong')?.textContent).toBe('执行结果待核查')
+  expect(button('查看终端')).toBeDefined()
+  expect(button('重试回复')).toBeUndefined()
+  await act(async () => useAiStore.getState().put({
+    ...c, status: 'idle', messages: [...c.messages, { id: 'next', role: 'user', text: '后续检查' }],
+  }))
+  expect(host.querySelector('.ai-fixed-notice')).toBeNull()
 })
-
-it('rapid session changes synchronize in order and finish with the latest open set', async () => {
-  const scope = api.ai.scope.getMockImplementation()!
-  let finish!: (value: AiConversation) => void
-  api.ai.scope.mockImplementationOnce(
-    () =>
-      new Promise((resolve) => {
-        finish = resolve
-      }),
-  )
-  await act(async () =>
-    useSessionStore.setState((s) => ({ tabs: s.tabs.filter((t) => t.sessionId === 'a') })),
-  )
-  expect(api.ai.scope).toHaveBeenCalledTimes(1)
-  await act(async () =>
-    useSessionStore.setState((s) => ({
-      tabs: [
-        ...s.tabs,
-        { id: 'tab-c', sessionId: 'c', profileId: 'r', profileName: '主机C', status: 'connected' },
-      ],
-    })),
-  )
-  expect(api.ai.scope).toHaveBeenCalledTimes(1)
-  await act(async () => finish(await scope({ conversationId: 'chat', sessionIds: ['a'] })))
-  expect(api.ai.scope).toHaveBeenLastCalledWith({ conversationId: 'chat', sessionIds: ['a', 'c'] })
-  expect(useAiStore.getState().conversations.chat.targets.map((t) => t.sessionId)).toEqual(['a', 'c'])
-})
-it('connection status changes and reconnect replace the range without including connecting tabs', async () => {
-  await act(async () =>
-    useSessionStore.setState((s) => ({
-      tabs: s.tabs.map((t) => (t.sessionId === 'a' ? { ...t, status: 'reconnecting' } : t)),
-    })),
-  )
-  expect(api.ai.scope).toHaveBeenLastCalledWith({ conversationId: 'chat', sessionIds: ['b'] })
-  await act(async () =>
-    useSessionStore.setState((s) => ({
-      tabs: s.tabs.map((t) => (t.id === 'tab-a' ? { ...t, sessionId: 'a-new', status: 'connected' } : t)),
-    })),
-  )
-  expect(api.ai.scope).toHaveBeenLastCalledWith({ conversationId: 'chat', sessionIds: ['a-new', 'b'] })
-})
-
 async function openHistory() {
   await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="对话历史"]')!.click())
 }
@@ -864,11 +666,12 @@ it('history is a dialog; opening a chat closes it and preserves the current draf
   expect(host.querySelector('.ai-history-dialog')).toBeNull()
   expect(host.textContent).not.toContain('删除对话')
   await openHistory()
-  expect(document.querySelector('[role=dialog]')!.textContent).toContain('对话历史')
+  expect(document.querySelector('[role=dialog]')!.textContent).toContain('主机A · 对话历史')
+  expect(api.ai.history).toHaveBeenCalledWith({ sessionId: 'a' })
   expect(host.querySelector('.ai-history-delete')).toBeNull()
   expect(document.querySelectorAll('.ai-history-dialog .ai-history-delete')).toHaveLength(2)
   await act(async () => historyButton('打开对话：检查').click())
-  expect(api.ai.read).toHaveBeenCalledWith({ conversationId: 'chat' })
+  expect(api.ai.read).toHaveBeenCalledWith({ sessionId: 'a', conversationId: 'chat' })
   expect(document.querySelector('[role=dialog]')).toBeNull()
   expect(host.querySelector('textarea')!.value).toBe('保留未发送内容')
 })
@@ -876,9 +679,9 @@ it('deleting another chat is restricted to history and preserves the current cha
   await fill('当前草稿')
   await openHistory()
   await act(async () => historyButton('删除对话：旧对话').click())
-  expect(api.ai.remove).toHaveBeenCalledWith({ conversationId: 'other-chat' })
+  expect(api.ai.remove).toHaveBeenCalledWith({ sessionId: 'a', conversationId: 'other-chat' })
   expect(document.querySelector('.ai-history-dialog [aria-label="删除对话：旧对话"]')).toBeNull()
-  expect(useAiStore.getState().selectedId).toBe('chat')
+  expect(useAiStore.getState().selectedByTab['tab-a']).toBe('chat')
   await act(async () => historyButton('关闭对话历史').click())
   expect(host.querySelector('textarea')!.value).toBe('当前草稿')
   expect(host.querySelector('.ai-history-delete')).toBeNull()
@@ -887,8 +690,8 @@ it('deleting the current chat clears its selection and leaves history open', asy
   await fill('待删除的草稿')
   await openHistory()
   await act(async () => historyButton('删除对话：检查').click())
-  expect(api.ai.remove).toHaveBeenCalledWith({ conversationId: 'chat' })
-  expect(useAiStore.getState().selectedId).toBeNull()
+  expect(api.ai.remove).toHaveBeenCalledWith({ sessionId: 'a', conversationId: 'chat' })
+  expect(useAiStore.getState().selectedByTab['tab-a']).toBeNull()
   expect(useAiStore.getState().conversations.chat).toBeUndefined()
   expect(document.querySelector('[role=dialog]')).not.toBeNull()
   expect(document.querySelector('.ai-history-dialog [aria-label="删除对话：检查"]')).toBeNull()
@@ -901,7 +704,7 @@ it('failed history deletion retains the row and shows the error inside the dialo
   await act(async () => historyButton('删除对话：检查').click())
   expect(document.querySelector('.ai-history-dialog [role=alert]')!.textContent).toBe('删除失败')
   expect(historyButton('删除对话：检查')).not.toBeNull()
-  expect(useAiStore.getState().selectedId).toBe('chat')
+  expect(useAiStore.getState().selectedByTab['tab-a']).toBe('chat')
   expect(host.querySelector('[role=alert]')).toBeNull()
 })
 it('history read failures do not report a false empty history', async () => {
@@ -921,7 +724,7 @@ it('closing history while loading cannot reopen it when the response arrives', a
   await act(async () => historyButton('关闭对话历史').click())
   await act(async () => finish([]))
   expect(document.querySelector('[role=dialog]')).toBeNull()
-  expect(useAiStore.getState().selectedId).toBe('chat')
+  expect(useAiStore.getState().selectedByTab['tab-a']).toBe('chat')
 })
 it('history delete dispatches only once while its request is pending', async () => {
   let finish!: () => void
@@ -963,13 +766,14 @@ for (const permission of ['observer', 'auto'] as const)
       api.ai.permission.mockResolvedValue({ ...created, permission })
       await fill('首条消息使用选定模式')
       await act(async () => button('发送').click())
-      expect(api.ai.permission).toHaveBeenCalledWith({ conversationId: 'first-chat', permission })
+      expect(api.ai.permission).toHaveBeenCalledWith({ sessionId: 'a', conversationId: 'first-chat', permission })
       expect(api.ai.permission.mock.invocationCallOrder[0]).toBeLessThan(
         api.ai.send.mock.invocationCallOrder[0],
       )
       expect(useAiStore.getState().conversations['first-chat'].permission).toBe(permission)
       expect(api.ai.send).toHaveBeenCalledWith({
         conversationId: 'first-chat',
+        sessionId: 'a',
         text: '首条消息使用选定模式',
         attachments: [],
       })
@@ -990,10 +794,10 @@ it('failed initial permission application sends nothing and preserves the new dr
   await fill('不得在模式未确认时运行')
   await act(async () => button('发送').click())
   expect(api.ai.send).not.toHaveBeenCalled()
-  expect(useAiStore.getState().selectedId).toBeNull()
+  expect(useAiStore.getState().selectedByTab['tab-a']).toBeNull()
   expect(host.querySelector('textarea')!.value).toBe('不得在模式未确认时运行')
   expect(host.querySelector('#ai-permission-picker')!.getAttribute('data-permission')).toBe('auto')
-  expect(document.querySelector('.ai-error-dialog [data-slot="dialog-description"]')?.textContent).toBe(
+  expect(document.querySelector('.ai-fixed-notice-copy span')?.textContent).toBe(
     '设置执行模式失败',
   )
 })
@@ -1003,6 +807,6 @@ it('a failed first send retains the draft in the conversation that was created',
   api.ai.send.mockRejectedValue(new Error('发送失败'))
   await fill('保留这条消息')
   await act(async () => button('发送').click())
-  expect(useAiStore.getState().selectedId).toBe('first-chat')
+  expect(useAiStore.getState().selectedByTab['tab-a']).toBe('first-chat')
   expect(host.querySelector('textarea')!.value).toBe('保留这条消息')
 })

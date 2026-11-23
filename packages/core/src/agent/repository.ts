@@ -6,9 +6,11 @@ import {
   aiProviderSchema,
   aiCliSchema,
   aiBackendSchema,
+  aiHostSchema,
   aiSummarySchema,
   fail,
 } from '@eizhu/contracts'
+import type { AiHost } from '@eizhu/contracts'
 import { LocalCipher } from '../local/crypto.ts'
 
 export const storedProviderSchema = aiProviderSchema
@@ -23,15 +25,20 @@ export const storedAiConfigSchema = z.strictObject({
 export const storedAiConversationSchema = z.strictObject({
   format: z.literal(3),
   conversation: aiConversationSchema,
+  host: aiHostSchema.optional(),
   wire: z.array(modelMessageSchema).max(1000),
   outputs: z.record(z.string(), z.strictObject({ content: z.string().max(262144), truncated: z.boolean() })),
   nativeSession: z.string().max(512).optional(),
 })
 export type StoredAiConversation = z.infer<typeof storedAiConversationSchema>
+export function sameAiHost(a: AiHost | undefined, b: AiHost | undefined) {
+  return a?.profileId === b?.profileId && a?.host === b?.host && a?.port === b?.port && a?.username === b?.username
+}
+const indexSchema = z.array(aiSummarySchema.extend({ host: aiHostSchema.optional() }))
 const storageRequest = z.discriminatedUnion('kind', [
   z.strictObject({ kind: z.literal('config.read') }),
   z.strictObject({ kind: z.literal('config.write'), value: storedAiConfigSchema }),
-  z.strictObject({ kind: z.literal('list') }),
+  z.strictObject({ kind: z.literal('list'), host: aiHostSchema.optional() }),
   z.strictObject({ kind: z.literal('read'), id: z.uuid() }),
   z.strictObject({ kind: z.literal('save'), value: storedAiConversationSchema }),
   z.strictObject({ kind: z.literal('remove'), id: z.uuid() }),
@@ -78,21 +85,24 @@ export class AgentRepository {
       return storedAiConversationSchema.parse(
         this.read(`agent:v2:conversation:${d.id}`) ?? fail('NOT_FOUND', '对话不存在'),
       )
-    const index = z
-      .array(aiSummarySchema)
-      .max(100)
-      .parse(this.read('agent:v2:index') ?? [])
-    if (d.kind === 'list') return index.sort((a, b) => b.updatedAt - a.updatedAt)
+    const index = indexSchema.parse(this.read('agent:v2:index') ?? [])
+    if (d.kind === 'list')
+      return index.filter((v) => sameAiHost(v.host, d.host))
+        .sort((a, b) => b.updatedAt - a.updatedAt)
+        .map((entry) => aiSummarySchema.strip().parse(entry))
     if (d.kind === 'save') {
       const c = d.value.conversation
-      if (!index.some((v) => v.id === c.id) && index.length >= 100)
-        fail('AI_HISTORY_LIMIT', '已保存100个对话，请先删除部分历史')
+      const existing = index.find((v) => v.id === c.id)
+      if (existing && !sameAiHost(existing.host, d.value.host))
+        fail('FORBIDDEN', '不能更改AI对话所属主机')
+      if (!existing && index.filter((v) => sameAiHost(v.host, d.value.host)).length >= 100)
+        fail('AI_HISTORY_LIMIT', '当前主机已保存100个对话，请先删除部分历史')
       if (Buffer.byteLength(JSON.stringify(d.value)) > 8 * 1024 * 1024)
         fail('AI_HISTORY_LIMIT', '对话与输出超过8MiB，请新建对话')
       return this.db.transaction(() => {
         this.write(`agent:v2:conversation:${c.id}`, d.value)
         this.write('agent:v2:index', [
-          aiSummarySchema.strip().parse(c),
+          { id: c.id, title: c.title, updatedAt: c.updatedAt, backend: c.backend, host: d.value.host },
           ...index.filter((v) => v.id !== c.id),
         ])
       })()

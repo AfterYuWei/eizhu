@@ -76,6 +76,8 @@ export const aiTargetSchema = z.strictObject({
   cwd: z.string().max(32768),
   system: z.string().max(4096),
 })
+export const aiHostSchema = aiTargetSchema.pick({ profileId: true, host: true, port: true, username: true })
+export type AiHost = z.infer<typeof aiHostSchema>
 export const aiToolCallSchema = z.strictObject({
   id,
   name: aiToolNameSchema,
@@ -85,6 +87,7 @@ export const aiToolCallSchema = z.strictObject({
   preview: z.string().max(524288).default(''),
   result: z.json().optional(),
   error: z.string().max(2048).default(''),
+  errorCode: id.optional(),
 })
 export const aiMessageSchema = z.strictObject({
   id: z.uuid(),
@@ -92,6 +95,7 @@ export const aiMessageSchema = z.strictObject({
   text: z.string().max(196608),
   startedAt: z.int().nonnegative().optional(),
   completedAt: z.int().nonnegative().optional(),
+  stopped: z.boolean().optional(),
   tool: aiToolCallSchema.optional(),
 })
 export const aiConversationSchema = z.strictObject({
@@ -107,6 +111,7 @@ export const aiConversationSchema = z.strictObject({
   summary: z.string().max(32768),
   status: z.enum(['idle', 'thinking', 'awaiting_confirmation', 'executing', 'paused', 'error']),
   error: z.string().max(2048),
+  errorCode: id.optional(),
 })
 export const aiSummarySchema = aiConversationSchema.pick({
   id: true,
@@ -114,11 +119,22 @@ export const aiSummarySchema = aiConversationSchema.pick({
   updatedAt: true,
   backend: true,
 })
+const aiHistoryItemSchema = aiSummarySchema.extend({ activeSessionId: id.optional() })
+export type AiHistoryItem = z.infer<typeof aiHistoryItemSchema>
+export function aiRetryableReply(conversation: AiConversation) {
+  const last = conversation.messages.findLastIndex((m) => m.role === 'user')
+  return conversation.status === 'error' &&
+    ['AI_STREAM_INTERRUPTED', 'AI_UNAVAILABLE', 'AI_PROTOCOL'].includes(conversation.errorCode ?? '') &&
+    last >= 0 && !conversation.messages.slice(last + 1).some((m) => m.tool) &&
+    !conversation.jobs.some((job) => job.status === 'running' || job.status === 'unknown')
+}
 export const aiAttachmentSchema = z.strictObject({
   name: z.string().min(1).max(255),
   content: z.string().max(131072),
 })
 const conversationId = z.strictObject({ conversationId: z.uuid() })
+const session = z.strictObject({ sessionId: id })
+const boundConversation = conversationId.extend(session.shape)
 export const ai = {
   'ai.settings': { input: z.undefined(), output: aiSettingsSchema },
   'ai.setEnabled': { input: z.strictObject({ enabled: z.boolean() }), output: aiSettingsSchema },
@@ -154,40 +170,41 @@ export const ai = {
       .max(3),
   },
   'ai.open': {
-    input: z.strictObject({ sessionIds: z.array(id).min(1).max(32), backend: aiBackendSchema.optional() }),
+    input: session.extend({ backend: aiBackendSchema.optional() }),
     output: aiConversationSchema,
   },
-  'ai.history': { input: z.undefined(), output: z.array(aiSummarySchema).max(100) },
-  'ai.read': { input: conversationId, output: aiConversationSchema },
-  'ai.remove': { input: conversationId, output: z.void() },
-  'ai.scope': {
-    input: conversationId.extend({ sessionIds: z.array(id).max(32) }),
-    output: aiConversationSchema,
-  },
-  'ai.backend': { input: conversationId.extend({ backend: aiBackendSchema }), output: aiConversationSchema },
+  'ai.history': { input: session, output: z.array(aiHistoryItemSchema).max(100) },
+  'ai.legacyHistory': { input: z.undefined(), output: z.array(aiSummarySchema).max(100) },
+  'ai.legacyRead': { input: conversationId, output: aiConversationSchema },
+  'ai.read': { input: boundConversation, output: aiConversationSchema },
+  'ai.remove': { input: boundConversation, output: z.void() },
+  'ai.release': { input: boundConversation, output: z.void() },
+  'ai.scope': { input: boundConversation, output: aiConversationSchema },
+  'ai.backend': { input: boundConversation.extend({ backend: aiBackendSchema }), output: aiConversationSchema },
   'ai.permission': {
-    input: conversationId.extend({ permission: z.enum(['observer', 'confirm', 'auto']) }),
+    input: boundConversation.extend({ permission: z.enum(['observer', 'confirm', 'auto']) }),
     output: aiConversationSchema,
   },
   'ai.send': {
-    input: conversationId.extend({
+    input: boundConversation.extend({
       text: z.string().min(1).max(16384),
       attachments: z.array(aiAttachmentSchema).max(8),
     }),
     output: z.void(),
   },
+  'ai.retry': { input: boundConversation, output: z.void() },
   'ai.decide': {
-    input: conversationId.extend({
+    input: boundConversation.extend({
       callId: id,
       decision: z.enum(['once', 'conversation', 'reject']),
       revision: z.int(),
     }),
     output: z.void(),
   },
-  'ai.cancel': { input: conversationId, output: z.void() },
-  'ai.stopJob': { input: conversationId.extend({ jobId: id }), output: aiConversationSchema },
+  'ai.cancel': { input: boundConversation, output: z.void() },
+  'ai.stopJob': { input: boundConversation.extend({ jobId: id }), output: aiConversationSchema },
   'ai.output': {
-    input: conversationId.extend({ handle: id, offset: z.int().nonnegative().default(0) }),
+    input: boundConversation.extend({ handle: id, offset: z.int().nonnegative().default(0) }),
     output: z.string().max(32768),
   },
 } as const

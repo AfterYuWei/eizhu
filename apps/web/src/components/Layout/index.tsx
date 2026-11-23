@@ -72,7 +72,8 @@ export function Layout() {
   const settingsPage = useDesktopShellStore((s) => s.settingsPage)
   const settingsTab = settingsPage ?? 'appearance'
   const settingsOpen = settingsPage !== null
-  const [rightSidebar, setRightSidebar] = useState<'choose' | 'ai' | 'sftp' | null>(null)
+  const [rightSidebar, setRightSidebar] = useState<'choose' | 'sftp' | null>(null)
+  const [aiTabs, setAiTabs] = useState<Record<string, boolean>>({})
   const setInspectorWidth = useDesktopShellStore(s => s.setInspectorWidth)
   const [workspaceWidth, setWorkspaceWidth] = useState(window.innerWidth)
   const workspace = useRef<HTMLDivElement>(null)
@@ -91,7 +92,8 @@ export function Layout() {
   const { fetchProfiles, fetchGroups } = useProfileStore()
   const activeTab = tabs.find((tab) => tab.id === activeTabId)
   const terminal = activePage === 'terminal' && Boolean(activeTab?.profileId)
-  const rightSidebarVisible = rightSidebar !== null && !settingsOpen && terminal
+  const activeAi = !rightSidebar && activeTab && aiTabs[activeTab.id]
+  const rightSidebarVisible = Boolean(rightSidebar || activeAi) && !settingsOpen && terminal
   const sidebarOverlay = workspaceWidth < inspectorWidth + 480 + 8
   const terminalThemeId = resolveTerminalThemeId(terminalTheme, theme)
   const terminalPalette = getTerminalThemeMeta(terminalThemeId)
@@ -205,7 +207,10 @@ export function Layout() {
           <WorkspaceTabs />
           <div className="shell-workspace-actions" data-eizhu-drag-region={desktop || undefined}>
             <TerminalSplitMenu iconOnly />
-            {terminal && <ShellIconButton label="右侧栏" aria-expanded={rightSidebarVisible} aria-controls="desktop-right-sidebar" aria-pressed={rightSidebarVisible} onClick={() => setRightSidebar(value => value === null ? 'choose' : null)}><PanelRight size={16} /></ShellIconButton>}
+            {terminal && <ShellIconButton label="右侧栏" aria-expanded={rightSidebarVisible} aria-controls="desktop-right-sidebar" aria-pressed={rightSidebarVisible} onClick={() => {
+              if (activeAi && activeTab) setAiTabs(current => ({ ...current, [activeTab.id]: false }))
+              else setRightSidebar(value => value === null ? 'choose' : null)
+            }}><PanelRight size={16} /></ShellIconButton>}
             {activePage === 'terminal' && activeTab && <WorkspaceActions terminal={terminal} />}
           </div>
           {showControls && <div className="shell-window-controls-space" aria-hidden="true" />}
@@ -219,9 +224,18 @@ export function Layout() {
         <aside className={`shell-inspector shell-inspector-picker ${sidebarOverlay ? 'is-overlay' : ''}`} style={{ width: inspectorWidth }} hidden={!rightSidebarVisible || rightSidebar !== 'choose'} inert={!rightSidebarVisible || rightSidebar !== 'choose'} aria-label="选择侧栏内容">
           <ShellResizeHandle label="调整右侧栏宽度" value={inspectorWidth} min={320} max={560} onChange={setInspectorWidth} reverse />
           <div className="shell-inspector-heading"><span>侧栏</span><ShellIconButton label="关闭右侧栏" onClick={() => setRightSidebar(null)}><X size={15} /></ShellIconButton></div>
-          <div className="shell-inspector-choices"><p>从这里开始</p><Button variant="ghost" onClick={() => setRightSidebar('ai')}><AiIcon size={18} /><span>AI</span></Button><Button variant="ghost" onClick={() => setRightSidebar('sftp')}><FolderOpen size={18} /><span>SFTP</span></Button></div>
+          <div className="shell-inspector-choices"><p>从这里开始</p><Button variant="ghost" onClick={() => {
+            if (!activeTab) return
+            setAiTabs(current => ({ ...current, [activeTab.id]: true }))
+            setRightSidebar(null)
+          }}><AiIcon size={18} /><span>AI</span></Button><Button variant="ghost" onClick={() => setRightSidebar('sftp')}><FolderOpen size={18} /><span>SFTP</span></Button></div>
         </aside>
-        <AiInspector key={workspaceGeneration()} open={rightSidebarVisible && rightSidebar === 'ai'} overlay={sidebarOverlay} onClose={() => setRightSidebar(null)} onChoose={() => setRightSidebar('choose')} />
+        {tabs.filter(tab => tab.profileId && Object.hasOwn(aiTabs, tab.id)).map(tab => (
+          <AiInspector key={`${workspaceGeneration()}:${tab.id}`} tabId={tab.id} open={rightSidebarVisible && Boolean(activeAi) && tab.id === activeTabId} overlay={sidebarOverlay}
+            onOpenTab={(id) => { setAiTabs(current => ({ ...current, [id]: true })); useSessionStore.getState().setActiveTab(id) }}
+            onClose={() => setAiTabs(current => ({ ...current, [tab.id]: false }))}
+            onChoose={() => { setAiTabs(current => ({ ...current, [tab.id]: false })); setRightSidebar('choose') }} />
+        ))}
         <ServerInspector open={rightSidebarVisible && rightSidebar === 'sftp'} overlay={sidebarOverlay} onClose={() => setRightSidebar(null)} onChoose={() => setRightSidebar('choose')} />
       </div>
       </div>

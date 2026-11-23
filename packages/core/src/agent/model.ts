@@ -30,6 +30,7 @@ class CompletionBoundary {
   private data: string[] = []
   completed = false
   failed = false
+  transportError?: unknown
   protocol: 'responses' | 'chat' | 'anthropic'
   constructor(protocol: 'responses' | 'chat' | 'anthropic') {
     this.protocol = protocol
@@ -115,6 +116,7 @@ export function modelFetch(
             stream.close()
           },
           (error) => {
+            if (boundary) boundary.transportError = error
             release?.()
             stream.error(error)
           },
@@ -184,7 +186,7 @@ export async function generateModel(input: {
   })
   let text = ''
   for await (const part of result.fullStream) {
-    if (part.type === 'error') throw part.error
+    if (part.type === 'error') throw boundary.transportError ?? part.error
     if (part.type === 'text-delta') {
       text += part.text
       if (text.length > 65536) fail('AI_PROTOCOL', '模型回复超过上限')

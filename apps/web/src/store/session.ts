@@ -4,6 +4,7 @@ import { sessionApi } from '@/api/session'
 import { useServerDetailStore } from '@/store/serverDetail'
 import type { SessionApiError } from '@/types/session'
 import type { SessionTarget } from '@/types/sessionMessage'
+import { useAiStore } from './ai'
 
 export type TabStatus = 'connecting' | 'connected' | 'disconnected' | 'error' | 'reconnecting'
 
@@ -149,6 +150,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     if (tab.sessionId) await sessionApi.close(tab.sessionId)
     const current = get().tabs.find((item) => item.id === tabId)
     if (!current || current.sessionId !== tab.sessionId) return
+    useAiStore.getState().closeTab(tabId)
     if (current.detailAttached && current.profileId)
       useServerDetailStore.getState().disconnect(current.profileId)
 
