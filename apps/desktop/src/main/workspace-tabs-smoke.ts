@@ -70,28 +70,31 @@ export async function verifyWorkspaceTabs(window: BrowserWindow, root: string) {
 
     const geometry = async () => {
       await wait(`(()=>{const scroll=document.querySelector('.shell-tab-scroll'),selected=scroll.querySelector('.shell-tab.is-active');const a=scroll.getBoundingClientRect(),b=selected.getBoundingClientRect();return b.left>=a.left-1&&b.right<=a.right+1})()`)
-      return js<{ headerHeight: number; overflow: boolean; buttonsFit: boolean; noDrag: boolean; oldListRemoved: boolean }>(`(()=>{
+      return js<{ headerHeight: number; overflow: boolean; buttonsFit: boolean; noDrag: boolean; oldListRemoved: boolean; draftFillsPane: boolean }>(`(()=>{
         const header=document.querySelector('.shell-workspace-header'),scroll=document.querySelector('.shell-tab-scroll'),action=document.querySelector('.shell-workspace-actions'),add=document.querySelector('.shell-tab-add');
         const a=action.getBoundingClientRect(),b=header.getBoundingClientRect(),c=add.getBoundingClientRect();
+        const card=document.querySelector('.term-pane:not(.is-hidden) .term-pane-card.is-draft'),picker=card.querySelector('.connection-picker');
+        const pane=card.getBoundingClientRect(),page=picker.getBoundingClientRect();
         return {headerHeight:b.height,overflow:scroll.scrollWidth>scroll.clientWidth,
+          draftFillsPane:['left','top','right','bottom'].every(edge=>Math.abs(pane[edge]-page[edge])<1),
           buttonsFit:a.right<=b.right&&c.right<=a.left&&c.left>=b.left,
           noDrag:getComputedStyle(scroll).webkitAppRegion==='no-drag'&&getComputedStyle(add).webkitAppRegion==='no-drag'&&getComputedStyle(header).webkitAppRegion==='drag',
           oldListRemoved:!document.querySelector('.shell-open-section')&&!document.querySelector('[aria-label="调整服务器和已打开区域比例"]')};
       })()`)
     }
     const wide = await geometry()
-    assert.ok(wide.headerHeight >= 48 && wide.overflow && wide.buttonsFit && wide.noDrag && wide.oldListRemoved)
+    assert.ok(wide.headerHeight >= 48 && wide.overflow && wide.buttonsFit && wide.noDrag && wide.oldListRemoved && wide.draftFillsPane)
     await capture('workspace-tabs-light.png', 'light')
     window.setContentSize(900, 650)
     await wait(`innerWidth===900`)
     const narrow = await geometry()
-    assert.ok(narrow.overflow && narrow.buttonsFit)
+    assert.ok(narrow.overflow && narrow.buttonsFit && narrow.draftFillsPane)
     await capture('workspace-tabs-dark-narrow.png', 'dark')
     await js(`document.dispatchEvent(new KeyboardEvent('keydown',{key:'b',ctrlKey:true,shiftKey:true,bubbles:true,cancelable:true}))`)
     await wait(`!!document.querySelector('.desktop-shell.sidebar-is-hidden')`)
     await js(`document.documentElement.style.setProperty('--sans-size','22px')`)
     const enlarged = await geometry()
-    assert.ok(enlarged.headerHeight >= 48 && enlarged.buttonsFit && enlarged.noDrag)
+    assert.ok(enlarged.headerHeight >= 48 && enlarged.buttonsFit && enlarged.noDrag && enlarged.draftFillsPane)
     await capture('workspace-tabs-large-collapsed.png', 'light')
     assert.equal(await js(`window.eizhu.localState.read({key:'terminal_layout'})`), null, 'Terminal tabs must remain in memory only')
     // Close through the same button path, checking the restored keyboard focus.

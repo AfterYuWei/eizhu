@@ -21,8 +21,6 @@ interface SettingsStore {
   appFontSize: number
   appFontFamily: string
   terminalTheme: string
-  /** 沿用历史偏好键，当前控制命令及其输出右侧的竖条。 */
-  terminalCommandHighlight: boolean
   terminalLogHighlight: boolean
   // 自动补全设置
   terminalAutocomplete: boolean
@@ -41,7 +39,6 @@ interface SettingsStore {
   setAppFontSize: (size: number) => void
   setAppFontFamily: (family: string) => void
   setTerminalTheme: (id: string) => void
-  setTerminalCommandHighlight: (enabled: boolean) => void
   setTerminalLogHighlight: (enabled: boolean) => void
   setTerminalAutocomplete: (enabled: boolean) => void
   setTerminalInlineSuggestion: (enabled: boolean) => void
@@ -110,7 +107,6 @@ export const useSettingsStore = create<SettingsStore>()(
       appFontSize: 14,
       appFontFamily: DEFAULT_APP_FONT_FAMILY,
       terminalTheme: 'default',
-      terminalCommandHighlight: true,
       terminalLogHighlight: false,
       terminalAutocomplete: true,
       terminalInlineSuggestion: false,
@@ -144,7 +140,6 @@ export const useSettingsStore = create<SettingsStore>()(
         applyAppFont(get().appFontSize, appFontFamily)
       },
       setTerminalTheme: (terminalTheme) => set({ terminalTheme }),
-      setTerminalCommandHighlight: (terminalCommandHighlight) => set({ terminalCommandHighlight }),
       setTerminalLogHighlight: (terminalLogHighlight) => set({ terminalLogHighlight }),
       setTerminalAutocomplete: (terminalAutocomplete) => set({ terminalAutocomplete }),
       setTerminalInlineSuggestion: (terminalInlineSuggestion) => set({ terminalInlineSuggestion }),

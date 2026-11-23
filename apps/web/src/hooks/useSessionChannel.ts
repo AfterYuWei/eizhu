@@ -1,7 +1,7 @@
 import type { CompletionGeneratorRequest } from '@/types/completion'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { sessionApi } from '@/api/session'
-import type { SessionMessage } from '@/types/sessionMessage'
+import type { ConnectionStatePayload, SessionMessage } from '@/types/sessionMessage'
 
 type ChannelStatus = 'connecting' | 'connected' | 'disconnected'
 
@@ -38,7 +38,14 @@ export function useSessionChannel(options: UseSessionChannelOptions) {
         return
       }
       await callbacksRef.current.onMessage?.(message)
-      if (message.type === 'exit' || message.type === 'disconnect' || message.type === 'error') {
+      // Reconnect keeps the same session ID and MessagePort subscription.
+      if (message.type === 'metadata') {
+        setStatus('connected')
+      } else if (message.type === 'connection_state') {
+        const state = message.payload as ConnectionStatePayload
+        setStatus(state.status === 'connected' ? 'connected'
+          : state.status === 'connecting' || state.status === 'reconnecting' ? 'connecting' : 'disconnected')
+      } else if (message.type === 'exit' || message.type === 'disconnect' || message.type === 'error') {
         setStatus('disconnected')
       }
     }

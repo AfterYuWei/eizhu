@@ -1,20 +1,22 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Plus, Square, History, ChevronDown, Settings2, ArrowUp, FileText, X } from 'lucide-react'
+import { Plus, Square, History, ChevronDown, Settings2, ArrowUp, FileText, TriangleAlert, X } from 'lucide-react'
 import type {
   AiConversation,
   AiBackend,
   AiCapabilities,
   AiCliStatus,
+  AiHistoryItem,
   AiModelCatalog,
   AiProvider,
 } from '@eizhu/contracts'
-import { failureOf } from '@eizhu/contracts'
+import { aiRetryableReply, failureOf } from '@eizhu/contracts'
 import { useAiStore } from '@/store/ai'
-import { useSessionStore, type SessionTab } from '@/store/session'
+import { useSessionStore } from '@/store/session'
 import { useDesktopShellStore } from '@/store/desktopShell'
 import { bridge } from '@/lib/bridge'
 import { AiIcon, AiAgentIcon, AiModeCheckIcon, AiDeleteIcon, AI_PERMISSION_ICONS } from '@/lib/serverIcons'
 import { useAccountStore } from '@/store/account'
+import { terminalActions } from '@/lib/terminalActions'
 import { workspaceGeneration } from '@/lib/workspaceScope'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -23,7 +25,6 @@ import {
   DialogClose,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -70,49 +71,47 @@ const permissionModes = [
 const ConfirmationIcon = AI_PERMISSION_ICONS.confirm
 
 type Draft = { text: string; attachments: Array<{ name: string; content: string }> }
-function connectedTabSessionIds(tabs: SessionTab[]) {
-  return [
-    ...new Set(
-      tabs.filter((tab) => tab.sessionId && tab.status === 'connected').map((tab) => tab.sessionId!),
-    ),
-  ].sort()
-}
 export function AiInspector({
+  tabId,
   open,
   overlay,
   onClose,
   onChoose,
+  onOpenTab,
 }: {
+  tabId: string
   open: boolean
   overlay: boolean
   onClose: () => void
   onChoose: () => void
+  onOpenTab?: (tabId: string) => void
 }) {
-  const { tabs } = useSessionStore()
+  const tab = useSessionStore((state) => state.tabs.find((item) => item.id === tabId))
+  const sessionId = tab?.sessionId ?? null
+  const connected = tab?.status === 'connected' && Boolean(sessionId)
   const { inspectorWidth, setInspectorWidth, setSettingsPage } = useDesktopShellStore()
-  const { selectedId, conversations, select, put, progress, forget, settings, setSettings } = useAiStore()
-  const conversation = selectedId ? conversations[selectedId] : undefined
+  const selectedId = useAiStore((state) => state.selectedByTab[tabId] ?? null)
+  const conversation = useAiStore((state) => selectedId ? state.conversations[selectedId] : undefined)
+  const settings = useAiStore((state) => state.settings)
+  const { select, put, progress, forget, setSettings } = useAiStore.getState()
   const conversationId = conversation?.id
+  const boundSession = conversation?.targets[0]?.sessionId
+  const binding = conversation && sessionId && boundSession === sessionId
+    ? { conversationId: conversation.id, sessionId } : undefined
   const [newPermission, setNewPermission] = useState<AiConversation['permission']>('confirm')
   const mode = permissionModes.find((m) => m.value === (conversation?.permission ?? newPermission))!
   const loggedIn = useAccountStore((s) => s.status?.loggedIn)
   const [cliStatuses, setCliStatuses] = useState<AiCliStatus[]>([])
   const [official, setOfficial] = useState<AiCapabilities | null>(null)
   const [newBackend, setNewBackend] = useState<AiBackend | null>(null)
-  const sessionIds = connectedTabSessionIds(tabs)
-  const sessionKey = JSON.stringify(sessionIds)
-  const targetKey = JSON.stringify(conversation?.targets.map((t) => t.sessionId).sort() ?? [])
-  const scopeReady = sessionIds.length > 0 && sessionIds.length <= 32 && sessionKey === targetKey
-  const scopeQueue = useRef(Promise.resolve())
   const [drafts, setDrafts] = useState<Record<string, Draft>>({})
-  const key = selectedId ?? 'new',
-    draft = drafts[key] ?? { text: '', attachments: [] }
-  const [error, setError] = useState(''),
-    [loading, setLoading] = useState(false)
-  const [dismissedError, setDismissedError] = useState('')
-  const [history, setHistory] = useState<Array<
-    Pick<AiConversation, 'id' | 'title' | 'updatedAt' | 'backend'>
-  > | null>(null)
+  const key = selectedId ?? 'new'
+  const draft = drafts[key] ?? { text: '', attachments: [] }
+  const [problem, setProblem] = useState<{ message: string; code?: string; sessionId?: string }>()
+  const [loading, setLoading] = useState(false)
+  const [history, setHistory] = useState<AiHistoryItem[] | null>(null)
+  const [legacy, setLegacy] = useState<AiHistoryItem[] | null>(null)
+  const [legacyChat, setLegacyChat] = useState<AiConversation>()
   const [historyError, setHistoryError] = useState('')
   const [pickerBoundary, setPickerBoundary] = useState<HTMLElement | null>(null)
   const messages = useRef<HTMLDivElement>(null),
@@ -122,6 +121,7 @@ export function AiInspector({
     conversation?.status === 'thinking' ||
     conversation?.status === 'executing' ||
     conversation?.status === 'awaiting_confirmation'
+  const runningJob = conversation?.jobs.some((job) => job.status === 'running')
   const turns = useMemo(() => {
     const groups: Array<{
       id: string
@@ -138,7 +138,7 @@ export function AiInspector({
       else groups.push({ id: request ? request.id + ':reply' : message.id, messages: [message], request })
     }
     const last = groups.at(-1)
-    if (busy && last?.messages[0]?.role === 'user')
+    if ((busy || request?.stopped) && last?.messages[0]?.role === 'user')
       groups.push({ id: last.id + ':reply', messages: [], request: last.messages[0] })
     return groups
   }, [conversation?.messages, busy])
@@ -150,16 +150,9 @@ export function AiInspector({
             (message) => message.tool?.state === 'unknown' || message.tool?.state === 'failed',
           )?.tool
       : undefined
-  const conversationError =
-    conversation?.error ||
-    (pausedCall ? pausedCall.error || '本轮有命令执行结果未知，请先在终端核查，再发送后续指令。' : '')
-  const errorKey = JSON.stringify([
-    workspaceGeneration(),
-    conversationId,
-    conversation?.messages.findLast((message) => message.role === 'user')?.id,
-    conversationError,
-  ])
-  const visibleError = error || (errorKey !== dismissedError ? conversationError : '')
+  const unknown = pausedCall?.state === 'unknown' ||
+    (conversation?.status === 'paused' && conversation.jobs.some((job) => job.status === 'unknown'))
+  const setError = useCallback((message: string) => setProblem(message ? { message } : undefined), [])
   const latestMessage = conversation?.messages.at(-1)
   const activity =
     conversation?.status === 'awaiting_confirmation'
@@ -170,98 +163,61 @@ export function AiInspector({
           ? '正在回复…'
           : '正在思考…'
   const update = (value: Partial<Draft>) => setDrafts((s) => ({ ...s, [key]: { ...draft, ...value } }))
-  const positionPicker = (id: 'ai-agent-picker' | 'ai-chat-model') => {
-    setPickerBoundary(document.getElementById(id)?.closest<HTMLElement>('.ai-inspector') ?? null)
-  }
+  const inspector = useRef<HTMLElement>(null)
+  const positionPicker = () => setPickerBoundary(inspector.current)
   const act = useCallback(
-    async (action: () => Promise<unknown>, onError: (message: string) => void = setError) => {
+    async (action: () => Promise<unknown>, onError?: (message: string) => void) => {
       const generation = workspaceGeneration()
       setLoading(true)
-      onError('')
+      if (onError) onError('')
+      else setProblem(undefined)
       try {
         await action()
-      } catch (e) {
-        if (generation === workspaceGeneration()) onError(e instanceof Error ? e.message : '操作失败')
+      } catch (error) {
+        if (generation !== workspaceGeneration()) return
+        const failure = failureOf(error)
+        const message = error instanceof Error ? error.message : failure.message
+        if (onError) onError(message)
+        else setProblem({ message, code: failure.code })
       } finally {
         if (generation === workspaceGeneration()) setLoading(false)
       }
     },
-    [setLoading, setError],
+    [],
   )
   useEffect(() => {
-    if (!window.eizhu) return
-    let live = true,
-      version = 0
+    if (!window.eizhu || !conversationId || !sessionId || !boundSession) return
+    let live = true
     const generation = workspaceGeneration()
-    const synchronize = () => {
-      if (!live || generation !== workspaceGeneration()) return
-      const currentVersion = ++version
-      const ids = connectedTabSessionIds(useSessionStore.getState().tabs)
-      const conversationIds = Object.keys(useAiStore.getState().conversations).sort()
-      if (!conversationIds.length) return
-      scopeQueue.current = scopeQueue.current.then(async () => {
-        if (!live || currentVersion !== version || generation !== workspaceGeneration()) return
-        await act(
-          async () => {
-            for (const id of conversationIds) {
-              if (!live || currentVersion !== version || generation !== workspaceGeneration()) return
-              if (!useAiStore.getState().conversations[id]) continue
-              try {
-                const next = await bridge().ai.scope({
-                  conversationId: id,
-                  sessionIds: ids.length <= 32 ? ids : [],
-                })
-                if (live && currentVersion === version && generation === workspaceGeneration()) put(next)
-              } catch (error) {
-                if (!live || generation !== workspaceGeneration()) return
-                const code = failureOf(error).code
-                if (code === 'NOT_FOUND' || code === 'FORBIDDEN') forget(id)
-                else throw error
-              }
-            }
-          },
-          (message) => {
-            if (message) setError(message)
-          },
-        )
-      })
-    }
-    // Observe store transitions directly: React can batch a same-ID reconnect into one render.
-    const unsubscribeTabs = useSessionStore.subscribe((state, previous) => {
-      if (
-        JSON.stringify(connectedTabSessionIds(state.tabs)) !==
-        JSON.stringify(connectedTabSessionIds(previous.tabs))
-      )
-        synchronize()
+    const api = bridge().ai
+    const request = { conversationId, sessionId }
+    const change = sessionId === boundSession ? api.scope(request) : connected ? api.read(request) : null
+    void change?.then((next) => {
+      if (live && generation === workspaceGeneration()) put(next)
+    }, (error: unknown) => {
+      if (live && generation === workspaceGeneration() && connected) {
+        const failure = failureOf(error)
+        setProblem({ ...failure, sessionId })
+      }
     })
-    const unsubscribeConversations = useAiStore.subscribe((state, previous) => {
-      if (
-        JSON.stringify(Object.keys(state.conversations).sort()) !==
-        JSON.stringify(Object.keys(previous.conversations).sort())
-      )
-        synchronize()
-    })
-    synchronize()
-    return () => {
-      live = false
-      unsubscribeTabs()
-      unsubscribeConversations()
-    }
-  }, [act, put, forget])
+    return () => { live = false }
+  }, [conversationId, sessionId, boundSession, connected, put])
   useEffect(() => {
-    if (!window.eizhu) return
+    if (!window.eizhu || !selectedId) return
     return bridge().events.on('eizhu-ai-message', (event) => {
       if (event.workspaceGeneration !== workspaceGeneration()) return
-      if ('conversation' in event) put(event.conversation)
-      else progress(event.conversationId, event.message)
+      if ('conversation' in event) {
+        if (event.conversation.id === selectedId && event.conversation.targets[0]?.sessionId === sessionId)
+          put(event.conversation)
+      } else if (event.conversationId === selectedId) progress(event.conversationId, event.message)
     })
-  }, [put, progress])
+  }, [selectedId, sessionId, put, progress])
   useEffect(() => {
     if (open && window.eizhu)
       void bridge()
         .ai.settings()
         .then(setSettings, (e) => setError(e.message))
-  }, [open, setSettings])
+  }, [open, setSettings, setError])
   useEffect(() => {
     if (follow.current && messages.current) messages.current.scrollTop = messages.current.scrollHeight
   }, [conversation?.messages, conversation?.status])
@@ -333,8 +289,8 @@ export function AiInspector({
   const ready = Boolean(agent && agent.models.some((m) => m.id === model))
   const changeBackend = (next: AiBackend) =>
     act(async () => {
-      if (conversation) put(await bridge().ai.backend({ conversationId: conversation.id, backend: next }))
-      else setNewBackend(next)
+      if (binding) put(await bridge().ai.backend({ ...binding, backend: next }))
+      else if (!conversation) setNewBackend(next)
     })
   const upload = () =>
     act(async () => {
@@ -363,70 +319,65 @@ export function AiInspector({
       }
       if (generation === workspaceGeneration()) update({ attachments: [...draft.attachments, ...additions] })
     })
-  const newConversation = async (connectedIds: string[]) => {
-    if (!agent || !ready) throw new Error('请选择可用的Agent和模型')
-    let created = await bridge().ai.open({
-      sessionIds: connectedIds,
-      backend: { ...agent.backend, model },
-    })
-    if (created.permission !== newPermission)
-      created = await bridge().ai.permission({ conversationId: created.id, permission: newPermission })
-    setDrafts((current) => ({ ...current, [created.id]: draft }))
-    put(created)
-    select(created.id)
-    setHistory(null)
-    return created
-  }
   const send = () =>
     act(async () => {
-      if (!settings?.enabled || !draft.text.trim()) return
-      if (!ready) throw new Error('请选择可用的Agent和模型')
-      await scopeQueue.current
-      const connectedIds = connectedTabSessionIds(useSessionStore.getState().tabs)
-      if (!connectedIds.length) throw new Error('请先打开SSH连接')
-      if (connectedIds.length > 32) throw new Error('AI最多支持32个已连接的SSH会话，请关闭多余连接')
-      const c = conversation ?? (await newConversation(connectedIds))
+      if (!settings?.enabled || !draft.text.trim() || !agent || !ready || !sessionId || !connected || busy ||
+        (conversation && !binding)) return
       const generation = workspaceGeneration()
-      const refresh = scopeQueue.current.then(async () => {
-        const ids = connectedTabSessionIds(useSessionStore.getState().tabs)
-        const next = await bridge().ai.scope({
-          conversationId: c.id,
-          sessionIds: ids.length <= 32 ? ids : [],
-        })
-        if (generation !== workspaceGeneration()) throw new Error('工作区已变化，请重新发送')
-        put(next)
-      })
-      // Send reports the refresh failure; recovering the queue keeps later Tab changes usable.
-      scopeQueue.current = refresh.catch(() => undefined)
-      await refresh
-      let synchronized: Promise<void>
-      do {
-        synchronized = scopeQueue.current
-        await synchronized
-      } while (synchronized !== scopeQueue.current)
-      if (generation !== workspaceGeneration()) throw new Error('工作区已变化，请重新发送')
-      const latestIds = connectedTabSessionIds(useSessionStore.getState().tabs)
-      const scoped = useAiStore.getState().conversations[c.id]
-      if (!latestIds.length) throw new Error('请先打开SSH连接')
-      if (latestIds.length > 32) throw new Error('AI最多支持32个已连接的SSH会话，请关闭多余连接')
-      if (
-        !scoped ||
-        JSON.stringify(scoped.targets.map((target) => target.sessionId).sort()) !== JSON.stringify(latestIds)
-      )
-        throw new Error('Tab连接范围正在更新，请在连接就绪后重新发送')
-      await bridge().ai.send({
-        conversationId: c.id,
-        text: draft.text.trim(),
-        attachments: draft.attachments,
-      })
-      setDrafts((s) => ({
-        ...s,
+      let c = conversation
+      if (!c) {
+        c = await bridge().ai.open({ sessionId, backend: { ...agent.backend, model } })
+        if (c.permission !== newPermission) {
+          const request = { conversationId: c.id, sessionId }
+          try {
+            c = await bridge().ai.permission({ ...request, permission: newPermission })
+          } catch (error) {
+            await bridge().ai.release(request)
+            throw error
+          }
+        }
+        if (generation !== workspaceGeneration()) return
+        const created = c
+        setDrafts((current) => ({ ...current, [created.id]: draft }))
+        put(created)
+        select(tabId, created.id)
+      }
+      const request = { conversationId: c.id, sessionId }
+      const next = await bridge().ai.scope(request)
+      const latest = useSessionStore.getState().tabs.find((item) => item.id === tabId)
+      if (generation !== workspaceGeneration() || latest?.sessionId !== sessionId || latest?.status !== 'connected') return
+      put(next)
+      await bridge().ai.send({ ...request, text: draft.text.trim(), attachments: draft.attachments })
+      if (generation === workspaceGeneration()) setDrafts((current) => ({
+        ...current,
         [key]: { text: '', attachments: [] },
-        [c.id]: { text: '', attachments: [] },
+        [request.conversationId]: { text: '', attachments: [] },
       }))
     })
+  const showTerminal = () => terminalActions(tabId)?.focus()
+  const reconnect = async () => { await terminalActions(tabId)?.reconnect() }
+  const showSettings = () => setSettingsPage('ai')
+  const currentProblem = problem && (!problem.sessionId || problem.sessionId === sessionId) ? problem : undefined
+  const code = currentProblem?.code ?? conversation?.errorCode ?? pausedCall?.errorCode
+  const message = currentProblem?.message || conversation?.error || pausedCall?.error
+  const notice = unknown
+    ? { title: '执行结果待核查', message: connected ? '请先在终端核查本次操作结果。' : 'SSH 已断开，命令结果未知。', label: '查看终端', action: showTerminal }
+    : !connected
+      ? { title: tab?.status === 'connecting' || tab?.status === 'reconnecting' ? '正在连接 SSH' : 'SSH 已断开',
+          message: draft.text.trim() ? '草稿尚未发送，连接就绪后可继续。' : '连接就绪后可继续当前对话。',
+          label: tab?.status !== 'connecting' && tab?.status !== 'reconnecting' ? '重新连接' : undefined,
+          action: () => void act(reconnect) }
+      : code === 'AI_BUSY' && pausedCall
+        ? { title: '终端忙', message: '本次操作未执行。请先返回空闲提示符。', label: '查看终端', action: showTerminal }
+        : !settings?.enabled || !ready || ['AI_UNAUTHORIZED', 'AI_CONFIG', 'AI_CLI_UNAVAILABLE'].includes(code ?? '')
+          ? { title: code === 'AI_UNAUTHORIZED' ? '模型鉴权失败' : !settings?.enabled ? 'AI 助手尚未启用' : '当前模型不可用',
+              message: message || '请确认 AI 设置中的供应商或模型。', label: '打开 AI 设置', action: showSettings }
+          : conversation && binding && aiRetryableReply(conversation)
+            ? { title: '模型回复中断', message: '模型回复未完成，可以重试本轮。', label: '重试回复', action: () => void act(() => bridge().ai.retry(binding)) }
+            : message ? { title: 'AI 操作未完成', message, label: pausedCall || code === 'AI_SCOPE_CHANGED' ? '查看终端' : undefined, action: showTerminal } : undefined
   return (
     <aside
+      ref={inspector}
       className={'shell-inspector ai-inspector' + (overlay ? ' is-overlay' : '')}
       style={{ width: inspectorWidth }}
       hidden={!open}
@@ -460,16 +411,19 @@ export function AiInspector({
         >
           <AiIcon size={15} /> AI <ChevronDown size={13} />
         </Button>
+        <span className="ai-host-name" title={tab?.profileName}>{tab?.profileName}</span>
         <div className="ai-inline-actions">
           <ShellIconButton
             label="新建AI对话"
-            disabled={loading || busy || !settings?.enabled}
-            onClick={() => {
-              select(null)
+            disabled={loading || busy || runningJob || !settings?.enabled}
+            onClick={() => void act(async () => {
+              if (binding) await bridge().ai.release(binding)
+              if (conversationId) forget(conversationId)
+              select(tabId, null)
               setNewBackend(null)
               setNewPermission('confirm')
               setHistory(null)
-            }}
+            })}
           >
             <Plus size={15} />
           </ShellIconButton>
@@ -478,60 +432,95 @@ export function AiInspector({
             onOpenChange={(value) => {
               if (!value) {
                 setHistory(null)
+                setLegacy(null)
+                setLegacyChat(undefined)
                 return
               }
+              if (!sessionId) return
               setHistory([])
               void act(async () => {
-                const rows = await bridge().ai.history()
+                const rows = await bridge().ai.history({ sessionId })
                 setHistory((current) => (current === null ? null : rows))
               }, setHistoryError)
             }}
           >
             <DialogTrigger asChild>
-              <ShellIconButton label="对话历史" disabled={loading}>
+              <ShellIconButton label="对话历史" disabled={loading || !sessionId}>
                 <History size={15} />
               </ShellIconButton>
             </DialogTrigger>
             <DialogContent className="ai-history-dialog" showCloseButton={false}>
               <DialogHeader className="ai-history-heading">
                 <div>
-                  <DialogTitle>对话历史</DialogTitle>
-                  <DialogDescription>打开或删除已保存的对话。</DialogDescription>
+                  <DialogTitle>{legacy ? '旧版对话记录' : (tab?.profileName ?? '当前主机') + ' · 对话历史'}</DialogTitle>
+                  <DialogDescription>{legacy ? '旧版记录的主机归属无法确认，可只读查看。' : '选择一条对话，继续在此主机使用。'}</DialogDescription>
                 </div>
                 <DialogClose asChild>
-                  <ShellIconButton label="关闭对话历史">
-                    <X size={16} />
-                  </ShellIconButton>
+                  <ShellIconButton label="关闭对话历史"><X size={16} /></ShellIconButton>
                 </DialogClose>
               </DialogHeader>
               <div className="ai-history-list">
-                {history?.map((h) => (
-                  <div className="ai-history-row" key={h.id} data-conversation-id={h.id}>
-                    <Button
-                      variant="ghost"
-                      disabled={loading}
-                      aria-label={'打开对话：' + h.title}
-                      aria-current={selectedId === h.id ? 'true' : undefined}
-                      onClick={() =>
-                        void act(async () => {
-                          const c = await bridge().ai.read({ conversationId: h.id })
+                {legacyChat ? legacyChat.messages.map((message) => (
+                  <AiMessage key={message.id} messages={[message]} targets={legacyChat.targets} onError={setHistoryError} />
+                )) : (legacy ?? history)?.map((h) => {
+                  const otherTab = h.activeSessionId && h.activeSessionId !== sessionId
+                    ? useSessionStore.getState().tabs.find((item) => item.sessionId === h.activeSessionId)
+                    : undefined
+                  const elsewhere = Boolean(h.activeSessionId && h.activeSessionId !== sessionId)
+                  return (
+                    <div className="ai-history-row" key={h.id} data-conversation-id={h.id}>
+                      <Button
+                        variant="ghost"
+                        disabled={loading || (!legacy && (elsewhere ? !otherTab : !connected || busy || runningJob))}
+                        aria-label={'打开对话：' + h.title}
+                        aria-current={!legacy && selectedId === h.id ? 'true' : undefined}
+                        onClick={() => void act(async () => {
+                          if (legacy) {
+                            setLegacyChat(await bridge().ai.legacyRead({ conversationId: h.id }))
+                            return
+                          }
+                          if (otherTab) {
+                            onOpenTab?.(otherTab.id)
+                            setHistory(null)
+                            return
+                          }
+                          if (!sessionId) return
+                          const target = { conversationId: h.id, sessionId }
+                          const generation = workspaceGeneration()
+                          let c: AiConversation
+                          try {
+                            c = await bridge().ai.read(target)
+                          } catch (error) {
+                            if (failureOf(error).code === 'AI_TAB_IN_USE')
+                              setHistory(await bridge().ai.history({ sessionId }))
+                            throw error
+                          }
+                          if (binding && h.id !== conversationId) {
+                            try {
+                              await bridge().ai.release(binding)
+                            } catch (error) {
+                              await bridge().ai.release(target)
+                              throw error
+                            }
+                          }
+                          if (generation !== workspaceGeneration()) return
+                          if (conversationId && conversationId !== c.id) forget(conversationId)
                           put(c)
-                          select(c.id)
+                          select(tabId, c.id)
+                          setProblem(undefined)
                           setHistory(null)
-                        }, setHistoryError)
-                      }
-                    >
-                      <span>{h.title}</span>
-                      <small>{new Date(h.updatedAt).toLocaleString('zh-CN')}</small>
-                    </Button>
-                    <ShellIconButton
-                      label={'删除对话：' + h.title}
-                      className="ai-history-delete"
-                      disabled={loading}
-                      onClick={() =>
-                        void act(async () => {
-                          await scopeQueue.current
-                          await bridge().ai.remove({ conversationId: h.id })
+                        }, setHistoryError)}
+                      >
+                        <span>{h.title}</span>
+                        <small>{elsewhere ? '在另一标签页使用' : new Date(h.updatedAt).toLocaleString('zh-CN')}</small>
+                      </Button>
+                      {!legacy && <ShellIconButton
+                        label={'删除对话：' + h.title}
+                        className="ai-history-delete"
+                        disabled={loading || elsewhere}
+                        onClick={() => void act(async () => {
+                          if (!sessionId) return
+                          await bridge().ai.remove({ conversationId: h.id, sessionId })
                           if (selectedId === h.id) setNewPermission('confirm')
                           forget(h.id)
                           setHistory((current) => current?.filter((row) => row.id !== h.id) ?? null)
@@ -540,19 +529,23 @@ export function AiInspector({
                             delete next[h.id]
                             return next
                           })
-                        }, setHistoryError)
-                      }
-                    >
-                      <AiDeleteIcon size={16} />
-                    </ShellIconButton>
-                  </div>
-                ))}
-                {loading && !history?.length && <Loading />}
-                {!loading && !history?.length && !historyError && (
+                        }, setHistoryError)}
+                      ><AiDeleteIcon size={16} /></ShellIconButton>}
+                    </div>
+                  )
+                })}
+                {loading && !(legacy ?? history)?.length && <Loading />}
+                {!loading && !(legacy ?? history)?.length && !historyError && (
                   <p className="ai-history-empty">暂无历史对话</p>
                 )}
               </div>
               <InlineError message={historyError} />
+              <Button variant="ghost" className="ai-history-legacy" disabled={loading} onClick={() => {
+                setHistoryError('')
+                if (legacyChat) setLegacyChat(undefined)
+                else if (legacy) setLegacy(null)
+                else void act(async () => setLegacy(await bridge().ai.legacyHistory()), setHistoryError)
+              }}>{legacyChat ? '返回旧版列表' : legacy ? '返回主机历史' : '查看旧版记录'}</Button>
             </DialogContent>
           </Dialog>
           <ShellIconButton label="AI设置" onClick={() => setSettingsPage('ai')}>
@@ -572,8 +565,7 @@ export function AiInspector({
           {!conversation?.messages.length && (
             <div className="ai-welcome">
               <AiIcon size={25} />
-              <p>打开SSH连接，选择Agent开始运维任务</p>
-              <p>当前对话独立于终端标签</p>
+              <p>描述要在此终端完成的任务</p>
             </div>
           )}
           {turns.map((turn, i) => (
@@ -584,6 +576,7 @@ export function AiInspector({
               busy={busy && i === turns.length - 1}
               startedAt={turn.request?.startedAt}
               completedAt={turn.request?.completedAt}
+              stopped={turn.request?.stopped}
               onError={setError}
             />
           ))}
@@ -601,7 +594,7 @@ export function AiInspector({
           <span>{activity}</span>
         </div>
       )}
-      {conversation?.jobs.some((j) => j.status === 'running') && (
+      {conversation && binding && runningJob && (
         <div className="ai-task-state">
           {conversation.jobs
             .filter((j) => j.status === 'running')
@@ -618,7 +611,7 @@ export function AiInspector({
                   aria-label={'停止任务 ' + job.id}
                   onClick={() =>
                     void act(async () =>
-                      put(await bridge().ai.stopJob({ conversationId: conversation.id, jobId: job.id })),
+                      put(await bridge().ai.stopJob({ ...binding, jobId: job.id })),
                     )
                   }
                 >
@@ -630,66 +623,35 @@ export function AiInspector({
             size="sm"
             variant="ghost"
             disabled={loading}
-            onClick={() => void act(() => bridge().ai.cancel({ conversationId: conversation.id }))}
+            onClick={() => void act(() => bridge().ai.cancel(binding))}
           >
             停止Agent及全部任务
           </Button>
         </div>
       )}
-      <Dialog
-        open={open && Boolean(visibleError)}
-        onOpenChange={(value) => {
-          if (!value) {
-            setError('')
-            setDismissedError(errorKey)
-          }
-        }}
-      >
-        <DialogContent className="ai-error-dialog" showCloseButton={false}>
-          <DialogHeader>
-            <DialogTitle>
-              {error ? 'AI 操作失败' : conversation?.status === 'paused' ? 'AI 任务已暂停' : 'AI 任务异常'}
-            </DialogTitle>
-            <DialogDescription>{visibleError}</DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <DialogClose asChild>
-              <Button variant="secondary">知道了</Button>
-            </DialogClose>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-      {!settings?.enabled && <p className="ai-command-notice">请在设置中启用AI助手。</p>}
-      {settings?.enabled && !ready && (
-        <p className="ai-command-notice">请选择可用的Agent和模型；可在设置中配置供应商或检查CLI安装。</p>
+      {settings && notice && (
+        <div className="ai-fixed-notice">
+          <TriangleAlert size={16} aria-hidden="true" />
+          <div className="ai-fixed-notice-copy" role="status" aria-live="polite" aria-atomic="true">
+            <strong>{notice.title}</strong>
+            {notice.message && <span>{notice.message}</span>}
+          </div>
+          {notice.label && <Button variant="outline" size="sm" disabled={loading} onClick={notice.action}>
+            {notice.label}
+          </Button>}
+        </div>
       )}
-      {!sessionIds.length && <p className="ai-command-notice">请先打开SSH连接。</p>}
-      {sessionIds.length > 32 && <p className="ai-command-notice">AI最多支持32个SSH会话，请关闭多余连接。</p>}
       <div className="ai-composer">
         {pending && conversation ? (
           <AiApproval
             call={pending}
             target={conversation.targets.find((t) => t.sessionId === pending.sessionId)}
-            disabled={
-              loading ||
-              !settings?.enabled ||
-              !scopeReady ||
-              !conversation.targets.some(
-                (t) =>
-                  t.sessionId === pending.sessionId &&
-                  tabs.some((tab) => tab.sessionId === t.sessionId && tab.status === 'connected'),
-              )
-            }
-            onDecide={(decision) =>
-              void act(() =>
-                bridge().ai.decide({
-                  conversationId: conversation.id,
-                  callId: pending.id,
-                  decision,
-                  revision: conversation.revision,
-                }),
-              )
-            }
+            hostName={tab?.profileName}
+            disabled={loading || !settings?.enabled || !connected || !binding || binding.sessionId !== pending.sessionId}
+            onDecide={(decision) => {
+              if (!binding) return
+              void act(() => bridge().ai.decide({ ...binding, callId: pending.id, decision, revision: conversation.revision }))
+            }}
             onError={setError}
           />
         ) : (
@@ -703,7 +665,7 @@ export function AiInspector({
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
                   e.preventDefault()
-                  if (!busy) void send()
+                  if (!busy && !loading && connected) void send()
                 }
               }}
             />
@@ -751,7 +713,7 @@ export function AiInspector({
                 <TooltipTrigger asChild>
                   <DropdownMenuTrigger asChild>
                     <Button
-                      id="ai-permission-picker"
+                      id={open ? 'ai-permission-picker' : undefined}
                       variant="ghost"
                       className="ai-permission-picker"
                       data-permission={mode.value}
@@ -781,10 +743,11 @@ export function AiInspector({
                           setNewPermission(item.value)
                           return
                         }
+                        if (!binding) return
                         void act(async () =>
                           put(
                             await bridge().ai.permission({
-                              conversationId: conversation.id,
+                              ...binding,
                               permission: item.value,
                             }),
                           ),
@@ -809,7 +772,7 @@ export function AiInspector({
               disabled={loading || !settings?.enabled}
               onOpenChange={(open) => {
                 if (open) {
-                  positionPicker('ai-agent-picker')
+                  positionPicker()
                   void refreshAgents()
                 }
               }}
@@ -821,7 +784,7 @@ export function AiInspector({
               <Tooltip>
                 <TooltipTrigger asChild>
                   <SelectTrigger
-                    id="ai-agent-picker"
+                    id={open ? 'ai-agent-picker' : undefined}
                     className="ai-agent-picker"
                     aria-label={agent ? '选择Agent：' + agent.label : '选择Agent'}
                   >
@@ -861,7 +824,7 @@ export function AiInspector({
               value={ready ? 'model:' + model : ''}
               disabled={loading || !agent || !settings?.enabled}
               onOpenChange={(open) => {
-                if (open) positionPicker('ai-chat-model')
+                if (open) positionPicker()
               }}
               onValueChange={(value) => {
                 if (agent) void changeBackend({ ...agent.backend, model: value.slice(6) })
@@ -869,7 +832,7 @@ export function AiInspector({
             >
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <SelectTrigger id="ai-chat-model" className="ai-model-picker" aria-label="选择模型">
+                  <SelectTrigger id={open ? 'ai-chat-model' : undefined} className="ai-model-picker" aria-label="选择模型">
                     <SelectValue placeholder="模型" />
                   </SelectTrigger>
                 </TooltipTrigger>
@@ -898,7 +861,7 @@ export function AiInspector({
                 aria-label="停止Agent"
                 disabled={loading}
                 onClick={() =>
-                  conversation && void act(() => bridge().ai.cancel({ conversationId: conversation.id }))
+                  binding && void act(() => bridge().ai.cancel(binding))
                 }
               >
                 <Square size={13} />
@@ -913,8 +876,8 @@ export function AiInspector({
                   !settings?.enabled ||
                   !ready ||
                   !draft.text.trim() ||
-                  !sessionIds.length ||
-                  sessionIds.length > 32
+                  !connected ||
+                  Boolean(conversation && !binding)
                 }
                 onClick={() => void send()}
               >

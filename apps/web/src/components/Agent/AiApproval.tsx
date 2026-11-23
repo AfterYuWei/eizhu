@@ -4,12 +4,14 @@ import { AiCodeBlock } from './AiCodeBlock'
 export function AiApproval({
   call,
   target,
+  hostName,
   disabled,
   onDecide,
   onError,
 }: {
   call: AiToolCall
   target?: AiTarget
+  hostName?: string
   disabled: boolean
   onDecide: (decision: 'once' | 'conversation' | 'reject') => void
   onError: (message: string) => void
@@ -23,6 +25,7 @@ export function AiApproval({
       <div className="ai-approval-content">
         {target && (
           <div className="ai-command-target">
+            {hostName && <>{hostName} · </>}
             {target.username}@{target.host}:{target.port}
             {cwd && <> · {cwd}</>}
           </div>

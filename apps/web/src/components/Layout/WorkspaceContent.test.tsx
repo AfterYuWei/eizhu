@@ -59,17 +59,24 @@ it('无终端也可打开工具页，首次按需挂载、重复切换保留唯�
   expect(store.getState().transfers).toBe(tasks)
 })
 
-it('映射页面按需打开，切换时保留终端和 SFTP，关闭不卸载其他工具', async () => {
+it('映射页面按需挂载，反复导航保留唯一页面、输入及其他工具', async () => {
   await act(async () => { await useWorkspaceViewStore.getState().openSftp(); useSessionStore.getState().openDraftTab(); root.render(<WorkspaceContent onAddServer={() => {}} />); await vi.dynamicImportSettled() })
   const terminal = host.querySelector('textarea')
   await act(async () => { useWorkspaceViewStore.getState().openPortMapping(); await vi.dynamicImportSettled() })
-  const mapping = host.querySelector('[aria-label="映射页面状态"]')!
+  const mapping = host.querySelector<HTMLInputElement>('[aria-label="映射页面状态"]')!
   expect(mapping).not.toBeNull()
   expect(mapping.getAttribute('data-active')).toBe('true')
+  mapping.value = '保留映射筛选'
+  expect(host.querySelector('#workspace-port-mapping')!.getAttribute('aria-label')).toBe('端口映射')
   await act(async () => useWorkspaceViewStore.getState().openVault())
   expect(mapping.getAttribute('data-active')).toBe('false')
-  await act(async () => useWorkspaceViewStore.getState().closePortMapping())
-  expect(host.querySelector('[aria-label="映射页面状态"]')).toBeNull()
+  expect(host.querySelector<HTMLElement>('#workspace-port-mapping')!.hidden).toBe(true)
+  expect(host.querySelector('#workspace-port-mapping')!.hasAttribute('inert')).toBe(true)
+  await act(async () => useWorkspaceViewStore.getState().openPortMapping())
+  expect(host.querySelectorAll('[aria-label="映射页面状态"]')).toHaveLength(1)
+  expect(host.querySelector('[aria-label="映射页面状态"]')).toBe(mapping)
+  expect(mapping.value).toBe('保留映射筛选')
+  expect(mapping.getAttribute('data-active')).toBe('true')
   expect(host.querySelector('textarea')).toBe(terminal)
   expect(host.querySelector('[aria-label="SFTP 状态"]')).not.toBeNull()
 })

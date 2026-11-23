@@ -100,7 +100,9 @@ export async function verifyPortMapping(window: BrowserWindow, root: string, pro
   try {
     window.setContentSize(1280, 800)
     await open(); await open()
-    assert.equal(await js(`document.querySelectorAll('#workspace-tab-port-mapping').length`), 1)
+    assert.equal(await js(`document.querySelectorAll('#workspace-port-mapping').length`), 1)
+    assert.equal(await js(`document.querySelectorAll('#workspace-tab-port-mapping').length`), 0)
+    assert.equal(await js(`document.querySelectorAll('.shell-tab-list [aria-selected="true"]').length`), 0)
     for (const config of configs) {
       await js(`document.querySelector('[data-mapping-id="${config.id}"] .pm-rule-actions button').click()`)
       await wait(`window.eizhu.tunnel.statuses().then(rows=>rows.find(r=>r.id==='${config.id}')?.status==='running')`)
@@ -115,9 +117,12 @@ export async function verifyPortMapping(window: BrowserWindow, root: string, pro
     const firstState = (await js<TunnelStatus[]>('window.eizhu.tunnel.statuses()')).find((r) => r.id === first.id)!
     await wait(`window.eizhu.clipboard.read().then(text=>text==='127.0.0.1:${firstState.bound_port}')`)
     await js(`document.dispatchEvent(new KeyboardEvent('keydown',{key:'w',ctrlKey:true,shiftKey:true,bubbles:true,cancelable:true}))`)
-    await wait(`!document.querySelector('#workspace-tab-port-mapping')`)
+    assert.equal(await js(`!document.querySelector('#workspace-port-mapping').hidden`), true)
+    await js(`window.__portMappingSmokePage=document.querySelector('.port-mapping-view');document.querySelector('.shell-primary-nav [aria-controls="workspace-vault"]').click()`)
+    await wait(`document.querySelector('#workspace-port-mapping').hidden`)
     assert.equal((await js<TunnelStatus[]>('window.eizhu.tunnel.statuses()')).filter((r) => configs.some((c) => c.id === r.id) && r.status === 'running').length, 3)
     await open()
+    assert.equal(await js(`document.querySelector('.port-mapping-view')===window.__portMappingSmokePage`), true)
     await capture('port-mapping-light.png', 'light')
     await capture('port-mapping-dark.png', 'dark')
     window.setContentSize(900, 650)
@@ -229,11 +234,11 @@ export async function verifyPortMapping(window: BrowserWindow, root: string, pro
       await js(`document.querySelector('[data-mapping-id="${config.id}"] .pm-rule-actions button').click()`)
       await wait(`document.querySelector('[data-mapping-id="${config.id}"] .pm-status')?.textContent==='已停止'`)
     }
-    return { passed: true, syntheticSsh: true, modes: ['local', 'remote', 'dynamic'], rendererToTcp: true, singletonTab: true, independentLifecycle: true, actualPortClipboard: true, formValidation: true, saveOnly: true, delete: true, responsive: true, publicConfirmation: true, publicUnconfirmedRejected: true, stalePublicConfirmationRejected: true, publicRestartRequiresConfirmation: true, independentModeDrafts: true, remotePublicListener: true, selectableTarget: true, nativeFormFont: true, reactiveFlowPreview: true, reducedMotion: true, relayChecks, screenshots }
+    return { passed: true, syntheticSsh: true, modes: ['local', 'remote', 'dynamic'], rendererToTcp: true, singletonPage: true, independentLifecycle: true, actualPortClipboard: true, formValidation: true, saveOnly: true, delete: true, responsive: true, publicConfirmation: true, publicUnconfirmedRejected: true, stalePublicConfirmationRejected: true, publicRestartRequiresConfirmation: true, independentModeDrafts: true, remotePublicListener: true, selectableTarget: true, nativeFormFont: true, reactiveFlowPreview: true, reducedMotion: true, relayChecks, screenshots }
   } finally {
     for (const config of configs) await js(`window.eizhu.tunnel.stop({id:'${config.id}'})`)
     if (created) await js(`window.eizhu.tunnel.delete({id:'${created}'})`)
-    await js(`document.querySelector('[aria-label="关闭端口映射页面"]')?.click();document.documentElement.className=${JSON.stringify(original.theme)};document.documentElement.style.setProperty('--sans-size',${JSON.stringify(original.font)});window.eizhu.clipboard.write({text:''})`)
+    await js(`document.querySelector('.shell-tab-list [role="tab"]')?.click();delete window.__portMappingSmokePage;document.documentElement.className=${JSON.stringify(original.theme)};document.documentElement.style.setProperty('--sans-size',${JSON.stringify(original.font)});window.eizhu.clipboard.write({text:''})`)
     window.setContentSize(originalSize[0], originalSize[1])
     window.setMinimumSize(originalMinimum[0], originalMinimum[1])
   }

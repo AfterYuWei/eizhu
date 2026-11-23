@@ -76,6 +76,13 @@ export function CodeEditor({
         fontFamily: "'JetBrains Mono', 'Fira Code', ui-monospace, monospace",
         minimap: { enabled: content.length > 100_000 },
         scrollBeyondLastLine: false,
+        scrollbar: {
+          verticalScrollbarSize: 8,
+          horizontalScrollbarSize: 8,
+          verticalSliderSize: 6,
+          horizontalSliderSize: 6,
+          useShadows: false,
+        },
         tabSize: 2,
         wordWrap: content.length > 500_000 ? 'on' : 'off',
         readOnly: readOnly || loading,

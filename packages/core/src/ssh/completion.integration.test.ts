@@ -120,6 +120,7 @@ test(
                 return
               }
               if (path === '/wait') return
+              if (path === '/closed') { sftp.end(); return }
               const entries =
                 path === '/large' || path === '/candidate-limit'
                   ? Array.from({ length: path === '/large' ? 10001 : 5000 }, (_, i) => ({
@@ -288,6 +289,10 @@ test(
         await assert.rejects(
           run({ generatorId: 'paths', params: { directory: '/denied' } }),
           (e) => failureOf(e).code === 'SFTP_READ_FAILED',
+        )
+        await assert.rejects(
+          run({ generatorId: 'paths', params: { directory: '/closed' } }),
+          (e) => failureOf(e).code === 'SFTP_NOT_CONNECTED',
         )
         for (const directory of ['/large', '/metadata-limit']) {
           await assert.rejects(

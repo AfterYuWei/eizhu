@@ -547,7 +547,6 @@ body.ptr-dragging * {
   max-height: 4.8em;
   overflow-y: auto;
   overflow-wrap: anywhere;
-  scrollbar-width: thin;
   user-select: text;
 }
 .sftp-dir-mode-options {

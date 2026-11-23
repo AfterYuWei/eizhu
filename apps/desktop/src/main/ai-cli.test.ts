@@ -11,12 +11,13 @@ import { CliAgentHost, cliCommand } from './ai-cli.ts'
 const peer = String.raw`#!/usr/bin/env node
 import { createInterface } from 'node:readline'
 import { spawn } from 'node:child_process'
+import { once } from 'node:events'
 import { readFile } from 'node:fs/promises'
 const args=process.argv.slice(2), kind=process.env.EIZHU_TEST_CLI_KIND
 if(args[0]==='--version'){console.log('fixture 1');process.exit(0)}
 if(args[0]==='mcp'){console.log('[]');process.exit(0)}
 const send=v=>process.stdout.write(JSON.stringify(v)+'\n')
-let mcp, bridge, native='fixture-session', pending=new Map(), next=0
+let mcp, native='fixture-session', pending=new Map(), next=0
 if(kind==='codex'){
  const values={};for(let i=0;i<args.length;i++)if(args[i]==='-c'){const [k,...v]=args[++i].split('=');values[k]=JSON.parse(v.join('='))}
  if(values['features.shell_tool']!==false||values['features.apps']!==false||values.web_search!=='disabled')throw Error('unsafe config')
@@ -32,15 +33,23 @@ if(kind==='codex'){
  mcp={};for(const key of ['command','args','env'])mcp[key]=JSON.parse(yaml.match(new RegExp('        '+key+': (.+)'))[1])
 }
 async function tools(){
- bridge=spawn(mcp.command,mcp.args,{env:{...process.env,...mcp.env},stdio:['pipe','pipe','ignore']})
- createInterface({input:bridge.stdout}).on('line',line=>{const f=JSON.parse(line);if(f.id)pending.get(f.id)?.(f.result)})
- const request=(method,params)=>new Promise(resolve=>{const id=++next;pending.set(id,resolve);bridge.stdin.write(JSON.stringify({jsonrpc:'2.0',id,method,params})+'\n')})
- await request('initialize',{protocolVersion:'2025-03-26',capabilities:{},clientInfo:{name:'fixture',version:'1'}})
- bridge.stdin.write(JSON.stringify({jsonrpc:'2.0',method:'notifications/initialized'})+'\n')
- const listed=await request('tools/list',{});if(listed.tools.length!==15)throw Error('catalog mismatch')
- const result=await request('tools/call',{name:'session_info',arguments:{}})
- if(result.isError)throw Error('MCP failed')
- return result
+ const bridge=spawn(mcp.command,mcp.args,{env:{...process.env,...mcp.env},stdio:['pipe','pipe','ignore']})
+ const closed=once(bridge,'close')
+ try{
+  createInterface({input:bridge.stdout}).on('line',line=>{const f=JSON.parse(line);if(f.id)pending.get(f.id)?.(f.result)})
+  const request=(method,params)=>new Promise(resolve=>{const id=++next;pending.set(id,resolve);bridge.stdin.write(JSON.stringify({jsonrpc:'2.0',id,method,params})+'\n')})
+  await request('initialize',{protocolVersion:'2025-03-26',capabilities:{},clientInfo:{name:'fixture',version:'1'}})
+  bridge.stdin.write(JSON.stringify({jsonrpc:'2.0',method:'notifications/initialized'})+'\n')
+  const listed=await request('tools/list',{});if(listed.tools.length!==15)throw Error('catalog mismatch')
+  const result=await request('tools/call',{name:'session_info',arguments:{}})
+  if(result.isError)throw Error('MCP failed')
+  return result
+ }finally{
+  // Report completion only after our MCP child has released its working directory.
+  bridge.stdin.end()
+  const [code]=await closed
+  if(code!==0)throw Error('MCP did not exit cleanly')
+ }
 }
 createInterface({input:process.stdin}).on('line',async line=>{
  const f=JSON.parse(line)

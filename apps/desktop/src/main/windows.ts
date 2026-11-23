@@ -50,7 +50,7 @@ export class Windows {
       backgroundColor: '#0A0A0A',
       frame: process.platform === 'darwin',
       titleBarStyle: process.platform === 'darwin' ? 'hidden' : undefined,
-      trafficLightPosition: process.platform === 'darwin' ? { x: 16, y: 24 } : undefined,
+      trafficLightPosition: process.platform === 'darwin' ? { x: 16, y: kind === 'editor' ? 16 : 24 } : undefined,
       webPreferences: {
         preload: join(this.directory, '../preload/index.cjs'),
         nodeIntegration: false,

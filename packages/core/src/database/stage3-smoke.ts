@@ -146,6 +146,9 @@ parentPort!.on('message', async (message) =>
           })
           agent.execute({ kind: 'save', value: { format: 3, conversation, wire: [], outputs: {} } })
           assert.equal((agent.execute({ kind: 'list' }) as unknown[]).length, 1)
+          const host = { profileId: 'host-a', host: 'fixture.invalid', port: 22, username: 'test' }
+          const scoped = { ...conversation, id: randomUUID() }
+          agent.execute({ kind: 'save', value: { format: 3, conversation: scoped, host, wire: [], outputs: {} } })
           const rows = z
             .array(z.object({ data: z.instanceof(Buffer) }))
             .parse(aiDb.prepare('SELECT data FROM local_state').all())
@@ -166,6 +169,14 @@ parentPort!.on('message', async (message) =>
           assert.deepEqual(restored.providers[0].models, config.providers[0].models)
           assert.equal(restored.enabled, false)
           assert.equal((agent.execute({ kind: 'list' }) as unknown[]).length, 1)
+          assert.deepEqual(
+            z.array(z.object({ id: z.string() })).parse(agent.execute({ kind: 'list', host })).map((item) => item.id),
+            [scoped.id],
+          )
+          assert.deepEqual(agent.execute({ kind: 'list', host: { ...host, username: 'other' } }), [])
+          assert.throws(() => agent!.execute({
+            kind: 'save', value: { format: 3, conversation: scoped, host: { ...host, username: 'other' }, wire: [], outputs: {} },
+          }), /不能更改/)
           assert.ok(aiDb.prepare("SELECT data FROM local_state WHERE key='other-setting'").get())
           assert.ok(
             !JSON.stringify(

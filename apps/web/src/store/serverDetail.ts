@@ -5,6 +5,7 @@ import { editApi } from '@/api/edit'
 import { openEditorFile } from '@/lib/editorWindow'
 import { useProfileStore } from '@/store/profile'
 import type { ServerInfo } from '@/api/serverDetail'
+import { normalizeCommandError } from '@eizhu/contracts'
 
 // --- File tree node (supports lazy-loaded children) ---
 
@@ -306,12 +307,13 @@ export const useServerDetailStore = create<ServerDetailStore>((set, get) => ({
     const detail = get().details[profileId]
     if (!detail?.sessionId) return
     const sessionId = detail.sessionId
+    const requestId = detail.requestId
 
     try {
       const info = await serverDetailApi.getInfo(sessionId)
       set((s) => {
         const current = s.details[profileId]
-        if (!current || current.sessionId !== sessionId) return s
+        if (!current || current.sessionId !== sessionId || current.requestId !== requestId) return s
         return {
           details: {
             ...s.details,
@@ -319,7 +321,7 @@ export const useServerDetailStore = create<ServerDetailStore>((set, get) => ({
           },
         }
       })
-      if (info.icon && get().details[profileId]?.sessionId === sessionId) {
+      if (info.icon && get().details[profileId]?.sessionId === sessionId && get().details[profileId]?.requestId === requestId) {
         void useProfileStore.getState().updateDetectedIcon(profileId, info.icon)
       }
     } catch (err) {
@@ -329,8 +331,9 @@ export const useServerDetailStore = create<ServerDetailStore>((set, get) => ({
 
   listFiles: async (profileId: string, path: string) => {
     const detail = get().details[profileId]
-    if (!detail?.sessionId) return
+    if (!detail?.sessionId || detail.status !== 'connected') return
     const sessionId = detail.sessionId
+    const requestId = detail.requestId
     const showHidden = detail.showHidden
 
     set((s) => {
@@ -357,7 +360,7 @@ export const useServerDetailStore = create<ServerDetailStore>((set, get) => ({
       set((s) => {
         const current = s.details[profileId]
         // A newer shell CWD or manual navigation owns the displayed directory.
-        if (!current || current.sessionId !== sessionId || current.currentPath !== path) return s
+        if (!current || current.sessionId !== sessionId || current.requestId !== requestId || current.currentPath !== path) return s
         return {
           details: {
             ...s.details,
@@ -371,18 +374,20 @@ export const useServerDetailStore = create<ServerDetailStore>((set, get) => ({
         }
       })
     } catch (err) {
-      const msg = err instanceof Error ? err.message : '鍔犺浇澶辫触'
+      const error = normalizeCommandError(err)
+      const disconnected = ['SSH_NOT_CONNECTED', 'SFTP_NOT_CONNECTED', 'NOT_FOUND', 'CANCELLED', 'SSH_EXEC_TIMEOUT'].includes(error.error.code)
       set((s) => {
         const current = s.details[profileId]
-        if (!current || current.sessionId !== sessionId || current.currentPath !== path) return s
+        if (!current || current.sessionId !== sessionId || current.requestId !== requestId || current.currentPath !== path) return s
         return {
           details: {
             ...s.details,
             [profileId]: {
               ...current,
               files: [],
-              error: msg,
+              error: error.message,
               loading: false,
+              ...(disconnected ? { status: 'disconnected', currentPath: detail.currentPath, requestId: ++nextRequestId } : {}),
             },
           },
         }
@@ -410,14 +415,17 @@ export const useServerDetailStore = create<ServerDetailStore>((set, get) => ({
   markDisconnected: (profileId: string, error?: string) => {
     set((s) => {
       const detail = s.details[profileId]
-      if (!detail) return s
+      if (!detail || detail.status === 'disconnected') return s
       return {
         details: {
           ...s.details,
           [profileId]: {
             ...detail,
             status: 'disconnected',
-            error: error ?? detail.error,
+            requestId: ++nextRequestId,
+            loading: false,
+            selected: new Set(),
+            error: error ?? '文件连接已断开',
           },
         },
       }

@@ -216,6 +216,19 @@ it('releases a session returned by a reconnect request after cancellation withou
   expect(document.querySelector('[role="dialog"]')).toBeNull()
 })
 
+it('同 ID 重连的就绪事件先于请求响应时，响应不再覆盖已连接状态', async () => {
+  let resolve!: (value: Awaited<ReturnType<typeof sessionApi.reconnect>>) => void
+  vi.mocked(sessionApi.reconnect).mockReturnValue(new Promise((done) => { resolve = done }))
+  let pending!: Promise<void>
+  await act(async () => { pending = terminalActions('tab')!.reconnect() })
+  await message({ type: 'metadata', payload: { session_id: 'ssh', profile_id: 'server', profile_name: '服务器', host: 'example.test', port: 22, username: 'user', protocol: 'ssh' } })
+  await act(async () => {
+    resolve({ session_id: 'ssh', status: 'connecting' })
+    await pending
+  })
+  expect(useSessionStore.getState().tabs[0].status).toBe('connected')
+})
+
 it('keeps cancellation failures in the connection log and retains the session for another cancellation attempt', async () => {
   vi.mocked(sessionApi.close).mockRejectedValueOnce({
     error: { code: 'RUNTIME_UNAVAILABLE', message: '暂时无法停止连接，请重试' },

@@ -5,6 +5,7 @@ vi.mock('@/lib/editorWindow', () => ({ openEditorFile: vi.fn() }))
 vi.mock('@/store/profile', () => ({ useProfileStore: { getState: () => ({ updateDetectedIcon: vi.fn() }) } }))
 import { useServerDetailStore as store } from './serverDetail'
 import { setWorkspaceGeneration } from '@/lib/workspaceScope'
+import { DesktopError } from '@eizhu/contracts'
 beforeEach(() => {
   store.setState(store.getInitialState(), true); setWorkspaceGeneration(1); vi.resetAllMocks()
   api.closeSession.mockResolvedValue(undefined); api.getInfo.mockResolvedValue({ icon: '' }); api.listFiles.mockResolvedValue({ entries: [] }); api.createSession.mockResolvedValue({ session_id: 'session', home_dir: '/home' })
@@ -38,4 +39,27 @@ it.each(['success', 'failure'])('快速切换目录后丢弃旧列表的迟到 %
   expect(store.getState().details.p.files.map((file) => file.name)).toEqual(['current.txt'])
   expect(store.getState().details.p.error).toBeNull()
   expect(store.getState().details.p.loading).toBe(false)
+})
+
+it('文件连接失效时结束加载并保留原目录，重新建立详情连接不增加所有者', async () => {
+  await store.getState().connect('p')
+  await store.getState().listFiles('p', '/work')
+  api.listFiles.mockRejectedValueOnce(new DesktopError({ code: 'SFTP_NOT_CONNECTED', message: '文件连接已断开' }))
+  await store.getState().listFiles('p', '/next')
+  expect(store.getState().details.p).toMatchObject({ status: 'disconnected', loading: false, currentPath: '/work', refCount: 1 })
+  api.createSession.mockResolvedValueOnce({ session_id: 'recovered', home_dir: '/home' })
+  await store.getState().ensureConnected('p')
+  expect(api.listFiles).toHaveBeenLastCalledWith('recovered', '/work', false)
+  expect(store.getState().details.p.refCount).toBe(1)
+})
+
+it('断开后的旧目录响应不能恢复文件列表或覆盖重连状态', async () => {
+  await store.getState().connect('p')
+  let resolve!: (response: { entries: [] }) => void
+  api.listFiles.mockReturnValueOnce(new Promise((done) => { resolve = done }))
+  const pending = store.getState().listFiles('p', '/work')
+  store.getState().markDisconnected('p')
+  resolve({ entries: [] })
+  await pending
+  expect(store.getState().details.p).toMatchObject({ status: 'disconnected', loading: false, error: '文件连接已断开' })
 })

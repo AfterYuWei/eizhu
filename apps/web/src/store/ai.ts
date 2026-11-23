@@ -3,9 +3,10 @@ import type { AiConversation, AiSettings } from '@eizhu/contracts'
 interface AiState {
   settings: AiSettings | null
   setSettings: (settings: AiSettings) => void
-  selectedId: string | null
+  selectedByTab: Record<string, string | null>
   conversations: Record<string, AiConversation>
-  select: (id: string | null) => void
+  select: (tabId: string, id: string | null) => void
+  closeTab: (tabId: string) => void
   put: (conversation: AiConversation) => void
   progress: (id: string, message: AiConversation['messages'][number]) => void
   forget: (id: string) => void
@@ -13,9 +14,16 @@ interface AiState {
 export const useAiStore = create<AiState>((set) => ({
   settings: null,
   setSettings: (settings) => set({ settings }),
-  selectedId: null,
+  selectedByTab: {},
   conversations: {},
-  select: (selectedId) => set({ selectedId }),
+  select: (tabId, id) => set((s) => ({ selectedByTab: { ...s.selectedByTab, [tabId]: id } })),
+  closeTab: (tabId) => set((s) => {
+    const { [tabId]: id, ...selectedByTab } = s.selectedByTab
+    if (!id) return { selectedByTab }
+    const conversations = { ...s.conversations }
+    delete conversations[id]
+    return { selectedByTab, conversations }
+  }),
   put: (conversation) =>
     set((s) => ({ conversations: { ...s.conversations, [conversation.id]: conversation } })),
   progress: (id, message) =>
@@ -31,7 +39,7 @@ export const useAiStore = create<AiState>((set) => ({
     }),
   forget: (id) =>
     set((s) => ({
-      selectedId: s.selectedId === id ? null : s.selectedId,
+      selectedByTab: Object.fromEntries(Object.entries(s.selectedByTab).map(([tab, current]) => [tab, current === id ? null : current])),
       conversations: Object.fromEntries(Object.entries(s.conversations).filter(([key]) => key !== id)),
     })),
 }))

@@ -381,7 +381,7 @@ export function FilePane({ pane, onPickServer }: FilePaneProps) {
       </div>
       {activeTab.error ? <div className="sftp-pane-error">
         <InlineError message={activeTab.error}/>
-        <Button variant="outline" size="sm" onClick={handleRefresh}>重试</Button>
+        <Button variant="outline" size="sm" disabled={activeTab.loading} onClick={handleRefresh}>{activeTab.connectionLost ? '重新连接' : '重试'}</Button>
       </div> : activeTab.loading ? <div className="sftp-pane-loading" aria-busy="true">
         {activeTab.connecting ? <div className="sftp-connection-status" role="status">
           <Loading inline />

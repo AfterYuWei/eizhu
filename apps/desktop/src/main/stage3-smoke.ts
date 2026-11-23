@@ -24,6 +24,7 @@ export async function verifyStage3(window: BrowserWindow, runtime: RuntimeHost, 
     directories: string[] = [],
     sizes: number[] = []
   let loadInProgress = false
+  let dropNextFileChannel = false
   const fixtureInfo =
     '===HOSTNAME===\nstage3-synthetic\n===OS===\nDebian GNU/Linux\n===OS_ID===\ndebian\n===KERNEL===\n6.1\n===ARCH===\nx86_64\n===CPUS===\n2\n===CPUMHZ===\n2400\n'
   const fixtureMetrics =
@@ -148,6 +149,7 @@ export async function verifyStage3(window: BrowserWindow, runtime: RuntimeHost, 
             ]),
           )
           sftp.on('OPENDIR', (id: number, path: string) => {
+            if (dropNextFileChannel) { dropNextFileChannel = false; sftp.end(); return }
             directories.push(path)
             listed = false
             sftp.handle(id, Buffer.from('directory'))
@@ -437,16 +439,17 @@ export async function verifyStage3(window: BrowserWindow, runtime: RuntimeHost, 
       )
     }
     step('all-completion-generators-passed')
-    const completionUi = await verifyCompletionUi(window, runtime, id, root, inputs)
+    const completionUi = await verifyCompletionUi(window, runtime, id, root, inputs, () => { dropNextFileChannel = true })
     step('all-completion-ui-passed')
+    const historyCount = (await call<unknown[]>('history.list', { profileId: direct })).length
     await call('history.record', { profileId: direct, command: 'echo 合成历史', cwd: '/tmp' })
-    assert.equal((await call<unknown[]>('history.list', { profileId: direct })).length, 1)
+    assert.equal((await call<unknown[]>('history.list', { profileId: direct })).length, historyCount + 1)
     await call('localState.write', {
       key: 'history_settings',
       value: { enabled: false, maxEntries: 500, retentionDays: 30 },
     })
     await call('history.record', { profileId: direct, command: '隐私命令', cwd: '/' })
-    assert.equal((await call<unknown[]>('history.list', { profileId: direct })).length, 1)
+    assert.equal((await call<unknown[]>('history.list', { profileId: direct })).length, historyCount + 1)
     await call('localState.write', {
       key: 'history_settings',
       value: { enabled: true, maxEntries: 500, retentionDays: 30 },

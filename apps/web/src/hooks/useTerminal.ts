@@ -24,21 +24,21 @@ interface UseTerminalOptions {
     fontFamily?: string;
     fontFamilyCN?: string;
     terminalTheme?: string;
-    commandMarkers?: boolean;
     logHighlight?: boolean;
     onData?: (data: string) => void;
     onFontSizeChange?: (delta: number) => void; // Ctrl+滚轮缩放时调用，delta 为 ±1
     onResize?: (cols: number, rows: number) => void; // 终端尺寸变化时调用（字体变化、容器resize）
 }
-// 打开终端内链接：桌面端由 opener 插件转系统默认浏览器（等价 Electron
-// setWindowOpenHandler + shell.openExternal），浏览器开新标签。
-const openLink = (uri: string) => {
+// 终端内链接仅在 Ctrl + 左键单击时通过系统默认浏览器打开。
+const openLink = (event: MouseEvent, uri: string) => {
+    if (!event.ctrlKey || event.button !== 0)
+        return;
     if (/^https?:\/\//i.test(uri)) {
         void openExternal(uri).catch(() => { });
     }
 };
 export function useTerminal(options: UseTerminalOptions) {
-    const { containerRef, fontSize = 14, fontFamily, fontFamilyCN, terminalTheme = 'default', commandMarkers = true, logHighlight = false, onData, onFontSizeChange, onResize } = options;
+    const { containerRef, fontSize = 14, fontFamily, fontFamilyCN, terminalTheme = 'default', logHighlight = false, onData, onFontSizeChange, onResize } = options;
     const terminalRef = useRef<Terminal | null>(null);
     const fitAddonRef = useRef<FitAddon | null>(null);
     const highlightingRef = useRef<TerminalHighlighting | null>(null);
@@ -79,9 +79,11 @@ export function useTerminal(options: UseTerminalOptions) {
             macOptionClickForcesSelection: true,
             cursorBlink: true,
             scrollback: 10000,
+            // xterm 6 uses this width for both the ruler and scrollbar geometry.
+            overviewRuler: { width: 8 },
             linkHandler: {
                 // 仅对 OSC 8 超链接生效；普通 URL 由下方 WebLinksAddon 的 handler 处理
-                activate: (_event, uri) => openLink(uri),
+                activate: openLink,
                 hover: () => {
                     terminal.element?.classList.add('xterm-cursor-pointer');
                 },
@@ -94,7 +96,7 @@ export function useTerminal(options: UseTerminalOptions) {
         // 必须显式传 handler：默认实现会 window.open() 开空白窗口再改 location.href，
         // 在 Electron 中该空白窗口(about:blank)会被主进程 setWindowOpenHandler deny，
         // 导致链接无法打开。
-        const webLinksAddon = new WebLinksAddon((_event, uri) => openLink(uri));
+        const webLinksAddon = new WebLinksAddon(openLink);
         const unicode11Addon = new Unicode11Addon();
         terminal.loadAddon(fitAddon);
         terminal.loadAddon(webLinksAddon);
@@ -102,7 +104,7 @@ export function useTerminal(options: UseTerminalOptions) {
         // Enable Unicode 11 character width for better CJK and emoji rendering
         terminal.unicode.activeVersion = '11';
         terminal.open(containerRef.current);
-        const highlighting = new TerminalHighlighting({ theme: terminalTheme, commandMarkers, logs: logHighlight });
+        const highlighting = new TerminalHighlighting({ theme: terminalTheme, logs: logHighlight });
         terminal.loadAddon(highlighting);
         highlightingRef.current = highlighting;
         // 尝试加载 WebGL 渲染器以提升高频更新性能（如进度条、实时日志）
@@ -402,8 +404,8 @@ export function useTerminal(options: UseTerminalOptions) {
         terminal.options.theme = getTerminalTheme(terminalTheme);
     }, [terminalTheme]);
     useEffect(() => {
-        highlightingRef.current?.update({ theme: terminalTheme, commandMarkers, logs: logHighlight });
-    }, [terminalTheme, commandMarkers, logHighlight]);
+        highlightingRef.current?.update({ theme: terminalTheme, logs: logHighlight });
+    }, [terminalTheme, logHighlight]);
     const write = useCallback((data: string) => {
         return new Promise<void>((resolve) => { const terminal=terminalRef.current; if(terminal)terminal.write(data,resolve);else resolve() });
     }, []);

@@ -40,6 +40,70 @@ afterEach(async () => {
   useServerDetailStore.setState({ details: {} })
   useSidebarDetailStore.setState({ detailCache: {} })
   useSessionStore.setState({ tabs: [] })
+  vi.useRealTimers()
+})
+
+it('右侧文件连接失效后自动重连，失败后延迟重试并恢复原目录', async () => {
+  vi.useFakeTimers()
+  api.createSession.mockResolvedValue({ session_id: 'detail', home_dir: '/home' })
+  api.listFiles.mockImplementation(async (_id: string, path: string) => ({ path, entries: [] }))
+  await act(async () => {
+    useSessionStore.setState({ tabs: [{ id: 'tab', profileId: 'server', profileName: '服务器', sessionId: 'ssh', status: 'connected', detailAttached: true }] })
+    await useServerDetailStore.getState().connect('server')
+    await useServerDetailStore.getState().listFiles('server', '/work')
+  })
+  api.createSession.mockRejectedValueOnce(new Error('暂时无法连接'))
+  await act(async () => useServerDetailStore.getState().markDisconnected('server'))
+  await act(async () => vi.advanceTimersByTime(1000))
+  expect(api.createSession).toHaveBeenCalledTimes(2)
+  await act(async () => vi.advanceTimersByTime(1000))
+  expect(api.createSession).toHaveBeenCalledTimes(2)
+  api.createSession.mockResolvedValueOnce({ session_id: 'new-detail', home_dir: '/home' })
+  await act(async () => vi.advanceTimersByTime(1000))
+  expect(api.createSession).toHaveBeenCalledTimes(3)
+  expect(api.listFiles).toHaveBeenLastCalledWith('new-detail', '/work', false)
+  expect(useServerDetailStore.getState().getStatus('server')).toMatchObject({ status: 'connected', refCount: 1 })
+})
+
+it('SSH 同 ID 重连的状态被批量渲染时仍自动恢复侧栏文件服务', async () => {
+  vi.useFakeTimers()
+  api.createSession.mockResolvedValue({ session_id: 'detail', home_dir: '/home' })
+  api.listFiles.mockImplementation(async (_id: string, path: string) => ({ path, entries: [] }))
+  await act(async () => {
+    useSessionStore.setState({ tabs: [{ id: 'tab', profileId: 'server', profileName: '服务器', sessionId: 'ssh', status: 'connected', detailAttached: true }] })
+    await useServerDetailStore.getState().connect('server')
+  })
+  await act(async () => {
+    useSessionStore.getState().updateTabStatus('tab', 'reconnecting')
+    useSessionStore.getState().updateTabStatus('tab', 'connected')
+  })
+  await act(async () => vi.advanceTimersByTime(1000))
+  expect(api.createSession).toHaveBeenCalledTimes(2)
+})
+
+it('SSH 尚未恢复或侧栏已隐藏时不重连，最后一个所有者关闭后取消重试', async () => {
+  vi.useFakeTimers()
+  api.createSession.mockResolvedValue({ session_id: 'detail', home_dir: '/home' })
+  api.listFiles.mockImplementation(async (_id: string, path: string) => ({ path, entries: [] }))
+  await act(async () => {
+    useSessionStore.setState({ tabs: [{ id: 'tab', profileId: 'server', profileName: '服务器', sessionId: 'ssh', status: 'connected', detailAttached: true }] })
+    await useServerDetailStore.getState().connect('server')
+  })
+  await act(async () => useSessionStore.getState().updateTabStatus('tab', 'reconnecting'))
+  await act(async () => vi.advanceTimersByTime(60000))
+  expect(api.createSession).toHaveBeenCalledTimes(1)
+  await act(async () => {
+    useSessionStore.getState().updateTabStatus('tab', 'connected')
+    root.render(<ServerDetail tabId="tab" profileId="server" profileName="测试服务器" host="example.test" port={22} username="user" active={false} />)
+  })
+  await act(async () => vi.advanceTimersByTime(60000))
+  expect(api.createSession).toHaveBeenCalledTimes(1)
+  await act(async () => {
+    root.render(<ServerDetail tabId="tab" profileId="server" profileName="测试服务器" host="example.test" port={22} username="user" active />)
+  })
+  await act(async () => useServerDetailStore.getState().disconnect('server'))
+  await act(async () => vi.advanceTimersByTime(60000))
+  expect(api.createSession).toHaveBeenCalledTimes(1)
 })
 
 it('终端先上报目录时，等待文件服务就绪后自动定位，并在重连后重新定位', async () => {

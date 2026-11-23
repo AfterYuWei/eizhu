@@ -49,6 +49,36 @@ export function ServerDetail({
   const serverDetail = getStatus(profileId)
   const bodyRef = useRef<HTMLDivElement>(null)
   const detail = getDetail(tabId)
+  const reconnectAttempt = useRef(0)
+  const sshReady = tabs.some((item) => item.profileId === profileId && item.status === 'connected')
+
+  // Observe transitions directly: React can batch a same-ID SSH reconnect.
+  useEffect(() => {
+    if (!active) return
+    const store = useServerDetailStore.getState()
+    if (!useSessionStore.getState().tabs.some((item) => item.profileId === profileId && item.status === 'connected')) {
+      store.markDisconnected(profileId)
+    } else if (store.getStatus(profileId).status === 'connected' && !store.getStatus(profileId).loading) {
+      void store.refresh(profileId)
+    }
+    return useSessionStore.subscribe((state, previous) => {
+      if (previous.tabs.some((item) => item.profileId === profileId && item.status === 'connected'
+        && !state.tabs.some((current) => current.id === item.id && current.status === 'connected'))) {
+        useServerDetailStore.getState().markDisconnected(profileId)
+      }
+    })
+  }, [active, profileId])
+
+  useEffect(() => {
+    if (!active || serverDetail.status === 'connected' && !serverDetail.loading && !serverDetail.error) {
+      reconnectAttempt.current = 0
+      return
+    }
+    if (!sshReady || serverDetail.status !== 'disconnected' || serverDetail.refCount <= 0) return
+    const delay = Math.min(30000, 1000 * 2 ** reconnectAttempt.current++)
+    const timer = setTimeout(() => { void useServerDetailStore.getState().ensureConnected(profileId) }, delay)
+    return () => clearTimeout(timer)
+  }, [active, profileId, serverDetail.error, serverDetail.loading, serverDetail.refCount, serverDetail.status, sshReady])
 
   // Context menu state
   const [ctx, setCtx] = useState<{ x: number; y: number; entry: FileTreeNode | null } | null>(null)
@@ -365,6 +395,9 @@ export function ServerDetail({
               <span>{serverDetail.error}</span>
             </div>
           )}
+          {serverDetail.status === 'disconnected' && <div className="sdetail-file-loading" role="status">
+            {sshReady ? '正在等待自动重连…' : '等待 SSH 恢复后自动重连…'}
+          </div>}
           {isConnected && (
             <>
               {/* Parent directory entry ".." */}

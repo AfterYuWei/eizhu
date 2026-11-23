@@ -15,6 +15,7 @@ export function AiMessage({
   busy = false,
   startedAt,
   completedAt,
+  stopped,
   onError,
 }: {
   messages: AiConversation['messages']
@@ -22,6 +23,7 @@ export function AiMessage({
   busy?: boolean
   startedAt?: number
   completedAt?: number
+  stopped?: boolean
   onError: (message: string) => void
 }) {
   const [now, setNow] = useState(Date.now)
@@ -70,6 +72,7 @@ export function AiMessage({
           <AiIcon size={18} />
         </span>
         <span>AI</span>
+        {stopped && <span className="ai-message-elapsed">已停止</span>}
         {elapsed !== undefined && (
           <time className="ai-message-elapsed" dateTime={'PT' + elapsed + 'S'}>
             {busy ? '已处理 ' : '耗时 '}

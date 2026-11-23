@@ -119,9 +119,11 @@ export class RuntimeService {
     if (isAccountOperation(request.operation)) return account[request.operation].output.parse(await this.account.execute(request.operation, request.input))
     if(isArchiveOperation(request.operation)) return archive[request.operation].output.parse(await this.archive.execute(request.operation,request.input))
     if (isSshOperation(request.operation)) {
-      if (request.operation === 'session.close' || request.operation === 'session.reconnect')
-        await this.agent.invalidateSession(ssh[request.operation].input.parse(request.input).id)
-      return ssh[request.operation].output.parse(await this.ssh.execute(request.operation, request.input))
+      const { operation, input } = request
+      if (operation === 'session.close' || operation === 'session.reconnect')
+        return this.agent.changeSession(ssh[operation].input.parse(input).id, operation === 'session.close',
+          async () => ssh[operation].output.parse(await this.ssh.execute(operation, input)))
+      return ssh[operation].output.parse(await this.ssh.execute(operation, input))
     }
     if(isSftpOperation(request.operation))return sftp[request.operation].output.parse(await this.sftp.execute(request.operation,request.input))
     if(request.operation==='sftp.authorizeEditor'){const d=request.input as {sessionId:string;path:string};return this.sftp.authorizeEditor(d.sessionId,d.path)}

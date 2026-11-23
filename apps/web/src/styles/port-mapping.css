@@ -44,7 +44,7 @@
 .pm-form-heading { flex-shrink:0; padding:20px 44px 16px 22px; }
 .port-mapping-dialog [data-slot="dialog-title"],.port-mapping-confirm [data-slot$="title"] { font-size:max(16px,var(--sans-size)); font-weight:500; line-height:1.5; }
 .port-mapping-form { display:flex; flex-direction:column; min-height:0; }
-.pm-editor-grid { display:grid; grid-template-columns:minmax(0,1.18fr) minmax(300px,1fr); gap:28px; padding:0 22px 18px; min-height:0; overflow-y:auto; scrollbar-width:thin; }
+.pm-editor-grid { display:grid; grid-template-columns:minmax(0,1.18fr) minmax(300px,1fr); gap:28px; padding:0 22px 18px; min-height:0; overflow-y:auto; }
 .port-mapping-form fieldset { display:flex; flex-direction:column; align-self:start; gap:12px; border:0; padding:0; min-width:0; }
 .pm-field { display:flex; flex-direction:column; gap:5px; min-width:0; }
 .pm-field>span:empty { display:none; }

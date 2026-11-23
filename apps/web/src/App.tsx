@@ -14,7 +14,7 @@ import { useAccountStore } from '@/store/account';
 // Initialize theme on app load
 initTheme();
 function App() {
-    const [space, setSpace] = useState(0);
+    const [space, setSpace] = useState(workspaceGeneration() ?? 0);
     useEffect(() => {
         void refreshWorkspace().then(() => setSpace(workspaceGeneration() ?? 0)).catch(() => { });
         void useAccountStore.getState().hydrate();

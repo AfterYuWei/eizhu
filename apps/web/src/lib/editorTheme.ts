@@ -67,9 +67,9 @@ export function applyEditorTheme(monaco: typeof Monaco, mode: 'light' | 'dark'):
       'list.hoverBackground': color('--bg-hover'),
       'editorError.foreground': color('--red'),
       'editorWarning.foreground': color('--yellow'),
-      'scrollbarSlider.background': color('--fg', 0.13),
-      'scrollbarSlider.hoverBackground': color('--fg', 0.22),
-      'scrollbarSlider.activeBackground': color('--fg', 0.3),
+      'scrollbarSlider.background': color('--scrollbar-thumb'),
+      'scrollbarSlider.hoverBackground': color('--scrollbar-thumb-hover'),
+      'scrollbarSlider.activeBackground': color('--scrollbar-thumb-active'),
     },
   })
   monaco.editor.setTheme(name)

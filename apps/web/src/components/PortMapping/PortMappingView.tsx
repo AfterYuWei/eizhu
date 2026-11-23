@@ -128,7 +128,7 @@ export function PortMappingView({ active }: { active: boolean }) {
           </li>
         })}</ul>}
     </div>
-    <p className="pm-footnote">关闭页面或终端不会停止映射；退出应用时停止，重启后需手动启动。运行中表示监听已就绪。</p>
+    <p className="pm-footnote">切换页面或关闭终端不会停止映射；退出应用时停止，重启后需手动启动。运行中表示监听已就绪。</p>
     {active && editing && <PortMappingForm key={editing === 'new' ? 'new' : editing.id} profiles={profiles} config={editing === 'new' ? null : editing} onClose={() => setEditing(null)} onSaved={(saved) => { setConfigs((old) => old.some((c) => c.id === saved.id) ? old.map((c) => c.id === saved.id ? saved : c) : [...old, saved]); setEditing(null) }} />}
     <AlertDialog open={active && publicStarting !== null} onOpenChange={(open) => { if (!open) setPublicStarting(null) }}><AlertDialogContent className="port-mapping-confirm pm-public-confirm">
       <AlertDialogTitle>确认对外开放此映射？</AlertDialogTitle>
