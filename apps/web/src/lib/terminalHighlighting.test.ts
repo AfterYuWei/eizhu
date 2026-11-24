@@ -53,7 +53,7 @@ it('所有预设保留原配色，日志语义色达到 4.5:1 背景对比度', 
       const foreground = luminance(color)
       expect((Math.max(background, foreground) + 0.05) / (Math.min(background, foreground) + 0.05)).toBeGreaterThanOrEqual(4.5)
     }
-    expect(getTerminalTheme(theme.id)).toBe(theme.theme)
+    expect(getTerminalTheme(theme.id)).toEqual({ ...theme.theme, overviewRulerBorder: '#00000000' })
   }
 })
 
