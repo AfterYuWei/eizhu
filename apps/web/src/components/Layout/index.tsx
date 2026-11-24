@@ -206,7 +206,7 @@ export function Layout() {
       <div className="shell-workspace-area" ref={workspace}>
       <main className="shell-workspace">
         <header className="shell-workspace-header" data-eizhu-drag-region={desktop || undefined}>
-          {sidebarHidden && <div className="shell-top-controls-slot" aria-hidden="true" />}
+          {mac && sidebarHidden && <div className="shell-top-controls-slot" aria-hidden="true" />}
           <WorkspaceTabs />
           <div className="shell-workspace-actions" data-eizhu-drag-region={desktop || undefined}>
             <TerminalSplitMenu iconOnly />
