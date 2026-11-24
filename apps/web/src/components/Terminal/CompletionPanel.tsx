@@ -233,7 +233,7 @@ function CompletionRow({ suggestion, selected, active, onHover, onClick }: Compl
   const label = suggestion.displayName ?? suggestion.name
   const icon = isHistory ? ICONS.history : isDir ? ICONS.directory : isFile ? ICONS.file : ICONS[suggestion.type]
 
-  // 活动列的选中项用强高亮（accent），父级来源列的选中项用弱高亮（表示路径来源）
+  // 活动列与父级来源列的选中项使用不同强度的中性底色。
   const strongHighlight = selected && active
   const weakHighlight = selected && !active
 
@@ -254,9 +254,9 @@ function CompletionRow({ suggestion, selected, active, onHover, onClick }: Compl
         borderRadius: 4,
         cursor: 'pointer',
         background: strongHighlight
-          ? 'color-mix(in srgb, var(--accent) 20%, transparent)'
+          ? 'color-mix(in srgb, var(--fg) 14%, transparent)'
           : weakHighlight
-            ? 'color-mix(in srgb, var(--accent) 9%, transparent)'
+            ? 'var(--accent-bg2)'
             : 'transparent',
         color: 'var(--fg)',
       }}
@@ -267,7 +267,7 @@ function CompletionRow({ suggestion, selected, active, onHover, onClick }: Compl
           fontSize: 10,
           flexShrink: 0,
           textAlign: 'center',
-          color: isHistory ? 'var(--yellow, #f5a623)' : strongHighlight ? 'var(--accent)' : 'var(--fg-4)',
+          color: isHistory ? 'var(--yellow, #f5a623)' : selected ? 'var(--fg-2)' : 'var(--fg-4)',
           fontWeight: isHistory ? 700 : 400,
           fontStyle: isHistory ? 'italic' : 'normal',
           fontFamily: isHistory ? 'ui-sans-serif, system-ui' : 'inherit',
@@ -278,7 +278,7 @@ function CompletionRow({ suggestion, selected, active, onHover, onClick }: Compl
       <span
         style={{
           fontWeight: selected ? 600 : 400,
-          color: strongHighlight ? 'var(--accent)' : selected ? 'var(--fg)' : 'var(--fg-2)',
+          color: selected ? 'var(--fg)' : 'var(--fg-2)',
           whiteSpace: 'nowrap',
           overflow: 'hidden',
           textOverflow: 'ellipsis',
@@ -298,10 +298,8 @@ function CompletionRow({ suggestion, selected, active, onHover, onClick }: Compl
             lineHeight: 1,
             padding: '2px 5px',
             borderRadius: 999,
-            color: selected ? 'var(--accent)' : 'var(--fg-4)',
-            background: selected
-              ? 'color-mix(in srgb, var(--accent) 12%, transparent)'
-              : 'color-mix(in srgb, var(--fg) 8%, transparent)',
+            color: selected ? 'var(--fg)' : 'var(--fg-2)',
+            background: selected ? 'var(--accent-bg)' : 'var(--accent-bg2)',
             flexShrink: 0,
           }}
         >

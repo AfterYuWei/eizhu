@@ -24,7 +24,7 @@ export function TerminalThemePicker({ open, onOpenChange, value, onChange }: Ter
             // 生成缩略图：用主题的 foreground/background + 8 ANSI 色条
             const t = theme.theme;
             const swatches = [t.black, t.red, t.green, t.yellow, t.blue, t.magenta, t.cyan, t.white];
-            return (<Button type="button" variant="ghost" key={theme.id} className={`terminal-theme-item ${isSelected ? 'selected' : ''}`} onClick={() => {
+            return (<Button type="button" variant="ghost" key={theme.id} className={`terminal-theme-item ${isSelected ? 'selected' : ''}`} aria-pressed={isSelected} onClick={() => {
                     onChange(theme.id);
                     onOpenChange(false);
                 }}>
@@ -49,7 +49,7 @@ export function TerminalThemePicker({ open, onOpenChange, value, onChange }: Ter
                 </div>
 
                 {/* 右侧勾选标记 */}
-                {isSelected && (<Check size={18} className="terminal-theme-check"/>)}
+                {isSelected && (<Check size={18} className="terminal-theme-check" aria-hidden="true"/>)}
               </Button>);
         })}
         </div>

@@ -50,7 +50,6 @@
 .desktop-shell .settings-page .settings-content [data-variant='default'][data-slot='button']:hover { background: var(--bg-hover); }
 .desktop-shell .settings-page .settings-content [data-variant='outline'][data-slot='button'] { border-color: transparent; background: var(--bg-active); }
 .desktop-shell .settings-page .settings-content .settings-theme-btn[data-slot='button'] { background: var(--bg-active); }
-.desktop-shell .settings-page [data-slot='switch-thumb'] { background: light-dark(var(--surface-panel), var(--fg)); }
 .settings-page :is(button, input, [role='combobox']) { font-family: var(--sans); font-size: var(--sans-size); line-height: 1.5; }
 .desktop-shell .settings-page .settings-stack { display: flex; flex-direction: column; gap: 20px; }
 .desktop-shell .settings-page .settings-stack > .settings-section-title { margin-bottom: -8px; }

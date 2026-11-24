@@ -278,16 +278,15 @@
   background: transparent;
   color: var(--fg-3);
   cursor: pointer;
-  transition: background 0.1s, color 0.1s, border-color 0.1s;
+  transition: background 0.1s, color 0.1s;
 }
 .pf-icon-popover-cell:hover {
   background: var(--bg-hover);
   color: var(--fg);
 }
 .pf-icon-popover-cell.active {
-  border-color: var(--accent);
-  background: var(--accent-bg);
-  color: var(--accent);
+  background: var(--bg-active);
+  color: var(--fg);
 }
 /* Private-key textarea. */
 .pf-dialog-content .pf-key-textarea {

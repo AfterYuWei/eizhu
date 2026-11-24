@@ -1,87 +1,116 @@
 import { Loading } from '@/components/ui/loading'
-import { useEffect,useState } from 'react';
-import { Check } from 'lucide-react';
-import { Dialog,DialogContent,DialogHeader,DialogTitle } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { vaultApi } from '@/api/vault';
-import { toast } from 'sonner';
-import { VAULT_TYPE_LABELS,type VaultItem } from '@/types/vault';
-import { VAULT_TYPE_ICONS } from '@/lib/vaultIcons';
-import { vaultNeedsUsername } from '@/lib/vaultUsername';
+import { useEffect, useState } from 'react'
+import { Check } from 'lucide-react'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { vaultApi } from '@/api/vault'
+import { toast } from 'sonner'
+import { VAULT_TYPE_LABELS, type VaultItem } from '@/types/vault'
+import { VAULT_TYPE_ICONS } from '@/lib/vaultIcons'
+import { vaultNeedsUsername } from '@/lib/vaultUsername'
 interface VaultSelectDialogProps {
-    open: boolean;
-    onOpenChange: (open: boolean) => void;
-    selectedId?: string;
-    onSelect: (item: VaultItem) => void;
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  selectedId?: string
+  onSelect: (item: VaultItem) => void
 }
 function formatDate(iso: string): string {
-    try {
-        const value = new Date(iso);
-        return value.toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' });
-    }
-    catch {
-        return '';
-    }
+  try {
+    const value = new Date(iso)
+    return value.toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' })
+  } catch {
+    return ''
+  }
 }
 export function VaultSelectDialog({ open, onOpenChange, selectedId, onSelect }: VaultSelectDialogProps) {
-    const [items, setItems] = useState<VaultItem[]>([]);
-    const [loading, setLoading] = useState(false);
-    const [search, setSearch] = useState('');
-    useEffect(() => {
-        if (!open)
-            return;
-        setLoading(true);
-        vaultApi
-            .list()
-            .then((list) => setItems(list ?? []))
-            .catch(() => toast.error('加载凭据列表失败'))
-            .finally(() => setLoading(false));
-    }, [open]);
-    const filtered = search
-        ? items.filter((item) => item.name.toLowerCase().includes(search.toLowerCase()) ||
-            (item.type === 'password' && item.username.toLowerCase().includes(search.toLowerCase())) ||
-            item.remark.toLowerCase().includes(search.toLowerCase()))
-        : items;
-    const handleSelect = (item: VaultItem) => {
-        onSelect(item);
-        onOpenChange(false);
-    };
-    return (<Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="vault-select-dialog-content">
-        <DialogHeader className="mb-4">
+  const [items, setItems] = useState<VaultItem[]>([])
+  const [loading, setLoading] = useState(false)
+  const [search, setSearch] = useState('')
+  useEffect(() => {
+    if (!open) return
+    setLoading(true)
+    vaultApi
+      .list()
+      .then((list) => setItems(list ?? []))
+      .catch(() => toast.error('加载凭据列表失败'))
+      .finally(() => setLoading(false))
+  }, [open])
+  const filtered = search
+    ? items.filter(
+        (item) =>
+          item.name.toLowerCase().includes(search.toLowerCase()) ||
+          (item.type === 'password' && item.username.toLowerCase().includes(search.toLowerCase())) ||
+          item.remark.toLowerCase().includes(search.toLowerCase()),
+      )
+    : items
+  const handleSelect = (item: VaultItem) => {
+    onSelect(item)
+    onOpenChange(false)
+  }
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="vault-select-dialog-content" aria-describedby={undefined}>
+        <DialogHeader>
           <DialogTitle>从 Vault 选择凭据</DialogTitle>
         </DialogHeader>
 
-        <Input type="text" className="vault-select-search" placeholder="搜索名称 / 备注" value={search} onChange={(event) => setSearch(event.target.value)} autoFocus/>
+        <Input
+          type="text"
+          className="vault-select-search"
+          aria-label="搜索凭据"
+          placeholder="搜索名称 / 备注"
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          autoFocus
+        />
 
         <div className="vault-select-list">
-          {loading ? (<Loading />) : filtered.length === 0 ? (<div className="vault-select-empty">无匹配凭据</div>) : (filtered.map((item) => {
-            const Icon = VAULT_TYPE_ICONS[item.type];
-            const isSelected = item.id === selectedId;
-            const needsUsername = vaultNeedsUsername(item);
-            return (<div key={item.id} className={`vault-select-row ${isSelected ? 'selected' : ''} ${needsUsername ? 'disabled' : ''}`} onClick={() => !needsUsername && handleSelect(item)} role="option" aria-selected={isSelected} aria-disabled={needsUsername} title={needsUsername ? '请先编辑该密码凭据并补充用户名' : undefined}>
-                  <div className="vault-row-icon">
-                    <Icon size={15}/>
-                  </div>
-                  <div className="vault-row-main">
-                    <div className="vault-row-title">
-                      <span className="vault-row-name">{item.name || '未命名'}</span>
-                      <span className={`vault-row-badge vault-row-badge-${item.type}`}>{VAULT_TYPE_LABELS[item.type]}</span>
-                    </div>
-                    <div className="vault-row-meta">
-                      {item.type === 'password' ? (<>
+          {loading ? (
+            <Loading />
+          ) : filtered.length === 0 ? (
+            <div className="vault-select-empty">无匹配凭据</div>
+          ) : (
+            filtered.map((item) => {
+              const Icon = VAULT_TYPE_ICONS[item.type]
+              const isSelected = item.id === selectedId
+              const needsUsername = vaultNeedsUsername(item)
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  className="vault-select-row"
+                  onClick={() => handleSelect(item)}
+                  aria-pressed={isSelected}
+                  disabled={needsUsername}
+                  title={needsUsername ? '请先编辑该密码凭据并补充用户名' : undefined}
+                >
+                  <Icon size={16} aria-hidden="true" />
+                  <span className="vault-row-main">
+                    <span className="vault-row-title">
+                      <span className="vault-row-name" title={item.name}>
+                        {item.name || '未命名'}
+                      </span>
+                      <span className="vault-row-badge">{VAULT_TYPE_LABELS[item.type]}</span>
+                    </span>
+                    <span className="vault-row-meta">
+                      {item.type === 'password' ? (
+                        <>
                           <span className="vault-row-user">{item.username || '需补充用户名'}</span>
                           <span className="vault-row-sep">·</span>
-                        </>) : null}
+                        </>
+                      ) : null}
                       <span>引用 {item.ref_count}</span>
                       <span className="vault-row-sep">·</span>
                       <span className="vault-row-date">{formatDate(item.updated_at)}</span>
-                    </div>
-                  </div>
-                  {isSelected && <Check size={14} style={{ color: 'var(--accent)' }}/>}
-                </div>);
-        }))}
+                    </span>
+                  </span>
+                  {isSelected && <Check size={14} className="vault-select-check" aria-hidden="true" />}
+                </button>
+              )
+            })
+          )}
         </div>
       </DialogContent>
-    </Dialog>);
+    </Dialog>
+  )
 }

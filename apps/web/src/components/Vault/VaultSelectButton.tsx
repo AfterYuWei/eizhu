@@ -48,7 +48,7 @@ export function VaultSelectButton({ vaultId, onChange, onItemResolved }: VaultSe
         {item ? (
           <span className="vault-select-btn-summary">
             {Icon && <Icon size={14} />}
-            <span className={`vault-row-badge vault-row-badge-${item.type}`}>{VAULT_TYPE_LABELS[item.type]}</span>
+            <span className="vault-row-badge">{VAULT_TYPE_LABELS[item.type]}</span>
             {item.type === 'password' && (
               <span style={{ color: 'var(--fg-4)', fontSize: '11px' }}>
                 {item.username ? `${item.username}@` : '需补充用户名 · '}
