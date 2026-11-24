@@ -158,7 +158,7 @@ export function ProviderSection({ providers, onChanged }: Props) {
       <div className="backup-provider-content">
       {visibleProviders.length === 0 && !adding && (
         <div className="sync-provider-empty-hint backup-empty">
-          <div><p>尚未添加云存储</p><span className="backup-description">添加存储源，将完整版本保存在本机以外。</span></div>
+          <div><p>尚未添加云存储</p><span className="backup-description">添加云存储，将自动备份文件保存在本机以外。</span></div>
           <span className="backup-provider-types">WebDAV · S3 · Google Drive · OneDrive</span>
         </div>
       )}

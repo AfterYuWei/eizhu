@@ -78,3 +78,24 @@ it('keeps failed queue actions beside the action and allows another attempt', as
   expect(clear).toHaveBeenCalledTimes(2)
   expect(host.querySelector('[role="alert"]')).toBeNull()
 })
+
+it('connects only the task endpoints and offers recovery as a separate action', async () => {
+  const [tab] = createSftpStore().getState().leftTabs
+  const resumeTransfer = vi.fn().mockResolvedValue(undefined)
+  const connectTransferEndpoints = vi.fn().mockImplementation(async () => {
+    store.setState({ rightTabs: [{ ...tab, server: { ...tab.server, id: 'server', name: '原站点' }, sessionId: 'new' }] })
+  })
+  await act(async () => store.setState({
+    transfers: [{ ...task, source_profile: 'local', required_profiles: ['server'], status: 'recoverable' }],
+    rightTabs: [{ ...tab, server: { ...tab.server, id: 'server', name: '原站点' }, connectionLost: true }],
+    connectTransferEndpoints,
+    resumeTransfer,
+  }))
+  expect(host.textContent).toContain('等待连接')
+  expect(button('恢复传输 config.yml')).toBeNull()
+  await act(async () => button('重新连接 原站点，准备恢复 config.yml').click())
+  expect(connectTransferEndpoints).toHaveBeenCalledExactlyOnceWith(task.id)
+  expect(resumeTransfer).not.toHaveBeenCalled()
+  await act(async () => button('恢复传输 config.yml').click())
+  expect(resumeTransfer).toHaveBeenCalledExactlyOnceWith(task.id)
+})

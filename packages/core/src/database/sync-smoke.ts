@@ -153,6 +153,8 @@ async function verify() {
     const preview = (await a.sync.execute('sync.preview', { includeOffline: true })) as SyncPreview
     assert.equal(preview.offlineCount, 1)
     assert.equal(preview.accountCount, 0)
+    assert.deepEqual(preview.useCloudImpact, { added: 0, updated: 0, removed: 0 })
+    assert.deepEqual(preview.useLocalImpact, { added: 1, updated: 0, removed: 0 })
     assert.equal(peer.seq, 0)
     await a.sync.execute('sync.bootstrap', { token: preview.token, mode: 'merge' })
     await a.sync.execute('sync.now', undefined)
@@ -477,6 +479,8 @@ async function verify() {
     mergeCloud.snippets[0].content = 'echo cloud'
     const mergeRemote = entries(mergeCloud).map(item => ({ ...item, revision: 1, epoch: 1 }))
     const mergePreview = workbench.store.sync.preview(workbench.runtimeId, 1, 1, mergeRemote, false)
+    assert.deepEqual(mergePreview.useCloudImpact, { added: 1, updated: 3, removed: 0 })
+    assert.deepEqual(mergePreview.useLocalImpact, { added: 0, updated: 3, removed: 1 })
     workbench.store.sync.bootstrap(mergePreview.token, workbench.runtimeId, 'merge')
     const mergeConflicts = workbench.store.sync.conflicts()
     assert.equal(mergeConflicts.length, 4)

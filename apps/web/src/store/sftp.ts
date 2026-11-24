@@ -305,6 +305,7 @@ export interface SftpStore {
   acceptTransferTasks: (tasks: TransferTask[], target?: { pane: PaneSide; tabId: string }) => void
   openTransferConflict: (id: string) => Promise<void>
   pauseTransfer: (id: string) => Promise<void>
+  connectTransferEndpoints: (id: string) => Promise<void>
   resumeTransfer: (id: string, restart?: boolean, file?: File) => Promise<void>
   cancelTransfer: (id: string) => Promise<void>
   clearCompleted: () => Promise<void>
@@ -886,6 +887,37 @@ export function createSftpStore(options: SftpStoreOptions = {}): SftpStoreApi {
     pauseTransfer: async (id) => {
       get().acceptTransferTasks([await sftpApi.pauseTransfer(id)])
     },
+    connectTransferEndpoints: async (id) => {
+      const task = get().transfers.find((item) => item.id === id)
+      if (!task) return
+      for (const profileId of disconnectedTransferProfiles(task, [...get().leftTabs, ...get().rightTabs])) {
+        if (disposed || generation !== workspaceGeneration()) return
+        const { leftTabs, rightTabs } = get()
+        if (!disconnectedTransferProfiles(task, [...leftTabs, ...rightTabs]).includes(profileId)) continue
+        const left = leftTabs.find((tab) => tab.server.id === profileId)
+        const right = rightTabs.find((tab) => tab.server.id === profileId)
+        const existing = left ?? right
+        const pane = left || (!right && profileId === LOCAL_SERVER.id) ? 'left' : 'right'
+        let server = existing?.server
+        if (!server) {
+          if (profileId === LOCAL_SERVER.id) server = LOCAL_SERVER
+          else {
+            const profile = await profileApi.get(profileId).catch((cause: unknown) => {
+              if (normalizeCommandError(cause).error.code === 'NOT_FOUND') throw new Error('任务对应的服务器配置已移除')
+              throw cause
+            })
+            if (disposed || generation !== workspaceGeneration()) return
+            server = { id: profile.id, name: profile.name, host: profile.host, port: profile.port, username: profile.username, icon: profile.icon }
+          }
+        }
+        await get().connectServer(pane, server)
+        if (disposed || generation !== workspaceGeneration()) return
+        if (disconnectedTransferProfiles(task, [...get().leftTabs, ...get().rightTabs]).includes(profileId)) {
+          const tab = tabsOf(get(), pane).tabs.find((item) => item.server.id === profileId)
+          throw new Error(`${server.name}：${tab?.error || '文件连接尚未就绪'}`)
+        }
+      }
+    },
     resumeTransfer: async (id, restart = false, file) => {
       if (get().transfers.find((task) => task.id === id)?.conflict_count) {
         await get().openTransferConflict(id)
@@ -957,6 +989,12 @@ export function createSftpStore(options: SftpStoreOptions = {}): SftpStoreApi {
 }
 
 /* ── store helpers (pure) ── */
+
+export function disconnectedTransferProfiles(task: TransferTask, tabs: SftpTab[]): string[] {
+  const profiles = task.required_profiles ?? [task.source_profile, task.target_profile]
+  return [...new Set(profiles)].filter((id): id is string => Boolean(id) && id !== '__staging__'
+    && !tabs.some((tab) => tab.server.id === id && tab.sessionId && !tab.connecting && !tab.connectionLost))
+}
 
 interface TabSlice {
   tabs: SftpTab[]

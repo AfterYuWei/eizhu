@@ -43,6 +43,7 @@ export const transferTaskSchema = z.strictObject({
   confirmed_offset: uint.optional(),
   source_profile: id.optional(),
   target_profile: id.optional(),
+  required_profiles: z.array(id).max(2).optional(),
   items_total: uint.optional(),
   items_completed: uint.optional(),
   current_file: path.optional(),

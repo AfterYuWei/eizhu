@@ -43,7 +43,7 @@ const strategyOptions = [
   { value: 'regenerate', label: '全部作为新记录导入（重新生成 ID）' },
 ]
 
-export function BackupPanel() {
+export function BackupPanel({ initialTab = 'backup' }: { initialTab?: 'backup' | 'files' }) {
   // ── Export state ──
   const [mode, setMode] = useState<CredentialMode>('encrypted')
   const [exportPwd, setExportPwd] = useState('')
@@ -199,7 +199,7 @@ export function BackupPanel() {
     : false
 
   return (
-    <Tabs defaultValue="backup" className="settings-section backup-page">
+    <Tabs defaultValue={initialTab} className="settings-section backup-page">
       <TabsList className="settings-subtabs backup-tabs" variant="line" aria-label="数据备份功能">
         <TabsTrigger value="backup">自动备份</TabsTrigger>
         <TabsTrigger value="files">文件导入与导出</TabsTrigger>

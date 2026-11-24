@@ -3,6 +3,8 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { ProfileForm } from './index'
+import { useSessionStore } from '@/store/session'
+import { useWorkspaceViewStore } from '@/store/workspaceView'
 import { useProfileStore } from '@/store/profile'
 import { profileApi } from '@/api/profile'
 import type { Profile } from '@/types/profile'
@@ -30,7 +32,12 @@ beforeEach(() => {
   useProfileStore.setState({ ...useProfileStore.getInitialState(), createProfile: create, updateProfile: update }, true)
   host = document.createElement('div'); document.body.append(host); root = createRoot(host)
 })
-afterEach(async () => { await act(async () => root.unmount()); host.remove(); vi.unstubAllGlobals() })
+afterEach(async () => {
+  await act(async () => root.unmount())
+  host.remove()
+  useSessionStore.setState(useSessionStore.getInitialState(), true)
+  vi.unstubAllGlobals()
+})
 
 it('跨页签保留草稿，从备注页提交完整连接与认证信息', async () => {
   await render()
@@ -44,6 +51,28 @@ it('跨页签保留草稿，从备注页提交完整连接与认证信息', asyn
   await tab('代理与备注')
   await act(async () => button('创建').click())
   expect(create).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ name: 'server.example.test', host: 'server.example.test', username: 'deploy', password: '测试密码', proxy: { type: 'direct' }, note: '测试备注' }))
+  expect(close).toHaveBeenCalledWith(false)
+})
+
+it('保存失败保留表单，保存并连接成功后使用保存结果复用当前草稿', async () => {
+  const openTab = vi.fn().mockResolvedValue('draft')
+  useWorkspaceViewStore.getState().showTerminal()
+  useSessionStore.setState({
+    tabs: [{ id: 'draft', profileId: '', profileName: '新连接', status: 'disconnected', sessionId: null }],
+    activeTabId: 'draft',
+    openTab,
+  })
+  create.mockRejectedValueOnce(new Error('保存失败'))
+  await render()
+  await act(async () => fill('host', 'draft.example.test'))
+  await tab('身份认证')
+  await act(async () => fill('username', 'deploy'))
+  await act(async () => button('保存并连接').click())
+  expect(document.querySelector('[role="alert"]')?.textContent).toBe('保存失败')
+  expect(openTab).not.toHaveBeenCalled()
+  expect(close).not.toHaveBeenCalled()
+  await act(async () => button('保存并连接').click())
+  expect(openTab).toHaveBeenCalledExactlyOnceWith(profile.id, profile.name, profile.host, profile.port, profile.username, 'draft')
   expect(close).toHaveBeenCalledWith(false)
 })
 

@@ -1,6 +1,8 @@
 import { useId, useRef, useState } from 'react'
 import { ArrowUp, ArrowDown, X, Check, AlertCircle, Loader2, ChevronDown, ChevronUp, Trash2, Copy, Pause, Play, RotateCcw, Save } from 'lucide-react'
 import { useSftpStore } from './storeContext'
+import { disconnectedTransferProfiles, LOCAL_SERVER } from '@/store/sftp'
+import { useProfileStore } from '@/store/profile'
 import { Button } from '@/components/ui/button'
 import { InlineError } from '@/components/ui/inline-error'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -43,7 +45,10 @@ function statusMeta(task: TransferTask) {
 
 export function TransferQueue() {
   const listId = useId()
-  const { transfers, cancelTransfer, clearCompleted, pauseTransfer, resumeTransfer } = useSftpStore()
+  const { leftTabs, rightTabs, transfers, cancelTransfer, clearCompleted, pauseTransfer, connectTransferEndpoints, resumeTransfer } = useSftpStore()
+  const profiles = useProfileStore((state) => state.profiles)
+  const tabs = [...leftTabs, ...rightTabs]
+  const connecting = tabs.some((tab) => tab.connecting)
   const fileInput = useRef<HTMLInputElement>(null)
   const [fileTarget, setFileTarget] = useState<{ id: string; restart: boolean } | null>(null)
   const [restartTarget, setRestartTarget] = useState<TransferTask | null>(null)
@@ -57,7 +62,7 @@ export function TransferQueue() {
     setErrors((old) => ({ ...old, [id]: '' }))
     try { await action() } catch (cause) {
       const error = normalizeCommandError(cause)
-      if (error.error.code === 'SOURCE_REQUIRED') {
+      if (['SOURCE_REQUIRED', 'UPLOAD_FILE_REQUIRED'].includes(error.error.code)) {
         setFileTarget({ id, restart })
         fileInput.current?.click()
       } else { setErrors((old) => ({ ...old, [id]: error.message })) }
@@ -124,7 +129,14 @@ export function TransferQueue() {
           const preparing = task.status === 'transferring' && ['scanning', 'archiving'].includes(task.phase ?? '')
           const direction = task.direction === 'upload' ? '上传' : task.direction === 'download' ? '下载' : '传输'
           const error = errors[task.id] || task.error_message
-          const statusContent = <>{meta.icon}<span>{meta.label}{errors[task.id] && ' · 操作失败'}{isSending(task) && task.speed > 0 && <small>{formatSpeed(task.speed)}</small>}</span></>
+          const canResume = task.status === 'paused' || task.status === 'recoverable' || task.status === 'failed' && task.retryable
+          const disconnected = taskGroup(task) === 'attention' ? disconnectedTransferProfiles(task, tabs) : []
+          const connectionNames = disconnected.map((id) => id === LOCAL_SERVER.id ? LOCAL_SERVER.name
+            : tabs.find((tab) => tab.server.id === id)?.server.name ?? profiles.find((profile) => profile.id === id)?.name ?? '原服务器')
+          const connectLabel = `重新连接 ${connectionNames.join('、')}`
+          const resumeLabel = task.conflict_count ? '处理冲突' : task.status === 'failed' ? '重试传输' : '恢复传输'
+          const statusLabel = disconnected.length && task.status === 'recoverable' && !task.conflict_count ? '等待连接' : meta.label
+          const statusContent = <>{meta.icon}<span>{statusLabel}{errors[task.id] && ' · 操作失败'}{isSending(task) && task.speed > 0 && <small>{formatSpeed(task.speed)}</small>}</span></>
           return <div key={task.id} className={`sftp-tx-item ${task.status}`}>
             <span className="sftp-tx-dir" title={direction} aria-label={direction}>{task.direction === 'upload' ? <ArrowUp size={14} /> : task.direction === 'download' ? <ArrowDown size={14} /> : <Copy size={14} />}</span>
             <span className="sftp-tx-name" title={`${task.file_name}\n${task.current_file ?? ''}\n${direction} · ${formatSize(task.transferred)} / ${formatSize(task.size)}`}>
@@ -141,13 +153,17 @@ export function TransferQueue() {
               <PopoverContent side="top" align="end" className="sftp-dialog sftp-tx-error-popover">
                 <strong>错误详情{task.error_code && ` · ${task.error_code}`}</strong>
                 <InlineError message={error}/>
-                <p>恢复前请连接任务所属服务器。源文件或暂存内容变化时需重新开始；取消将清理本任务暂存。</p>
+                <p>{disconnected.length ? `请先连接${connectionNames.join('、')}，再手动恢复传输。` : '源文件或暂存内容变化时需重新开始。'}取消将清理本任务暂存。</p>
               </PopoverContent>
             </Popover> : <span className={`sftp-tx-status ${task.status}`}>{statusContent}</span>}
             <div className="sftp-tx-actions">
               {taskGroup(task) === 'active' && <Button variant="ghost" size="icon-xs" title="暂停" aria-label={`暂停 ${task.file_name}`} disabled={busy.has(task.id)} onClick={() => void run(task.id, () => pauseTransfer(task.id))}><Pause size={12} /></Button>}
-              {(task.status === 'paused' || task.status === 'recoverable' || task.status === 'failed' && task.retryable) && <Button variant="ghost" size="icon-xs" title={task.status === 'failed' ? '重试' : '继续'} aria-label={`${task.status === 'failed' ? '重试' : '继续'} ${task.file_name}`} disabled={busy.has(task.id)} onClick={() => void run(task.id, () => resumeTransfer(task.id))}><Play size={12} /></Button>}
-              {taskGroup(task) === 'attention' && <Button variant="ghost" size="icon-xs" title="重新开始" aria-label={`重新开始 ${task.file_name}`} disabled={busy.has(task.id)} onClick={() => setRestartTarget(task)}><RotateCcw size={12} /></Button>}
+              {disconnected.length > 0
+                ? <Button variant="ghost" size="xs" className="sftp-tx-next" title={connectLabel} aria-label={`${connectLabel}，准备恢复 ${task.file_name}`}
+                  disabled={connecting || busy.has(task.id)} onClick={() => void run(task.id, () => connectTransferEndpoints(task.id))}>{busy.has(task.id) ? '连接中…' : '重新连接'}</Button>
+                : canResume && <Button variant="ghost" size="xs" className="sftp-tx-next" aria-label={`${resumeLabel} ${task.file_name}`}
+                  disabled={busy.has(task.id)} onClick={() => void run(task.id, () => resumeTransfer(task.id))}>{resumeLabel}</Button>}
+              {taskGroup(task) === 'attention' && disconnected.length === 0 && !task.conflict_count && <Button variant="ghost" size="icon-xs" title="重新开始" aria-label={`重新开始 ${task.file_name}`} disabled={busy.has(task.id)} onClick={() => setRestartTarget(task)}><RotateCcw size={12} /></Button>}
               {task.direction === 'download' && task.target_profile === '__staging__' && task.status === 'completed' && <Button variant="ghost" size="icon-xs" title="保存下载文件" aria-label={`保存 ${task.file_name}`} disabled={busy.has(task.id)} onClick={() => void run(task.id, () => sftpApi.exportDownload(task.id))}><Save size={12} /></Button>}
               {taskGroup(task) !== 'finished' && <Button variant="ghost" size="icon-xs" className="sftp-tx-cancel" title="取消并清理暂存" aria-label={`取消并清理 ${task.file_name}`} disabled={busy.has(task.id)} onClick={() => void run(task.id, () => cancelTransfer(task.id))}><X size={12} /></Button>}
             </div>

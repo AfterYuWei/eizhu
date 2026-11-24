@@ -8,6 +8,27 @@ it('刷新失联会话会重新连接并恢复原目录',async()=>{
  const store=createSftpStore();const tab=store.getState().leftTabs[0];store.setState({leftTabs:[{...tab,sessionId:'old',path:'/work'}]});api.getSession.mockResolvedValue({status:'disconnected'});await store.getState().refresh('left');expect(api.closeSession).toHaveBeenCalledWith('old');expect(api.createSession).toHaveBeenCalledWith('local');expect(store.getState().leftTabs[0]).toMatchObject({sessionId:'new',path:'/work',error:null});expect(api.list).toHaveBeenLastCalledWith('new','/work',false)
 })
 
+it('从传输任务重连原文件标签，保留目录和检查点，等待用户恢复传输', async () => {
+  const store = createSftpStore()
+  const [tab] = store.getState().leftTabs
+  const resumeTransfer = vi.fn()
+  store.setState({
+    leftTabs: [{ ...tab, sessionId: 'old', path: '/work', connectionLost: true }],
+    transfers: [{
+      id: 'job', file_name: 'data', direction: 'download', status: 'recoverable',
+      size: 100, transferred: 40, speed: 0, started_at: 1, required_profiles: ['local'],
+    }],
+    resumeTransfer,
+  })
+  api.getSession.mockResolvedValue({ status: 'disconnected' })
+  await store.getState().connectTransferEndpoints('job')
+  expect(api.closeSession).toHaveBeenCalledExactlyOnceWith('old')
+  expect(api.list).toHaveBeenCalledExactlyOnceWith('new', '/work', false)
+  expect(store.getState().leftTabs).toHaveLength(1)
+  expect(store.getState().transfers[0]).toMatchObject({ status: 'recoverable', transferred: 40 })
+  expect(resumeTransfer).not.toHaveBeenCalled()
+})
+
 it('失联事件立即结束加载并保留目录，迟到的目录结果不能覆盖失联状态', async () => {
   const store = createSftpStore(), tab = store.getState().leftTabs[0]
   store.setState({ leftTabs: [{ ...tab, sessionId: 'old', path: '/work' }] })

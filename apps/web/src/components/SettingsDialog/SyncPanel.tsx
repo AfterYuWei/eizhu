@@ -66,6 +66,7 @@ export function SyncPanel() {
     }
   }
   const enabled = account?.syncEnabled ?? false
+  const impact = mode === 'use_cloud' ? preview?.useCloudImpact : mode === 'use_local' ? preview?.useLocalImpact : null
   return (
     <section className="settings-section settings-stack" aria-label="账号条目同步">
       <div className="settings-section-title">
@@ -78,7 +79,7 @@ export function SyncPanel() {
             <div className="settings-field-info">
               <span className="settings-field-label">登录后同步条目</span>
               <p className="settings-field-desc">
-                在多台设备间同步服务器、分组、凭据和命令片段。完整版本与第三方备份可独立使用。
+                在多台设备间同步服务器、分组、凭据和命令片段。文件备份可独立使用。
               </p>
             </div>
             <Button size="sm" variant="outline" onClick={() => runDesktopAction('account-settings')}>
@@ -265,17 +266,26 @@ export function SyncPanel() {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>确认首次接入</AlertDialogTitle>
-            <AlertDialogDescription>
-              {mode === 'use_cloud'
-                ? '使用云端内容替换当前账号空间，应用前保存加密安全快照。原离线库保留。'
-                : mode === 'use_local'
-                  ? '将预览中的本地集合整体替换云端，云端独有条目将提交删除标记。其他设备会重新核对；超出单批上限时会拒绝替换。'
-                  : '合并不同条目；同 ID 的不同内容保留为冲突，待你选择。原离线库保留。'}
+            <AlertDialogTitle>{mode === 'use_cloud' ? '用云端条目替换账号本地数据' : mode === 'use_local' ? '用本地条目替换云端数据' : '确认首次接入'}</AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2" asChild>
+              <div>
+                {impact && <p>新增 {impact.added} 条 · 覆盖 {impact.updated} 条 · 移除 {impact.removed} 条</p>}
+                <p>{mode === 'use_cloud'
+                  ? '原离线空间保留。当前账号空间中的待同步更改会被丢弃。若需找回被替换的条目，请先导出加密备份。'
+                  : mode === 'use_local'
+                    ? '云端独有条目将提交删除标记，其他设备会重新核对。若需保留这些条目，可返回选择合并，或先在已有副本的设备导出备份。'
+                    : '合并不同条目；同 ID 的不同内容保留为冲突，待你选择。原离线库保留。'}</p>
+              </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>取消</AlertDialogCancel>
+            {mode === 'use_cloud' && (
+              <Button variant="outline" onClick={() => {
+                setMode(null)
+                runDesktopAction('backup-files')
+              }}>先导出备份</Button>
+            )}
             <AlertDialogAction
               onClick={() => {
                 const selected = mode

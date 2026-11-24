@@ -10,6 +10,9 @@ import { Tabs,TabsContent,TabsList,TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { Popover,PopoverContent,PopoverTrigger } from '@/components/ui/popover';
 import { useProfileStore } from '@/store/profile';
+import { useSessionStore } from '@/store/session';
+import { useWorkspaceViewStore } from '@/store/workspaceView';
+import { workspaceGeneration } from '@/lib/workspaceScope';
 import { profileApi } from '@/api/profile';
 import { SELECTABLE_SERVER_ICONS,ServerIcon } from '@/lib/serverIcons';
 import { applyVaultUsernameToProfile } from '@/lib/vaultUsername';
@@ -107,7 +110,14 @@ export function ProfileForm({ open, onOpenChange, profile, presetGroupId }: Prof
     };
     const handleSubmit = async (event: React.FormEvent) => {
         event.preventDefault();
-        if (!validateConnection()) return;
+        if (loading || !validateConnection()) return;
+        const generation = workspaceGeneration();
+        const connectAfterSave = !isEditing && event.nativeEvent instanceof SubmitEvent
+            && event.nativeEvent.submitter?.getAttribute('value') === 'connect';
+        const sessions = useSessionStore.getState();
+        const draftId = connectAfterSave && useWorkspaceViewStore.getState().activePage === 'terminal'
+            ? sessions.tabs.find((tab) => tab.id === sessions.activeTabId && !tab.profileId && !tab.sessionId)?.id
+            : undefined;
         setLoading(true);
         setError('');
         try {
@@ -130,7 +140,13 @@ export function ProfileForm({ open, onOpenChange, profile, presetGroupId }: Prof
                 await updateProfile(profile.id, payload);
             }
             else {
-                await createProfile(payload);
+                const created = await createProfile(payload);
+                if (generation !== workspaceGeneration()) return;
+                if (connectAfterSave) {
+                    const sessions = useSessionStore.getState();
+                    const draft = sessions.tabs.find((tab) => tab.id === draftId && !tab.profileId && !tab.sessionId);
+                    void sessions.openTab(created.id, created.name, created.host, created.port, created.username, draft?.id);
+                }
             }
             onOpenChange(false);
         }
@@ -277,14 +293,14 @@ export function ProfileForm({ open, onOpenChange, profile, presetGroupId }: Prof
         setForm((prev) => ({ ...prev, proxy: { ...(prev.proxy || { type: 'direct' }), ...patch } }));
         setTestResult(null);
     };
-    return (<Dialog open={open} onOpenChange={onOpenChange}>
+    return (<Dialog open={open} onOpenChange={(value) => { if (!loading) onOpenChange(value); }}>
       <DialogContent className="pf-dialog-content" showCloseButton={false}>
         <DialogHeader className="pf-header">
           <DialogTitle>{isEditing ? '编辑连接' : '新建连接'}</DialogTitle>
           <DialogDescription>配置服务器信息与 SSH 连接方式</DialogDescription>
         </DialogHeader>
         <DialogClose asChild>
-          <Button type="button" variant="ghost" size="icon-sm" className="pf-close" aria-label="关闭连接表单"><X size={16}/></Button>
+          <Button type="button" variant="ghost" size="icon-sm" className="pf-close" aria-label="关闭连接表单" disabled={loading}><X size={16}/></Button>
         </DialogClose>
 
         <form ref={formRef} onSubmit={handleSubmit} onInvalidCapture={handleInvalid} onChangeCapture={() => setError('')} id="profile-form" className="pf-form">
@@ -500,12 +516,15 @@ export function ProfileForm({ open, onOpenChange, profile, presetGroupId }: Prof
             {testing ? '测试中...' : '测试连接'}
           </Button>
           {error ? <InlineError message={error} className="pf-footer-spacer"/> : <div className="pf-footer-spacer"/>}
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} className="pf-btn-cancel">
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} className="pf-btn-cancel" disabled={loading}>
             取消
           </Button>
-          <Button type="submit" form="profile-form" disabled={loading} className="pf-btn-submit">
+          <Button type="submit" form="profile-form" variant={isEditing ? 'default' : 'outline'} disabled={loading} className={isEditing ? 'pf-btn-submit' : undefined}>
             {loading ? '保存中...' : isEditing ? '保存' : '创建'}
           </Button>
+          {!isEditing && <Button type="submit" form="profile-form" value="connect" disabled={loading} className="pf-btn-submit">
+            保存并连接
+          </Button>}
         </div>
       </DialogContent>
     </Dialog>);

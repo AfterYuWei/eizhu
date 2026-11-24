@@ -716,7 +716,7 @@ body.ptr-dragging * {
 .sftp-tx:not(.collapsed) :is(.sftp-tx-count, .sftp-tx-attention, .sftp-tx-mini-bar, .sftp-tx-speed) { display: none; }
 .sftp-tx-list { flex: 1; min-height: 0; overflow-y: auto; padding: 0 12px; }
 .sftp-tx-list[hidden] { display: none; }
-.sftp-tx-item { display: grid; grid-template-columns: 16px minmax(0, 1.4fr) minmax(90px, 0.8fr) 124px 90px 76px; align-items: center; gap: 8px; min-height: 36px; padding: 4px 0; }
+.sftp-tx-item { display: grid; grid-template-columns: 16px minmax(0, 1.4fr) minmax(90px, 0.8fr) 124px 90px 124px; align-items: center; gap: 8px; min-height: 36px; padding: 4px 0; }
 .sftp-tx-item:hover { background: var(--bg-hover); }
 .sftp-tx-dir { display: flex; align-items: center; justify-content: center; color: var(--sftp-muted); }
 .sftp-tx-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg); font: 400 var(--sans-size) / 1.5 var(--sans); }
@@ -739,6 +739,7 @@ body.ptr-dragging * {
 .sftp-tx-status.failed { color: var(--red); }
 .sftp-tx-actions { display: flex; align-items: center; justify-content: flex-end; gap: 2px; }
 .sftp-tx-actions [data-slot='button'] { width: 24px; height: 24px; padding: 0; color: var(--sftp-muted); }
+.sftp-tx-actions .sftp-tx-next { width: auto; padding-inline: 5px; color: var(--fg); white-space: nowrap; }
 .sftp-tx-actions .sftp-tx-cancel:hover { color: var(--red); background: var(--red-bg); }
 .sftp-tx-error-trigger { min-width: 0; padding: 0; border: 0; background: transparent; color: var(--red); text-align: left; cursor: pointer; }
 .sftp-tx-error-popover { display: flex; flex-direction: column; width: min(360px, calc(100vw - 32px)); gap: 10px; font: 400 var(--sans-size)/1.6 var(--sans); }
@@ -748,11 +749,11 @@ body.ptr-dragging * {
 .sftp-tx-spin { animation: sftp-spin 800ms linear infinite; }
 @keyframes sftp-spin { to { transform: rotate(360deg); } }
 @container sftp-transfers (max-width: 740px) {
-  .sftp-tx-item { grid-template-columns: 16px minmax(0, 1fr) 100px 86px 76px; }
+  .sftp-tx-item { grid-template-columns: 16px minmax(0, 1fr) 100px 86px 124px; }
   .sftp-tx-size, .sftp-tx-mini-bar, .sftp-tx-clear span { display: none; }
 }
 @container sftp-transfers (max-width: 500px) {
-  .sftp-tx-item { grid-template-columns: 14px minmax(0, 1fr) 80px 76px; gap: 6px; }
+  .sftp-tx-item { grid-template-columns: 14px minmax(0, 1fr) 80px 124px; gap: 6px; }
   .sftp-tx-status { grid-column: 2; font-size: 11px; }
   .sftp-tx-status > span { flex-direction: row; gap: 6px; }
   .sftp-tx-actions { grid-column: 4; grid-row: 1 / 3; }

@@ -4,9 +4,12 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useProfileStore } from '@/store/profile'
 import { useSessionStore } from '@/store/session'
+import { runDesktopAction } from '@/lib/desktopActions'
 import type { Group } from '@/types/group'
 import type { Profile } from '@/types/profile'
 import { ConnectionPicker } from './ConnectionPicker'
+
+vi.mock('@/lib/desktopActions', () => ({ runDesktopAction: vi.fn() }))
 
 const group = (id: string, name: string, parent_id?: string): Group => ({ id, name, parent_id, icon: 'folder', sort_order: 0, created_at: '' })
 const server = (id: string, group_id?: string): Profile => ({ id, name: `服务器 ${id}`, host: `${id}.example.test`, port: 22, username: 'deploy', group_id, auth_type: 'password', proxy: { type: 'direct' }, tags: [], options: '{}', note: '', sort_order: 0, created_at: '', updated_at: '' })
@@ -78,4 +81,13 @@ it('地址与用户名搜索继续生效，选择卡片复用当前草稿，空�
   expect(openTab).toHaveBeenCalledExactlyOnceWith('east', '服务器 east', 'east.example.test', 22, 'deploy', 'draft-target')
   await search('不存在的关键词')
   expect(host.querySelector('[role="status"]')?.textContent).toContain('未找到匹配')
+})
+
+it('没有服务器时可从当前草稿直接创建或打开文件备份入口', async () => {
+  useProfileStore.setState({ profiles: [] })
+  await render()
+  const buttons = [...host.querySelectorAll('button')]
+  await act(async () => buttons.find((button) => button.textContent === '添加服务器')!.click())
+  await act(async () => buttons.find((button) => button.textContent === '从备份导入')!.click())
+  expect(vi.mocked(runDesktopAction).mock.calls).toEqual([['add-server', 'draft-target'], ['backup-files']])
 })

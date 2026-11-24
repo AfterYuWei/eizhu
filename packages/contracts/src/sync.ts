@@ -91,6 +91,11 @@ export const syncStatusSchema = z.strictObject({
     )
     .max(10000),
 })
+const syncReplacementImpactSchema = z.strictObject({
+  added: integer,
+  updated: integer,
+  removed: integer,
+})
 export const syncPreviewSchema = z.strictObject({
   token: z.uuid(),
   localCount: integer,
@@ -98,6 +103,8 @@ export const syncPreviewSchema = z.strictObject({
   accountCount: integer,
   cloudCount: integer,
   conflictCount: integer,
+  useCloudImpact: syncReplacementImpactSchema,
+  useLocalImpact: syncReplacementImpactSchema,
   conflicts: z.array(syncConflictSchema).max(10000).optional(),
 })
 export const syncMessageSchema = z.strictObject({

@@ -41,6 +41,7 @@ export interface TransferTask {
   confirmed_offset?: number
   source_profile?: string
   target_profile?: string
+  required_profiles?: string[]
   /** Includes files and empty directories; completed items have been committed. */
   items_total?: number
   items_completed?: number

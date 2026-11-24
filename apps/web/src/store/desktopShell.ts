@@ -11,7 +11,8 @@ const clamp = (value: number, min: number, max: number) => Math.max(min, Math.mi
 
 interface DesktopShellStore {
   settingsPage: SettingsTab | null
-  setSettingsPage: (tab: SettingsTab | null) => void
+  settingsBackupFiles: boolean
+  setSettingsPage: (tab: SettingsTab | null, backupFiles?: boolean) => void
   inspectorWidth: number
   collapsedGroups: Record<string, boolean>
   groupsReady: boolean
@@ -22,7 +23,8 @@ interface DesktopShellStore {
 /** Geometry is global; group expansion is stored in the workspace's local state. */
 export const useDesktopShellStore = create<DesktopShellStore>()(persist((set) => ({
   settingsPage: null,
-  setSettingsPage: (settingsPage) => set({ settingsPage }),
+  settingsBackupFiles: false,
+  setSettingsPage: (settingsPage, settingsBackupFiles = false) => set({ settingsPage, settingsBackupFiles }),
   inspectorWidth: 400,
   collapsedGroups: {},
   groupsReady: false,
