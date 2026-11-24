@@ -15,6 +15,7 @@ let host: HTMLDivElement, root: Root
 const profile: Profile = { id: 'server', name: '测试连接', host: 'server.example.test', port: 22, username: 'deploy', auth_type: 'password', proxy: { type: 'socks5', host: 'proxy.example.test', port: 1080, has_password: true }, tags: [], options: '{}', note: '测试备注', sort_order: 0, created_at: '', updated_at: '' }
 const input = (id: string) => document.getElementById(id) as HTMLInputElement
 function button(text: string) { return [...document.querySelectorAll<HTMLButtonElement>('button')].find(node => node.textContent?.trim() === text)! }
+const feedback = () => document.querySelector<HTMLElement>('.pf-test-result')
 function fill(id: string, value: string) {
   const element = input(id)
   const prototype = element instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype
@@ -94,8 +95,11 @@ it('隐藏页签漏填必填项时自动显示该页并聚焦第一个字段，�
   expect(profileApi.testNew).not.toHaveBeenCalled()
 })
 
-it('代理端口无效时定位代理页，修正后可在任意页测试已有连接并查看结果', async () => {
-  vi.mocked(profileApi.test).mockResolvedValue({ success: true, message: '测试连接成功', latency_ms: 12, stages: [] })
+it('代理端口无效时定位代理页，修正后在测试按钮旁显示结果', async () => {
+  vi.mocked(profileApi.test).mockResolvedValue({
+    success: true, message: '测试连接成功', latency_ms: 12,
+    stages: [{ stage: 'ssh_auth', status: 'success', message: '测试连接成功' }],
+  })
   await render(profile)
   await tab('代理与备注')
   await act(async () => fill('proxy-port', '70000'))
@@ -110,10 +114,54 @@ it('代理端口无效时定位代理页，修正后可在任意页测试已有�
   expect(input('password').placeholder).toContain('留空则不修改')
   await act(async () => button('测试连接').click())
   expect(profileApi.test).toHaveBeenCalledWith('server', expect.objectContaining({ password: '', proxy: { type: 'socks5', host: 'proxy.example.test', port: 1080, username: '' } }))
-  await tab('基本连接')
-  expect(document.querySelector('.pf-feedback')?.textContent).toContain('测试连接成功')
+  expect(feedback()?.textContent).toBe('测试连接成功12 ms')
+  expect(button('测试连接').getAttribute('aria-controls')).toBe(feedback()?.id)
+  expect(document.querySelector('.pf-form')?.contains(feedback())).toBe(false)
   await act(async () => button('保存').click())
   expect(update).toHaveBeenCalledWith('server', expect.objectContaining({ password: '', proxy: expect.not.objectContaining({ password: expect.anything() }) }))
+})
+
+it('鼠标可从测试按钮移入浮层查看指纹，移到其他位置后收起结果', async () => {
+  vi.mocked(profileApi.test).mockResolvedValue({
+    success: false, message: '请先连接并确认主机指纹', latency_ms: 35,
+    stages: [{ stage: 'host_key', status: 'warning', message: '尚未信任此主机指纹', fingerprint: 'SHA256:current' }],
+  })
+  await render(profile)
+  const trigger = button('测试连接')
+  await act(async () => trigger.click())
+  const popup = feedback()!
+  expect(popup.textContent).toContain('SHA256:current')
+  await act(async () => {
+    trigger.dispatchEvent(new PointerEvent('pointerout', { bubbles: true, pointerType: 'mouse' }))
+    popup.dispatchEvent(new PointerEvent('pointerover', { bubbles: true, pointerType: 'mouse' }))
+    await new Promise(resolve => setTimeout(resolve, 170))
+  })
+  expect(feedback()).toBe(popup)
+  await act(async () => {
+    popup.dispatchEvent(new PointerEvent('pointerout', { bubbles: true, pointerType: 'mouse' }))
+    await new Promise(resolve => setTimeout(resolve, 170))
+  })
+  expect(feedback()).toBeNull()
+})
+
+it('测试未结束时移开鼠标不会弹出旧结果，回到按钮可查看失败原因', async () => {
+  let rejectTest!: (error: Error) => void
+  vi.mocked(profileApi.test).mockReturnValueOnce(new Promise((_, reject) => { rejectTest = reject }))
+  await render(profile)
+  const trigger = button('测试连接')
+  await act(async () => trigger.click())
+  expect(trigger.textContent).toBe('测试中…')
+  await act(async () => {
+    trigger.dispatchEvent(new PointerEvent('pointerout', { bubbles: true, pointerType: 'mouse' }))
+    await new Promise(resolve => setTimeout(resolve, 170))
+    rejectTest(new Error('业务进程已断开'))
+  })
+  expect(feedback()).toBeNull()
+  await act(async () => trigger.dispatchEvent(new PointerEvent('pointerover', { bubbles: true, pointerType: 'mouse' })))
+  expect(feedback()?.textContent).toBe('业务进程已断开')
+  expect(document.querySelector('.pf-footer [role="alert"]')).toBeNull()
+  await act(async () => fill('host', 'changed.example.test'))
+  expect(feedback()).toBeNull()
 })
 
 it('只输入空白的主机或用户名会定位各自所属页签', async () => {

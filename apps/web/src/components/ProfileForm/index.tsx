@@ -1,4 +1,4 @@
-import { useCallback,useRef,useState } from 'react';
+import { useCallback,useEffect,useId,useMemo,useRef,useState } from 'react';
 import { CheckCircle2,Eye,EyeOff,LoaderCircle,Network,ShieldAlert,Upload,X,XCircle } from 'lucide-react';
 import { Dialog,DialogClose,DialogContent,DialogDescription,DialogHeader,DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Select,SelectContent,SelectItem,SelectTrigger,SelectValue } from '@/components/ui/select';
 import { Tabs,TabsContent,TabsList,TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
-import { Popover,PopoverContent,PopoverTrigger } from '@/components/ui/popover';
+import { Popover,PopoverAnchor,PopoverContent,PopoverTrigger } from '@/components/ui/popover';
 import { useProfileStore } from '@/store/profile';
 import { useSessionStore } from '@/store/session';
 import { useWorkspaceViewStore } from '@/store/workspaceView';
@@ -21,6 +21,11 @@ import { VaultSelectButton } from '@/components/Vault/VaultSelectButton';
 import type { Profile,ProfileCreateRequest,ProfileProxyInput,ProfileTestResult,ProxyType } from '@/types/profile';
 import type { VaultItem } from '@/types/vault';
 type ProfileFormTab = 'connection' | 'auth' | 'advanced';
+type ConnectionTest = { draft: symbol } & (
+    | { status: 'testing' }
+    | { status: 'finished'; result: ProfileTestResult }
+    | { status: 'failed'; message: string }
+);
 interface ProfileFormProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
@@ -72,8 +77,21 @@ export function ProfileForm({ open, onOpenChange, profile, presetGroupId }: Prof
     const [error, setError] = useState('');
     const [passwordVisible, setPasswordVisible] = useState(false);
     const [proxyPasswordVisible, setProxyPasswordVisible] = useState(false);
-    const [testing, setTesting] = useState(false);
-    const [testResult, setTestResult] = useState<ProfileTestResult | null>(null);
+    const [connectionTest, setConnectionTest] = useState<ConnectionTest | null>(null);
+    const [showTestFeedback, setShowTestFeedback] = useState(false);
+    // 配置变化或表单重新打开后，旧测试结果不再对应当前草稿。
+    const testDraft = useMemo(() => Symbol(open ? form.auth_type : 'closed'), [form, open]);
+    const testFeedbackId = useId();
+    const testDismissTimer = useRef<number | undefined>(undefined);
+    const testing = connectionTest?.status === 'testing';
+    const currentTest = connectionTest?.draft === testDraft ? connectionTest : null;
+    const testResult = currentTest?.status === 'finished' ? currentTest.result : undefined;
+    const testMessage = currentTest?.status === 'failed' ? currentTest.message : testResult?.message;
+    const testStages = testResult?.stages.filter((stage) =>
+        stage.message !== testResult.message || stage.profile_name || stage.fingerprint || stage.known_fingerprint,
+    );
+    const testFeedbackVisible = open && showTestFeedback && Boolean(testMessage);
+    useEffect(() => () => window.clearTimeout(testDismissTimer.current), []);
     const [iconOpen, setIconOpen] = useState(false);
     const [uploadingKey, setUploadingKey] = useState(false);
     const [selectedVaultItem, setSelectedVaultItem] = useState<VaultItem | null>(null);
@@ -163,9 +181,10 @@ export function ProfileForm({ open, onOpenChange, profile, presetGroupId }: Prof
         }
     };
     const runConnectionTest = async () => {
-        if (!formRef.current?.reportValidity() || !validateConnection()) return;
-        setTesting(true);
-        setTestResult(null);
+        if (testing || !formRef.current?.reportValidity() || !validateConnection()) return;
+        window.clearTimeout(testDismissTimer.current);
+        setShowTestFeedback(true);
+        setConnectionTest({ draft: testDraft, status: 'testing' });
         setError('');
         try {
             const host = form.host.trim();
@@ -186,19 +205,17 @@ export function ProfileForm({ open, onOpenChange, profile, presetGroupId }: Prof
             const result = isEditing && profile
                 ? await profileApi.test(profile.id, payload)
                 : await profileApi.testNew(payload);
-            setTestResult(result);
+            setConnectionTest({ draft: testDraft, status: 'finished', result });
         }
         catch (err) {
-            const apiMessage = (err as {
-                error?: {
-                    message?: string;
-                };
-            })?.error?.message;
-            setError(apiMessage || (err as Error).message || '连接测试失败');
+            const failure = err as { error?: { message?: string }; message?: string } | null;
+            setConnectionTest({ draft: testDraft, status: 'failed', message: failure?.error?.message || failure?.message || '连接测试失败' });
         }
-        finally {
-            setTesting(false);
-        }
+    };
+    const dismissTestAfterPointerLeave = (event: React.PointerEvent) => {
+        if (event.pointerType === 'touch') return;
+        window.clearTimeout(testDismissTimer.current);
+        testDismissTimer.current = window.setTimeout(() => setShowTestFeedback(false), 140);
     };
     const handlePrivateKeyUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
@@ -287,11 +304,9 @@ export function ProfileForm({ open, onOpenChange, profile, presetGroupId }: Prof
     const handleProxyTypeChange = (value: string) => {
         const type = value as ProxyType;
         setForm((prev) => ({ ...prev, proxy: newProxyInput(type) }));
-        setTestResult(null);
     };
     const updateProxy = (patch: Partial<ProfileProxyInput>) => {
         setForm((prev) => ({ ...prev, proxy: { ...(prev.proxy || { type: 'direct' }), ...patch } }));
-        setTestResult(null);
     };
     return (<Dialog open={open} onOpenChange={(value) => { if (!loading) onOpenChange(value); }}>
       <DialogContent className="pf-dialog-content" showCloseButton={false}>
@@ -490,31 +505,46 @@ export function ProfileForm({ open, onOpenChange, profile, presetGroupId }: Prof
           </Tabs>
         </form>
 
-        <div className="pf-feedback" aria-live="polite">
-          {testResult && (<div className={`pf-test-result ${testResult.success ? 'success' : 'error'}`}>
-              <div className="pf-test-summary">
-                {testResult.success ? <CheckCircle2 size={15}/> : <XCircle size={15}/>}
-                <span>{testResult.message}</span>
-                <span className="pf-test-latency">{testResult.latency_ms} ms</span>
-              </div>
-              <div className="pf-test-stages">
-                {testResult.stages.map((stage, index) => (<div key={`${stage.stage}-${stage.profile_id}-${index}`} className="pf-test-stage" data-status={stage.status}>
-                    {stage.status === 'success' ? <CheckCircle2 size={13}/> : <ShieldAlert size={13}/>}
-                    <div>
-                      <div>{stage.profile_name ? `${stage.profile_name}：` : ''}{stage.message}</div>
-                      {stage.fingerprint && <div className="pf-test-fingerprint">当前：{stage.fingerprint}</div>}
-                      {stage.known_fingerprint && <div className="pf-test-fingerprint">已保存：{stage.known_fingerprint}</div>}
-                    </div>
-                  </div>))}
-              </div>
-            </div>)}
-
-        </div>
         <div className="pf-footer">
-          <Button type="button" variant="outline" onClick={runConnectionTest} disabled={loading || testing} className="pf-btn-test">
-            {testing ? <LoaderCircle size={14} className="animate-spin"/> : <Network size={14}/>}
-            {testing ? '测试中...' : '测试连接'}
-          </Button>
+          <Popover open={testFeedbackVisible} onOpenChange={setShowTestFeedback}>
+            <PopoverAnchor asChild>
+              <Button type="button" variant="outline" onClick={runConnectionTest} disabled={loading} aria-disabled={testing || undefined}
+                aria-expanded={testFeedbackVisible} aria-controls={testFeedbackVisible ? testFeedbackId : undefined} className="pf-btn-test"
+                onPointerEnter={(event) => {
+                    if (event.pointerType === 'touch') return;
+                    window.clearTimeout(testDismissTimer.current);
+                    if (currentTest) setShowTestFeedback(true);
+                }}
+                onPointerLeave={dismissTestAfterPointerLeave}>
+                {testing ? <LoaderCircle size={14} className="animate-spin" aria-hidden="true"/> : <Network size={14} aria-hidden="true"/>}
+                {testing ? '测试中…' : '测试连接'}
+              </Button>
+            </PopoverAnchor>
+            <PopoverContent side="top" align="start" sideOffset={6} collisionPadding={12}
+              id={testFeedbackId} role="region" aria-label="连接测试结果"
+              className="pf-test-result"
+              onOpenAutoFocus={(event) => event.preventDefault()}
+              onCloseAutoFocus={(event) => event.preventDefault()}
+              onPointerEnter={() => window.clearTimeout(testDismissTimer.current)}
+              onPointerLeave={dismissTestAfterPointerLeave}>
+              <div className="pf-test-summary" data-status={testResult?.success ? 'success' : 'error'}>
+                {testResult?.success ? <CheckCircle2 size={15} aria-hidden="true"/> : <XCircle size={15} aria-hidden="true"/>}
+                <span>{testMessage}</span>
+                {testResult && <span className="pf-test-latency">{testResult.latency_ms} ms</span>}
+              </div>
+              {!!testStages?.length && <div className="pf-test-stages">
+                {testStages.map((stage, index) => (<div key={`${stage.stage}-${stage.profile_id}-${index}`} className="pf-test-stage" data-status={stage.status}>
+                  {stage.status === 'success' ? <CheckCircle2 size={13} aria-hidden="true"/> : <ShieldAlert size={13} aria-hidden="true"/>}
+                  <div>
+                    <div>{stage.profile_name ? `${stage.profile_name}：` : ''}{stage.message}</div>
+                    {stage.fingerprint && <div className="pf-test-fingerprint">当前：{stage.fingerprint}</div>}
+                    {stage.known_fingerprint && <div className="pf-test-fingerprint">已保存：{stage.known_fingerprint}</div>}
+                  </div>
+                </div>))}
+              </div>}
+            </PopoverContent>
+          </Popover>
+          <span className="sr-only" role="status">{currentTest?.status === 'testing' ? '正在测试连接' : testMessage}</span>
           {error ? <InlineError message={error} className="pf-footer-spacer"/> : <div className="pf-footer-spacer"/>}
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)} className="pf-btn-cancel" disabled={loading}>
             取消
