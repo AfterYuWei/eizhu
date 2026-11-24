@@ -1,5 +1,6 @@
 import { Loading,LoadingBar } from '@/components/ui/loading'
 import { InlineError } from '@/components/ui/inline-error'
+import { LocalNetworkHelp } from '@/components/ConnectionDialog/LocalNetworkHelp'
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { writeClipboardText } from '@/lib/clipboard';
@@ -380,7 +381,10 @@ export function FilePane({ pane, onPickServer }: FilePaneProps) {
         {activeTab.loading && <LoadingBar label={activeTab.connecting ? `${connectionPrompt} · ${server.name}` : '正在读取文件列表'} />}
       </div>
       {activeTab.error ? <div className="sftp-pane-error">
-        <InlineError message={activeTab.error}/>
+        <div className="flex min-w-0 max-w-md flex-col gap-2">
+          <InlineError message={activeTab.error}/>
+          <LocalNetworkHelp errorCode={activeTab.connectionErrorCode}/>
+        </div>
         <Button variant="outline" size="sm" disabled={activeTab.loading} onClick={handleRefresh}>{activeTab.connectionLost ? '重新连接' : '重试'}</Button>
       </div> : activeTab.loading ? <div className="sftp-pane-loading" aria-busy="true">
         {activeTab.connecting ? <div className="sftp-connection-status" role="status">

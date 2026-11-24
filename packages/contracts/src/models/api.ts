@@ -119,6 +119,7 @@ export interface SftpSessionInfo {
   profile_id: string
   status: string
   error?: string
+  error_code?: string
   home_dir?: string // User's home directory
   created_at: string
   host_key_fingerprint?: string

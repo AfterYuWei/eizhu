@@ -4,7 +4,13 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { ConnectionDialog } from './index'
 import { writeClipboardText } from '@/lib/clipboard'
+import { getPlatformCapabilities } from '@/lib/platform'
+import { bridge } from '@/lib/bridge'
+
+const openLocalNetworkSettings = vi.hoisted(() => vi.fn())
 vi.mock('@/lib/clipboard', () => ({ writeClipboardText: vi.fn() }))
+vi.mock('@/lib/platform', () => ({ getPlatformCapabilities: vi.fn() }))
+vi.mock('@/lib/bridge', () => ({ bridge: () => ({ system: { openLocalNetworkSettings } }) }))
 let host: HTMLDivElement, root: Root
 const base: ComponentProps<typeof ConnectionDialog> = {
   open: true,
@@ -112,6 +118,37 @@ it('shows the actual failed stage, reason, code and actionable authentication ad
   expect(document.querySelector('.connection-log-message svg')).not.toBeNull()
   await act(async () => button('重新连接').click())
   expect(reconnect).toHaveBeenCalledOnce()
+})
+
+it('opens macOS privacy settings for an inner-network failure and keeps the manual path available', async () => {
+  vi.mocked(getPlatformCapabilities).mockReturnValue({
+    platform: 'macos', runtime: 'desktop', localNetworkPrivacy: true,
+    windowControls: true, appUpdates: false, dragOut: true, nativeFilePaths: true,
+    documentPicker: true, secureKeyStore: true, maxConcurrentTransfers: 5,
+  })
+  vi.mocked(bridge().system.openLocalNetworkSettings).mockRejectedValueOnce(new Error('unavailable'))
+  await render({ status: 'error', host: '192.168.1.20', errorCode: 'LOCAL_NETWORK_UNREACHABLE' })
+  expect(document.body.textContent).toContain('系统设置 → 隐私与安全 → 本地网络')
+  await act(async () => button('打开系统设置').click())
+  expect(openLocalNetworkSettings).toHaveBeenCalledExactlyOnceWith()
+  expect(document.body.textContent).toContain('请按上方路径手动打开')
+  await render({ status: 'error', host: '192.168.1.20', errorCode: 'SSH_AUTH_FAILED' })
+  expect(button('打开系统设置')).toBeUndefined()
+})
+
+it.each([
+  ['windows', '出站规则'],
+  ['linux', '本机防火墙'],
+  ['macos', '本机防火墙'],
+] as const)('shows the applicable network guidance on %s without a macOS privacy panel', async (platform, text) => {
+  vi.mocked(getPlatformCapabilities).mockReturnValue({
+    platform, runtime: 'desktop', localNetworkPrivacy: false,
+    windowControls: true, appUpdates: false, dragOut: true, nativeFilePaths: true,
+    documentPicker: true, secureKeyStore: true, maxConcurrentTransfers: 5,
+  })
+  await render({ status: 'error', errorCode: 'LOCAL_NETWORK_UNREACHABLE' })
+  expect(document.body.textContent).toContain(text)
+  expect(button('打开系统设置')).toBeUndefined()
 })
 
 it('falls back to the last real operation for an older failure snapshot without guessing its cause', async () => {

@@ -60,11 +60,17 @@ export class SshConnection {
         const socket = this.ownSocket(
           net.connect({ host: proxy.host!, port: proxy.port!, allowHalfOpen: true }),
         )
-        socket.setTimeout(hop.timeout, () => socket.destroy(networkError('PROXY_TIMEOUT', '代理连接超时')))
+        socket.setTimeout(hop.timeout, () =>
+          socket.destroy(
+            socket.connecting
+              ? connectionError({ code: 'ETIMEDOUT', message: '' }, true, proxy.host)
+              : networkError('PROXY_TIMEOUT', '代理连接超时'),
+          ),
+        )
         await new Promise<void>((resolve, reject) => {
           socket.once('connect', resolve)
           socket.once('error', (error) =>
-            reject(error instanceof DesktopError ? error : connectionError(error, true)),
+            reject(error instanceof DesktopError ? error : connectionError(error, true, proxy.host)),
           )
         })
         await proxyHandshake(
@@ -91,6 +97,10 @@ export class SshConnection {
         if (!this.controller.signal.aborted) hooks.disconnected()
       })
       await new Promise<void>((resolve, reject) => {
+        let tcpConnected = false
+        client.once('connect', () => {
+          tcpConnected = true
+        })
         let verificationFailure: DesktopError | undefined
         const abort = () => {
           client.destroy()
@@ -98,7 +108,11 @@ export class SshConnection {
         }
         const timer = setTimeout(() => {
           client.destroy()
-          reject(networkError('SSH_TIMEOUT', 'SSH 握手超时'))
+          reject(
+            !sock && !tcpConnected
+              ? connectionError({ code: 'ETIMEDOUT', message: '' }, false, p.host)
+              : networkError('SSH_TIMEOUT', 'SSH 握手超时'),
+          )
         }, 150000)
         const cleanup = () => {
           clearTimeout(timer)
@@ -119,7 +133,9 @@ export class SshConnection {
         })
         client.once('error', (error: Error & { code?: string; level?: string }) => {
           cleanup()
-          reject(verificationFailure ?? connectionError(error))
+          const connectingHost =
+            !sock && !tcpConnected && error.level === 'client-socket' ? p.host : undefined
+          reject(verificationFailure ?? connectionError(error, false, connectingHost))
         })
         client.once('close', () => {
           cleanup()

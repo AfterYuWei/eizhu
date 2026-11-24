@@ -62,6 +62,7 @@ declare const __EIZHU_UPDATE_FEEDS__: Partial<Record<'stable' | 'test', string>>
 declare const __EIZHU_UPDATE_REPOSITORY__: { owner: string; repo: string }
 
 const smoke = process.argv.includes('--smoke-test')
+const localNetworkPrivacy = process.platform === 'darwin' && Number.parseInt(process.getSystemVersion(), 10) >= 15
 const devUrl = !app.isPackaged ? process.env.ELECTRON_RENDERER_URL : undefined
 const smokeRoot = process.argv.find((value) => value.startsWith('--smoke-root='))?.slice(13)
 if (smoke && !smokeRoot) throw new Error('Smoke test requires an isolated --smoke-root')
@@ -228,6 +229,7 @@ function capabilities(): PlatformCapabilities {
     nativeFilePaths: true,
     documentPicker: true,
     secureKeyStore: keyMode === 'system',
+    localNetworkPrivacy,
     maxConcurrentTransfers: 5,
   }
 }
@@ -568,6 +570,11 @@ async function execute(window: BrowserWindow, operation: string, input: unknown)
     }
     case 'system.openExternal':
       await shell.openExternal(foundation['system.openExternal'].input.parse(value).url)
+      return
+    case 'system.openLocalNetworkSettings':
+      if (window !== windows.main) fail('FORBIDDEN', '仅主窗口可打开本地网络设置')
+      if (!localNetworkPrivacy) fail('UNSUPPORTED_PLATFORM', '当前系统不提供本地网络隐私设置')
+      await shell.openExternal('x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension')
       return
     case 'system.saveText': {
       const data = foundation['system.saveText'].input.parse(value)

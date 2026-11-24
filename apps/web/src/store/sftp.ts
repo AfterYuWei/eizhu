@@ -15,7 +15,7 @@ DirectoryTransferMode,
 import { workspaceGeneration } from '@/lib/workspaceScope'
 import { mergeTransferTasks } from '@/lib/transferTasks'
 import { toast } from 'sonner'
-import { normalizeCommandError } from '@eizhu/contracts'
+import { DesktopError, normalizeCommandError } from '@eizhu/contracts'
 
 /* ────────────────────────────────────────────────────────────────
  * The local machine, modelled as a server so both panes are symmetric.
@@ -234,6 +234,7 @@ export interface SftpTab {
   tree: TreeNode | null   // cached tree-view root
   connecting: boolean
   connectionLost: boolean
+  connectionErrorCode?: string
   loading: boolean
   error: string | null
   // Monotonic counter to dedupe in-flight list requests: only the latest
@@ -1082,7 +1083,9 @@ async function connectAndNavigate(
   restorePath?: string,
 ) {
   // Mark as loading
-  set(updateTabById(get(), pane, tabId, (t) => ({ ...t, connecting: true, loading: true, error: null })))
+  set(updateTabById(get(), pane, tabId, (t) => ({
+    ...t, connecting: true, loading: true, error: null, connectionErrorCode: undefined,
+  })))
 
   let ownedSession:string|undefined
   try {
@@ -1096,7 +1099,6 @@ async function connectAndNavigate(
     let status = res.status
     let homeDir = res.home_dir || '/'
 
-    // Wait for connection (max 30 seconds)
     const deadline = Date.now() + 150000
     while (
       (status === 'connecting' || status === 'reconnecting' || status === 'hostkey_confirm')
@@ -1104,32 +1106,23 @@ async function connectAndNavigate(
     ) {
       await new Promise((r) => setTimeout(r, 500))
       if(!tabsOf(get(),pane).tabs.some(t=>t.id===tabId)){await sftpApi.closeSession(sessionId);return}
-      try {
-        const info = await sftpApi.getSession(sessionId)
-        set({pendingAuth:info.auth_request?{...info.auth_request,sessionId}:null})
-        status = info.status
-        if (status === 'hostkey_confirm' && info.host_key_fingerprint) {
-          set({
-            pendingHostKey: {
-              sessionId:info.host_key_request_id??sessionId,
-              pane,
-              tabId,
-              serverName: server.name,
-              fingerprint: info.host_key_fingerprint,
-              knownFingerprint: info.known_host_key_fingerprint,
-            },
-          })
-        }
-        if (info.error) {
-          throw new Error(info.error)
-        }
-        // Update home_dir from session info if available
-        if (info.home_dir) {
-          homeDir = info.home_dir
-        }
-      } catch {
-        break
+      const info = await sftpApi.getSession(sessionId)
+      set({pendingAuth:info.auth_request?{...info.auth_request,sessionId}:null})
+      status = info.status
+      if (info.error) throw new DesktopError({ code: info.error_code ?? 'SFTP_CONNECTION_FAILED', message: info.error })
+      if (status === 'hostkey_confirm' && info.host_key_fingerprint) {
+        set({
+          pendingHostKey: {
+            sessionId:info.host_key_request_id??sessionId,
+            pane,
+            tabId,
+            serverName: server.name,
+            fingerprint: info.host_key_fingerprint,
+            knownFingerprint: info.known_host_key_fingerprint,
+          },
+        })
       }
+      homeDir = info.home_dir || homeDir
     }
 
     if (status !== 'connected') {
@@ -1145,8 +1138,14 @@ async function connectAndNavigate(
     if (current?.view === 'tree' && !current.error) await setViewAndFetch(get, set, pane, 'tree', tabId)
   } catch (err) {
     if(ownedSession)await sftpApi.closeSession(ownedSession).catch(()=>undefined)
-    const msg = err instanceof Error ? err.message : String(err)
-    set({pendingAuth:null,pendingHostKey:null,...updateTabById(get(), pane, tabId, (t) => ({ ...t, sessionId:null,connecting: false,loading: false, error: msg }))})
+    const failure = normalizeCommandError(err)
+    set({
+      pendingAuth: null,
+      pendingHostKey: null,
+      ...updateTabById(get(), pane, tabId, (t) => ({
+        ...t, sessionId: null, connecting: false, loading: false, error: failure.message, connectionErrorCode: failure.error.code,
+      })),
+    })
   }
 }
 

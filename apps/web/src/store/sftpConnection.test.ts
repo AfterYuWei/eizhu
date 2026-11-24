@@ -33,6 +33,24 @@ it('重连失败后再次重连仍直接恢复原目录，不先跳回主目录'
   expect(store.getState().leftTabs[0]).toMatchObject({ path: '/work', sessionId: 'new', error: null, connectionLost: false })
 })
 
+it('保留内网连接失败原因，并在连接成功后清理错误码', async () => {
+  const store = createSftpStore()
+  const server = { id: 'lan', name: '内网服务器', host: '192.168.1.20', port: 22, username: 'user' }
+  const error = '无法连接内网 SSH 服务器'
+  const errorCode = 'LOCAL_NETWORK_UNREACHABLE'
+  api.createSession.mockResolvedValueOnce({ session_id: 'blocked', status: 'connecting' })
+  api.getSession.mockResolvedValueOnce({ status: 'error', error, error_code: errorCode })
+  await store.getState().connectServer('right', server)
+  expect(api.closeSession).toHaveBeenCalledWith('blocked')
+  expect(store.getState().rightTabs.find((tab) => tab.server.id === server.id)).toMatchObject({
+    error, connectionErrorCode: errorCode, sessionId: null,
+  })
+  await store.getState().refresh('right')
+  expect(store.getState().rightTabs.find((tab) => tab.server.id === server.id)).toMatchObject({
+    error: null, connectionErrorCode: undefined, sessionId: 'new',
+  })
+})
+
 it('目录读取失败保留最后成功路径', async () => {
   const store = createSftpStore(), tab = store.getState().leftTabs[0]
   store.setState({ leftTabs: [{ ...tab, sessionId: 'old', path: '/work' }] })

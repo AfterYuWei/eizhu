@@ -22,6 +22,7 @@ export const platformSchema = z.strictObject({
   nativeFilePaths: z.boolean(),
   documentPicker: z.boolean(),
   secureKeyStore: z.boolean(),
+  localNetworkPrivacy: z.boolean(),
   maxConcurrentTransfers: z.literal(5),
 })
 export type PlatformCapabilities = z.infer<typeof platformSchema>
@@ -94,6 +95,7 @@ export const foundation = {
     }),
     output: ready,
   },
+  'system.openLocalNetworkSettings': { input: empty, output: ready },
   'system.saveText': {
     input: z.strictObject({ content: text, suggestedName: z.string().min(1).max(255) }),
     output: z.string().nullable(),

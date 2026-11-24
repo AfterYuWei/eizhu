@@ -13,6 +13,7 @@ const browserCapabilities: PlatformCapabilities = {
   nativeFilePaths: false,
   documentPicker: false,
   secureKeyStore: false,
+  localNetworkPrivacy: false,
   maxConcurrentTransfers: 5,
 }
 export async function initializePlatform(): Promise<PlatformCapabilities> {

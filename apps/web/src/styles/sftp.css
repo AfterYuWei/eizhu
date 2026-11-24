@@ -116,7 +116,6 @@ body:has(.desktop-shell) :is(.sftp-root, .sftp-dialog, .sdetail-pane) [data-slot
 .sftp-connection-status > span:last-child { min-width: 0; }
 .sftp-connection-status small { display: block; overflow-wrap: anywhere; font-size: max(12px, calc(var(--sans-size) - 2px)); }
 .sftp-pane-error { color: var(--red); overflow-wrap: anywhere; }
-.sftp-pane-error > .inline-error { max-width: min(420px, calc(100% - 70px)); }
 /* ===== PANE HEADER (multi-tab) ===== */
 .sftp-pane-hdr {
   display: flex;

@@ -54,6 +54,7 @@ export const fileSessionSchema = z.strictObject({
   status: z.string().max(40),
   created_at: z.string(),
   error: z.string().max(1024).optional(),
+  error_code: z.string().max(100).optional(),
   home_dir: path.optional(),
   host_key_fingerprint: z.string().max(256).optional(),
   known_host_key_fingerprint: z.string().max(256).optional(),

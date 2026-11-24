@@ -24,6 +24,9 @@ export default {
     icon: 'icon.icns',
     category: 'public.app-category.developer-tools',
     minimumSystemVersion: '13.0',
+    extendInfo: {
+      NSLocalNetworkUsageDescription: 'eizhu 需要访问本地网络，才能通过 SSH 和 SFTP 连接你选择的内网设备。',
+    },
     hardenedRuntime: true,
     entitlements: 'apps/desktop/resources/entitlements.mac.plist',
     entitlementsInherit: 'apps/desktop/resources/entitlements.mac.plist',

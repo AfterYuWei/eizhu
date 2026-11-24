@@ -342,11 +342,14 @@ export class SftpService {
       )
       s.meta.status = 'connected'
       s.meta.error = undefined
+      s.meta.error_code = undefined
       this.sessionEvent(s)
     } catch (e) {
       if (!s.closing) {
+        const failure = failureOf(e)
         s.meta.status = 'error'
-        s.meta.error = failureOf(e).message
+        s.meta.error = failure.message
+        s.meta.error_code = failure.code
         this.sessionEvent(s)
       }
       await connection.close()
