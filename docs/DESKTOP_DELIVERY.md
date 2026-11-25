@@ -19,6 +19,8 @@ npm run desktop:smoke:package -- <安装包路径> --duration=60000
 
 本地开发包的应用标识为 `com.yuweinfo.eizhu.dev`，使用独立的 `eizhu-dev` 数据目录。更新本地包时重新构建并安装。
 
+GitHub 的 macOS 测试包使用临时签名。打包器先写入应用 UUID，再签署应用、Helper 和框架，最后生成 DMG 与 ZIP。烟测从最终 DMG 内检查签名。临时签名保留 Hardened Runtime，并使用独立的 entitlement 文件以兼容 Electron 内嵌库。下载测试包后手动安装并从访达启动，验证真实内网 SSH 连接。
+
 ## 独立更新源
 
 首个 Electron 版本手动安装。开发启动及 Linux deb/rpm 提示手动安装；NSIS、macOS 和 AppImage 接入 `electron-updater`。默认更新源是 `AfterYuWei/eizhu` 的 GitHub Releases，stable 与 test 通道独立选择；也可通过下述独立 HTTPS 基址覆盖。客户端不自动下载或退出安装；未签名 macOS 包建议手动更新。
@@ -29,7 +31,7 @@ npm run desktop:smoke:package -- <安装包路径> --duration=60000
 
 “关于”检查后保存随机候选令牌；下载不会再次检查或替换版本。新检查、通道切换后重新检查、运行实例重启使旧令牌失效；下载/安装中拒绝并发检查。下载进度通过有 schema 和上下文的事件返回主窗口，下载器执行摘要校验。失败后必须重新检查；取消未保存文件确认可保留已校验缓存，用户可再次安装。关闭确认通过后才执行退出备份、释放业务进程/Worker 和安装重启。禁用库的退出自动安装，禁止绕开编辑器确认。安装器同步报错时保留窗口与编辑内容，不假报成功；重启应用或手动安装前先保存内容。
 
-macOS 自动更新要求有效应用签名，hardened runtime/JIT entitlement 已保留；当前测试包不具备正式签名、公证或升级证明。Windows 签名、macOS 证书/公证配置由发布环境单独提供，私钥不入库。本轮未读取签名材料。
+macOS 自动更新需要有效且可跨版本识别的应用签名。临时签名测试包通过手动安装升级，正式签名、公证和跨版本更新另行验收。Windows 签名与 macOS 正式签名使用发布环境提供的证书，私钥不入库。
 
 ## 验收与回退
 

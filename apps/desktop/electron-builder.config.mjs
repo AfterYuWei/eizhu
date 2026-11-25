@@ -5,6 +5,10 @@ import { join } from 'node:path'
 import { buildSettings } from '../../scripts/desktop-build-settings.mjs'
 const { version, channel, feeds, updateRepository, appId, appName: productName, outputDirectory } = buildSettings()
 const local = channel === 'dev'
+const macAdHoc = channel === 'test' && process.env.EIZHU_MAC_ADHOC_SIGN === '1'
+const macEntitlements = macAdHoc
+  ? 'apps/desktop/resources/entitlements.mac.adhoc.plist'
+  : 'apps/desktop/resources/entitlements.mac.plist'
 export default {
   appId,
   productName,
@@ -71,8 +75,9 @@ export default {
       NSLocalNetworkUsageDescription: `${productName} 需要访问本地网络，才能通过 SSH 和 SFTP 连接你选择的内网设备。`,
     },
     hardenedRuntime: true,
-    entitlements: 'apps/desktop/resources/entitlements.mac.plist',
-    entitlementsInherit: 'apps/desktop/resources/entitlements.mac.plist',
+    entitlements: macEntitlements,
+    entitlementsInherit: macEntitlements,
+    ...(macAdHoc ? { identity: '-', forceCodeSigning: true, notarize: false } : {}),
   },
   win: { target: ['nsis'], icon: 'icon.ico' },
   nsis: { oneClick: false, allowToChangeInstallationDirectory: true, perMachine: false },

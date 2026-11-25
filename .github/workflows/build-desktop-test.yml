@@ -42,6 +42,6 @@ jobs:
         env:
           RELEASE_VERSION: ${{ steps.prepare.outputs.version }}
         run: |
-          gh release create "v$RELEASE_VERSION" --target "$GITHUB_SHA" --title "eizhu $RELEASE_VERSION" --notes "Electron 测试预览版本。来源提交：$GITHUB_SHA。测试版本可能不稳定，请按需安装。" --prerelease --latest=false --draft
+          gh release create "v$RELEASE_VERSION" --target "$GITHUB_SHA" --title "eizhu $RELEASE_VERSION" --notes "Electron 测试预览版本。来源提交：$GITHUB_SHA。macOS 测试包使用临时签名，请下载 DMG 手动安装。测试版本可能不稳定，请按需安装。" --prerelease --latest=false --draft
           gh release upload "v$RELEASE_VERSION" release-output/*
           gh release edit "v$RELEASE_VERSION" --draft=false --prerelease --latest=false

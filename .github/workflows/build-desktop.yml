@@ -47,6 +47,7 @@ jobs:
     env:
       CSC_IDENTITY_AUTO_DISCOVERY: 'false'
       EIZHU_CHANNEL: ${{ inputs.channel || 'test' }}
+      EIZHU_MAC_ADHOC_SIGN: ${{ matrix.platform == 'darwin' && (inputs.channel || 'test') == 'test' && '1' || '0' }}
       VITE_EIZHU_CHANNEL: ${{ inputs.channel || 'test' }}
       EIZHU_UPDATE_STABLE_URL: ${{ vars.EIZHU_UPDATE_STABLE_URL }}
       EIZHU_UPDATE_TEST_URL: ${{ vars.EIZHU_UPDATE_TEST_URL }}

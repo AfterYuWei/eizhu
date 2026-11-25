@@ -1,7 +1,9 @@
 import { mkdtemp, readdir, cp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, join, resolve } from 'node:path'
-import { spawn } from 'node:child_process'
+import { execFile, spawn } from 'node:child_process'
+import { promisify } from 'node:util'
+import assert from 'node:assert/strict'
 
 function run(command, args, cwd) {
   return new Promise((accept, reject) => {
@@ -38,7 +40,14 @@ try {
     try {
       const app = (await readdir(mount)).find((name) => name.endsWith('.app'))
       if (!app) throw new Error('DMG has no application')
-      await cp(join(mount, app), join(root, app), {
+      const bundle = join(mount, app)
+      if (process.env.EIZHU_MAC_ADHOC_SIGN === '1') {
+        await run('/usr/bin/codesign', ['--verify', '--deep', '--strict', bundle])
+        const { stderr } = await promisify(execFile)('/usr/bin/codesign', ['--display', '--verbose=4', bundle])
+        assert.match(stderr, /^Signature=adhoc$/m, 'macOS 测试包应使用临时签名')
+        console.log('macOS 安装包临时签名校验通过')
+      }
+      await cp(bundle, join(root, app), {
         recursive: true,
         verbatimSymlinks: true,
         preserveTimestamps: true,

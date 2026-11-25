@@ -35,6 +35,8 @@ function sourceDigest() {
     'apps/desktop/electron.vite.config.ts',
     'apps/desktop/electron-builder.config.mjs',
     'apps/desktop/package.json',
+    'apps/desktop/resources/entitlements.mac.plist',
+    'apps/desktop/resources/entitlements.mac.adhoc.plist',
     'apps/web/package.json',
     'apps/web/index.html',
     'apps/web/smoke.html',

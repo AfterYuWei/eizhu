@@ -41,4 +41,4 @@ NSIS 执行隔离安装/卸载；DMG 只读挂载后复制运行；AppImage 解�
 
 2026-10-22 的 Linux AppImage 失败发生在 Vault 布局烟测等待所有通知消失。成功通知在 Xvfb 的后台或悬停状态下可能暂停倒计时；烟测改为校验保存后的持久内容、删除后的不存在状态及剪贴板真实内容，并拒绝错误通知。截图仅临时隐藏成功通知后恢复，不依赖通知的自动关闭时间，也不更改应用的图形或沙箱配置。
 
-当前 CI 为未签名测试候选配置（`CSC_IDENTITY_AUTO_DISCOVERY=false`）。不要把已归档的阶段 1 四目标结果当作阶段 6 结果。实际状态与证据见 [阶段 6 报告](../docs/desktop-rebuild/STAGE_6_REPORT.md)。
+CI 仅在 macOS 的 test 任务启用 `EIZHU_MAC_ADHOC_SIGN=1`，并从最终 DMG 校验签名后运行烟测。macOS 正式签名和公证使用独立的发布证书配置。实际状态与证据见 [阶段 6 报告](../docs/desktop-rebuild/STAGE_6_REPORT.md)。
