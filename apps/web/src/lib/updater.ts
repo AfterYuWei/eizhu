@@ -1,8 +1,9 @@
 import { bridge, desktopBootstrap } from './bridge'
 import type { UpdateCandidate, UpdateProgress, UpdateChannel } from '@eizhu/contracts'
 export type { UpdateChannel }
+export const isLocalBuild = import.meta.env.VITE_EIZHU_CHANNEL === 'dev'
 export const buildChannel: UpdateChannel =
-  import.meta.env.VITE_EIZHU_CHANNEL === 'test' ||
+  isLocalBuild || import.meta.env.VITE_EIZHU_CHANNEL === 'test' ||
   (!import.meta.env.VITE_EIZHU_CHANNEL && import.meta.env.DEV)
     ? 'test'
     : 'stable'

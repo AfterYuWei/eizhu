@@ -8,9 +8,9 @@ import { extractFile, listPackage } from '@electron/asar'
 import { buildSettings } from './desktop-build-settings.mjs'
 
 const option = (name) => process.argv.find((arg) => arg.startsWith(`--${name}=`))?.slice(name.length + 3)
-const directory = resolve(option('directory') ?? 'artifacts/desktop')
-const archive = option('asar')
 const settings = buildSettings()
+const directory = resolve(option('directory') ?? settings.outputDirectory)
+const archive = option('asar')
 const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex')
 const describe = async (path) => {
   const hash = createHash('sha256')
@@ -20,7 +20,7 @@ const describe = async (path) => {
 assert.deepEqual(JSON.parse(await readFile('apps/desktop/out/build-info.json', 'utf8')), settings)
 const names = (await readdir(directory)).filter(
   (name) =>
-    name.startsWith(`eizhu-${settings.version}-`) &&
+    name.startsWith(`${settings.appName}-${settings.version}-`) &&
     /\.(?:dmg|zip|exe|AppImage|deb|rpm|blockmap)$/.test(name),
 )
 assert.ok(names.length > 0, '没有匹配当前版本的交付产物')
@@ -28,6 +28,7 @@ const artifacts = await Promise.all(names.sort().map((name) => describe(join(dir
 let packageFiles = []
 if (archive) {
   const metadata = JSON.parse(extractFile(archive, 'package.json').toString('utf8'))
+  assert.equal(metadata.name, settings.appName, '安装包名称不一致')
   assert.equal(metadata.version, settings.version, '安装包版本不一致')
   assert.equal(metadata.eizhuChannel, settings.channel, '安装包通道不一致')
   const entries = listPackage(archive).filter((name) => name.startsWith('/out/') && !name.endsWith('/'))

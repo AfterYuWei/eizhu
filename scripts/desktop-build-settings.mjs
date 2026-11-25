@@ -53,8 +53,9 @@ function sourceDigest() {
 export function buildSettings(env = process.env, platform = process.platform, arch = process.arch) {
   const base = readFileSync(new URL('../VERSION', import.meta.url), 'utf8').trim()
   if (!/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(base)) throw new Error('VERSION 必须为 x.y.z')
-  const channel = env.EIZHU_CHANNEL ?? 'test'
-  if (!['stable', 'test'].includes(channel)) throw new Error('EIZHU_CHANNEL 必须为 stable/test')
+  const channel = env.EIZHU_CHANNEL ?? 'dev'
+  if (!['dev', 'stable', 'test'].includes(channel)) throw new Error('EIZHU_CHANNEL 必须为 dev/stable/test')
+  const local = channel === 'dev'
   if (!['darwin-x64', 'darwin-arm64', 'win32-x64', 'linux-x64'].includes(`${platform}-${arch}`))
     throw new Error('不支持的桌面目标')
   const git = (args) =>
@@ -63,10 +64,10 @@ export function buildSettings(env = process.env, platform = process.platform, ar
   const version =
     channel === 'stable'
       ? base
-      : `${base}-test.${git(['rev-list', '--count', 'HEAD'])}.${revision.slice(0, 8)}`
+      : `${base}-${channel}.${git(['rev-list', '--count', 'HEAD'])}.${revision.slice(0, 8)}`
   const feeds = {}
   for (const selected of ['stable', 'test']) {
-    const value = env[`EIZHU_UPDATE_${selected.toUpperCase()}_URL`]
+    const value = local ? undefined : env[`EIZHU_UPDATE_${selected.toUpperCase()}_URL`]
     if (!value) continue
     const url = new URL(value)
     if (
@@ -87,11 +88,14 @@ export function buildSettings(env = process.env, platform = process.platform, ar
     base,
     version,
     channel,
+    appName: local ? 'eizhu-dev' : 'eizhu',
+    appId: local ? 'com.yuweinfo.eizhu.dev' : 'com.yuweinfo.eizhu',
+    outputDirectory: local ? 'artifacts/desktop-dev' : 'artifacts/desktop',
     revision,
     platform,
     arch,
     feeds,
-    updateRepository,
+    ...(local ? {} : { updateRepository }),
     sourceDigest: sourceDigest(),
   }
 }

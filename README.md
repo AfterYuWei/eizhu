@@ -26,7 +26,7 @@ npm run desktop:smoke:package -- <安装包路径>
 ```
 
 Windows x64：NSIS；macOS arm64/x64：分别打包 DMG/ZIP；Linux x64：AppImage、deb、rpm。
-品牌和 `com.yuweinfo.eizhu` 保持现状，版本仅从根目录 `VERSION` 读取。首个 Electron 版本需手动安装。
+本机默认打包为 `eizhu-dev`，产物在 `artifacts/desktop-dev`。GitHub 测试版和正式版使用 `eizhu` 与 `com.yuweinfo.eizhu`。基础版本统一从根目录 `VERSION` 读取。首个 Electron 版本需手动安装。
 
 - [开发指南](docs/DEVELOPMENT.md) / [架构](docs/ARCHITECTURE.md) / [维护规范](AGENTS.md)
 - [桌面设计事实](DESIGN.md) / [备份兼容](docs/BACKUP.md) / [第三方云备份](docs/BACKUP_CLOUD.md) / [安全](docs/SECURITY.md)

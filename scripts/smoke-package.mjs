@@ -1,6 +1,6 @@
 import { mkdtemp, readdir, cp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { basename, join, resolve } from 'node:path'
 import { spawn } from 'node:child_process'
 
 function run(command, args, cwd) {
@@ -28,6 +28,7 @@ function run(command, args, cwd) {
 }
 const artifact = resolve(process.argv[2] ?? '')
 if (!process.argv[2]) throw new Error('Usage: node scripts/smoke-package.mjs <installer>')
+const appName = basename(artifact).startsWith('eizhu-dev-') ? 'eizhu-dev' : 'eizhu'
 const root = await mkdtemp(join(tmpdir(), 'eizhu-package-'))
 let executable
 try {
@@ -42,14 +43,14 @@ try {
         verbatimSymlinks: true,
         preserveTimestamps: true,
       })
-      executable = join(root, app, 'Contents/MacOS/eizhu')
+      executable = join(root, app, 'Contents/MacOS', basename(app, '.app'))
     } finally {
       await run('hdiutil', ['detach', mount])
     }
   } else if (process.platform === 'win32') {
     const install = join(root, 'installed')
     await run(artifact, ['/S', `/D=${install}`])
-    executable = join(install, 'eizhu.exe')
+    executable = join(install, `${appName}.exe`)
   } else {
     if (!artifact.endsWith('.AppImage'))
       throw new Error('Linux foundation smoke currently requires the final AppImage')
@@ -65,7 +66,7 @@ try {
 } finally {
   // Windows installer cleanup remains owned by its uninstaller to release registry/file associations.
   if (process.platform === 'win32') {
-    const uninstaller = join(root, 'installed', 'Uninstall eizhu.exe')
+    const uninstaller = join(root, 'installed', `Uninstall ${appName}.exe`)
     await run(uninstaller, ['/S']).catch(() => undefined)
   }
   await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 500 })

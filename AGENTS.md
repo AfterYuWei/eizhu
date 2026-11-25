@@ -11,7 +11,7 @@ UI 与文档使用中文。当前执行阶段 6 最终工程交付与发布验�
 
 测试优先使用已安装工具和用户提供的测试服务。未经用户事先明确同意，不得为测试下载任何二进制，包括数据库、构建工具或格式化工具；需要下载时必须先询问。数据库测试使用随机隔离 schema 并清理，不修改既有业务数据，不将凭据写入源码、文档或验收记录。
 
-桌面打包测试结束后，确认项目副本无运行进程，注销并删除 `artifacts/desktop/mac/eizhu.app`，避免重复应用入口；保留 `/Applications/eizhu.app` 和用户数据。
+本机自测默认打包为 `eizhu-dev`，使用独立应用标识和数据目录，产物在 `artifacts/desktop-dev`。GitHub 的 test 和 stable 包使用 `eizhu`。macOS 打包测试结束后，确认项目副本无运行进程，注销并删除 `artifacts/desktop-dev/mac/eizhu-dev.app`；验收发布包时同样清理 `artifacts/desktop/mac/eizhu.app`。保留 `/Applications` 中的安装版和用户数据。
 
 2026-11-05 AI 设置统一管理启用开关、内置/外部 Agent 与供应商下拉选择，侧栏只显示当前选择。关闭停止任务、作废审批并保留配置和历史。AI Agent v2 替换旧单命令架构：内置 AI SDK 三协议、多供应商，外部 Codex/Claude Code/DeepSeek Harness 驱动，多连接显式范围与共享远端工具目录，观察/确认/自动权限和统一审批。命令仍在现有 SSH PTY 执行；不支持 Windows 远端 shell。配置与历史由数据库 Worker 加密保存，不进入同步/备份；各空间一次性清除旧 `ai:*`。官方网关改为 `/api/ai/v2`，需协调独立后台部署。真实模型、完整 CLI 和远端 PTY 验收边界见 `docs/desktop-rebuild/AI_AGENT_V2_2026-11-05.md`、`docs/AI_API.md`。
 
@@ -25,7 +25,7 @@ npm run lint
 npm test
 npm run baseline:verify     # 只读校验固定旧备份/协议/UI 证据，不能刷新样本
 npm run desktop:build
-npm run desktop:package     # 当前平台最终安装产物
+npm run desktop:package     # 当前平台 eizhu-dev 本地测试安装包
 npm run desktop:smoke       # 构建输出进程树烟测，使用临时数据目录
 npm run desktop:smoke:package -- <安装包路径>
 npm run desktop:accept:sync -- --synthetic # 两个隔离目录验证认证与同步；真实模式见第四批报告
@@ -62,7 +62,7 @@ npm run desktop:accept:sync -- --synthetic # 两个隔离目录验证认证与�
 
 ## 数据、安全与兼容
 
-系统用户数据根下 `eizhu-desktop`；开发版独立 `eizhu-desktop-dev`。不寻找、读取或迁移旧数据库、key、设置、任务。
+系统用户数据根下，发布包使用 `eizhu-desktop`，本地 eizhu-dev 安装包使用 `eizhu-dev`，源码开发启动使用 `eizhu-desktop-dev`。不寻找、读取或迁移旧数据库、key、设置、任务。
 Chromium 存储也使用新目录。全局 UI 设置与账号元数据、各空间业务库分开。
 设备密钥优先使用系统密钥库；Linux `basic_text` 不能视为安全密钥库。仅首次初始化允许受限文件兜底。
 已有密钥无法解锁、损坏或丢失时必须保留数据并报错，不允许静默生成替代密钥。
