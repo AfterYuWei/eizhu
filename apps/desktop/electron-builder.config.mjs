@@ -6,7 +6,11 @@ import { buildSettings } from '../../scripts/desktop-build-settings.mjs'
 const { version, channel, feeds, updateRepository, appId, appName: productName, outputDirectory } = buildSettings()
 const local = channel === 'dev'
 const macAdHoc = channel === 'test' && process.env.EIZHU_MAC_ADHOC_SIGN === '1'
-const macEntitlements = macAdHoc
+const macSelfSign = channel === 'test' && process.env.EIZHU_MAC_SELF_SIGN === '1'
+const macSigningIdentity = macSelfSign ? process.env.CSC_NAME?.trim() : '-'
+if (macSelfSign && (macAdHoc || !macSigningIdentity))
+  throw new Error('macOS 自签名需要指定 CSC_NAME，并且不能同时启用临时签名')
+const macEntitlements = macAdHoc || macSelfSign
   ? 'apps/desktop/resources/entitlements.mac.adhoc.plist'
   : 'apps/desktop/resources/entitlements.mac.plist'
 export default {
@@ -77,7 +81,10 @@ export default {
     hardenedRuntime: true,
     entitlements: macEntitlements,
     entitlementsInherit: macEntitlements,
-    ...(macAdHoc ? { identity: '-', forceCodeSigning: true, notarize: false } : {}),
+    ...(macAdHoc || macSelfSign
+      ? { identity: macSigningIdentity, forceCodeSigning: true, notarize: false }
+      : {}),
+    ...(macSelfSign ? { timestamp: 'none' } : {}),
   },
   win: { target: ['nsis'], icon: 'icon.ico' },
   nsis: { oneClick: false, allowToChangeInstallationDirectory: true, perMachine: false },
