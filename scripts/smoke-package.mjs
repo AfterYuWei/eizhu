@@ -1,4 +1,5 @@
-import { mkdtemp, readdir, cp, rm } from 'node:fs/promises'
+import { mkdtemp, readdir, cp, readFile, rm } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
 import { tmpdir } from 'node:os'
 import { basename, join, resolve } from 'node:path'
 import { execFile, spawn } from 'node:child_process'
@@ -31,12 +32,17 @@ function run(command, args, cwd) {
 const artifact = resolve(process.argv[2] ?? '')
 if (!process.argv[2]) throw new Error('Usage: node scripts/smoke-package.mjs <installer>')
 const appName = basename(artifact).startsWith('eizhu-dev-') ? 'eizhu-dev' : 'eizhu'
-const selfSignedFingerprint = process.env.EIZHU_MAC_SELF_SIGN_CERT_SHA1
-async function verifySelfSignedBundle(bundle) {
-  assert.match(selfSignedFingerprint, /^[A-Fa-f0-9]{40}$/, 'macOS 自签名证书指纹无效')
-  const requirement = `=identifier "com.yuweiinfo.eizhu" and certificate leaf = H"${selfSignedFingerprint}"`
+const selfSignedFingerprint = process.env.EIZHU_MAC_SELF_SIGN_CERT_SHA256
+async function verifySelfSignedBundle(bundle, certificatePrefix) {
+  assert.match(selfSignedFingerprint, /^[A-Fa-f0-9]{64}$/, 'macOS 自签名证书指纹无效')
   await run('/usr/bin/codesign', ['--verify', '--deep', '--strict', bundle])
-  await run('/usr/bin/codesign', ['--verify', '--strict', '--test-requirement', requirement, bundle])
+  const { stderr } = await promisify(execFile)('/usr/bin/codesign', [
+    '--display', '--verbose=4', `--extract-certificates=${certificatePrefix}`, bundle,
+  ])
+  assert.match(stderr, /^Identifier=com\.yuweiinfo\.eizhu$/m, 'macOS 安装包的签名应用标识不匹配')
+  const signer = await readFile(certificatePrefix + '0')
+  const fingerprint = createHash('sha256').update(signer).digest('hex')
+  assert.equal(fingerprint, selfSignedFingerprint.toLowerCase(), 'macOS 安装包的签名证书指纹不匹配')
 }
 
 const root = await mkdtemp(join(tmpdir(), 'eizhu-package-'))
@@ -50,10 +56,10 @@ try {
       if (!app) throw new Error('DMG has no application')
       const bundle = join(mount, app)
       if (selfSignedFingerprint) {
-        await verifySelfSignedBundle(bundle)
+        await verifySelfSignedBundle(bundle, join(root, 'dmg-signer'))
         const zipRoot = join(root, 'zip')
         await run('/usr/bin/ditto', ['-x', '-k', artifact.replace(/\.dmg$/, '.zip'), zipRoot])
-        await verifySelfSignedBundle(join(zipRoot, app))
+        await verifySelfSignedBundle(join(zipRoot, app), join(root, 'zip-signer'))
         console.log('macOS DMG 与 ZIP 内应用签名和证书校验通过')
       } else if (process.env.EIZHU_MAC_ADHOC_SIGN === '1') {
         await run('/usr/bin/codesign', ['--verify', '--deep', '--strict', bundle])

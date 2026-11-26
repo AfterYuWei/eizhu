@@ -40,6 +40,7 @@ if [[ ! "$fingerprint" =~ ^[A-Fa-f0-9]{40}$ ]]; then
   echo "::error::无法识别 eizhu Local Code Signing 证书指纹。"
   exit 1
 fi
+certificate_sha256="$(/usr/bin/openssl x509 -in "$certificate" -noout -fingerprint -sha256 | /usr/bin/sed 's/^.*=//;s/://g')"
 # The GitHub-hosted runner discards this public trust anchor at the end of the job.
 sudo -n /usr/bin/security add-trusted-cert -d -r trustRoot -p codeSign -k "$system_keychain" "$certificate"
 
@@ -62,4 +63,4 @@ if [[ ! -f "$installer" ]]; then
   echo "::error::找不到本次构建的 macOS 安装包 $installer"
   exit 1
 fi
-EIZHU_MAC_SELF_SIGN_CERT_SHA1="$fingerprint" node scripts/smoke-package.mjs "$installer" --duration=60000
+EIZHU_MAC_SELF_SIGN_CERT_SHA256="$certificate_sha256" node scripts/smoke-package.mjs "$installer" --duration=60000
