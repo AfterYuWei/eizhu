@@ -44,7 +44,7 @@ await new Promise((accept, reject) => {
   })
 }).catch(async (cause) => {
   await mkdir(evidenceRoot, { recursive: true })
-  for (const name of ['ai-v2-failure.png', 'ai-v2-failure.json']) {
+  for (const name of ['ai-v2-failure.png', 'ai-v2-failure.json', 'home-light.png', 'home-dark.png']) {
     try {
       await copyFile(join(root, name), join(evidenceRoot, name))
     } catch (error) {

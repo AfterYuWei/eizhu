@@ -54,6 +54,24 @@ function sidebarBrightness(capture: Electron.NativeImage): number {
   const offset = (Math.floor(height * 0.55) * width + Math.floor(width * 0.05)) * 4
   return (data[offset] + data[offset + 1] + data[offset + 2]) / 3
 }
+
+async function captureTheme(
+  window: BrowserWindow,
+  theme: 'light' | 'dark',
+  painted: (brightness: number) => boolean,
+): Promise<{ image: Electron.NativeImage; brightness: number }> {
+  const deadline = performance.now() + 5_000
+  for (;;) {
+    await prepareCapture(window, theme)
+    window.webContents.invalidate()
+    const image = await window.webContents.capturePage(undefined, { stayAwake: true })
+    const brightness = sidebarBrightness(image)
+    // The compositor can return the previous frame even after the renderer has applied the theme.
+    if (painted(brightness) || performance.now() >= deadline) return { image, brightness }
+    await new Promise((resolve) => setTimeout(resolve, 100))
+  }
+}
+
 /** Runs only with --smoke-test and an explicit isolated temporary data root. Never loads user data. */
 export async function runSmoke(options: {
   windows: Windows
@@ -187,20 +205,18 @@ export async function runSmoke(options: {
   // This setting is limited to this synthetic smoke window; normal application throttling is unchanged.
   window.webContents.backgroundThrottling = false
   window.setContentSize(1280, 720)
-  await prepareCapture(window, 'light')
-  step('light-capture-ready')
-  const light = await window.webContents.capturePage(undefined, { stayAwake: true })
-  await writeFile(join(root, 'home-light.png'), light.toPNG())
+  step('capturing-light')
+  const light = await captureTheme(window, 'light', (brightness) => brightness > 160)
+  await writeFile(join(root, 'home-light.png'), light.image.toPNG())
   step('light-captured')
-  await prepareCapture(window, 'dark')
-  const dark = await window.webContents.capturePage(undefined, { stayAwake: true })
-  await writeFile(join(root, 'home-dark.png'), dark.toPNG())
-  const screenshotContrast = { light: sidebarBrightness(light), dark: sidebarBrightness(dark) }
+  const dark = await captureTheme(window, 'dark', (brightness) => brightness < 130 && light.brightness - brightness > 80)
+  await writeFile(join(root, 'home-dark.png'), dark.image.toPNG())
+  const screenshotContrast = { light: light.brightness, dark: dark.brightness }
   assert.ok(
     screenshotContrast.light > 160 &&
       screenshotContrast.dark < 130 &&
       screenshotContrast.light - screenshotContrast.dark > 80,
-    'Captured themes must contain distinct painted light/dark surfaces',
+    `Captured themes must contain distinct painted light/dark surfaces: ${JSON.stringify(screenshotContrast)}`,
   )
   step('dark-captured')
 
