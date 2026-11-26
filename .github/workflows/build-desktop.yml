@@ -83,7 +83,7 @@ jobs:
         env:
           EIZHU_MAC_SELF_SIGN_P12: ${{ secrets.EIZHU_MAC_SELF_SIGN_P12 }}
           EIZHU_MAC_SELF_SIGN_PASSWORD: ${{ secrets.EIZHU_MAC_SELF_SIGN_PASSWORD }}
-        run: bash scripts/ci-package-mac-self-signed.sh "${{ matrix.arch }}" "artifacts/desktop/${{ matrix.installer }}"
+        run: bash scripts/ci-package-mac-self-signed.sh "${{ matrix.arch }}"
       - run: npm run desktop:package -- --platform=${{ matrix.platform }} --arch=${{ matrix.arch }}
         if: matrix.platform != 'darwin' || (inputs.channel || 'test') != 'test'
       - name: Smoke final installer contents (macOS / Windows)

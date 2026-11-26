@@ -2,7 +2,6 @@
 set -euo pipefail
 
 arch="${1:?Missing macOS architecture}"
-installer="${2:?Missing macOS installer path}"
 if [[ -z "${EIZHU_MAC_SELF_SIGN_P12:-}" || -z "${EIZHU_MAC_SELF_SIGN_PASSWORD:-}" ]]; then
   echo "::error::配置 EIZHU_MAC_SELF_SIGN_P12 和 EIZHU_MAC_SELF_SIGN_PASSWORD 后重新运行。"
   exit 1
@@ -14,16 +13,8 @@ keychain="$signing_dir/eizhu.keychain-db"
 certificate="$signing_dir/eizhu.cer"
 p12="$signing_dir/eizhu.p12"
 system_keychain=/Library/Keychains/System.keychain
-fingerprint=
-runner_trust_added=false
 
 cleanup() {
-  if [[ "$runner_trust_added" == true ]]; then
-    sudo -n /usr/bin/security remove-trusted-cert -d "$certificate" ||
-      echo "::warning::未能移除运行器上的临时代码签名信任。"
-    sudo -n /usr/bin/security delete-certificate -Z "$fingerprint" "$system_keychain" ||
-      echo "::warning::未能从运行器移除临时公钥证书。"
-  fi
   if [[ -e "$keychain" ]]; then
     /usr/bin/security delete-keychain "$keychain" ||
       echo "::warning::未能注销运行器上的临时签名钥匙串。"
@@ -49,9 +40,8 @@ if [[ ! "$fingerprint" =~ ^[A-Fa-f0-9]{40}$ ]]; then
   echo "::error::无法识别 eizhu Local Code Signing 证书指纹。"
   exit 1
 fi
-# The runner needs a trust anchor to sign with a self-signed certificate.
+# The GitHub-hosted runner discards this public trust anchor at the end of the job.
 sudo -n /usr/bin/security add-trusted-cert -d -r trustRoot -p codeSign -k "$system_keychain" "$certificate"
-runner_trust_added=true
 
 keychains=("$keychain")
 while IFS= read -r entry; do
@@ -64,4 +54,12 @@ done < <(/usr/bin/security list-keychains -d user)
 
 EIZHU_MAC_SELF_SIGN=1 CSC_KEYCHAIN="$keychain" CSC_NAME="$fingerprint" \
   npm run desktop:package -- --platform=darwin --arch="$arch"
+/usr/bin/security delete-keychain "$keychain"
+
+version="$(node -p 'require("./apps/desktop/out/build-info.json").version')"
+installer="artifacts/desktop/eizhu-$version-mac-$arch.dmg"
+if [[ ! -f "$installer" ]]; then
+  echo "::error::找不到本次构建的 macOS 安装包 $installer"
+  exit 1
+fi
 EIZHU_MAC_SELF_SIGN_CERT_SHA1="$fingerprint" node scripts/smoke-package.mjs "$installer" --duration=60000
