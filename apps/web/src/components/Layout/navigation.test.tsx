@@ -45,6 +45,18 @@ it('分组可折叠，服务器单击不连接，双击复用当前连接草稿'
   expect(host.querySelector('.grp-label')!.getAttribute('aria-expanded')).toBe('false')
 })
 
+it('服务器未连接时不显示状态点，连接后出现，断开后隐藏', async () => {
+  await act(async () => root.render(<TooltipProvider><Sidebar /></TooltipProvider>))
+  const row = host.querySelector('.srv')!
+  expect(row.querySelector('.shell-connection-dot')).toBeNull()
+  await act(async () => useSessionStore.setState({
+    tabs: [{ id: 'a', profileId: profile.id, profileName: profile.name, status: 'connected', sessionId: 'ssh-a' }],
+  }))
+  expect(row.querySelector('.shell-connection-dot.is-connected')?.getAttribute('aria-label')).toBe('已连接')
+  await act(async () => useSessionStore.getState().updateTabStatus('a', 'disconnected'))
+  expect(row.querySelector('.shell-connection-dot')).toBeNull()
+})
+
 it('服务器是固定标题，只有真实文件夹提供展开和收起操作', async () => {
   await act(async () => root.render(<TooltipProvider><Sidebar /></TooltipProvider>))
   const heading = host.querySelector<HTMLElement>('.shell-section-heading')!

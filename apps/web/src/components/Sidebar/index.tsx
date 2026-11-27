@@ -247,7 +247,12 @@ export function Sidebar({ onAddServer }: {
         </div>
         <div className="srv-info">
           <span className="srv-nm">{profile.name}<ItemSyncBadge type="profile" id={profile.id}/></span>
-          <span className={`shell-connection-dot is-${status}`} aria-label={status === 'connected' ? '已连接' : status === 'connecting' || status === 'reconnecting' ? '连接中' : '未连接'}/>
+          {status !== 'disconnected' && (
+            <span
+              className={`shell-connection-dot is-${status}`}
+              aria-label={status === 'connected' ? '已连接' : status === 'error' ? '连接失败' : '连接中'}
+            />
+          )}
         </div>
         <Button type="button" variant="ghost" size="icon-xs" className="srv-edit-btn" title="编辑服务器" aria-label="编辑服务器" onClick={(e) => {
                 e.stopPropagation();
