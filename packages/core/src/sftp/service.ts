@@ -219,6 +219,7 @@ export class SftpService {
     await mkdir(this.directory, { recursive: true, mode: 0o700 })
     const saved = await this.database.call<Checkpoint[]>('sftp.storage.list')
     for (const c of saved) {
+      c.task.required_profiles = this.transferProfiles(c)
       if (activeStatuses.includes(c.task.status) || c.task.status === 'paused') {
         c.task.status = 'recoverable'
         c.task.speed = 0
@@ -232,6 +233,10 @@ export class SftpService {
         persisted: true,
       })
     }
+  }
+  private transferProfiles(c: Pick<Checkpoint, 'sourceProfile' | 'targetProfile' | 'upload'>): string[] {
+    return [...new Set(c.upload ? [c.targetProfile] : [c.sourceProfile, c.targetProfile])]
+      .filter((profile) => profile !== '__staging__')
   }
   private async save(job: Job, event = true, force = false) {
     const c = job.checkpoint
@@ -342,11 +347,14 @@ export class SftpService {
       )
       s.meta.status = 'connected'
       s.meta.error = undefined
+      s.meta.error_code = undefined
       this.sessionEvent(s)
     } catch (e) {
       if (!s.closing) {
+        const failure = failureOf(e)
         s.meta.status = 'error'
-        s.meta.error = failureOf(e).message
+        s.meta.error = failure.message
+        s.meta.error_code = failure.code
         this.sessionEvent(s)
       }
       await connection.close()
@@ -428,6 +436,7 @@ export class SftpService {
           execution_generation: 0,
           source_profile: c.sourceProfile,
           target_profile: c.targetProfile,
+          required_profiles: this.transferProfiles(c),
           items_total: c.files.length,
           items_completed: 0,
         },

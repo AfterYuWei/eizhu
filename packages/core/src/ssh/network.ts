@@ -6,19 +6,57 @@ export const networkError = (
   message = 'SSH 连接失败，请检查网络、认证与服务器配置',
 ) => new DesktopError({ code, message })
 
+const privateNetworks = new net.BlockList()
+privateNetworks.addSubnet('10.0.0.0', 8)
+privateNetworks.addSubnet('172.16.0.0', 12)
+privateNetworks.addSubnet('192.168.0.0', 16)
+privateNetworks.addSubnet('169.254.0.0', 16)
+privateNetworks.addSubnet('fc00::', 7, 'ipv6')
+privateNetworks.addSubnet('fe80::', 10, 'ipv6')
+const localHostname = /\.local\.?$/i
+const unreachableCodes = new Set(['EACCES', 'EPERM', 'EHOSTDOWN', 'EHOSTUNREACH', 'ENETUNREACH', 'ETIMEDOUT'])
+
+function isLocalNetworkHost(host: string): boolean {
+  const family = net.isIP(host)
+  return family ? privateNetworks.check(host, family === 6 ? 'ipv6' : 'ipv4') : localHostname.test(host)
+}
+
+type ConnectionFailure = {
+  code?: string
+  level?: string
+  message: string
+  address?: string
+  errors?: ConnectionFailure[]
+}
+
 /** 仅输出已识别的原因，不把可能包含凭据的库错误原文交给界面。 */
 export function connectionError(
-  error: { code?: string; level?: string; message: string },
+  error: ConnectionFailure,
   proxy = false,
+  connectingHost?: string,
 ): DesktopError {
   const prefix = proxy ? 'PROXY' : 'SSH'
   const target = proxy ? '代理服务器' : 'SSH 服务器'
+  if (
+    connectingHost &&
+    ((localHostname.test(connectingHost) && (error.code === 'ENOTFOUND' || error.code === 'EAI_AGAIN')) ||
+      (error.errors ?? [error]).every(
+        ({ code, address }) =>
+          unreachableCodes.has(code ?? '') && isLocalNetworkHost(address || connectingHost),
+      ))
+  ) {
+    return networkError('LOCAL_NETWORK_UNREACHABLE', `无法连接内网${target}`)
+  }
   switch (error.code) {
     case 'ENOTFOUND':
     case 'EAI_AGAIN':
       return networkError(`${prefix}_DNS_FAILED`, `无法解析${target}的域名`)
     case 'ECONNREFUSED':
       return networkError(`${prefix}_CONNECTION_REFUSED`, `${target}拒绝了连接，目标端口未接受请求`)
+    case 'EACCES':
+    case 'EPERM':
+      return networkError(`${prefix}_ACCESS_DENIED`, `系统阻止了到${target}的连接`)
+    case 'EHOSTDOWN':
     case 'EHOSTUNREACH':
     case 'ENETUNREACH':
       return networkError(`${prefix}_NETWORK_UNREACHABLE`, `当前网络无法到达${target}`)

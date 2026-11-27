@@ -10,6 +10,7 @@ import {
   buildChannel,
   checkForUpdates,
   downloadAndInstallUpdate,
+  isLocalBuild,
   releasePage,
   type UpdateCheckResult,
   type UpdateDownloadProgress,
@@ -83,6 +84,8 @@ export function AboutPanel() {
   }
 
   const desktop = isDesktopRuntime()
+  const showUpdates = desktop && !isLocalBuild
+  const buildLabel = isLocalBuild ? '本地开发包' : buildChannel === 'test' ? '测试版' : '正式版'
   const updatesAvailable = getPlatformCapabilities().appUpdates
   const channelLabel = updateChannel === 'stable' ? '正式版' : '测试版'
 
@@ -90,7 +93,7 @@ export function AboutPanel() {
     <div className="settings-section">
       <div className="settings-section-title">
         <Info size={14} />
-        <span>关于 eizhu</span>
+        <span>关于 {isLocalBuild ? 'eizhu-dev' : 'eizhu'}</span>
       </div>
 
       <div className="settings-card">
@@ -98,15 +101,15 @@ export function AboutPanel() {
           <div className="settings-field-info">
             <span className="settings-field-label">当前版本</span>
             <span className="settings-field-desc">
-              {desktop ? '基于 Electron 的桌面版' : '浏览器模式（网页版）'}
+              {isLocalBuild ? '通过本机重新打包更新' : desktop ? '基于 Electron 的桌面版' : '浏览器模式（网页版）'}
             </span>
           </div>
           <span className="about-version-value">
-            {version ? `${version} · ${buildChannel === 'test' ? '测试版' : '正式版'}` : '—'}
+            {version ? `${version} · ${buildLabel}` : '—'}
           </span>
         </div>
 
-        {desktop && (
+        {showUpdates && (
           <div className="settings-field">
             <div className="settings-field-info">
               <label htmlFor="settings-update-channel" className="settings-field-label">
@@ -137,7 +140,7 @@ export function AboutPanel() {
           </div>
         )}
 
-        {desktop && (
+        {showUpdates && (
           <div className="settings-field">
             <div className="settings-field-info">
               <span className="settings-field-label">软件更新</span>
@@ -177,7 +180,7 @@ export function AboutPanel() {
           </div>
         )}
 
-        {desktop && (
+        {showUpdates && (
           <div className="settings-field">
             <div className="settings-field-info">
               <span className="settings-field-label">手动更新</span>

@@ -15,7 +15,7 @@ DirectoryTransferMode,
 import { workspaceGeneration } from '@/lib/workspaceScope'
 import { mergeTransferTasks } from '@/lib/transferTasks'
 import { toast } from 'sonner'
-import { normalizeCommandError } from '@eizhu/contracts'
+import { DesktopError, normalizeCommandError } from '@eizhu/contracts'
 
 /* ────────────────────────────────────────────────────────────────
  * The local machine, modelled as a server so both panes are symmetric.
@@ -234,6 +234,7 @@ export interface SftpTab {
   tree: TreeNode | null   // cached tree-view root
   connecting: boolean
   connectionLost: boolean
+  connectionErrorCode?: string
   loading: boolean
   error: string | null
   // Monotonic counter to dedupe in-flight list requests: only the latest
@@ -304,6 +305,7 @@ export interface SftpStore {
   acceptTransferTasks: (tasks: TransferTask[], target?: { pane: PaneSide; tabId: string }) => void
   openTransferConflict: (id: string) => Promise<void>
   pauseTransfer: (id: string) => Promise<void>
+  connectTransferEndpoints: (id: string) => Promise<void>
   resumeTransfer: (id: string, restart?: boolean, file?: File) => Promise<void>
   cancelTransfer: (id: string) => Promise<void>
   clearCompleted: () => Promise<void>
@@ -673,11 +675,14 @@ export function createSftpStore(options: SftpStoreOptions = {}): SftpStoreApi {
 
     commitDrop: async (copyModifier) => {
       const { dragSession: drag, dropTarget: target } = get()
-      if (!drag || !target) return false
+      if (!drag || !target) {
+        get().cancelDrag()
+        return false
+      }
       const invalid = validateDrop(drag, target, copyModifier)
       if (invalid) {
         toast.warning(invalid)
-        set({ dropTarget: null })
+        get().cancelDrag()
         return false
       }
 
@@ -885,6 +890,37 @@ export function createSftpStore(options: SftpStoreOptions = {}): SftpStoreApi {
     pauseTransfer: async (id) => {
       get().acceptTransferTasks([await sftpApi.pauseTransfer(id)])
     },
+    connectTransferEndpoints: async (id) => {
+      const task = get().transfers.find((item) => item.id === id)
+      if (!task) return
+      for (const profileId of disconnectedTransferProfiles(task, [...get().leftTabs, ...get().rightTabs])) {
+        if (disposed || generation !== workspaceGeneration()) return
+        const { leftTabs, rightTabs } = get()
+        if (!disconnectedTransferProfiles(task, [...leftTabs, ...rightTabs]).includes(profileId)) continue
+        const left = leftTabs.find((tab) => tab.server.id === profileId)
+        const right = rightTabs.find((tab) => tab.server.id === profileId)
+        const existing = left ?? right
+        const pane = left || (!right && profileId === LOCAL_SERVER.id) ? 'left' : 'right'
+        let server = existing?.server
+        if (!server) {
+          if (profileId === LOCAL_SERVER.id) server = LOCAL_SERVER
+          else {
+            const profile = await profileApi.get(profileId).catch((cause: unknown) => {
+              if (normalizeCommandError(cause).error.code === 'NOT_FOUND') throw new Error('任务对应的服务器配置已移除')
+              throw cause
+            })
+            if (disposed || generation !== workspaceGeneration()) return
+            server = { id: profile.id, name: profile.name, host: profile.host, port: profile.port, username: profile.username, icon: profile.icon }
+          }
+        }
+        await get().connectServer(pane, server)
+        if (disposed || generation !== workspaceGeneration()) return
+        if (disconnectedTransferProfiles(task, [...get().leftTabs, ...get().rightTabs]).includes(profileId)) {
+          const tab = tabsOf(get(), pane).tabs.find((item) => item.server.id === profileId)
+          throw new Error(`${server.name}：${tab?.error || '文件连接尚未就绪'}`)
+        }
+      }
+    },
     resumeTransfer: async (id, restart = false, file) => {
       if (get().transfers.find((task) => task.id === id)?.conflict_count) {
         await get().openTransferConflict(id)
@@ -956,6 +992,12 @@ export function createSftpStore(options: SftpStoreOptions = {}): SftpStoreApi {
 }
 
 /* ── store helpers (pure) ── */
+
+export function disconnectedTransferProfiles(task: TransferTask, tabs: SftpTab[]): string[] {
+  const profiles = task.required_profiles ?? [task.source_profile, task.target_profile]
+  return [...new Set(profiles)].filter((id): id is string => Boolean(id) && id !== '__staging__'
+    && !tabs.some((tab) => tab.server.id === id && tab.sessionId && !tab.connecting && !tab.connectionLost))
+}
 
 interface TabSlice {
   tabs: SftpTab[]
@@ -1082,7 +1124,9 @@ async function connectAndNavigate(
   restorePath?: string,
 ) {
   // Mark as loading
-  set(updateTabById(get(), pane, tabId, (t) => ({ ...t, connecting: true, loading: true, error: null })))
+  set(updateTabById(get(), pane, tabId, (t) => ({
+    ...t, connecting: true, loading: true, error: null, connectionErrorCode: undefined,
+  })))
 
   let ownedSession:string|undefined
   try {
@@ -1096,7 +1140,6 @@ async function connectAndNavigate(
     let status = res.status
     let homeDir = res.home_dir || '/'
 
-    // Wait for connection (max 30 seconds)
     const deadline = Date.now() + 150000
     while (
       (status === 'connecting' || status === 'reconnecting' || status === 'hostkey_confirm')
@@ -1104,32 +1147,23 @@ async function connectAndNavigate(
     ) {
       await new Promise((r) => setTimeout(r, 500))
       if(!tabsOf(get(),pane).tabs.some(t=>t.id===tabId)){await sftpApi.closeSession(sessionId);return}
-      try {
-        const info = await sftpApi.getSession(sessionId)
-        set({pendingAuth:info.auth_request?{...info.auth_request,sessionId}:null})
-        status = info.status
-        if (status === 'hostkey_confirm' && info.host_key_fingerprint) {
-          set({
-            pendingHostKey: {
-              sessionId:info.host_key_request_id??sessionId,
-              pane,
-              tabId,
-              serverName: server.name,
-              fingerprint: info.host_key_fingerprint,
-              knownFingerprint: info.known_host_key_fingerprint,
-            },
-          })
-        }
-        if (info.error) {
-          throw new Error(info.error)
-        }
-        // Update home_dir from session info if available
-        if (info.home_dir) {
-          homeDir = info.home_dir
-        }
-      } catch {
-        break
+      const info = await sftpApi.getSession(sessionId)
+      set({pendingAuth:info.auth_request?{...info.auth_request,sessionId}:null})
+      status = info.status
+      if (info.error) throw new DesktopError({ code: info.error_code ?? 'SFTP_CONNECTION_FAILED', message: info.error })
+      if (status === 'hostkey_confirm' && info.host_key_fingerprint) {
+        set({
+          pendingHostKey: {
+            sessionId:info.host_key_request_id??sessionId,
+            pane,
+            tabId,
+            serverName: server.name,
+            fingerprint: info.host_key_fingerprint,
+            knownFingerprint: info.known_host_key_fingerprint,
+          },
+        })
       }
+      homeDir = info.home_dir || homeDir
     }
 
     if (status !== 'connected') {
@@ -1145,8 +1179,14 @@ async function connectAndNavigate(
     if (current?.view === 'tree' && !current.error) await setViewAndFetch(get, set, pane, 'tree', tabId)
   } catch (err) {
     if(ownedSession)await sftpApi.closeSession(ownedSession).catch(()=>undefined)
-    const msg = err instanceof Error ? err.message : String(err)
-    set({pendingAuth:null,pendingHostKey:null,...updateTabById(get(), pane, tabId, (t) => ({ ...t, sessionId:null,connecting: false,loading: false, error: msg }))})
+    const failure = normalizeCommandError(err)
+    set({
+      pendingAuth: null,
+      pendingHostKey: null,
+      ...updateTabById(get(), pane, tabId, (t) => ({
+        ...t, sessionId: null, connecting: false, loading: false, error: failure.message, connectionErrorCode: failure.error.code,
+      })),
+    })
   }
 }
 

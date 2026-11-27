@@ -43,3 +43,40 @@ test('connection diagnostics retain recognized causes and never serialize raw li
   assert.equal(unknown.error.code, 'SSH_CONNECTION_FAILED')
   assert.ok(!unknown.message.includes('synthetic-secret'))
 })
+
+test('local network guidance uses the endpoint of the failed TCP connection', () => {
+  const unreachable = { code: 'EHOSTUNREACH', message: 'raw transport error' }
+  for (const host of [
+    '10.2.3.4',
+    '172.31.1.2',
+    '192.168.1.10',
+    '169.254.1.2',
+    '::ffff:c0a8:10a',
+    'fd12::1',
+    'fe80::1%en0',
+  ]) {
+    assert.equal(connectionError(unreachable, false, host).error.code, 'LOCAL_NETWORK_UNREACHABLE')
+  }
+  for (const host of ['127.0.0.1', '::1', '172.32.1.2', 'localhost', 'example.test']) {
+    assert.equal(connectionError(unreachable, false, host).error.code, 'SSH_NETWORK_UNREACHABLE')
+  }
+  assert.equal(
+    connectionError({ code: 'ENOTFOUND', message: '' }, false, 'server.local.').error.code,
+    'LOCAL_NETWORK_UNREACHABLE',
+  )
+  const proxy = { ...unreachable, address: '192.168.1.10' }
+  assert.match(connectionError(proxy, true, 'proxy.example.test').message, /代理服务器/)
+  assert.equal(connectionError(proxy, true).error.code, 'PROXY_NETWORK_UNREACHABLE')
+  assert.equal(
+    connectionError(
+      { ...proxy, errors: [proxy, { ...proxy, code: 'ECONNREFUSED' }] },
+      true,
+      'proxy.example.test',
+    ).error.code,
+    'PROXY_NETWORK_UNREACHABLE',
+  )
+  assert.equal(
+    connectionError({ ...proxy, code: 'ECONNREFUSED' }, true, 'proxy.example.test').error.code,
+    'PROXY_CONNECTION_REFUSED',
+  )
+})

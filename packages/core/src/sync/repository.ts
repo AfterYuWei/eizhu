@@ -14,6 +14,7 @@ import {
 import type {
   SyncConflict,
   SyncStatus,
+  SyncPreview,
   SyncResolveBatch,
   SyncRevealCredentials,
   SyncConflictCredentials,
@@ -73,6 +74,18 @@ type Preview = {
   expires: number
 }
 const count = (p: Payload) => entries(p).length
+function replacementImpact(current: Map<string, Entity>, replacement: Map<string, Entity>) {
+  const impact = { added: 0, updated: 0, removed: 0 }
+  for (const [key, value] of replacement) {
+    const previous = current.get(key)
+    if (!previous) impact.added++
+    else if (!equal(previous, value)) impact.updated++
+  }
+  for (const key of current.keys()) {
+    if (!replacement.has(key)) impact.removed++
+  }
+  return impact
+}
 const toRemote = (item: PlainItem, epoch: number): Remote => ({
   itemType: item.itemType,
   itemId: item.itemId,
@@ -305,7 +318,7 @@ export class SyncRepository {
     }
     return { payload, collisions }
   }
-  preview(runtimeId: string, seq: number, epoch: number, remote: Remote[], includeOffline: boolean) {
+  preview(runtimeId: string, seq: number, epoch: number, remote: Remote[], includeOffline: boolean): SyncPreview {
     const offline = includeOffline ? this.offline() : null
     const account = this.local.snapshot(),
       local = this.mergeOffline(account, offline?.payload ?? emptyPayload())
@@ -348,13 +361,21 @@ export class SyncRepository {
         .prepare('INSERT INTO sync_previews VALUES (?,?,?)')
         .run(token, this.cipher.seal(preview, `sync-preview:${token}`), expires)
     })()
+    const cloudItems = new Map<string, Entity>()
+    for (const row of remote) {
+      if (row.value) cloudItems.set(identity(row.itemType, row.itemId), row.value)
+    }
+    const accountItems = new Map(entries(account).map((item) => [identity(item.itemType, item.itemId), item.value]))
+    const localItems = new Map(entries(local.payload).map((item) => [identity(item.itemType, item.itemId), item.value]))
     return {
       token,
-      localCount: count(local.payload),
+      localCount: localItems.size,
       offlineCount: offline ? count(offline.payload) : 0,
-      accountCount: count(account),
-      cloudCount: remote.filter((r) => r.value).length,
+      accountCount: accountItems.size,
+      cloudCount: cloudItems.size,
       conflictCount: conflicts.length,
+      useCloudImpact: replacementImpact(accountItems, cloudItems),
+      useLocalImpact: replacementImpact(cloudItems, localItems),
       conflicts,
     }
   }

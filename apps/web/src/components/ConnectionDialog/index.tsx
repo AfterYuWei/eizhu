@@ -6,6 +6,7 @@ import { writeClipboardText } from '@/lib/clipboard'
 import { ServerIcon } from '@/lib/serverIcons'
 import type { ConnectionLogEntry } from '@/types/sessionMessage'
 import { connectionDiagnosis, stageLabel } from './diagnostics'
+import { LocalNetworkHelp } from './LocalNetworkHelp'
 import '@/styles/connection-dialog.css'
 
 interface ConnectionDialogProps {
@@ -447,6 +448,7 @@ export function ConnectionDialog({
               )}
             </div>
           )}
+          {failed && <LocalNetworkHelp errorCode={errorCode} className="px-4 pb-3" />}
           {failed && (
             <div className="connection-actions connection-records-actions">
               {status === 'reconnecting' && (

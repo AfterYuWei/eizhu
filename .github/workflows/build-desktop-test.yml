@@ -13,6 +13,9 @@ jobs:
     uses: ./.github/workflows/build-desktop.yml
     with:
       channel: test
+    secrets:
+      EIZHU_MAC_DEVELOPMENT_P12: ${{ secrets.EIZHU_MAC_DEVELOPMENT_P12 }}
+      EIZHU_MAC_DEVELOPMENT_PASSWORD: ${{ secrets.EIZHU_MAC_DEVELOPMENT_PASSWORD }}
   release:
     needs: desktop
     if: github.ref == 'refs/heads/dev'
@@ -42,6 +45,6 @@ jobs:
         env:
           RELEASE_VERSION: ${{ steps.prepare.outputs.version }}
         run: |
-          gh release create "v$RELEASE_VERSION" --target "$GITHUB_SHA" --title "eizhu $RELEASE_VERSION" --notes "Electron 测试预览版本。来源提交：$GITHUB_SHA。测试版本可能不稳定，请按需安装。" --prerelease --latest=false --draft
+          gh release create "v$RELEASE_VERSION" --target "$GITHUB_SHA" --title "eizhu $RELEASE_VERSION" --notes "Electron 测试预览版本。来源提交：$GITHUB_SHA。macOS 包使用 Apple Development 签名，未公证。从此前的签名切换时，请下载 DMG 手动覆盖安装，首次打开可能需要系统放行和钥匙串授权。测试版本可能不稳定，请按需安装。" --prerelease --latest=false --draft
           gh release upload "v$RELEASE_VERSION" release-output/*
           gh release edit "v$RELEASE_VERSION" --draft=false --prerelease --latest=false

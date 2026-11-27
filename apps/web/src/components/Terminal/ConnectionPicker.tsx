@@ -1,7 +1,8 @@
 import { useState,useEffect,useMemo,useRef,useId,type RefObject } from 'react'
-import { ArrowUpRight,ChevronDown,Search } from 'lucide-react'
+import { ArrowUpRight,ChevronDown,FolderUp,Plus,Search } from 'lucide-react'
 import { useProfileStore } from '@/store/profile'
 import { useSessionStore } from '@/store/session'
+import { runDesktopAction } from '@/lib/desktopActions'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { resolveServerIcon } from '@/lib/serverIcons'
@@ -145,9 +146,13 @@ export function ConnectionPicker({ tabId, isActive = true, inputRef }: { tabId: 
         </header>
         <div className="connection-picker-list" aria-label="按分组选择服务器">
           {sections.map((section) => renderGroup(section))}
-          {!sections.length && <p className="connection-picker-empty" role="status">
-            {profiles.length ? '未找到匹配的服务器或分组，试试其他关键词。' : '暂无服务器，请先在侧栏新增服务器。'}
-          </p>}
+          {!sections.length && <div className="connection-picker-empty">
+            <p role="status">{profiles.length ? '未找到匹配的服务器或分组，试试其他关键词。' : '添加第一台服务器，或从已有备份导入。'}</p>
+            {!profiles.length && <div className="mt-3 flex flex-wrap justify-center gap-2">
+              <Button size="sm" onClick={() => runDesktopAction('add-server', tabId)}><Plus size={14} />添加服务器</Button>
+              <Button size="sm" variant="outline" onClick={() => runDesktopAction('backup-files')}><FolderUp size={14} />从备份导入</Button>
+            </div>}
+          </div>}
         </div>
       </div>
     </div>

@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import type { BrowserWindow } from 'electron'
 import updater from 'electron-updater'
 import { Updates } from './updates.ts'
+declare const __EIZHU_CHANNEL__: string
 
 /** Real updater transport and SHA-512 rejection, isolated from user cache/installer. */
 export async function verifyStage6(window: BrowserWindow, root: string) {
@@ -84,7 +85,9 @@ export async function verifyStage6(window: BrowserWindow, root: string) {
       `(()=>{const tab=[...document.querySelectorAll('[role="tab"]')].find(e=>e.textContent==='关于');if(!tab)return false;tab.focus();tab.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}));return true})()`,
     )
     await wait(
-      `(()=>{const button=[...document.querySelectorAll('button')].find(e=>e.textContent==='检查更新');return button?.disabled&&document.body.innerText.includes('手动安装')&&document.body.innerText.includes('版本页面')})()`,
+      __EIZHU_CHANNEL__ === 'dev'
+        ? `(()=>{const text=document.body.innerText;return text.includes('关于 eizhu-dev')&&text.includes('本地开发包')&&!text.includes('检查更新')&&!text.includes('版本页面')})()`
+        : `(()=>{const button=[...document.querySelectorAll('button')].find(e=>e.textContent==='检查更新');return button?.disabled&&document.body.innerText.includes('手动安装')&&document.body.innerText.includes('版本页面')})()`,
     )
     // Let the settings panel settle before preserving visual evidence.
     await new Promise((resolve) => setTimeout(resolve, 500))

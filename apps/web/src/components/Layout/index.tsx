@@ -70,6 +70,7 @@ export function Layout() {
   const [snippetQuick, setSnippetQuick] = useState<{ target: SnippetTarget | null } | null>(null)
   const [profileFormOpen, setProfileFormOpen] = useState(false)
   const settingsPage = useDesktopShellStore((s) => s.settingsPage)
+  const settingsBackupFiles = useDesktopShellStore((s) => s.settingsBackupFiles)
   const settingsTab = settingsPage ?? 'appearance'
   const settingsOpen = settingsPage !== null
   const [rightSidebar, setRightSidebar] = useState<'choose' | 'sftp' | null>(null)
@@ -98,10 +99,10 @@ export function Layout() {
   const terminalThemeId = resolveTerminalThemeId(terminalTheme, theme)
   const terminalPalette = getTerminalThemeMeta(terminalThemeId)
 
-  const openSettings = useCallback((tab: SettingsTab) => {
+  const openSettings = useCallback((tab: SettingsTab, backupFiles = false) => {
     const focused = document.activeElement
     if (focused instanceof HTMLElement && !focused.closest('.settings-page')) settingsReturnFocus.current = focused
-    useDesktopShellStore.getState().setSettingsPage(tab)
+    useDesktopShellStore.getState().setSettingsPage(tab, backupFiles)
   }, [])
 
   useEffect(() => {
@@ -141,6 +142,8 @@ export function Layout() {
     const unregister = [
       registerDesktopAction('palette', () => setPaletteOpen((v) => !v)),
       registerDesktopAction('sync-settings', () => openSettings('sync')),
+      registerDesktopAction('backup-files', () => openSettings('backup', true)),
+      registerDesktopAction('add-server', () => setProfileFormOpen(true)),
       registerDesktopAction('account-settings', () => { const account = useAccountStore.getState().status; if (!account?.loggedIn || account.sessionState === 'reauth_required') useAccountDialogStore.getState().open('login', account?.user?.email); else openSettings('account') }),
       registerDesktopAction('snippets', () => setSnippetsOpen(true)),
       registerDesktopAction('snippet-quick', () => setSnippetQuick({ target: snippetTarget() })),
@@ -203,7 +206,7 @@ export function Layout() {
       <div className="shell-workspace-area" ref={workspace}>
       <main className="shell-workspace">
         <header className="shell-workspace-header" data-eizhu-drag-region={desktop || undefined}>
-          {sidebarHidden && <div className="shell-top-controls-slot" aria-hidden="true" />}
+          {mac && sidebarHidden && <div className="shell-top-controls-slot" aria-hidden="true" />}
           <WorkspaceTabs />
           <div className="shell-workspace-actions" data-eizhu-drag-region={desktop || undefined}>
             <TerminalSplitMenu iconOnly />
@@ -243,11 +246,11 @@ export function Layout() {
     {showControls && <WindowControls className="shell-window-controls" maximized={maximized} onMinimize={minimize} onToggleMaximize={toggleMaximize} onClose={close} />}
     <TunnelPrompts key={workspaceGeneration()} />
     <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
-    <ProfileForm open={profileFormOpen} onOpenChange={setProfileFormOpen} />
+    {profileFormOpen && <ProfileForm open onOpenChange={setProfileFormOpen} />}
     {snippetsOpen && <Suspense fallback={null}><SnippetDialog key={workspaceGeneration()} open onOpenChange={setSnippetsOpen} /></Suspense>}
     {snippetQuick && <SnippetQuickPicker key={workspaceGeneration()} target={snippetQuick.target}
       onClose={() => setSnippetQuick(null)} onManage={() => { setSnippetQuick(null); setSnippetsOpen(true) }} />}
-    {settingsOpen && <Suspense fallback={<div className="settings-page settings-page-loading"><Loading /></div>}><SettingsPage key={settingsTab} initialTab={settingsTab} onBack={() => useDesktopShellStore.getState().setSettingsPage(null)} onTabChange={tab => useDesktopShellStore.getState().setSettingsPage(tab)} /></Suspense>}
+    {settingsOpen && <Suspense fallback={<div className="settings-page settings-page-loading"><Loading /></div>}><SettingsPage key={settingsTab} initialTab={settingsTab} initialBackupFiles={settingsBackupFiles} onBack={() => useDesktopShellStore.getState().setSettingsPage(null)} onTabChange={tab => useDesktopShellStore.getState().setSettingsPage(tab)} /></Suspense>}
     <Toaster theme={theme} />
   </div>
 }

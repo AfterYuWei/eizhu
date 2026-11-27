@@ -581,10 +581,18 @@ export async function verifyStage4(
     assert.equal(uiPeer.length, 1)
     await window.webContents.executeJavaScript(`[...document.querySelectorAll('.sftp-pane .sftp-row')].find(row=>row.querySelector('.sftp-cell-name')?.textContent==='source').dispatchEvent(new MouseEvent('dblclick',{bubbles:true}))`)
     await wait(async () => (await window.webContents.executeJavaScript(`!!document.querySelector('.sftp-cell-name[title="配置.json"]')`)) ? true : undefined)
+    const queueUpload = await call<{ tasks: Array<{ id: string; required_profiles: string[] }> }>('sftp.uploadBegin', {
+      sessionId: uiSession.id, name: 'queue-reconnect.txt', destDir: remote, size: 6, overwrite: false, lastModified: 42,
+    })
+    const queueTask = queueUpload.tasks[0]
+    assert.deepEqual(queueTask.required_profiles, [profileId])
+    await call('sftp.pauseTransfer', { taskId: queueTask.id })
     uiPeer[0].end()
     await wait(async () => (await window.webContents.executeJavaScript(`document.querySelector('.sftp-pane-error [role="alert"]')?.textContent.includes('连接已失效')&&document.querySelector('.sftp-pane-error button')?.textContent==='重新连接'`)) ? true : undefined)
     await writeFile(join(root, 'stage4-sftp-disconnected.png'), (await window.webContents.capturePage()).toPNG())
-    await window.webContents.executeJavaScript(`document.querySelector('.sftp-pane-error button').click()`)
+    await window.webContents.executeJavaScript(`document.querySelector('button[aria-label="展开传输队列"]')?.click()`)
+    await wait(async () => (await window.webContents.executeJavaScript(`[...document.querySelectorAll('.sftp-tx-next')].some(button=>button.getAttribute('aria-label')?.endsWith('准备恢复 queue-reconnect.txt'))`)) ? true : undefined)
+    await window.webContents.executeJavaScript(`[...document.querySelectorAll('.sftp-tx-next')].find(button=>button.getAttribute('aria-label')?.endsWith('准备恢复 queue-reconnect.txt')).click()`)
     await wait(async () => (await window.webContents.executeJavaScript(`!document.querySelector('.sftp-pane-error')&&!!document.querySelector('.sftp-cell-name[title="配置.json"]')&&[...document.querySelectorAll('.sftp-crumb-row')].some(row=>row.textContent.includes('source'))`)) ? true : undefined)
     await window.webContents.executeJavaScript(`new Promise(resolve=>setTimeout(resolve,250))`)
     await writeFile(join(root, 'stage4-sftp-reconnected.png'), (await window.webContents.capturePage()).toPNG())
@@ -592,6 +600,12 @@ export async function verifyStage4(
     fileSessions = await call<Array<{ id: string; profile_id: string }>>('sftp.listSessions')
     uiSession = fileSessions.find((session) => session.profile_id === profileId && session.id !== sessionId)
     assert.ok(uiSession && uiSession.id !== oldUiSession)
+    await wait(async () => (await window.webContents.executeJavaScript(`Boolean(document.querySelector('button[aria-label="恢复传输 queue-reconnect.txt"]'))`)) ? true : undefined)
+    const waitingTask = (await call<Array<{ id: string; status: string; transferred: number }>>('sftp.listTransfers', {}))
+      .find((task) => task.id === queueTask.id)
+    assert.equal(waitingTask?.status, 'paused')
+    assert.equal(waitingTask.transferred, 0)
+    await call('sftp.cancelTransfer', { taskId: queueTask.id })
     const inFlight = await call<{ upload_id: string; tasks: Array<{ id: string }> }>('sftp.uploadBegin', {
       sessionId: uiSession.id, name: 'navigation-inflight.txt', destDir: remote, size: 6, overwrite: false, lastModified: 42,
     })
@@ -656,7 +670,7 @@ export async function verifyStage4(
       singletonPage: true,
       navigationRetainsConnections: true,
       navigationRetainsTransfer: true,
-      reconnect: { passed: true, restoredPath: true, screenshots: ['stage4-sftp-disconnected.png', 'stage4-sftp-reconnected.png'] },
+      reconnect: { passed: true, restoredPath: true, queueRecoveryRequiresConfirmation: true, screenshots: ['stage4-sftp-disconnected.png', 'stage4-sftp-reconnected.png'] },
     }
   } finally {
     if (windows.editor) windows.closeEditor(true)

@@ -1,6 +1,6 @@
 # 桌面构建与交付
 
-`VERSION` 是唯一基础版本源。stable 使用原值，test 自动追加 `-test` 预发布标识（实际格式 `x.y.z-test.<提交计数>.<短SHA>`）。主进程、React 与安装包共享构建配置。`out/build-info.json` 记录版本、通道、目标、提交、更新源与源码指纹，打包时逐项比对；源码、配置或提交变化后需重新构建。
+`VERSION` 是唯一基础版本源。GitHub 的 stable 使用原值，test 使用 `x.y.z-test.<提交计数>.<短SHA>`。本机默认构建 `eizhu-dev`，版本为 `x.y.z-dev.<提交计数>.<短SHA>`。主进程、React 与安装包共享构建配置。`out/build-info.json` 记录版本、通道、应用标识、目标、提交、更新源与源码指纹，打包时逐项比对；源码、配置或提交变化后需重新构建。
 
 ```bash
 npm ci
@@ -15,7 +15,11 @@ npm run desktop:package
 npm run desktop:smoke:package -- <安装包路径> --duration=60000
 ```
 
-只在相应平台/架构的主机打包：Windows x64 NSIS；macOS 13+ x64/arm64 分架构 DMG/ZIP；Linux x64 AppImage/deb/rpm。原生模块随 Electron 分发，用户无需安装 Node。构建输出及候选包分别在 `apps/desktop/out` 和 `artifacts/desktop`。
+在相应平台和架构的主机打包，包括 Windows x64 NSIS、macOS 13+ x64/arm64 DMG/ZIP、Linux x64 AppImage/deb/rpm。原生模块随 Electron 分发，用户无需安装 Node。编译输出位于 `apps/desktop/out`，本地包输出到 `artifacts/desktop-dev`。GitHub 工作流显式选择 test 或 stable，发布包输出到 `artifacts/desktop`。
+
+本地开发包的应用标识为 `com.yuweinfo.eizhu.dev`，使用独立的 `eizhu-dev` 数据目录。更新本地包时重新构建并安装。
+
+GitHub 的 macOS 测试包使用固定的自签名证书。打包器先写入应用 UUID，再签署应用、Helper 和框架，最后生成 DMG 与 ZIP。烟测从两个最终产物内校验签名和证书。自签名保留 Hardened Runtime，并沿用测试包 entitlement 以兼容 Electron 内嵌库。从临时签名版迁移时下载 DMG 手动覆盖安装。首次打开可能需要系统放行和钥匙串授权。通过访达启动后验证真实内网 SSH 连接。
 
 ## 独立更新源
 
@@ -27,7 +31,7 @@ npm run desktop:smoke:package -- <安装包路径> --duration=60000
 
 “关于”检查后保存随机候选令牌；下载不会再次检查或替换版本。新检查、通道切换后重新检查、运行实例重启使旧令牌失效；下载/安装中拒绝并发检查。下载进度通过有 schema 和上下文的事件返回主窗口，下载器执行摘要校验。失败后必须重新检查；取消未保存文件确认可保留已校验缓存，用户可再次安装。关闭确认通过后才执行退出备份、释放业务进程/Worker 和安装重启。禁用库的退出自动安装，禁止绕开编辑器确认。安装器同步报错时保留窗口与编辑内容，不假报成功；重启应用或手动安装前先保存内容。
 
-macOS 自动更新要求有效应用签名，hardened runtime/JIT entitlement 已保留；当前测试包不具备正式签名、公证或升级证明。Windows 签名、macOS 证书/公证配置由发布环境单独提供，私钥不入库。本轮未读取签名材料。
+macOS 自动更新需要有效且可跨版本识别的应用签名。测试包跨版本更新需用同一张自签名证书并完成实机验收。Windows 签名与 macOS 正式签名使用发布环境提供的证书，私钥不入库。
 
 ## 验收与回退
 
@@ -39,6 +43,6 @@ macOS 自动更新要求有效应用签名，hardened runtime/JIT entitlement �
 
 升级前导出密码加密 `.eizhubackup` 并独立保存密码。停止应用后按平台方式手动安装候选包；首次 Electron 启动只使用全新目录，不自动读取旧数据。回退时退出应用、保留新数据目录副本，再装上一版已验收安装包；不要用旧应用直接打开新数据库。需要交换业务数据时，通过备份预览后导入；UI 设置、历史、传输任务和云目标配置不在旧备份范围。
 
-核对本机候选包和包内文件：`npm run desktop:delivery:verify -- --directory=artifacts/desktop/stage-6 --asar=artifacts/desktop/mac/eizhu.app/Contents/Resources/app.asar --report=docs/desktop-rebuild/evidence/stage-6/delivery.json`。其他平台按对应安装内容的 app.asar 路径传参。该工具验证完整构建输出、包内版本/通道，并生成源码与产物摘要，不替代启动或签名验收。
+核对本机候选包和包内文件可运行 `npm run desktop:delivery:verify -- --asar=artifacts/desktop-dev/mac/eizhu-dev.app/Contents/Resources/app.asar`。其他平台按对应安装内容的 app.asar 路径传参。该工具验证完整构建输出、包内名称、版本和通道，并生成源码与产物摘要。启动和签名另行验收。
 
 更新 API 与签名要求参考已锁定依赖源码及 [electron-builder v26 官方说明](https://www.electron.build/v26/docs/features/auto-update/)。升级依赖后须重新核对 API 和平台行为。

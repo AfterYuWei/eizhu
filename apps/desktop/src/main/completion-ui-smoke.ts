@@ -280,18 +280,21 @@ export async function verifyCompletionUi(
     await js(`document.querySelector('.xterm').dispatchEvent(new WheelEvent('wheel',{deltaY:100000,bubbles:true}))`)
     for (const theme of ['light', 'dark']) {
       await js(`document.documentElement.className=d`, theme)
-      const geometry = await js<{ native: string; thumb: number; radius: string; hidden: string }>(`
+      const geometry = await js<{ native: string; thumb: number; radius: string; hidden: string; rulerBorderAlpha: number }>(`
         const probe=document.createElement('div');probe.style.cssText='width:160px;height:100px;overflow:scroll';document.body.append(probe);
         const native=getComputedStyle(probe,'::-webkit-scrollbar').width;
         const slider=document.querySelector('.xterm .scrollbar.vertical .slider');const style=getComputedStyle(slider);
         const thumb=slider.getBoundingClientRect().width-parseFloat(style.borderLeftWidth)-parseFloat(style.borderRightWidth);
         const radius=style.borderRadius;const hidden=getComputedStyle(document.querySelector('.shell-tab-scroll')).scrollbarWidth;
-        probe.remove();return {native,thumb,radius,hidden};
+        const ruler=document.querySelector('.xterm-decoration-overview-ruler');
+        const rulerBorderAlpha=ruler.getContext('2d').getImageData(0,Math.floor(ruler.height/2),1,1).data[3];
+        probe.remove();return {native,thumb,radius,hidden,rulerBorderAlpha};
       `)
       assert.equal(geometry.native, '8px')
       assert.equal(geometry.thumb, 6)
       assert.equal(geometry.radius, '999px')
       assert.equal(geometry.hidden, 'none')
+      assert.equal(geometry.rulerBorderAlpha, 0, `Terminal ruler border must be transparent in ${theme} mode`)
       await js(`document.querySelector('.xterm-scrollable-element').dispatchEvent(new MouseEvent('mouseover',{bubbles:true}));await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));await new Promise(resolve=>setTimeout(resolve,150))`)
       await capture(`scrollbar-terminal-${theme}.png`)
     }

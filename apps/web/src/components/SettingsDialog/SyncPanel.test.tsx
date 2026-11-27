@@ -8,6 +8,7 @@ import { vaultApi } from '@/api/vault'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useAccountStore } from '@/store/account'
 import { useSyncStore } from '@/store/sync'
+import { runDesktopAction } from '@/lib/desktopActions'
 import type { SyncStatus, SyncConflict } from '@/types/sync'
 vi.mock('@/api/sync', () => ({
   syncApi: {
@@ -50,6 +51,8 @@ beforeEach(async () => {
     accountCount: 1,
     cloudCount: 3,
     conflictCount: 1,
+    useCloudImpact: { added: 2, updated: 0, removed: 1 },
+    useLocalImpact: { added: 1, updated: 0, removed: 2 },
   })
   useAccountStore.setState(
     {
@@ -103,11 +106,24 @@ it('uploads only after explicit merge confirmation and explains full replacement
   await click('预览首次接入')
   await click('使用本地')
   expect(document.querySelector('[role="alertdialog"]')?.textContent).toContain('云端独有条目将提交删除标记')
+  expect(document.querySelector('[role="alertdialog"]')?.textContent).toContain('新增 1 条 · 覆盖 0 条 · 移除 2 条')
   expect(syncApi.bootstrap).not.toHaveBeenCalled()
   await click('取消')
   await click('确认合并')
   await click('确认接入')
   expect(syncApi.bootstrap).toHaveBeenCalledWith('22222222-2222-4222-8222-222222222222', 'merge')
+})
+
+it('shows the local impact and opens file backup without applying the cloud replacement', async () => {
+  await click('预览首次接入')
+  await click('使用云端')
+  const dialog = document.querySelector('[role="alertdialog"]')
+  expect(dialog?.textContent).toContain('新增 2 条 · 覆盖 0 条 · 移除 1 条')
+  expect(dialog?.textContent).toContain('待同步更改会被丢弃')
+  await click('先导出备份')
+  expect(runDesktopAction).toHaveBeenCalledExactlyOnceWith('backup-files')
+  expect(syncApi.bootstrap).not.toHaveBeenCalled()
+  expect(document.querySelector('[role="alertdialog"]')).toBeNull()
 })
 it('uses the login key and offers no independent sync-password input', async () => {
   expect(host.querySelector('#sync-password')).toBeNull()

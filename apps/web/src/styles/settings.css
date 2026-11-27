@@ -169,7 +169,7 @@
   background: var(--bg-hover);
 }
 .terminal-theme-item.selected {
-  background: var(--accent-bg);
+  background: var(--bg-active);
 }
 
 /* 缩略图预览 */
@@ -220,7 +220,7 @@
 
 /* 勾选标记 */
 .terminal-theme-check {
-  color: var(--accent);
+  color: var(--fg);
   flex-shrink: 0;
 }
 

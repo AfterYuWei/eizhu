@@ -6,6 +6,7 @@ import { ProfileForm } from '@/components/ProfileForm';
 import { GroupForm } from '@/components/Sidebar/GroupForm';
 import { useProfileStore } from '@/store/profile';
 import { useSessionStore } from '@/store/session';
+import { useWorkspaceViewStore } from '@/store/workspaceView';
 import { useDesktopShellStore } from '@/store/desktopShell';
 import { ShellIconButton } from '@/components/Layout/ShellControls';
 import { DropdownMenu,DropdownMenuTrigger,DropdownMenuContent,DropdownMenuItem } from '@/components/ui/dropdown-menu';
@@ -30,6 +31,9 @@ export function Sidebar({ onAddServer }: {
     const profiles = useMemo(() => rawProfiles ?? [], [rawProfiles]);
     const groups = useMemo(() => rawGroups ?? [], [rawGroups]);
     const { openTab, tabs, activeTabId } = useSessionStore();
+    const activePage = useWorkspaceViewStore((state) => state.activePage);
+    // Click-to-select on the server list (single click selects, double connects).
+    const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
     // Profile form
     const [showProfileForm, setShowProfileForm] = useState(false);
     const [editingProfile, setEditingProfile] = useState<Profile | null>(null);
@@ -85,27 +89,23 @@ export function Sidebar({ onAddServer }: {
         name: string;
     }>({
         ghostLabel: (session) => session.name,
-        onActivate: () => { },
+        onActivate: () => setSelectedProfileId(null),
         onOver: (_session, payload) => {
             const groupId = payload?.kind === 'group' ? payload.groupId : null;
             setDragOverGroupId((current) => (current === groupId ? current : groupId));
         },
         onDrop: (session, payload) => {
+            setDragOverGroupId(null);
             if (payload.kind !== 'group')
                 return;
-            setDragOverGroupId(null);
             void moveProfileToGroup(session.profileId, payload.groupId);
         },
         onCancel: () => setDragOverGroupId(null),
     });
-    // Click-to-select on the server list (single click selects, double connects).
-    const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
     const activeTab = tabs.find((t) => t.id === activeTabId);
-    const activeProfileId = useMemo(() => {
-        const tab = tabs.find((t) => t.id === activeTabId);
-        return tab?.profileId;
-    }, [tabs, activeTabId]);
+    const activeProfileId = activePage === 'terminal' ? activeTab?.profileId : undefined;
     const handleConnect = (profile: Profile) => {
+        setSelectedProfileId(null);
         const shouldReuseActiveDraft = activeTab &&
             !activeTab.profileId &&
             !activeTab.sessionId;
@@ -229,6 +229,9 @@ export function Sidebar({ onAddServer }: {
             serverDrag.start(e, { profileId: profile.id, name: profile.name }); }} onClick={(e) => {
                 e.stopPropagation();
                 setSelectedProfileId(profile.id);
+            }} onBlur={(e) => {
+                if (!e.currentTarget.contains(e.relatedTarget))
+                    setSelectedProfileId((current) => current === profile.id ? null : current);
             }} onDoubleClick={(e) => { if (!(e.target as HTMLElement).closest('button'))
             handleConnect(profile); }} onContextMenu={(e) => handleProfileContextMenu(e, profile)} onKeyDown={(e) => {
                 if ((e.target as HTMLElement).closest('button'))
@@ -247,7 +250,12 @@ export function Sidebar({ onAddServer }: {
         </div>
         <div className="srv-info">
           <span className="srv-nm">{profile.name}<ItemSyncBadge type="profile" id={profile.id}/></span>
-          <span className={`shell-connection-dot is-${status}`} aria-label={status === 'connected' ? '已连接' : status === 'connecting' || status === 'reconnecting' ? '连接中' : '未连接'}/>
+          {status !== 'disconnected' && (
+            <span
+              className={`shell-connection-dot is-${status}`}
+              aria-label={status === 'connected' ? '已连接' : status === 'error' ? '连接失败' : '连接中'}
+            />
+          )}
         </div>
         <Button type="button" variant="ghost" size="icon-xs" className="srv-edit-btn" title="编辑服务器" aria-label="编辑服务器" onClick={(e) => {
                 e.stopPropagation();

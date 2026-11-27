@@ -138,6 +138,7 @@ it.each(['list', 'tree'] as const)('%s 视图右键未选中项只删除该项',
   const deleteItem = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find((item) => item.textContent === '删除')!
   await act(async () => deleteItem.click())
   expect(store.getState().deleteConfirm?.entries.map((entry) => entry.path)).toEqual(['/two.txt'])
+  expect(store.getState().leftTabs[0].selected).toEqual(new Set(['/one.txt']))
 })
 
 it('树形视图工具栏删除包括展开目录内的多选文件', async () => {

@@ -65,7 +65,7 @@
 .desktop-shell .shell-sidebar.is-preview { position: absolute; inset: 0 auto 0 0; height: 100%; margin: 0; z-index: 30; opacity: 0; transform: translateX(-24px); pointer-events: none; border-right: 1px solid var(--edge-soft); border-radius: 0 var(--r-lg) var(--r-lg) 0; box-shadow: 8px 0 24px rgba(0, 0, 0, 0.06); transition: transform 180ms cubic-bezier(0.2, 0, 0.2, 1), opacity 180ms ease; }
 .desktop-shell .shell-sidebar.is-preview-open { transform: translateX(0); opacity: 1; pointer-events: auto; }
 .desktop-shell .shell-sidebar.collapsed.is-preview-resting { transition: none; }
-/* The header beneath the floating buttons must exclude their hit area too. */
+/* On macOS, the header shares a row with the floating buttons. */
 .shell-top-controls-slot { flex: 0 0 calc(2 * var(--shell-icon-size) + var(--shell-icon-gap)); height: var(--shell-icon-size); -webkit-app-region: no-drag; }
 /* Keep these controls outside both the animated sidebar and the workspace's
    clipping/stacking context, at the same coordinates throughout hover preview.
@@ -111,7 +111,7 @@
 .desktop-shell .srv-nm { flex: 1; min-width: 0; font: 400 var(--sans-size) / 1.5 var(--sans); color: var(--fg-3); }
 .desktop-shell .srv.active .srv-nm { color: var(--fg-2); }
 .desktop-shell .srv-edit-btn { width: 22px; height: 22px; padding: 0; opacity: 0; }
-.desktop-shell .srv:hover .srv-edit-btn, .desktop-shell .srv:focus-within .srv-edit-btn { opacity: 1; }
+.desktop-shell .srv:is(:hover, :focus-visible, :has(:focus-visible)) .srv-edit-btn { opacity: 1; }
 .desktop-shell .sidebar-empty { font-size: var(--sans-size); padding: 20px 8px; color: var(--fg-3); }
 .desktop-shell :is(.shell-sidebar .sidebar-body, .settings-page .settings-nav) { scrollbar-width: none; }
 .desktop-shell :is(.shell-sidebar .sidebar-body, .settings-page .settings-nav)::-webkit-scrollbar { display: none; width: 0; height: 0; }
@@ -161,7 +161,7 @@
 .desktop-shell .shell-tab-close { flex-shrink: 0; width: 24px; height: 24px; margin-right: 4px; color: inherit; opacity: 0; pointer-events: none; }
 .desktop-shell .shell-tab-close > svg { width: 12px; height: 12px; }
 .desktop-shell .shell-tab.is-active .shell-tab-close { opacity: 0.5; pointer-events: auto; }
-.desktop-shell .shell-tab:is(:hover, :focus-within) .shell-tab-close { opacity: 1; pointer-events: auto; }
+.desktop-shell .shell-tab:is(:hover, :focus-visible, :has(:focus-visible)) .shell-tab-close { opacity: 1; pointer-events: auto; }
 .desktop-shell .shell-tab .shell-tab-close:hover { background: color-mix(in srgb, currentColor 8%, transparent); color: inherit; }
 .desktop-shell .shell-tab-add { flex-shrink: 0; -webkit-app-region: no-drag; }
 /* SSH chrome shares the terminal canvas. On macOS the collapsed sidebar's

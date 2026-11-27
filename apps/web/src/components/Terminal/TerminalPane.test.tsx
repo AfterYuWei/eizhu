@@ -18,7 +18,7 @@ const mocks = vi.hoisted(() => ({
     reset: vi.fn(),
     fit: vi.fn(),
     getSize: () => ({ cols: 80, rows: 24 }),
-    getTerminal: () => null,
+    getTerminal: vi.fn(),
   },
   channel: {
     status: 'connected',
@@ -61,6 +61,7 @@ function View() {
 const message = async (payload: SessionMessage) => act(async () => mocks.onMessage!(payload))
 beforeEach(async () => {
   vi.resetAllMocks()
+  mocks.terminal.getTerminal.mockReturnValue(null)
   vi.mocked(sessionApi.close).mockResolvedValue(undefined)
   vi.mocked(sessionApi.create).mockResolvedValue({ session_id: 'new-ssh', status: 'connecting' })
   ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
@@ -80,6 +81,51 @@ afterEach(async () => {
   useSessionStore.setState(useSessionStore.getInitialState(), true)
   vi.useRealTimers()
   vi.unstubAllGlobals()
+})
+
+it('终端查找只清理自己的选区，退出时保留用户手动选中的文字', async () => {
+  let selectionChanged: (() => void) | undefined
+  const terminal = {
+    buffer: {
+      active: {
+        length: 1,
+        getLine: () => ({
+          length: 3,
+          getCell: (column: number) => ({ getWidth: () => 1, getChars: () => 'abc'[column] }),
+        }),
+      },
+    },
+    select: vi.fn(),
+    clearSelection: vi.fn(),
+    scrollToLine: vi.fn(),
+    focus: vi.fn(),
+    onSelectionChange: (listener: () => void) => {
+      selectionChanged = listener
+      return { dispose: () => { selectionChanged = undefined } }
+    },
+  }
+  mocks.terminal.getTerminal.mockReturnValue(terminal)
+  await act(async () => terminalActions('tab')!.search())
+  const input = host.querySelector<HTMLInputElement>('[aria-label="查找内容"]')!
+  const enterQuery = (value: string) => act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, value)
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+  })
+
+  await enterQuery('abc')
+  expect(terminal.select).toHaveBeenCalledWith(0, 0, 3)
+  await enterQuery('missing')
+  expect(host.querySelector('[role="search"]')?.textContent).toContain('无匹配')
+  expect(terminal.clearSelection).toHaveBeenCalledOnce()
+  expect(selectionChanged).toBeUndefined()
+
+  await enterQuery('abc')
+  selectionChanged?.()
+  const next = [...host.querySelectorAll<HTMLButtonElement>('[role="search"] button')].find((button) => button.textContent === '下一个')!
+  await act(async () => next.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })))
+  expect(host.querySelector('[role="search"]')).toBeNull()
+  expect(terminal.clearSelection).toHaveBeenCalledOnce()
+  expect(terminal.focus).toHaveBeenCalledOnce()
 })
 
 it('renders a replayed failure snapshot at host confirmation as an error without requiring a second error event', async () => {

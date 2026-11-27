@@ -58,10 +58,13 @@ import updater from 'electron-updater'
 import { Updates } from './updates.ts'
 declare const __EIZHU_VERSION__: string
 declare const __EIZHU_CHANNEL__: string
+declare const __EIZHU_APP_NAME__: string
+declare const __EIZHU_APP_ID__: string
 declare const __EIZHU_UPDATE_FEEDS__: Partial<Record<'stable' | 'test', string>>
-declare const __EIZHU_UPDATE_REPOSITORY__: { owner: string; repo: string }
+declare const __EIZHU_UPDATE_REPOSITORY__: { owner: string; repo: string } | null
 
 const smoke = process.argv.includes('--smoke-test')
+const localNetworkPrivacy = process.platform === 'darwin' && Number.parseInt(process.getSystemVersion(), 10) >= 15
 const devUrl = !app.isPackaged ? process.env.ELECTRON_RENDERER_URL : undefined
 const smokeRoot = process.argv.find((value) => value.startsWith('--smoke-root='))?.slice(13)
 if (smoke && !smokeRoot) throw new Error('Smoke test requires an isolated --smoke-root')
@@ -73,16 +76,19 @@ if (
 )
   throw new Error('Smoke root must be a fresh empty temporary directory')
 if (process.platform !== 'win32') process.umask(0o077)
+const localBuild = __EIZHU_CHANNEL__ === 'dev'
+const appName = app.isPackaged ? __EIZHU_APP_NAME__ : 'eizhu'
+const packagedProfile = localBuild ? appName : 'eizhu-desktop'
 const dataRoot = smoke
   ? join(smokeRoot!, 'profile')
-  : join(app.getPath('appData'), app.isPackaged ? 'eizhu-desktop' : 'eizhu-desktop-dev')
+  : join(app.getPath('appData'), app.isPackaged ? packagedProfile : 'eizhu-desktop-dev')
 // Electron path overrides require existing directories, including on the first normal installation.
 mkdirSync(dataRoot, { recursive: true, mode: 0o700 })
 mkdirSync(join(dataRoot, 'chromium'), { recursive: true, mode: 0o700 })
 app.setPath('userData', dataRoot)
 app.setPath('sessionData', join(dataRoot, 'chromium'))
-app.setName('eizhu')
-if (process.platform === 'win32') app.setAppUserModelId('com.yuweinfo.eizhu')
+app.setName(appName)
+if (process.platform === 'win32') app.setAppUserModelId(app.isPackaged ? __EIZHU_APP_ID__ : 'com.yuweinfo.eizhu')
 protocol.registerSchemesAsPrivileged([
   {
     scheme: 'eizhu',
@@ -228,6 +234,7 @@ function capabilities(): PlatformCapabilities {
     nativeFilePaths: true,
     documentPicker: true,
     secureKeyStore: keyMode === 'system',
+    localNetworkPrivacy,
     maxConcurrentTransfers: 5,
   }
 }
@@ -569,6 +576,11 @@ async function execute(window: BrowserWindow, operation: string, input: unknown)
     case 'system.openExternal':
       await shell.openExternal(foundation['system.openExternal'].input.parse(value).url)
       return
+    case 'system.openLocalNetworkSettings':
+      if (window !== windows.main) fail('FORBIDDEN', '仅主窗口可打开本地网络设置')
+      if (!localNetworkPrivacy) fail('UNSUPPORTED_PLATFORM', '当前系统不提供本地网络隐私设置')
+      await shell.openExternal('x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension')
+      return
     case 'system.saveText': {
       const data = foundation['system.saveText'].input.parse(value)
       const ownerContext = { ...runtime.context }
@@ -604,7 +616,7 @@ async function execute(window: BrowserWindow, operation: string, input: unknown)
     case 'diagnostics.append': {
       const data = foundation['diagnostics.append'].input.parse(value)
       // Only test builds retain frontend diagnostics. Structured secrets are redacted again in main.
-      if (__EIZHU_CHANNEL__ === 'test') {
+      if (__EIZHU_CHANNEL__ !== 'stable') {
         const lines = data.lines.map(redactLogText)
         const path = join(dataRoot, 'frontend.log')
         if (
@@ -683,8 +695,8 @@ async function start(): Promise<void> {
   updates = new Updates({
     driver: updater.autoUpdater,
     feeds: smoke ? {} : __EIZHU_UPDATE_FEEDS__,
-    repository: smoke ? undefined : __EIZHU_UPDATE_REPOSITORY__,
-    supported: app.isPackaged && (process.platform !== 'linux' || Boolean(process.env.APPIMAGE)),
+    repository: smoke ? undefined : (__EIZHU_UPDATE_REPOSITORY__ ?? undefined),
+    supported: !localBuild && app.isPackaged && (process.platform !== 'linux' || Boolean(process.env.APPIMAGE)),
     progress: (progress) => windows.emit(windows.main, 'eizhu-update-progress', progress),
     install: (action) => windows.runConfirmedQuit(() => quit(action)),
   })
@@ -693,7 +705,7 @@ async function start(): Promise<void> {
       process.platform === 'darwin'
         ? [
             {
-              label: 'eizhu',
+              label: appName,
               submenu: [
                 { role: 'about' },
                 { type: 'separator' },

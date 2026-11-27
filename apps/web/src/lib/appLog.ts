@@ -9,7 +9,8 @@ const pending: string[] = []
 let flushTimer: number | null = null
 
 function loggingEnabled(): boolean {
-  const testBuild = import.meta.env.VITE_EIZHU_CHANNEL === 'test' || import.meta.env.DEV
+  const channel = import.meta.env.VITE_EIZHU_CHANNEL
+  const testBuild = channel === 'test' || channel === 'dev' || import.meta.env.DEV
   return isDesktopRuntime() && testBuild
 }
 
@@ -76,5 +77,5 @@ export function installFrontendLogging(): void {
   window.addEventListener('unhandledrejection', (event) => {
     recordFrontendLog('ERROR', 'unhandledrejection', event.reason)
   })
-  recordFrontendLog('INFO', 'frontend logger started', { channel: 'test', level: 'debug' })
+  recordFrontendLog('INFO', 'frontend logger started', { channel: import.meta.env.VITE_EIZHU_CHANNEL ?? 'dev', level: 'debug' })
 }

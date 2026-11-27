@@ -351,9 +351,9 @@ export const terminalThemes: TerminalTheme[] = [
   },
 ]
 
-/** 获取原始终端配色，命令标识不修改文字颜色。 */
+/** 保留预设配色，隐藏 xterm 在滚动条旁绘制的概览标尺边线。 */
 export function getTerminalTheme(id: string): ITheme {
-  return getTerminalThemeMeta(id).theme
+  return { ...getTerminalThemeMeta(id).theme, overviewRulerBorder: '#00000000' }
 }
 
 /** 获取主题元信息（包含背景色与分类） */

@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict'
+import { once } from 'node:events'
 import { writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { BrowserWindow } from 'electron'
+import { Server, utils, type Connection } from 'ssh2'
 import { verifyVaultLayout } from './vault-layout-smoke.ts'
 
 /** Synthetic UI actions in the existing smoke window and its isolated data directory. */
@@ -33,6 +35,81 @@ export async function verifyWorkspaceTabs(window: BrowserWindow, root: string) {
   }
   try {
     window.setContentSize(1280, 720)
+    const peers = new Set<Connection>()
+    let terminalInput = ''
+    const server = new Server({ hostKeys: [utils.generateKeyPairSync('ed25519').private] }, (client) => {
+      peers.add(client)
+      client.on('error', () => undefined)
+      client.once('close', () => peers.delete(client))
+      client.on('authentication', (request) => {
+        if (request.method === 'password' && request.password === 'synthetic-first-connection') request.accept()
+        else request.reject()
+      })
+      client.on('ready', () => client.on('session', (accept) => {
+        const session = accept()
+        session.on('pty', (allow) => allow?.())
+        session.on('shell', (allow) => {
+          const channel = allow()
+          channel.on('error', () => undefined)
+          channel.on('data', (data: Buffer) => { terminalInput += data.toString('utf8') })
+          channel.write('first-connection-ready\r\n')
+        })
+      }))
+    })
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+    const address = server.address()
+    assert.ok(address && typeof address === 'object')
+    const click = (label: string) => js(`[...document.querySelectorAll('button')].find(button=>button.textContent.trim()===${JSON.stringify(label)}).click()`)
+    let fixtureProfile: { id: string } | undefined
+    try {
+      await js(`document.querySelector('.shell-tab-add').click()`)
+      await wait(`[...document.querySelectorAll('button')].some(button=>button.textContent==='从备份导入')`)
+      const draft = await js(`document.querySelector('.shell-tab-list [role="tab"]').id`)
+      await click('从备份导入')
+      await wait(`Boolean(document.querySelector('#backup-import-title'))`)
+      await click('返回应用')
+      await click('添加服务器')
+      const fill = (id: string, value: string) => js(`(()=>{
+        const input=document.getElementById(${JSON.stringify(id)});
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,${JSON.stringify(value)});
+        input.dispatchEvent(new Event('input',{bubbles:true}));
+      })()`)
+      await fill('name', '首次连接合成服务')
+      await fill('host', '127.0.0.1')
+      await fill('port', String(address.port))
+      await js(`[...document.querySelectorAll('.pf-tab-list [role="tab"]')].find(tab=>tab.textContent==='身份认证').focus()`)
+      await fill('username', 'deploy')
+      await fill('password', 'synthetic-first-connection')
+      await click('保存并连接')
+      await wait(`[...document.querySelectorAll('button')].some(button=>button.textContent.trim()==='仅本次信任')`)
+      await click('仅本次信任')
+      await wait(`window.eizhu.session.list().then(sessions=>sessions.some(session=>session.status==='connected'))`)
+      await wait(`Boolean(document.querySelector('.xterm-helper-textarea'))&&!document.querySelector('.connection-status')`)
+      window.focus()
+      window.webContents.focus()
+      await js(`document.querySelector('.xterm-helper-textarea').focus()`)
+      await window.webContents.insertText('first-connection-input')
+      for (let attempt = 0; attempt < 100 && !terminalInput.includes('first-connection-input'); attempt++)
+        await new Promise((resolve) => setTimeout(resolve, 50))
+      assert.ok(terminalInput.includes('first-connection-input'))
+      assert.equal(await js(tabCount), 1)
+      assert.equal(await js(`document.querySelector('.shell-tab-list [role="tab"]').id`), draft)
+      fixtureProfile = await js(`window.eizhu.profile.list({groupId:null,search:'首次连接合成服务'}).then(rows=>rows[0])`)
+      assert.ok(fixtureProfile)
+    } finally {
+      try {
+        await js(`document.querySelector('.shell-tab-close')?.click()`)
+        await wait(`${tabCount}===0`)
+        if (fixtureProfile) await js(`window.eizhu.profile.delete({id:${JSON.stringify(fixtureProfile.id)}})`)
+      } finally {
+        for (const peer of peers) peer.end()
+        await new Promise<void>((resolve) => server.close(() => resolve()))
+      }
+    }
+    const reloaded = once(window.webContents, 'did-finish-load')
+    window.webContents.reload()
+    await reloaded
+    await wait(`Boolean(document.querySelector('.shell-tab-add'))`)
     for (let count = 1; count <= 12; count++) {
       await js(`document.querySelector('.shell-tab-add').click()`)
       await wait(`${tabCount}===${count}`)
@@ -144,7 +221,7 @@ export async function verifyWorkspaceTabs(window: BrowserWindow, root: string) {
       await window.eizhu.localState.write({key:'terminal_layout',value:{version:1,tree:null,focusedId:null,tabs:[]}});
     })()`)
     await reload(false)
-    return { passed: true, synthetic: true, keyboard: true, mountedContentRetained: true, singletonTools: true, toolShortcutIsolation: true, closeFocus: true, freshSessions: true, fixedServerHeading: true, rememberedFolders: true, vaultLayout, wide, narrow, enlarged, screenshots }
+    return { passed: true, synthetic: true, firstConnection: true, keyboard: true, mountedContentRetained: true, singletonTools: true, toolShortcutIsolation: true, closeFocus: true, freshSessions: true, fixedServerHeading: true, rememberedFolders: true, vaultLayout, wide, narrow, enlarged, screenshots }
   } finally {
     await js(`document.documentElement.className=${JSON.stringify(original.theme)};document.documentElement.style.setProperty('--sans-size',${JSON.stringify(original.font)});delete window.__tabsSmokePanel;delete window.__tabsSmokeVault`)
     await js(`(()=>{if(document.querySelector('.desktop-shell.sidebar-is-hidden'))document.dispatchEvent(new KeyboardEvent('keydown',{key:'b',ctrlKey:true,shiftKey:true,bubbles:true,cancelable:true}))})()`)

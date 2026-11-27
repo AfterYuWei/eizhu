@@ -8,6 +8,27 @@ it('刷新失联会话会重新连接并恢复原目录',async()=>{
  const store=createSftpStore();const tab=store.getState().leftTabs[0];store.setState({leftTabs:[{...tab,sessionId:'old',path:'/work'}]});api.getSession.mockResolvedValue({status:'disconnected'});await store.getState().refresh('left');expect(api.closeSession).toHaveBeenCalledWith('old');expect(api.createSession).toHaveBeenCalledWith('local');expect(store.getState().leftTabs[0]).toMatchObject({sessionId:'new',path:'/work',error:null});expect(api.list).toHaveBeenLastCalledWith('new','/work',false)
 })
 
+it('从传输任务重连原文件标签，保留目录和检查点，等待用户恢复传输', async () => {
+  const store = createSftpStore()
+  const [tab] = store.getState().leftTabs
+  const resumeTransfer = vi.fn()
+  store.setState({
+    leftTabs: [{ ...tab, sessionId: 'old', path: '/work', connectionLost: true }],
+    transfers: [{
+      id: 'job', file_name: 'data', direction: 'download', status: 'recoverable',
+      size: 100, transferred: 40, speed: 0, started_at: 1, required_profiles: ['local'],
+    }],
+    resumeTransfer,
+  })
+  api.getSession.mockResolvedValue({ status: 'disconnected' })
+  await store.getState().connectTransferEndpoints('job')
+  expect(api.closeSession).toHaveBeenCalledExactlyOnceWith('old')
+  expect(api.list).toHaveBeenCalledExactlyOnceWith('new', '/work', false)
+  expect(store.getState().leftTabs).toHaveLength(1)
+  expect(store.getState().transfers[0]).toMatchObject({ status: 'recoverable', transferred: 40 })
+  expect(resumeTransfer).not.toHaveBeenCalled()
+})
+
 it('失联事件立即结束加载并保留目录，迟到的目录结果不能覆盖失联状态', async () => {
   const store = createSftpStore(), tab = store.getState().leftTabs[0]
   store.setState({ leftTabs: [{ ...tab, sessionId: 'old', path: '/work' }] })
@@ -31,6 +52,24 @@ it('重连失败后再次重连仍直接恢复原目录，不先跳回主目录'
   await store.getState().refresh('left')
   expect(api.list).toHaveBeenCalledExactlyOnceWith('new', '/work', true)
   expect(store.getState().leftTabs[0]).toMatchObject({ path: '/work', sessionId: 'new', error: null, connectionLost: false })
+})
+
+it('保留内网连接失败原因，并在连接成功后清理错误码', async () => {
+  const store = createSftpStore()
+  const server = { id: 'lan', name: '内网服务器', host: '192.168.1.20', port: 22, username: 'user' }
+  const error = '无法连接内网 SSH 服务器'
+  const errorCode = 'LOCAL_NETWORK_UNREACHABLE'
+  api.createSession.mockResolvedValueOnce({ session_id: 'blocked', status: 'connecting' })
+  api.getSession.mockResolvedValueOnce({ status: 'error', error, error_code: errorCode })
+  await store.getState().connectServer('right', server)
+  expect(api.closeSession).toHaveBeenCalledWith('blocked')
+  expect(store.getState().rightTabs.find((tab) => tab.server.id === server.id)).toMatchObject({
+    error, connectionErrorCode: errorCode, sessionId: null,
+  })
+  await store.getState().refresh('right')
+  expect(store.getState().rightTabs.find((tab) => tab.server.id === server.id)).toMatchObject({
+    error: null, connectionErrorCode: undefined, sessionId: 'new',
+  })
 })
 
 it('目录读取失败保留最后成功路径', async () => {

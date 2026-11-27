@@ -11,6 +11,7 @@ import { writeClipboardText } from '@/lib/clipboard'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { InlineError } from '@/components/ui/inline-error'
+import { LocalNetworkHelp } from '@/components/ConnectionDialog/LocalNetworkHelp'
 import { Loading } from '@/components/ui/loading'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog'
@@ -124,6 +125,7 @@ export function PortMappingView({ active }: { active: boolean }) {
               <Button variant="ghost" disabled={pending} className="pm-delete" aria-label={`删除 ${config.name}`} onClick={() => setDeleting(config)}><Trash2 size={14} />删除</Button>
             </div></div>
             {state?.error_message && <details className="pm-rule-error"><summary>错误详情{state.error_code ? ` · ${state.error_code}` : ''}</summary><p>{state.error_message}</p></details>}
+            <LocalNetworkHelp errorCode={state?.error_code ?? undefined} />
             <InlineError message={errors[config.id]} />
           </li>
         })}</ul>}

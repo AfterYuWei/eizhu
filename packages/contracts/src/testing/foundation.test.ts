@@ -29,6 +29,10 @@ test('only exact request envelopes, bounded settings and http(s) external links 
   )
   for (const url of ['file:///etc/passwd', 'javascript:alert(1)', 'eizhu://app/index.html'])
     assert.equal(foundation['system.openExternal'].input.safeParse({ url }).success, false)
+  const settingsUrl = { url: 'x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension' }
+  assert.equal(foundation['system.openExternal'].input.safeParse(settingsUrl).success, false)
+  assert.equal(foundation['system.openLocalNetworkSettings'].input.safeParse(settingsUrl).success, false)
+  assert.equal(foundation['system.openLocalNetworkSettings'].input.safeParse(undefined).success, true)
   assert.equal(
     foundation['system.openExternal'].input.safeParse({ url: 'https://example.invalid' }).success,
     true,

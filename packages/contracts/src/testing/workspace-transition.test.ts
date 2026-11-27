@@ -21,6 +21,7 @@ function bootstrap(generation: number, workspaceId = 'offline', userId = 0): Boo
       documentPicker: true,
       secureKeyStore: true,
       maxConcurrentTransfers: 5,
+      localNetworkPrivacy: false,
     },
   }
 }

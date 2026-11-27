@@ -11,14 +11,16 @@ const desktop = resolve(root, 'apps/desktop')
 const web = resolve(root, 'apps/web')
 const internal = { '@eizhu/contracts': resolve(root, 'packages/contracts/src/index.ts') }
 const external = ['electron', 'better-sqlite3', 'argon2', 'electron-updater', 'ssh2']
-const { version, channel, feeds, updateRepository } = buildSettings()
+const { version, channel, appName, appId, feeds, updateRepository } = buildSettings()
 export default defineConfig({
   main: {
     define: {
       __EIZHU_VERSION__: JSON.stringify(version),
       __EIZHU_CHANNEL__: JSON.stringify(channel),
+      __EIZHU_APP_NAME__: JSON.stringify(appName),
+      __EIZHU_APP_ID__: JSON.stringify(appId),
       __EIZHU_UPDATE_FEEDS__: JSON.stringify(feeds),
-      __EIZHU_UPDATE_REPOSITORY__: JSON.stringify(updateRepository),
+      __EIZHU_UPDATE_REPOSITORY__: JSON.stringify(updateRepository ?? null),
     },
     resolve: { alias: internal },
     build: {

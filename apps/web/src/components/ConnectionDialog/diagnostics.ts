@@ -43,6 +43,14 @@ export function connectionDiagnosis(code?: string): { title: string; suggestion:
       }
     case 'PROXY_CONNECTION_REFUSED':
       return { title: '代理端口拒绝连接', suggestion: '检查代理地址与端口，并确认代理服务已启动。' }
+    case 'LOCAL_NETWORK_UNREACHABLE':
+      return {
+        title: '无法连接内网地址',
+        suggestion: '确认本机已接入目标所在的网络，并检查目标地址和端口。',
+      }
+    case 'SSH_ACCESS_DENIED':
+    case 'PROXY_ACCESS_DENIED':
+      return { title: '系统阻止连接', suggestion: '检查本机防火墙和网络管理策略是否允许访问目标。' }
     case 'SSH_NETWORK_UNREACHABLE':
     case 'PROXY_NETWORK_UNREACHABLE':
       return {

@@ -24,6 +24,7 @@ import { themeOptions,appFontFamilyOptions,terminalFontFamilyOptions,terminalFon
 interface SettingsPageProps {
     onBack: () => void;
     initialTab?: SettingsTab;
+    initialBackupFiles?: boolean;
     onTabChange?: (tab: SettingsTab) => void;
 }
 export type SettingsTab = 'appearance' | 'terminal' | 'backup' | 'account' | 'sync' | 'logs' | 'diagnostics' | 'about' | 'ai';
@@ -40,7 +41,7 @@ const baseTabs: {
     { key: 'sync', label: '云同步', icon: CloudSync },
     { key: 'about', label: '关于', icon: Info },
 ];
-export function SettingsPage({ onBack, initialTab = 'appearance', onTabChange }: SettingsPageProps) {
+export function SettingsPage({ onBack, initialTab = 'appearance', initialBackupFiles = false, onTabChange }: SettingsPageProps) {
     const page = useRef<HTMLElement>(null);
     const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab);
     const [themePickerOpen, setThemePickerOpen] = useState(false);
@@ -234,7 +235,7 @@ export function SettingsPage({ onBack, initialTab = 'appearance', onTabChange }:
               {isDesktopRuntime() && <HistoryPanel />}
             </TabsContent>
 
-            <TabsContent value="backup" className="settings-content"><BackupPanel /></TabsContent>
+            <TabsContent value="backup" className="settings-content"><BackupPanel initialTab={initialBackupFiles ? 'files' : 'backup'} /></TabsContent>
             <TabsContent value="ai" className="settings-content"><AiPanel /></TabsContent>
 
             <TabsContent value="account" className="settings-content"><AccountPanel /></TabsContent>

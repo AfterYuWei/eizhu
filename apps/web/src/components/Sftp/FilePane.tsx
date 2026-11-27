@@ -1,5 +1,6 @@
 import { Loading,LoadingBar } from '@/components/ui/loading'
 import { InlineError } from '@/components/ui/inline-error'
+import { LocalNetworkHelp } from '@/components/ConnectionDialog/LocalNetworkHelp'
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { writeClipboardText } from '@/lib/clipboard';
@@ -72,7 +73,6 @@ export function FilePane({ pane, onPickServer }: FilePaneProps) {
         }
         finally {
             detach();
-            api.getState().cancelDrag();
         }
     };
     // ─── 指针拖拽引擎（替代 HTML5 DnD） ──────────────────────────────────────
@@ -81,14 +81,7 @@ export function FilePane({ pane, onPickServer }: FilePaneProps) {
         ghostLabel: (session) => session.entries.length === 1
             ? session.entries[0].name
             : `${session.entries[0].name} 等 ${session.entries.length} 项`,
-        onActivate: (session) => {
-            const state = api.getState();
-            // 拖动单个未选中项时同步选中（对齐原 HTML5 startDrag 行为）：
-            // entries.length === 1 仅出现在「未选中即拖」或「唯一选中项」两种情况
-            if (session.entries.length === 1)
-                state.select(pane, session.entries[0].path);
-            state.beginDrag(session);
-        },
+        onActivate: (session) => api.getState().beginDrag(session),
         onOver: (_session, payload, copyModifier) => {
             const state = api.getState();
             if (!state.dragSession)
@@ -103,9 +96,11 @@ export function FilePane({ pane, onPickServer }: FilePaneProps) {
             state.setDropTarget(invalid ? null : { ...target, copyModifier: copyModifier });
         },
         onDrop: async (_session, payload, copyModifier) => {
-            if (payload.kind !== 'sftp')
-                return;
             const state = api.getState();
+            if (payload.kind !== 'sftp') {
+                state.cancelDrag();
+                return;
+            }
             state.setDropTarget(payload.target);
             await state.commitDrop(copyModifier);
         },
@@ -114,6 +109,7 @@ export function FilePane({ pane, onPickServer }: FilePaneProps) {
         onLeaveWindow: (session) => {
             if (!getPlatformCapabilities().dragOut)
                 return false;
+            api.getState().cancelDrag();
             void runDragOut(session.sourceSessionId, session.entries.map((entry) => entry.path));
             return true;
         },
@@ -345,8 +341,6 @@ export function FilePane({ pane, onPickServer }: FilePaneProps) {
       {treeRoot ? (<FileTree root={treeRoot} activePath={path} selected={selected} onSelect={(entry, additive) => selectFn(entry.path, { additive })} onActivate={(entry) => openEntry(entry)} onContextMenu={(e, entry) => {
                 e.preventDefault();
                 e.stopPropagation();
-                if (!selected.has(entry.path))
-                    selectFn(entry.path);
                 setCtx({ x: e.clientX, y: e.clientY, entry });
             }} onRowPointerDown={(e, entry) => {
                 const session = buildDragSession(entry, flattenEntries(treeRoot));
@@ -380,7 +374,10 @@ export function FilePane({ pane, onPickServer }: FilePaneProps) {
         {activeTab.loading && <LoadingBar label={activeTab.connecting ? `${connectionPrompt} · ${server.name}` : '正在读取文件列表'} />}
       </div>
       {activeTab.error ? <div className="sftp-pane-error">
-        <InlineError message={activeTab.error}/>
+        <div className="flex min-w-0 max-w-md flex-col gap-2">
+          <InlineError message={activeTab.error}/>
+          <LocalNetworkHelp errorCode={activeTab.connectionErrorCode}/>
+        </div>
         <Button variant="outline" size="sm" disabled={activeTab.loading} onClick={handleRefresh}>{activeTab.connectionLost ? '重新连接' : '重试'}</Button>
       </div> : activeTab.loading ? <div className="sftp-pane-loading" aria-busy="true">
         {activeTab.connecting ? <div className="sftp-connection-status" role="status">

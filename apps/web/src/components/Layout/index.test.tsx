@@ -508,6 +508,7 @@ it('旧窄侧栏按最小展开宽度显示，macOS 折叠后工具图标移动�
   await act(async () => toggle().click())
   expect(host.querySelector('.shell-sidebar-top .shell-top-controls')).toBeNull()
   expect(host.querySelector('.shell-fixed-top-controls .shell-top-controls')).not.toBeNull()
+  expect(host.querySelector('.shell-workspace-header .shell-top-controls-slot')).not.toBeNull()
   expect(host.querySelector('.desktop-shell.is-mac.sidebar-is-hidden')).not.toBeNull()
 })
 
@@ -530,8 +531,13 @@ it('Windows 窗口控制位于窗口层而非圆角工作区，按钮独立响�
   windowControls.maximized = true
   await render()
   expect(controls.querySelector('[aria-label="还原"]')).not.toBeNull()
+  const tab = host.querySelector('.shell-workspace-tabs [aria-selected="true"]')
+  expect(tab).not.toBeNull()
   await act(async () => toggle().click())
   expect(host.querySelector('.shell-window-controls')).toBe(controls)
+  expect(host.querySelector('.shell-fixed-top-controls .shell-top-controls')).not.toBeNull()
+  expect(host.querySelector('.shell-workspace-header .shell-top-controls-slot')).toBeNull()
+  expect(host.querySelector('.shell-workspace-tabs [aria-selected="true"]')).toBe(tab)
 })
 
 it('账号空间更换重挂载后保留设置分类', async () => {
