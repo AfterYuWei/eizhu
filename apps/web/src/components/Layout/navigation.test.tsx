@@ -38,11 +38,34 @@ it('分组可折叠，服务器单击不连接，双击复用当前连接草稿'
   expect(row.title).toContain('root@example.test:2200')
   await act(async () => row.click())
   expect(open).not.toHaveBeenCalled()
+  expect(row.classList.contains('active')).toBe(true)
   await act(async () => row.dispatchEvent(new MouseEvent('dblclick', { bubbles: true })))
   expect(open).toHaveBeenCalledWith('p', profile.name, profile.host, 2200, 'root', 'draft')
+  expect(row.classList.contains('active')).toBe(false)
   await act(async () => host.querySelector<HTMLElement>('.grp-label')!.click())
   expect(host.querySelector('.srv')).toBeNull()
   expect(host.querySelector('.grp-label')!.getAttribute('aria-expanded')).toBe('false')
+})
+
+it('服务器临时选中随焦点离开清除，只有显示中的终端标记当前服务器', async () => {
+  await act(async () => root.render(<TooltipProvider><Sidebar /><button type="button">工作区操作</button></TooltipProvider>))
+  const row = host.querySelector<HTMLElement>('.srv')!
+  await act(async () => { row.focus(); row.click() })
+  expect(row.classList.contains('active')).toBe(true)
+  await act(async () => host.querySelector<HTMLButtonElement>('.srv-edit-btn')!.focus())
+  expect(row.classList.contains('active')).toBe(true)
+  await act(async () => [...host.querySelectorAll('button')].find((button) => button.textContent === '工作区操作')!.focus())
+  expect(row.classList.contains('active')).toBe(false)
+
+  await act(async () => useSessionStore.setState({
+    tabs: [{ id: 'a', profileId: profile.id, profileName: profile.name, status: 'connected', sessionId: 'ssh-a' }],
+    activeTabId: 'a',
+  }))
+  expect(row.classList.contains('active')).toBe(true)
+  await act(async () => useWorkspaceViewStore.getState().openVault())
+  expect(row.classList.contains('active')).toBe(false)
+  await act(async () => useWorkspaceViewStore.getState().showTerminal())
+  expect(row.classList.contains('active')).toBe(true)
 })
 
 it('服务器未连接时不显示状态点，连接后出现，断开后隐藏', async () => {

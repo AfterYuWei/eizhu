@@ -675,11 +675,14 @@ export function createSftpStore(options: SftpStoreOptions = {}): SftpStoreApi {
 
     commitDrop: async (copyModifier) => {
       const { dragSession: drag, dropTarget: target } = get()
-      if (!drag || !target) return false
+      if (!drag || !target) {
+        get().cancelDrag()
+        return false
+      }
       const invalid = validateDrop(drag, target, copyModifier)
       if (invalid) {
         toast.warning(invalid)
-        set({ dropTarget: null })
+        get().cancelDrag()
         return false
       }
 

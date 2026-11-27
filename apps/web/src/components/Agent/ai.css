@@ -837,7 +837,7 @@
   white-space: normal;
 }
 .ai-model-pool .ai-model-use[aria-pressed="true"],
-.ai-model-option:is(:hover, :focus-within) { background: var(--bg-active); }
+.ai-model-option:is(:hover, :has(:focus-visible)) { background: var(--bg-active); }
 .ai-model-pool .ai-model-remove:hover { color: var(--red); }
 .ai-model-current { display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0; color: var(--fg-2); }
 .ai-model-name { display: block; min-width: 0; overflow-wrap: anywhere; line-height: 1.4; }

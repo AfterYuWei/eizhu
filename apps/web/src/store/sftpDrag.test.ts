@@ -102,6 +102,15 @@ describe('SFTP drag helpers', () => {
     expect(validateDrop(source, target('/root', 'session-a'), true)).toBeNull()
   })
 
+  it('松开拖拽后清除源文件和目标高亮，即使目标无效', async () => {
+    const store = createSftpStore({ includeLocalTab: false })
+    store.getState().beginDrag(drag([entry('/root/a.txt')]))
+    store.getState().setDropTarget(target('/root', 'session-a'))
+
+    expect(await store.getState().commitDrop(false)).toBe(false)
+    expect(store.getState()).toMatchObject({ dragSession: null, dropTarget: null })
+  })
+
   it('does not publish repeated dragover updates for the same target', () => {
     const store = createSftpStore()
     let updates = 0
