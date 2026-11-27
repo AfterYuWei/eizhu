@@ -32,9 +32,9 @@ function run(command, args, cwd) {
 const artifact = resolve(process.argv[2] ?? '')
 if (!process.argv[2]) throw new Error('Usage: node scripts/smoke-package.mjs <installer>')
 const appName = basename(artifact).startsWith('eizhu-dev-') ? 'eizhu-dev' : 'eizhu'
-const selfSignedFingerprint = process.env.EIZHU_MAC_SELF_SIGN_CERT_SHA256
-async function verifySelfSignedBundle(bundle, certificatePrefix, appId) {
-  assert.match(selfSignedFingerprint, /^[A-Fa-f0-9]{64}$/, 'macOS 自签名证书指纹无效')
+const developmentFingerprint = process.env.EIZHU_MAC_DEVELOPMENT_CERT_SHA256
+async function verifyDevelopmentSignedBundle(bundle, certificatePrefix, appId) {
+  assert.match(developmentFingerprint, /^[A-Fa-f0-9]{64}$/, 'Apple Development 证书指纹无效')
   await run('/usr/bin/codesign', ['--verify', '--deep', '--strict', bundle])
   const { stderr } = await promisify(execFile)('/usr/bin/codesign', [
     '--display', '--verbose=4', `--extract-certificates=${certificatePrefix}`, bundle,
@@ -43,7 +43,12 @@ async function verifySelfSignedBundle(bundle, certificatePrefix, appId) {
   assert.equal(identifier, appId, 'macOS 安装包的签名应用标识不匹配')
   const signer = await readFile(certificatePrefix + '0')
   const fingerprint = createHash('sha256').update(signer).digest('hex')
-  assert.equal(fingerprint, selfSignedFingerprint.toLowerCase(), 'macOS 安装包的签名证书指纹不匹配')
+  assert.equal(fingerprint, developmentFingerprint.toLowerCase(), 'macOS 安装包的签名证书指纹不匹配')
+  const contents = await readdir(join(bundle, 'Contents'), { recursive: true })
+  assert.ok(
+    !contents.some((entry) => ['embedded.provisionprofile', 'embedded.mobileprovision'].includes(basename(entry))),
+    'macOS 安装包包含描述文件',
+  )
 }
 
 const root = await mkdtemp(join(tmpdir(), 'eizhu-package-'))
@@ -56,14 +61,14 @@ try {
       const app = (await readdir(mount)).find((name) => name.endsWith('.app'))
       if (!app) throw new Error('DMG has no application')
       const bundle = join(mount, app)
-      if (selfSignedFingerprint) {
+      if (developmentFingerprint) {
         const { appId } = JSON.parse(await readFile('apps/desktop/out/build-info.json', 'utf8'))
         assert.ok(appId, '构建记录缺少应用标识')
-        await verifySelfSignedBundle(bundle, join(root, 'dmg-signer'), appId)
+        await verifyDevelopmentSignedBundle(bundle, join(root, 'dmg-signer'), appId)
         const zipRoot = join(root, 'zip')
         await run('/usr/bin/ditto', ['-x', '-k', artifact.replace(/\.dmg$/, '.zip'), zipRoot])
-        await verifySelfSignedBundle(join(zipRoot, app), join(root, 'zip-signer'), appId)
-        console.log('macOS DMG 与 ZIP 内应用签名和证书校验通过')
+        await verifyDevelopmentSignedBundle(join(zipRoot, app), join(root, 'zip-signer'), appId)
+        console.log('macOS DMG 与 ZIP 的签名、证书指纹及描述文件校验通过')
       } else if (process.env.EIZHU_MAC_ADHOC_SIGN === '1') {
         await run('/usr/bin/codesign', ['--verify', '--deep', '--strict', bundle])
         const { stderr } = await promisify(execFile)('/usr/bin/codesign', ['--display', '--verbose=4', bundle])

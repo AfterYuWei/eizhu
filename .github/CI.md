@@ -41,4 +41,6 @@ NSIS 执行隔离安装/卸载；DMG 只读挂载后复制运行；AppImage 解�
 
 2026-10-22 的 Linux AppImage 失败发生在 Vault 布局烟测等待所有通知消失。成功通知在 Xvfb 的后台或悬停状态下可能暂停倒计时；烟测改为校验保存后的持久内容、删除后的不存在状态及剪贴板真实内容，并拒绝错误通知。截图仅临时隐藏成功通知后恢复，不依赖通知的自动关闭时间，也不更改应用的图形或沙箱配置。
 
-macOS test 任务使用仓库 Actions Secrets 中的 `EIZHU_MAC_SELF_SIGN_P12`（Base64 编码的加密 PKCS#12）和 `EIZHU_MAC_SELF_SIGN_PASSWORD`（导出密码）。运行器临时导入 `eizhu Local Code Signing`，从最终 DMG 和 ZIP 校验应用签名及证书，再执行烟测。凭据缺失或签名校验失败会阻止测试版发布。macOS 正式签名和公证使用独立的发布证书配置。实际状态与证据见 [阶段 6 报告](../docs/desktop-rebuild/STAGE_6_REPORT.md)。
+macOS test 和 stable 任务使用同一组仓库 Actions Secrets。`EIZHU_MAC_DEVELOPMENT_P12` 保存 Base64 编码的 Apple Development PKCS#12，`EIZHU_MAC_DEVELOPMENT_PASSWORD` 保存它的导出密码。运行器把签名身份导入临时钥匙串，再对最终 DMG 和更新 ZIP 校验应用标识、签名、证书指纹及描述文件，随后执行烟测。凭据缺失或验证失败会阻止发布。
+
+Apple Development 签名供开发和个人测试使用。macOS 安装包未公证。首次从旧签名版切换时，请下载对应架构的 DMG 手动覆盖安装，首次启动可能需要系统放行和钥匙串授权。实际状态与证据见 [阶段 6 报告](../docs/desktop-rebuild/STAGE_6_REPORT.md)。

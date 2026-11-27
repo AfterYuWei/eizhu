@@ -20,10 +20,10 @@ on:
         type: string
         default: full
     secrets:
-      EIZHU_MAC_SELF_SIGN_P12:
-        required: false
-      EIZHU_MAC_SELF_SIGN_PASSWORD:
-        required: false
+      EIZHU_MAC_DEVELOPMENT_P12:
+        required: true
+      EIZHU_MAC_DEVELOPMENT_PASSWORD:
+        required: true
 permissions:
   contents: read
 jobs:
@@ -77,17 +77,17 @@ jobs:
       - run: npm run baseline:verify
       - run: npm run architecture:verify
       - run: npm run desktop:build
-      - name: Package and smoke self-signed macOS test build
-        if: matrix.platform == 'darwin' && (inputs.channel || 'test') == 'test'
+      - name: Sign macOS packages with Apple Development and smoke final installers
+        if: matrix.platform == 'darwin'
         shell: bash
         env:
-          EIZHU_MAC_SELF_SIGN_P12: ${{ secrets.EIZHU_MAC_SELF_SIGN_P12 }}
-          EIZHU_MAC_SELF_SIGN_PASSWORD: ${{ secrets.EIZHU_MAC_SELF_SIGN_PASSWORD }}
-        run: bash scripts/ci-package-mac-self-signed.sh "${{ matrix.arch }}"
+          EIZHU_MAC_DEVELOPMENT_P12: ${{ secrets.EIZHU_MAC_DEVELOPMENT_P12 }}
+          EIZHU_MAC_DEVELOPMENT_PASSWORD: ${{ secrets.EIZHU_MAC_DEVELOPMENT_PASSWORD }}
+        run: bash scripts/ci-package-mac-development.sh "${{ matrix.arch }}"
       - run: npm run desktop:package -- --platform=${{ matrix.platform }} --arch=${{ matrix.arch }}
-        if: matrix.platform != 'darwin' || (inputs.channel || 'test') != 'test'
-      - name: Smoke final installer contents (macOS / Windows)
-        if: runner.os != 'Linux' && (matrix.platform != 'darwin' || (inputs.channel || 'test') != 'test')
+        if: matrix.platform != 'darwin'
+      - name: Smoke final Windows installer contents
+        if: matrix.platform == 'win32'
         shell: bash
         run: node scripts/smoke-package.mjs artifacts/desktop/${{ matrix.installer }} --duration=60000
       - name: Smoke final AppImage contents under X11

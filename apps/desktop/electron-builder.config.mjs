@@ -6,11 +6,11 @@ import { buildSettings } from '../../scripts/desktop-build-settings.mjs'
 const { version, channel, feeds, updateRepository, appId, appName: productName, outputDirectory } = buildSettings()
 const local = channel === 'dev'
 const macAdHoc = channel === 'test' && process.env.EIZHU_MAC_ADHOC_SIGN === '1'
-const macSelfSign = channel === 'test' && process.env.EIZHU_MAC_SELF_SIGN === '1'
-const macSigningIdentity = macSelfSign ? process.env.CSC_NAME?.trim() : '-'
-if (macSelfSign && (macAdHoc || !macSigningIdentity))
-  throw new Error('macOS 自签名需要指定 CSC_NAME，并且不能同时启用临时签名')
-const macEntitlements = macAdHoc || macSelfSign
+const macDevelopmentSign = !local && process.env.EIZHU_MAC_DEVELOPMENT_SIGN === '1'
+const macSigningIdentity = process.env.CSC_NAME?.trim() ?? ''
+if (macDevelopmentSign && (macAdHoc || !/^[a-f\d]{40}$/i.test(macSigningIdentity)))
+  throw new Error('Apple Development 签名需要以 CSC_NAME 指定证书指纹，并且不能同时启用临时签名')
+const macEntitlements = macAdHoc
   ? 'apps/desktop/resources/entitlements.mac.adhoc.plist'
   : 'apps/desktop/resources/entitlements.mac.plist'
 export default {
@@ -81,10 +81,17 @@ export default {
     hardenedRuntime: true,
     entitlements: macEntitlements,
     entitlementsInherit: macEntitlements,
-    ...(macAdHoc || macSelfSign
-      ? { identity: macSigningIdentity, forceCodeSigning: true, notarize: false }
+    ...(macAdHoc ? { identity: '-', forceCodeSigning: true, notarize: false } : {}),
+    ...(macDevelopmentSign
+      ? {
+          identity: macSigningIdentity,
+          type: 'development',
+          forceCodeSigning: true,
+          notarize: false,
+          preAutoEntitlements: false,
+          timestamp: 'none',
+        }
       : {}),
-    ...(macSelfSign ? { timestamp: 'none' } : {}),
   },
   win: { target: ['nsis'], icon: 'icon.ico' },
   nsis: { oneClick: false, allowToChangeInstallationDirectory: true, perMachine: false },

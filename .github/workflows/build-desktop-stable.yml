@@ -69,6 +69,9 @@ jobs:
     with:
       channel: stable
       validation: full
+    secrets:
+      EIZHU_MAC_DEVELOPMENT_P12: ${{ secrets.EIZHU_MAC_DEVELOPMENT_P12 }}
+      EIZHU_MAC_DEVELOPMENT_PASSWORD: ${{ secrets.EIZHU_MAC_DEVELOPMENT_PASSWORD }}
   release:
     needs: [version, desktop]
     if: ${{ always() && !cancelled() && needs.version.result == 'success' && (needs.desktop.result == 'success' || (needs.desktop.result == 'skipped' && inputs.validated_run_id != '')) }}
